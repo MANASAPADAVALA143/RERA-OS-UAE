@@ -1,0 +1,118 @@
+from typing import Annotated
+
+import jwt
+from fastapi import Depends, HTTPException, Request, status
+from sqlalchemy.orm import Session
+
+from config import settings
+from database import get_db
+from models.tenancy import TenantUser, UserRole, UserStatus
+from services.local_auth import decode_local_token
+
+WRITE_ROLES = {UserRole.owner, UserRole.admin, UserRole.cfo, UserRole.controller}
+
+
+class CurrentUser:
+    def __init__(self, user_id: str, tenant_id, role: UserRole, email: str):
+        self.user_id = user_id
+        self.tenant_id = tenant_id
+        self.role = role
+        self.email = email
+
+    def to_dict(self):
+        return {
+            "user_id": self.user_id,
+            "tenant_id": str(self.tenant_id),
+            "role": self.role.value,
+            "email": self.email,
+        }
+
+
+def _decode_token(token: str) -> dict:
+    if settings.effective_auth_mode == "local":
+        try:
+            return decode_local_token(token)
+        except jwt.PyJWTError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Invalid or expired token: {exc}",
+            ) from exc
+
+    try:
+        return jwt.decode(
+            token,
+            settings.supabase_jwt_secret,
+            algorithms=["HS256"],
+            audience="authenticated",
+        )
+    except jwt.PyJWTError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid or expired token: {exc}",
+        ) from exc
+
+
+async def get_current_user(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> CurrentUser:
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or invalid Authorization header",
+        )
+
+    token = auth_header.split(" ", 1)[1]
+    payload = _decode_token(token)
+    user_id = payload.get("sub")
+    email = payload.get("email", "")
+
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token missing sub claim",
+        )
+
+    tenant_user = (
+        db.query(TenantUser)
+        .filter(TenantUser.supabase_user_id == user_id)
+        .first()
+    )
+
+    if not tenant_user:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User has no tenant membership",
+        )
+
+    if tenant_user.status == UserStatus.disabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is disabled",
+        )
+
+    return CurrentUser(
+        user_id=user_id,
+        tenant_id=tenant_user.tenant_id,
+        role=tenant_user.role,
+        email=tenant_user.email or email,
+    )
+
+
+def require_role(*allowed_roles: str):
+    allowed = {UserRole(r) for r in allowed_roles}
+
+    async def _check(current_user: Annotated[CurrentUser, Depends(get_current_user)]):
+        if current_user.role not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Role '{current_user.role.value}' not permitted for this action",
+            )
+        return current_user
+
+    return _check
+
+
+def require_write_access():
+    return require_role("owner", "admin", "cfo", "controller")
