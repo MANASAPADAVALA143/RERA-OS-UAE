@@ -14,6 +14,7 @@ from models.real_estate.construction_extended import (
     ProjectFinancials,
     ProjectROIAssumptions,
     ScheduleTask,
+    ScheduleTaskStatus,
 )
 from models.real_estate.entity import Project
 from services.construction_roi import (
@@ -21,7 +22,7 @@ from services.construction_roi import (
     realized_cash_position,
     simple_project_irr,
 )
-from services.real_estate_calculations import schedule_task_late_days
+from services.real_estate_calculations import schedule_task_late_days, validate_task_status_consistency
 
 router = APIRouter(prefix="/api/real-estate/construction", tags=["real-estate"])
 
@@ -58,20 +59,40 @@ def _change_order_dict(co: ChangeOrder) -> dict:
 
 def _schedule_task_dict(task: ScheduleTask) -> dict:
     late = schedule_task_late_days(task.planned_end, task.actual_end, task.pct_complete)
+
+    planned_days = task.planned_duration_days
+    if planned_days is None and task.planned_start and task.planned_end:
+        planned_days = (task.planned_end - task.planned_start).days
+
+    actual_days = None
+    if task.actual_start and task.actual_end:
+        actual_days = (task.actual_end - task.actual_start).days
+
+    pct = float(task.pct_complete)
+    consistency = validate_task_status_consistency(task.status.value, pct, task.actual_end)
+
     return {
         "id": str(task.id),
         "project_id": str(task.project_id),
         "task_name": task.task_name,
         "vendor_name": task.vendor_name,
+        "division": task.division,
+        "line_item_code": task.line_item_code,
+        "line_item_name": task.line_item_name,
         "planned_start": task.planned_start.isoformat() if task.planned_start else None,
         "planned_end": task.planned_end.isoformat() if task.planned_end else None,
+        "planned_duration_days": planned_days,
         "actual_start": task.actual_start.isoformat() if task.actual_start else None,
         "actual_end": task.actual_end.isoformat() if task.actual_end else None,
-        "pct_complete": float(task.pct_complete),
+        "actual_duration_days": actual_days,
+        "pct_complete": pct,
         "status": task.status.value,
+        "status_override_reason": task.status_override_reason,
         "is_critical": task.is_critical,
         "is_milestone": task.is_milestone,
         "notes": task.notes,
+        "has_inconsistency": not consistency["valid"],
+        "inconsistency_detail": consistency.get("detail"),
         **late,
     }
 
@@ -232,6 +253,220 @@ def list_schedule_tasks(
             "max_days_late": max_late,
         },
     }
+
+
+class TaskScheduleCreate(BaseModel):
+    task_name: str
+    vendor_name: str | None = None
+    division: str | None = None
+    line_item_code: str | None = None
+    line_item_name: str | None = None
+    planned_start: date | None = None
+    planned_end: date | None = None
+    planned_duration_days: int | None = None
+    actual_start: date | None = None
+    actual_end: date | None = None
+    pct_complete: float = 0.0
+    status: str = "not_started"
+    is_critical: bool = False
+    is_milestone: bool = False
+    notes: str | None = None
+
+
+class TaskScheduleUpdate(BaseModel):
+    task_name: str | None = None
+    vendor_name: str | None = None
+    division: str | None = None
+    line_item_code: str | None = None
+    line_item_name: str | None = None
+    planned_start: date | None = None
+    planned_end: date | None = None
+    planned_duration_days: int | None = None
+    actual_start: date | None = None
+    actual_end: date | None = None
+    pct_complete: float | None = None
+    status: str | None = None
+    is_critical: bool | None = None
+    is_milestone: bool | None = None
+    notes: str | None = None
+    # Override action — requires reason; bypasses status consistency check
+    override_reason: str | None = None
+
+
+@router.get("/projects/{project_id}/task-schedule")
+def get_task_schedule(
+    project_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Task schedule grouped by division. The same underlying ScheduleTask rows
+    power the existing /schedule-tasks late-task exception view — no data fork.
+    """
+    _require_project(db, current_user.tenant_id, project_id)
+    rows = (
+        db.query(ScheduleTask)
+        .filter(ScheduleTask.tenant_id == current_user.tenant_id, ScheduleTask.project_id == project_id)
+        .order_by(ScheduleTask.division.nulls_last(), ScheduleTask.planned_start.nulls_last(), ScheduleTask.task_name)
+        .all()
+    )
+
+    items = [_schedule_task_dict(t) for t in rows]
+
+    # Group by division
+    groups: dict[str, list] = {}
+    for item in items:
+        key = item["division"] or "— Unassigned —"
+        groups.setdefault(key, []).append(item)
+
+    grouped = [
+        {
+            "division": div,
+            "task_count": len(tasks),
+            "completed_count": sum(1 for t in tasks if t["status"] == "complete"),
+            "in_progress_count": sum(1 for t in tasks if t["status"] == "in_progress"),
+            "late_count": sum(1 for t in tasks if t["is_late"]),
+            "inconsistency_count": sum(1 for t in tasks if t["has_inconsistency"]),
+            "tasks": tasks,
+        }
+        for div, tasks in groups.items()
+    ]
+
+    total_inconsistencies = sum(1 for i in items if i["has_inconsistency"])
+    return {
+        "project_id": str(project_id),
+        "summary": {
+            "total_tasks": len(items),
+            "completed": sum(1 for i in items if i["status"] == "complete"),
+            "in_progress": sum(1 for i in items if i["status"] == "in_progress"),
+            "not_started": sum(1 for i in items if i["status"] == "not_started"),
+            "late": sum(1 for i in items if i["is_late"]),
+            "inconsistencies": total_inconsistencies,
+        },
+        "groups": grouped,
+    }
+
+
+@router.post("/projects/{project_id}/task-schedule", status_code=201)
+def create_task_schedule_item(
+    project_id: uuid.UUID,
+    body: TaskScheduleCreate,
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    _require_project(db, current_user.tenant_id, project_id)
+
+    try:
+        status_val = ScheduleTaskStatus(body.status)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid status: {body.status}")
+
+    # Validate consistency — reject 'complete' with bad data unless override is set
+    if status_val == ScheduleTaskStatus.complete:
+        check = validate_task_status_consistency(body.status, body.pct_complete, body.actual_end)
+        if not check["valid"]:
+            raise HTTPException(status_code=422, detail=check["detail"])
+
+    task = ScheduleTask(
+        tenant_id=current_user.tenant_id,
+        project_id=project_id,
+        task_name=body.task_name,
+        vendor_name=body.vendor_name,
+        division=body.division,
+        line_item_code=body.line_item_code,
+        line_item_name=body.line_item_name,
+        planned_start=body.planned_start,
+        planned_end=body.planned_end,
+        planned_duration_days=body.planned_duration_days,
+        actual_start=body.actual_start,
+        actual_end=body.actual_end,
+        pct_complete=body.pct_complete,
+        status=status_val,
+        is_critical=body.is_critical,
+        is_milestone=body.is_milestone,
+        notes=body.notes,
+        created_by=current_user.email,
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    return _schedule_task_dict(task)
+
+
+@router.put("/task-schedule/{task_id}")
+def update_task_schedule_item(
+    task_id: uuid.UUID,
+    body: TaskScheduleUpdate,
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    task = (
+        db.query(ScheduleTask)
+        .filter(ScheduleTask.id == task_id, ScheduleTask.tenant_id == current_user.tenant_id)
+        .first()
+    )
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    update = body.model_dump(exclude_none=True)
+
+    # Handle override_reason path — sets status to 'override' and logs reason
+    if "override_reason" in update:
+        reason = update.pop("override_reason", "").strip()
+        if not reason:
+            raise HTTPException(status_code=400, detail="override_reason must not be empty when using Override Status")
+        task.status = ScheduleTaskStatus.override
+        task.status_override_reason = reason
+    elif "status" in update:
+        try:
+            new_status = ScheduleTaskStatus(update["status"])
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {update['status']}")
+
+        pct = float(update.get("pct_complete", task.pct_complete))
+        actual_end = update.get("actual_end", task.actual_end)
+        if new_status == ScheduleTaskStatus.complete:
+            check = validate_task_status_consistency("complete", pct, actual_end)
+            if not check["valid"]:
+                raise HTTPException(status_code=422, detail=check["detail"])
+        task.status = new_status
+        # Clear previous override reason when status explicitly re-set to a normal value
+        if new_status != ScheduleTaskStatus.override:
+            task.status_override_reason = None
+
+    for field in ("task_name", "vendor_name", "division", "line_item_code", "line_item_name", "notes"):
+        if field in update:
+            setattr(task, field, update[field])
+    for date_field in ("planned_start", "planned_end", "actual_start", "actual_end"):
+        if date_field in update:
+            setattr(task, date_field, update[date_field])
+    for num_field in ("pct_complete", "planned_duration_days"):
+        if num_field in update:
+            setattr(task, num_field, update[num_field])
+    for bool_field in ("is_critical", "is_milestone"):
+        if bool_field in update:
+            setattr(task, bool_field, update[bool_field])
+
+    db.commit()
+    db.refresh(task)
+    return _schedule_task_dict(task)
+
+
+@router.delete("/task-schedule/{task_id}", status_code=204)
+def delete_task_schedule_item(
+    task_id: uuid.UUID,
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    task = (
+        db.query(ScheduleTask)
+        .filter(ScheduleTask.id == task_id, ScheduleTask.tenant_id == current_user.tenant_id)
+        .first()
+    )
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    db.delete(task)
+    db.commit()
 
 
 @router.get("/compliance-docs")

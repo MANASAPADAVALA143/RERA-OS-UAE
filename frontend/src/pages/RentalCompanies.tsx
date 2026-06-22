@@ -1,0 +1,192 @@
+import { useCallback, useEffect, useState } from 'react';
+import {
+  Building, Building2, Home, Hotel, Warehouse, House,
+  Store, Landmark, School, Factory, ArrowLeft,
+} from 'lucide-react';
+import api from '../services/api';
+import { Card } from '../components/ui/Card';
+import { LoadingSkeleton } from '../components/ui/Table';
+import { fmtUSD, fmtPct } from '../components/ProtectedRoute';
+import { useRentalNav } from '../contexts/RentalNavContext';
+import RentalCompanyDashboard from './RentalCompanyDashboard';
+
+// ── flat interface matches actual API response shape ──────────────────────────
+interface CompanyListItem {
+  id: string;
+  company_name: string;
+  property_name: string;
+  property_count: number;
+  total_units: number;
+  occupied_units: number;
+  vacant_units: number;
+  occupancy_pct: number;
+  gross_potential_rent: number;
+  billed_this_month: number;
+  collected_this_month: number;
+  arrears_total: number;
+  noi_this_month: number;
+  total_expense_this_month: number;
+}
+
+type IconComp = React.FC<{ size?: number; className?: string }>;
+
+const COMPANY_STYLES: { Icon: IconComp; bg: string; text: string }[] = [
+  { Icon: Building2, bg: 'bg-emerald-100', text: 'text-emerald-700' },
+  { Icon: Home,      bg: 'bg-blue-100',    text: 'text-blue-700'    },
+  { Icon: Hotel,     bg: 'bg-amber-100',   text: 'text-amber-700'   },
+  { Icon: Building,  bg: 'bg-indigo-100',  text: 'text-indigo-700'  },
+  { Icon: House,     bg: 'bg-teal-100',    text: 'text-teal-700'    },
+  { Icon: Warehouse, bg: 'bg-cyan-100',    text: 'text-cyan-700'    },
+  { Icon: Landmark,  bg: 'bg-violet-100',  text: 'text-violet-700'  },
+  { Icon: Store,     bg: 'bg-rose-100',    text: 'text-rose-700'    },
+  { Icon: School,    bg: 'bg-orange-100',  text: 'text-orange-700'  },
+  { Icon: Factory,   bg: 'bg-slate-100',   text: 'text-slate-700'   },
+];
+
+export default function RentalCompanies() {
+  const { selectedCompanyId, setSelectedCompanyId } = useRentalNav();
+  const [companies, setCompanies] = useState<CompanyListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [prefersReduced, setPrefersReduced] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setPrefersReduced(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setPrefersReduced(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  const fetchCompanies = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await api.get<CompanyListItem[]>('/api/rentals/companies');
+      setCompanies(res.data);
+    } catch {
+      setError('Failed to load companies.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchCompanies(); }, [fetchCompanies]);
+
+  if (selectedCompanyId) {
+    return (
+      <div className="space-y-4">
+        <button
+          onClick={() => setSelectedCompanyId(null)}
+          className="flex items-center gap-2 text-sm text-primary hover:underline"
+        >
+          <ArrowLeft size={16} /> Back to Companies
+        </button>
+        <RentalCompanyDashboard companyId={selectedCompanyId} />
+      </div>
+    );
+  }
+
+  if (loading) return <LoadingSkeleton rows={6} />;
+  if (error) return (
+    <div className="text-red-600 p-4">
+      {error}
+      <button className="ml-4 underline" onClick={fetchCompanies}>Retry</button>
+    </div>
+  );
+
+  return (
+    <>
+      {!prefersReduced && (
+        <style>{`
+          @keyframes fadeInCard {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0);   }
+          }
+        `}</style>
+      )}
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-charcoal">Companies</h1>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+          {companies.map((c, index) => {
+            const style = COMPANY_STYLES[index % COMPANY_STYLES.length];
+            const { Icon } = style;
+            const occ = c.total_units > 0 ? c.occupied_units / c.total_units : 0;
+            return (
+              <div
+                key={c.id}
+                className={`transition-transform duration-150 ${prefersReduced ? '' : 'hover:scale-[1.05]'}`}
+                style={prefersReduced ? {} : {
+                  animation: `fadeInCard 0.25s ease ${index * 40}ms both`,
+                }}
+              >
+                <Card>
+                  <div className="space-y-3">
+                    {/* Header: icon + name + unit badge */}
+                    <div className="flex items-start gap-3">
+                      <div className={`p-2.5 rounded-xl ${style.bg} flex-shrink-0`}>
+                        <Icon size={22} className={style.text} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-primary truncate">{c.company_name}</h3>
+                        <p className="text-xs text-gray-400 truncate">{c.property_name}</p>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${
+                        occ >= 0.9 ? 'bg-green-100 text-green-800'
+                        : occ >= 0.75 ? 'bg-amber-100 text-amber-800'
+                        : 'bg-red-100 text-red-800'
+                      }`}>
+                        {c.occupied_units}/{c.total_units}
+                      </span>
+                    </div>
+
+                    {/* Occupancy bar */}
+                    <div>
+                      <div className="flex justify-between text-xs text-gray-500 mb-1">
+                        <span>Occupancy</span>
+                        <span>{fmtPct(occ)}</span>
+                      </div>
+                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary rounded-full transition-all"
+                          style={{ width: `${(occ * 100).toFixed(1)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* KPI row */}
+                    <div className="grid grid-cols-3 gap-1 text-xs">
+                      <div>
+                        <p className="text-gray-400">Collected</p>
+                        <p className="font-semibold">{fmtUSD(c.collected_this_month)}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400">NOI</p>
+                        <p className={`font-semibold ${c.noi_this_month < 0 ? 'text-red-600' : 'text-green-700'}`}>
+                          {fmtUSD(c.noi_this_month)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400">Arrears</p>
+                        <p className={`font-semibold ${c.arrears_total > 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                          {c.arrears_total > 0 ? fmtUSD(c.arrears_total) : '—'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setSelectedCompanyId(c.id)}
+                      className="w-full py-1.5 bg-primary text-white text-sm rounded-lg hover:bg-primary/90 transition-colors"
+                    >
+                      View Dashboard →
+                    </button>
+                  </div>
+                </Card>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}

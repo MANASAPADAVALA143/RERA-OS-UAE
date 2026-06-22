@@ -6,12 +6,24 @@ PROJECT_COLUMNS = {
     "project_code": "VARCHAR(50)",
     "contract_value": "NUMERIC(16, 2)",
     "total_project_cost": "NUMERIC(16, 2)",
+    "description": "VARCHAR(2000)",
+    "creator_role": "VARCHAR(255)",
+    "working_days": "VARCHAR(255)",
 }
 
 COST_TRADE_COLUMNS = {
     "csi_division_code": "VARCHAR(20)",
     "division_label": "VARCHAR(255)",
     "vendor_name": "VARCHAR(255)",
+    "sov_type": "VARCHAR(50)",
+    "sov_status": "VARCHAR(50)",
+    "sov_start_date": "DATE",
+    "sov_end_date": "DATE",
+    # AIA G702/G703 billing detail fields
+    "prior_period_completed": "NUMERIC(14, 2)",
+    "current_period_completed": "NUMERIC(14, 2)",
+    "stored_materials": "NUMERIC(14, 2) DEFAULT 0",
+    "retainage_pct": "NUMERIC(5, 4)",
 }
 
 
@@ -26,6 +38,37 @@ def _add_missing_columns(engine, table: str, columns: dict[str, str]) -> None:
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {col_type}"))
 
 
+CHANGE_ORDER_COLUMNS = {
+    "requested_by": "VARCHAR(255)",
+    "due_date": "DATE",
+    "type_of_reference": "VARCHAR(255)",
+    "approver": "VARCHAR(255)",
+    "attached_cr": "VARCHAR(255)",
+    "gc_superintendent": "VARCHAR(255)",
+}
+
+
+SCHEDULE_TASK_COLUMNS = {
+    "division": "VARCHAR(255)",
+    "line_item_code": "VARCHAR(50)",
+    "line_item_name": "VARCHAR(255)",
+    "planned_duration_days": "INTEGER",
+    "status_override_reason": "TEXT",
+}
+
+
+LOAN_COLUMNS = {
+    "noi_annual":             "NUMERIC(16, 2)",
+    "current_property_value": "NUMERIC(16, 2)",
+    "context_type":           "VARCHAR(20) DEFAULT 'construction'",
+}
+
+
 def apply_schema_patches(engine) -> None:
     _add_missing_columns(engine, "projects", PROJECT_COLUMNS)
     _add_missing_columns(engine, "cost_trades", COST_TRADE_COLUMNS)
+    _add_missing_columns(engine, "change_orders", CHANGE_ORDER_COLUMNS)
+    _add_missing_columns(engine, "schedule_tasks", SCHEDULE_TASK_COLUMNS)
+    _add_missing_columns(engine, "loans", LOAN_COLUMNS)
+    # New tables (r_vendors, r_receivables, r_payables, pay_applications, …)
+    # created by Base.metadata.create_all() in main.py startup — no ALTER TABLE needed

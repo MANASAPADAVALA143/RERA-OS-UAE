@@ -10,6 +10,47 @@ import { Table, LoadingSkeleton, type Column } from '../components/ui/Table';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { fmtUSD, fmtPct } from '../components/ProtectedRoute';
 
+interface LenderRiskLoan {
+  id: string;
+  company_name: string;
+  property_name: string;
+  loan_bank_name: string;
+  context_type: string | null;
+  loan_balance_as_of: number | null;
+  loan_maturity_date: string | null;
+  dscr: number | null;
+  ltv_current: number | null;
+  dscr_status: string | null;
+}
+
+interface LenderRiskSummary {
+  total_debt: number;
+  total_loans: number;
+  weighted_avg_dscr: number | null;
+  weighted_avg_ltv: number | null;
+  loans_below_1_00x: { count: number; items: LenderRiskLoan[] };
+  loans_below_1_25x: { count: number; items: LenderRiskLoan[] };
+  loans_below_dscr_covenant: { count: number; items: LenderRiskLoan[] };
+  all_loans: LenderRiskLoan[];
+}
+
+function fmtDscr(v: number | null) {
+  if (v == null) return '—';
+  return v.toFixed(2) + 'x';
+}
+
+function fmtLtv(v: number | null) {
+  if (v == null) return '—';
+  return (v * 100).toFixed(1) + '%';
+}
+
+function dscrCellClass(v: number | null) {
+  if (v == null) return 'text-gray-400';
+  if (v < 1.00) return 'text-red-700 font-semibold';
+  if (v < 1.25) return 'text-amber-700 font-semibold';
+  return 'text-green-700 font-semibold';
+}
+
 const BUCKET_ORDER = ['0-30_days', '31-60_days', '61-90_days', '91-180_days', '180_plus_days'];
 const BUCKET_LABELS: Record<string, string> = {
   '0-30_days': '0–30 days',
@@ -81,6 +122,7 @@ export default function CapitalRisk() {
   const [litigation, setLitigation] = useState<{ claims: LitigationClaim[]; summary: { total_exposure: number; total_reserved: number } } | null>(null);
   const [taxEvents, setTaxEvents] = useState<TaxEvent[]>([]);
   const [insuranceFlags, setInsuranceFlags] = useState<InsuranceFlag[]>([]);
+  const [lenderRisk, setLenderRisk] = useState<LenderRiskSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -88,7 +130,7 @@ export default function CapitalRisk() {
     setLoading(true);
     setError('');
     try {
-      const [ladderRes, facRes, capRes, vendorRes, litRes, taxRes, insRes] = await Promise.all([
+      const [ladderRes, facRes, capRes, vendorRes, litRes, taxRes, insRes, lenderRes] = await Promise.all([
         api.get<Record<string, number>>('/api/real-estate/financing/maturity-ladder'),
         api.get<Facility[]>('/api/real-estate/financing/facilities'),
         api.get<CapitalAvailable>('/api/real-estate/financing/capital-available'),
@@ -96,6 +138,7 @@ export default function CapitalRisk() {
         api.get<{ claims: LitigationClaim[]; summary: { total_exposure: number; total_reserved: number } }>('/api/real-estate/risk/litigation'),
         api.get<TaxEvent[]>('/api/real-estate/risk/tax-events'),
         api.get<InsuranceFlag[]>('/api/real-estate/risk/insurance-coverage'),
+        api.get<LenderRiskSummary>('/api/lender-risk/summary').catch(() => ({ data: null })),
       ]);
       setMaturityLadder(ladderRes.data);
       setFacilities(facRes.data);
@@ -104,6 +147,7 @@ export default function CapitalRisk() {
       setLitigation(litRes.data);
       setTaxEvents(taxRes.data);
       setInsuranceFlags(insRes.data);
+      setLenderRisk(lenderRes.data);
     } catch {
       setError('Failed to load capital & risk data.');
     } finally {
@@ -255,6 +299,79 @@ export default function CapitalRisk() {
           </Card>
         </ErrorBoundary>
       </div>
+
+      {/* Lender Risk — DSCR / LTV across all loans */}
+      {lenderRisk && (
+        <ErrorBoundary>
+          <Card title="Lender Risk (DSCR / LTV)">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
+              <KpiCard
+                label="Weighted DSCR"
+                value={fmtDscr(lenderRisk.weighted_avg_dscr)}
+                accent={lenderRisk.weighted_avg_dscr != null && lenderRisk.weighted_avg_dscr < 1.25}
+              />
+              <KpiCard label="Weighted LTV" value={fmtLtv(lenderRisk.weighted_avg_ltv)} />
+              <KpiCard
+                label="Below 1.00x (Hard Breach)"
+                value={String(lenderRisk.loans_below_1_00x.count)}
+                accent={lenderRisk.loans_below_1_00x.count > 0}
+              />
+              <KpiCard
+                label="Below 1.25x (Warning)"
+                value={String(lenderRisk.loans_below_1_25x.count)}
+                accent={lenderRisk.loans_below_1_25x.count > 0}
+              />
+            </div>
+
+            {lenderRisk.loans_below_1_00x.count > 0 && (
+              <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg mb-4 text-sm text-red-800">
+                <AlertTriangle size={16} className="shrink-0 mt-0.5 text-red-600" />
+                {lenderRisk.loans_below_1_00x.count} loan{lenderRisk.loans_below_1_00x.count > 1 ? 's' : ''} below 1.00x DSCR — potential covenant breach.
+              </div>
+            )}
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-gray-700 min-w-[700px]">
+                <thead>
+                  <tr className="bg-[#0E3B36] text-white text-xs">
+                    <th className="px-3 py-2 text-left">Company</th>
+                    <th className="px-3 py-2 text-left">Property</th>
+                    <th className="px-3 py-2 text-left">Bank</th>
+                    <th className="px-3 py-2 text-left">Type</th>
+                    <th className="px-3 py-2 text-right">Balance</th>
+                    <th className="px-3 py-2 text-right">DSCR</th>
+                    <th className="px-3 py-2 text-right">LTV</th>
+                    <th className="px-3 py-2 text-right">Maturity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lenderRisk.all_loans.map((loan, i) => (
+                    <tr key={loan.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <td className="px-3 py-2 whitespace-nowrap">{loan.company_name}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-gray-500">{loan.property_name}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-gray-500">{loan.loan_bank_name}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className="px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
+                          {loan.context_type ?? 'construction'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right">{loan.loan_balance_as_of != null ? fmtUSD(loan.loan_balance_as_of) : '—'}</td>
+                      <td className={`px-3 py-2 text-right ${dscrCellClass(loan.dscr)}`}>{fmtDscr(loan.dscr)}</td>
+                      <td className="px-3 py-2 text-right">{fmtLtv(loan.ltv_current)}</td>
+                      <td className="px-3 py-2 text-right text-gray-500">{loan.loan_maturity_date ?? '—'}</td>
+                    </tr>
+                  ))}
+                  {lenderRisk.all_loans.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="px-3 py-6 text-center text-gray-400">No loans recorded.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </ErrorBoundary>
+      )}
 
       <ErrorBoundary>
         <Card title="Insurance Flags">

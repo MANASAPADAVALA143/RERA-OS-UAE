@@ -15,6 +15,8 @@ interface TableProps<T> {
   keyField?: string;
   emptyMessage?: string;
   onRowClick?: (row: T) => void;
+  defaultSortKey?: string;
+  defaultSortDir?: 'asc' | 'desc';
 }
 
 export function Table<T extends Record<string, unknown>>({
@@ -23,9 +25,11 @@ export function Table<T extends Record<string, unknown>>({
   keyField = 'id',
   emptyMessage = 'No data available',
   onRowClick,
+  defaultSortKey,
+  defaultSortDir,
 }: TableProps<T>) {
-  const [sortKey, setSortKey] = useState<string | null>(null);
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [sortKey, setSortKey] = useState<string | null>(defaultSortKey ?? null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(defaultSortDir ?? 'asc');
 
   const handleSort = (col: Column<T>) => {
     if (!col.sortValue) return;

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell,
 } from 'recharts';
-import { AlertTriangle, Clock, FileText, Sparkles } from 'lucide-react';
+import {
+  AlertTriangle, Camera, Clock, FileText, RefreshCw, ChevronRight,
+} from 'lucide-react';
 import api from '../services/api';
 import { Card, KpiCard } from '../components/ui/Card';
 import { StatusPill } from '../components/ui/StatusPill';
@@ -10,16 +12,17 @@ import { Table, LoadingSkeleton, type Column } from '../components/ui/Table';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { useAuth } from '../contexts/AuthContext';
 import { fmtUSD, fmtPct } from '../components/ProtectedRoute';
-
-type Tab = 'costs' | 'change_orders' | 'schedule' | 'compliance' | 'financials';
-
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'costs', label: 'Costs & SOV' },
-  { id: 'change_orders', label: 'Change Orders' },
-  { id: 'schedule', label: 'Schedule' },
-  { id: 'compliance', label: 'Compliance' },
-  { id: 'financials', label: 'Financials & ROI' },
-];
+import { useConstructionNav, ALL_TABS, type Tab } from '../contexts/ConstructionNavContext';
+import ConstructionSOV from './ConstructionSOV';
+import ConstructionCR from './ConstructionCR';
+import ConstructionWorkLog from './ConstructionWorkLog';
+import ConstructionQC from './ConstructionQC';
+import ConstructionInspections from './ConstructionInspections';
+import ConstructionDocuments from './ConstructionDocuments';
+import ConstructionPayApplications from './ConstructionPayApplications';
+import ConstructionExpenses from './ConstructionExpenses';
+import ConstructionTaskSchedule from './ConstructionTaskSchedule';
+import ConstructionLoanTracker from './ConstructionLoanTracker';
 
 const safe = (n: number | null | undefined) => (n == null || Number.isNaN(n) ? 0 : n);
 
@@ -27,6 +30,7 @@ interface Project {
   id: string;
   project_name: string;
   project_code?: string | null;
+  project_type?: string | null;
   status: string;
   city?: string | null;
   state?: string | null;
@@ -34,6 +38,18 @@ interface Project {
   total_project_cost?: number | null;
   total_saleable_sqft?: number | null;
   target_completion_date?: string | null;
+  start_date?: string | null;
+  created_by?: string | null;
+  description?: string | null;
+  creator_role?: string | null;
+  working_days?: string | null;
+}
+
+interface LatestPhotosEntry {
+  id: string;
+  entry_date: string;
+  photo_count: number;
+  photos: { id: string; file_reference: string; caption: string | null }[];
 }
 
 interface CostTrade extends Record<string, unknown> {
@@ -141,6 +157,14 @@ interface ROISummary {
   message?: string;
 }
 
+interface AttentionItem {
+  id: string;
+  category: 'permit' | 'cost' | 'schedule' | 'compliance';
+  title: string;
+  context: string;
+  tab: Tab;
+}
+
 const EMPTY_SNAPSHOT_FORM = {
   period_start: '',
   period_end: '',
@@ -163,15 +187,404 @@ const EMPTY_ASSUMPTIONS_FORM = {
   selling_costs_pct: '0.025',
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Sub-components for the Overview mission-control layout
+// ─────────────────────────────────────────────────────────────────────────────
+
+function BulletBar({ fill, target, label }: { fill: number; target: number | null; label: string }) {
+  const fillPct = Math.min(1, Math.max(0, fill)) * 100;
+  const targetPct = target != null ? Math.min(1, Math.max(0, target)) * 100 : null;
+  const ahead = target != null && fill >= target;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-sm font-medium text-charcoal">{label}</span>
+        {targetPct != null && (
+          <span className={`text-xs font-medium ${ahead ? 'text-green-700' : 'text-amber-700'}`}>
+            {ahead ? '▲ Ahead of schedule' : '▼ Behind schedule'} ({targetPct.toFixed(1)}% elapsed)
+          </span>
+        )}
+      </div>
+      <div className="relative h-6 bg-gray-100 rounded-full overflow-visible">
+        {/* Fill bar */}
+        <div
+          className="h-full rounded-full bg-primary transition-all"
+          style={{ width: `${fillPct}%` }}
+        />
+        {/* Target marker */}
+        {targetPct != null && (
+          <div
+            className="absolute top-0 bottom-0 w-0.5 bg-charcoal"
+            style={{ left: `${targetPct}%` }}
+          >
+            <span className="absolute -top-5 left-1 text-xs text-charcoal whitespace-nowrap font-medium">
+              Target
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StackedBar({
+  paid, retainage, committed, total,
+}: { paid: number; retainage: number; committed: number; total: number }) {
+  if (total <= 0) return <p className="text-sm text-gray-400">No contract value data</p>;
+  const paidPct = Math.min(100, (paid / total) * 100);
+  const retainagePct = Math.min(100 - paidPct, (retainage / total) * 100);
+  const committedPct = Math.min(100 - paidPct - retainagePct, (committed / total) * 100);
+  return (
+    <div>
+      <div className="flex h-6 w-full rounded-full overflow-hidden bg-gray-100">
+        <div
+          className="h-full bg-primary transition-all"
+          style={{ width: `${paidPct}%` }}
+          title={`Paid: ${fmtUSD(paid)}`}
+        />
+        <div
+          className="h-full bg-accent transition-all"
+          style={{ width: `${retainagePct}%` }}
+          title={`Retainage: ${fmtUSD(retainage)}`}
+        />
+        <div
+          className="h-full bg-accent-light transition-all opacity-70"
+          style={{ width: `${committedPct}%` }}
+          title={`Committed: ${fmtUSD(committed)}`}
+        />
+      </div>
+      <div className="flex gap-4 mt-2 text-xs text-gray-500">
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-primary inline-block" />Paid</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-accent inline-block" />Retainage</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-accent-light opacity-70 inline-block" />Committed</span>
+      </div>
+    </div>
+  );
+}
+
+function StatCell({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
+  return (
+    <div>
+      <p className="text-xs text-gray-500">{label}</p>
+      <p className={`text-sm font-semibold mt-0.5 ${valueClass ?? 'text-charcoal'}`}>{value}</p>
+    </div>
+  );
+}
+
+const ATTENTION_ICONS: Record<AttentionItem['category'], React.ReactNode> = {
+  permit: <FileText size={14} />,
+  cost: <AlertTriangle size={14} />,
+  schedule: <Clock size={14} />,
+  compliance: <FileText size={14} />,
+};
+const ATTENTION_COLORS: Record<AttentionItem['category'], string> = {
+  permit: 'border-red-300 bg-red-50',
+  cost: 'border-amber-300 bg-amber-50',
+  schedule: 'border-amber-300 bg-amber-50',
+  compliance: 'border-red-300 bg-red-50',
+};
+const ATTENTION_TEXT: Record<AttentionItem['category'], string> = {
+  permit: 'text-red-800',
+  cost: 'text-amber-900',
+  schedule: 'text-amber-900',
+  compliance: 'text-red-800',
+};
+
+function AttentionCard({ item, onNavigate }: { item: AttentionItem; onNavigate: (t: Tab) => void }) {
+  return (
+    <button
+      onClick={() => onNavigate(item.tab)}
+      className={`text-left p-3 rounded-lg border ${ATTENTION_COLORS[item.category]} hover:opacity-90 transition-opacity w-full`}
+    >
+      <p className={`text-sm font-semibold flex items-center gap-1 ${ATTENTION_TEXT[item.category]}`}>
+        {ATTENTION_ICONS[item.category]}
+        {item.title}
+      </p>
+      <p className="text-xs text-gray-600 mt-1">{item.context}</p>
+      <p className="text-xs text-gray-400 mt-1 flex items-center gap-0.5">
+        View details <ChevronRight size={10} />
+      </p>
+    </button>
+  );
+}
+
+function VendorHeatmap({ docs }: { docs: ComplianceDoc[] }) {
+  const docTypes = Array.from(new Set(docs.map((d) => d.doc_type))).sort();
+  const vendorMap = new Map<string, Map<string, string>>();
+  for (const d of docs) {
+    if (!vendorMap.has(d.vendor_name)) vendorMap.set(d.vendor_name, new Map());
+    vendorMap.get(d.vendor_name)!.set(d.doc_type, d.status);
+  }
+
+  const hasIssue = (statusMap: Map<string, string>) =>
+    Array.from(statusMap.values()).some((s) => s !== 'approved' && s !== 'compliant');
+
+  const vendorsWithIssues = Array.from(vendorMap.entries()).filter(([, m]) => hasIssue(m));
+  const fullyCompliantCount = vendorMap.size - vendorsWithIssues.length;
+
+  if (vendorsWithIssues.length === 0) {
+    return <p className="text-sm text-green-700">All vendors are fully compliant.</p>;
+  }
+
+  const cellColor = (status: string | undefined) => {
+    if (!status) return 'bg-gray-100 text-gray-400';
+    if (status === 'approved' || status === 'compliant') return 'bg-green-100 text-green-800';
+    if (status === 'missing') return 'bg-red-100 text-red-800';
+    if (status === 'expired') return 'bg-red-100 text-red-800';
+    return 'bg-amber-100 text-amber-800';
+  };
+
+  const cellLabel = (status: string | undefined) => {
+    if (!status) return '—';
+    if (status === 'approved' || status === 'compliant') return '✓';
+    if (status === 'missing') return 'Missing';
+    if (status === 'expired') return 'Expired';
+    return status.replace(/_/g, ' ');
+  };
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs border-collapse">
+        <thead>
+          <tr>
+            <th className="text-left py-1 pr-3 text-gray-500 font-medium">Vendor</th>
+            {docTypes.map((dt) => (
+              <th key={dt} className="text-center py-1 px-2 text-gray-500 font-medium capitalize">
+                {dt.replace(/_/g, ' ').replace('certificate of insurance', 'COI')}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {vendorsWithIssues.map(([vendor, statusMap]) => (
+            <tr key={vendor} className="border-t border-gray-100">
+              <td className="py-1.5 pr-3 text-charcoal font-medium max-w-[140px] truncate" title={vendor}>
+                {vendor}
+              </td>
+              {docTypes.map((dt) => {
+                const s = statusMap.get(dt);
+                return (
+                  <td key={dt} className="py-1.5 px-2 text-center">
+                    <span className={`inline-flex px-1.5 py-0.5 rounded text-xs font-medium ${cellColor(s)}`}>
+                      {cellLabel(s)}
+                    </span>
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {fullyCompliantCount > 0 && (
+        <p className="text-xs text-gray-400 mt-2">+{fullyCompliantCount} vendor{fullyCompliantCount !== 1 ? 's' : ''} fully compliant</p>
+      )}
+    </div>
+  );
+}
+
+function ScheduleDelayChart({ tasks, onViewAll }: { tasks: ScheduleTask[]; onViewAll: () => void }) {
+  const lateTasks = [...tasks]
+    .filter((t) => t.is_late && safe(t.days_late) > 0)
+    .sort((a, b) => safe(b.days_late) - safe(a.days_late));
+
+  const displayTasks = lateTasks.slice(0, 7);
+  const remaining = lateTasks.length - displayTasks.length;
+
+  if (displayTasks.length === 0) {
+    return <p className="text-sm text-green-700">No tasks currently behind schedule.</p>;
+  }
+
+  const chartData = displayTasks.map((t) => ({
+    name: t.task_name.length > 28 ? t.task_name.slice(0, 26) + '…' : t.task_name,
+    days_late: safe(t.days_late),
+    status: t.days_late > 30 ? 'critical' : 'late',
+  }));
+
+  return (
+    <div>
+      <ResponsiveContainer width="100%" height={Math.max(180, displayTasks.length * 32 + 40)}>
+        <BarChart
+          data={chartData}
+          layout="vertical"
+          margin={{ top: 0, right: 16, left: 8, bottom: 0 }}
+        >
+          <XAxis
+            type="number"
+            tick={{ fontSize: 10 }}
+            tickFormatter={(v) => `${v}d`}
+            domain={[0, 'dataMax']}
+          />
+          <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={130} />
+          <Tooltip formatter={(v: number) => [`${v} days late`, 'Days Late']} />
+          <Bar dataKey="days_late" radius={[0, 3, 3, 0]} maxBarSize={20}>
+            {chartData.map((entry, i) => (
+              <Cell
+                key={i}
+                fill={entry.status === 'critical' ? '#DC2626' : '#F59E0B'}
+              />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+      {remaining > 0 && (
+        <button
+          onClick={onViewAll}
+          className="text-xs text-accent hover:text-accent-dark flex items-center gap-0.5 mt-1"
+        >
+          +{remaining} more late task{remaining !== 1 ? 's' : ''} <ChevronRight size={11} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function CostExposureChart({ trades }: { trades: CostTrade[] }) {
+  if (trades.length === 0) return <p className="text-sm text-gray-400 text-center py-8">No division data</p>;
+
+  const sorted = [...trades].sort((a, b) => safe(b.overrun_pct) - safe(a.overrun_pct));
+
+  const chartData = sorted.map((t) => ({
+    name: (t.division_label || t.trade_name).replace(/_/g, ' ').slice(0, 22),
+    budgeted: safe(t.budgeted_cost),
+    exposure: safe(t.actual_cost_to_date) + safe(t.committed_cost),
+    status: t.status,
+  }));
+
+  const statusColor = (status: string) => {
+    if (status === 'over_budget') return '#DC2626';
+    if (status === 'watch') return '#F59E0B';
+    return '#2F8F7A';
+  };
+
+  return (
+    <ResponsiveContainer width="100%" height={Math.max(260, trades.length * 30 + 60)}>
+      <BarChart
+        data={chartData}
+        layout="vertical"
+        margin={{ top: 4, right: 80, left: 8, bottom: 4 }}
+      >
+        <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `$${(v / 1e6).toFixed(1)}M`} />
+        <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={160} />
+        <Tooltip formatter={(v: number) => fmtUSD(v)} />
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+        <Bar dataKey="budgeted" name="Budgeted" fill="#0E3B36" radius={[0, 3, 3, 0]} maxBarSize={12} />
+        <Bar dataKey="exposure" name="Actual + Committed" radius={[0, 3, 3, 0]} maxBarSize={12}>
+          {chartData.map((entry, i) => (
+            <Cell key={i} fill={statusColor(entry.status)} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Priority-ranked attention items across all categories
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildAttentionItems(
+  permits: Permit[],
+  trades: CostTrade[],
+  tasks: ScheduleTask[],
+  vendorGaps: { vendor_name: string }[],
+): AttentionItem[] {
+  const items: AttentionItem[] = [];
+
+  // 1. Blocking + overdue permits (highest priority)
+  for (const p of permits.filter((p) => p.is_blocking && p.is_overdue)) {
+    items.push({
+      id: `permit-${p.id}`,
+      category: 'permit',
+      title: `Blocking permit overdue: ${p.permit_type.replace(/_/g, ' ')}`,
+      context: `${p.days_overdue} day${p.days_overdue !== 1 ? 's' : ''} overdue${p.target_approval_date ? ` (target: ${p.target_approval_date})` : ''}`,
+      tab: 'costs',
+    });
+  }
+
+  // 2. Over-budget cost divisions (sorted by overrun_pct desc = worst first)
+  const overBudget = [...trades]
+    .filter((t) => t.status === 'over_budget')
+    .sort((a, b) => safe(b.overrun_pct) - safe(a.overrun_pct));
+  for (const t of overBudget) {
+    const label = t.division_label || t.trade_name.replace(/_/g, ' ');
+    const overAmt = safe(t.actual_cost_to_date) + safe(t.committed_cost) - safe(t.budgeted_cost);
+    items.push({
+      id: `trade-ob-${t.id}`,
+      category: 'cost',
+      title: `Over budget: ${label}`,
+      context: `${fmtPct(t.overrun_pct)} over contract value (${fmtUSD(overAmt)} excess exposure)`,
+      tab: 'costs',
+    });
+  }
+
+  // 3. Late schedule tasks (sorted by days_late desc)
+  const lateTasks = [...tasks]
+    .filter((t) => t.is_late && safe(t.days_late) > 0)
+    .sort((a, b) => safe(b.days_late) - safe(a.days_late));
+  for (const t of lateTasks) {
+    items.push({
+      id: `sched-${t.id}`,
+      category: 'schedule',
+      title: `Late task: ${t.task_name}`,
+      context: `${t.days_late} day${t.days_late !== 1 ? 's' : ''} behind schedule`,
+      tab: 'schedule',
+    });
+  }
+
+  // 4. Vendors with zero compliant docs
+  for (const v of vendorGaps) {
+    items.push({
+      id: `vendor-${v.vendor_name}`,
+      category: 'compliance',
+      title: `No compliant docs: ${v.vendor_name}`,
+      context: 'Zero compliant documents on file',
+      tab: 'compliance',
+    });
+  }
+
+  // 5. Watch cost divisions
+  const watchTrades = [...trades]
+    .filter((t) => t.status === 'watch')
+    .sort((a, b) => safe(b.overrun_pct) - safe(a.overrun_pct));
+  for (const t of watchTrades) {
+    const label = t.division_label || t.trade_name.replace(/_/g, ' ');
+    items.push({
+      id: `trade-w-${t.id}`,
+      category: 'cost',
+      title: `Watch: ${label}`,
+      context: `${fmtPct(t.overrun_pct)} variance from contract value`,
+      tab: 'costs',
+    });
+  }
+
+  return items.slice(0, 3);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Schedule elapsed calculation
+// ─────────────────────────────────────────────────────────────────────────────
+
+function calcScheduleElapsed(start: string | null | undefined, end: string | null | undefined): number | null {
+  if (!start || !end) return null;
+  const startMs = new Date(start).getTime();
+  const endMs = new Date(end).getTime();
+  const nowMs = Date.now();
+  if (endMs <= startMs) return null;
+  return Math.max(0, Math.min(1, (nowMs - startMs) / (endMs - startMs)));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main component
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function Construction() {
   const { canWrite } = useAuth();
-  const [tab, setTab] = useState<Tab>('costs');
+  const { tab, setTab, projectId, setProjectId, setProjects: ctxSetProjects } = useConstructionNav();
   const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState('');
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [trades, setTrades] = useState<CostTrade[]>([]);
   const [permits, setPermits] = useState<Permit[]>([]);
-  const [atRiskPermits, setAtRiskPermits] = useState<Permit[]>([]);
   const [changeOrders, setChangeOrders] = useState<ChangeOrder[]>([]);
   const [coSummary, setCoSummary] = useState({ pending_exposure: 0, approved_total: 0 });
   const [scheduleTasks, setScheduleTasks] = useState<ScheduleTask[]>([]);
@@ -187,10 +600,16 @@ export default function Construction() {
   const [savingSnapshot, setSavingSnapshot] = useState(false);
   const [savingAssumptions, setSavingAssumptions] = useState(false);
   const [finMsg, setFinMsg] = useState('');
+  const [latestPhotosEntry, setLatestPhotosEntry] = useState<LatestPhotosEntry | null>(null);
   const [loading, setLoading] = useState(true);
-  const [explaining, setExplaining] = useState<string | null>(null);
-  const [explanation, setExplanation] = useState<{ id: string; text: string } | null>(null);
-  const [summary, setSummary] = useState({ total_budgeted: 0, total_actual: 0, overall_overrun_pct: 0, overall_status: 'on_track' });
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const [summary, setSummary] = useState({
+    total_budgeted: 0,
+    total_actual: 0,
+    total_committed: 0,
+    overall_overrun_pct: 0,
+    overall_status: 'on_track',
+  });
 
   const fetchProjects = useCallback(async () => {
     const { data } = await api.get<Project[]>('/api/real-estate/projects', {
@@ -198,23 +617,27 @@ export default function Construction() {
     });
     const list = data.length ? data : (await api.get<Project[]>('/api/real-estate/projects')).data;
     setProjects(list);
+    ctxSetProjects(list.map((p) => ({ id: p.id, project_name: p.project_name, project_code: p.project_code ?? null })));
     if (list.length && !projectId) setProjectId(list[0].id);
-  }, [projectId]);
+  }, [projectId, setProjectId, ctxSetProjects]);
 
   const fetchProjectData = useCallback(async (pid: string) => {
     if (!pid) return;
     setLoading(true);
     try {
       const [
-        tradesRes, permitsRes, atRiskRes, summaryRes,
-        coRes, schedRes, compRes, finRes, assumpRes, roiRes,
+        tradesRes, permitsRes, summaryRes,
+        coRes, schedRes, compRes, finRes, assumpRes, roiRes, latestPhotosRes,
       ] = await Promise.all([
         api.get<CostTrade[]>('/api/real-estate/costs/trades', { params: { project_id: pid } }),
         api.get<Permit[]>('/api/real-estate/permits', { params: { project_id: pid } }),
-        api.get<Permit[]>('/api/real-estate/permits/at-risk', { params: { project_id: pid } }),
-        api.get<{ total_budgeted: number; total_actual: number; overall_overrun_pct: number; overall_status: string }>(
-          `/api/real-estate/costs/summary/${pid}`,
-        ),
+        api.get<{
+          total_budgeted: number;
+          total_actual: number;
+          total_committed: number;
+          overall_overrun_pct: number;
+          overall_status: string;
+        }>(`/api/real-estate/costs/summary/${pid}`),
         api.get<{ items: ChangeOrder[]; summary: { pending_exposure: number; approved_total: number } }>(
           '/api/real-estate/construction/change-orders', { params: { project_id: pid } },
         ),
@@ -229,11 +652,17 @@ export default function Construction() {
         ),
         api.get<ROIAssumptions>(`/api/real-estate/construction/projects/${pid}/roi-assumptions`),
         api.get<ROISummary>(`/api/real-estate/construction/projects/${pid}/roi-summary`),
+        api.get<{ entry: LatestPhotosEntry | null }>('/api/real-estate/daily-progress-photos/latest', { params: { project_id: pid } }),
       ]);
       setTrades(tradesRes.data);
       setPermits(permitsRes.data);
-      setAtRiskPermits(atRiskRes.data);
-      setSummary(summaryRes.data);
+      setSummary({
+        total_budgeted: summaryRes.data.total_budgeted,
+        total_actual: summaryRes.data.total_actual,
+        total_committed: summaryRes.data.total_committed ?? 0,
+        overall_overrun_pct: summaryRes.data.overall_overrun_pct,
+        overall_status: summaryRes.data.overall_status,
+      });
       setChangeOrders(coRes.data.items);
       setCoSummary(coRes.data.summary);
       setScheduleTasks(schedRes.data.items);
@@ -255,16 +684,18 @@ export default function Construction() {
         exit_cap_rate: a.exit_cap_rate != null ? String(a.exit_cap_rate) : '',
         selling_costs_pct: a.selling_costs_pct != null ? String(a.selling_costs_pct) : '0.025',
       });
+      setLatestPhotosEntry(latestPhotosRes.data.entry ?? null);
+      setLastRefreshed(new Date());
     } catch {
       setTrades([]);
       setPermits([]);
-      setAtRiskPermits([]);
       setChangeOrders([]);
       setScheduleTasks([]);
       setComplianceDocs([]);
       setCashData({ latest: null, history: [] });
       setRoiAssumptions(null);
       setRoiSummary(null);
+      setLatestPhotosEntry(null);
     } finally {
       setLoading(false);
     }
@@ -278,70 +709,27 @@ export default function Construction() {
     }
   }, [projectId, projects, fetchProjectData]);
 
-  const handleExplain = async (tradeId: string) => {
-    setExplaining(tradeId);
-    try {
-      const { data } = await api.post<{ explanation: string }>('/api/real-estate/ai/explain-overrun', { trade_id: tradeId });
-      setExplanation({ id: tradeId, text: data.explanation });
-    } catch {
-      setExplanation({ id: tradeId, text: 'Unable to generate explanation.' });
-    } finally {
-      setExplaining(null);
-    }
-  };
+  // ── Derived values for the overview ───────────────────────────────────────
 
-  const chartData = trades.map((t) => ({
-    name: (t.division_label || t.trade_name).replace(/_/g, ' ').slice(0, 18),
-    budgeted: safe(t.budgeted_cost),
-    actual: safe(t.actual_cost_to_date),
-    committed: safe(t.committed_cost),
-  }));
+  const totalBudget = trades.reduce((s, t) => s + safe(t.budgeted_cost), 0);
+  const weightedComplete = totalBudget > 0
+    ? trades.reduce((s, t) => s + safe(t.pct_complete) * safe(t.budgeted_cost), 0) / totalBudget
+    : 0;
 
-  const tradeColumns: Column<CostTrade>[] = [
-    {
-      key: 'csi_division_code',
-      label: 'CSI',
-      render: (r) => r.csi_division_code || '—',
-      sortValue: (r) => r.csi_division_code || '',
-    },
-    {
-      key: 'division_label',
-      label: 'Division',
-      render: (r) => r.division_label || r.trade_name.replace(/_/g, ' '),
-      sortValue: (r) => r.division_label || r.trade_name,
-    },
-    { key: 'vendor_name', label: 'Vendor', render: (r) => r.vendor_name || '—' },
-    { key: 'budgeted_cost', label: 'Budget', render: (r) => fmtUSD(r.budgeted_cost), sortValue: (r) => safe(r.budgeted_cost) },
-    { key: 'actual_cost_to_date', label: 'Actual', render: (r) => fmtUSD(r.actual_cost_to_date), sortValue: (r) => safe(r.actual_cost_to_date) },
-    { key: 'committed_cost', label: 'Committed', render: (r) => fmtUSD(r.committed_cost), sortValue: (r) => safe(r.committed_cost) },
-    { key: 'pct_complete', label: '% Complete', render: (r) => fmtPct(r.pct_complete), sortValue: (r) => safe(r.pct_complete) },
-    { key: 'overrun_pct', label: 'Variance', render: (r) => fmtPct(r.overrun_pct), sortValue: (r) => safe(r.overrun_pct) },
-    { key: 'status', label: 'Status', render: (r) => <StatusPill status={r.status} /> },
-    {
-      key: 'actions',
-      label: '',
-      render: (r) =>
-        (r.status === 'watch' || r.status === 'over_budget') ? (
-          <button
-            onClick={() => handleExplain(r.id)}
-            disabled={explaining === r.id}
-            className="flex items-center gap-1 text-xs text-accent hover:text-accent-dark disabled:opacity-50"
-          >
-            <Sparkles size={12} />
-            {explaining === r.id ? '…' : 'Explain'}
-          </button>
-        ) : null,
-    },
-  ];
+  const scheduleElapsed = calcScheduleElapsed(
+    selectedProject?.start_date,
+    selectedProject?.target_completion_date,
+  );
 
-  const permitColumns: Column<Permit>[] = [
-    { key: 'permit_type', label: 'Permit', render: (r) => r.permit_type.replace(/_/g, ' ') },
-    { key: 'status', label: 'Status', render: (r) => <StatusPill status={r.status} /> },
-    { key: 'is_blocking', label: 'Blocking', render: (r) => (r.is_blocking ? 'Yes' : 'No') },
-    { key: 'days_pending', label: 'Days Pending', sortValue: (r) => safe(r.days_pending) },
-    { key: 'is_overdue', label: 'Overdue', render: (r) => (r.is_overdue ? `${r.days_overdue}d` : '—') },
-    { key: 'target_approval_date', label: 'Target Date', render: (r) => r.target_approval_date || '—' },
-  ];
+  const contractValue = safe(selectedProject?.contract_value);
+  const cashLatest = cashData.latest;
+  const amtPaid = safe(cashLatest?.paid_to_subcontractors);
+  const retainageHeld = cashLatest != null ? cashLatest.retainage_held : null;
+  const totalCompleted = amtPaid + safe(retainageHeld);
+  const balanceToFinish = contractValue > 0 ? contractValue - totalCompleted : null;
+  const costImpact = safe(coSummary.approved_total);
+
+  const attentionItems = buildAttentionItems(permits, trades, scheduleTasks, vendorGaps);
 
   const coColumns: Column<ChangeOrder>[] = [
     { key: 'co_number', label: 'CO #', sortValue: (r) => r.co_number },
@@ -438,25 +826,19 @@ export default function Construction() {
     { key: 'retainage_receivable', label: 'Retainage Recv.', render: (r) => fmtUSD(r.retainage_receivable), sortValue: (r) => safe(r.retainage_receivable) },
   ];
 
-  const cashLatest = cashData.latest;
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-charcoal">Construction</h1>
-          {selectedProject && (
-            <p className="text-sm text-gray-500 mt-1">
-              {selectedProject.project_code && <span className="font-medium text-charcoal">{selectedProject.project_code} · </span>}
-              {[selectedProject.city, selectedProject.state].filter(Boolean).join(', ')}
-              {selectedProject.total_saleable_sqft ? ` · ${selectedProject.total_saleable_sqft.toLocaleString()} SF` : ''}
-            </p>
-          )}
-        </div>
+
+      {/* Mobile only: project + section selects (sidebar is hidden on small screens) */}
+      <div className="md:hidden flex flex-col sm:flex-row gap-2">
         <select
           value={projectId}
           onChange={(e) => setProjectId(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-accent min-w-[220px]"
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-accent"
         >
           {projects.length === 0 && <option value="">No projects</option>}
           {projects.map((p) => (
@@ -465,106 +847,316 @@ export default function Construction() {
             </option>
           ))}
         </select>
-      </div>
-
-      {(selectedProject?.contract_value || selectedProject?.total_project_cost) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {selectedProject.contract_value != null && (
-            <KpiCard label="Contract Value (SOV)" value={fmtUSD(selectedProject.contract_value)} accent />
-          )}
-          {selectedProject.total_project_cost != null && (
-            <KpiCard label="Total Project Cost" value={fmtUSD(selectedProject.total_project_cost)} />
-          )}
-          {roiSummary?.configured && roiSummary.roi != null && (
-            <KpiCard label="Project ROI" value={fmtPct(roiSummary.roi)} sub={roiSummary.moic != null ? `MOIC ${roiSummary.moic.toFixed(2)}x` : undefined} />
-          )}
-          {cashLatest && (
-            <KpiCard label="Net Realized Cash" value={fmtUSD(cashLatest.net_realized_cash)} sub={cashLatest.period_end ? `as of ${cashLatest.period_end}` : undefined} />
-          )}
-        </div>
-      )}
-
-      <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
-        {TABS.map(({ id, label }) => (
-          <button
-            key={id}
-            onClick={() => setTab(id)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-              tab === id ? 'border-accent text-accent' : 'border-transparent text-gray-500 hover:text-charcoal'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+        <select
+          value={tab}
+          onChange={(e) => setTab(e.target.value as Tab)}
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-accent"
+        >
+          {ALL_TABS.map(({ id, label }) => (
+            <option key={id} value={id}>{label}</option>
+          ))}
+        </select>
       </div>
 
       {loading ? (
         <LoadingSkeleton rows={8} />
       ) : (
         <>
-          {tab === 'costs' && (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <KpiCard label="Total Budget" value={fmtUSD(summary.total_budgeted)} />
-                <KpiCard label="Actual to Date" value={fmtUSD(summary.total_actual)} />
-                <KpiCard label="Overall Variance" value={fmtPct(summary.overall_overrun_pct)} sub={summary.overall_status.replace(/_/g, ' ')} />
+          {/* ══════════════════════════════════════════════════════════════════
+              OVERVIEW TAB — Mission-Control Layout
+          ══════════════════════════════════════════════════════════════════ */}
+          {tab === 'overview' && selectedProject && (
+            <div className="space-y-6">
+
+              {/* Section 1: Header */}
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {selectedProject.project_code && (
+                      <span className="text-sm font-medium text-gray-500 font-mono">
+                        {selectedProject.project_code}
+                      </span>
+                    )}
+                    <h2 className="text-xl font-bold text-charcoal">{selectedProject.project_name}</h2>
+                    <StatusPill status={selectedProject.status} />
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {[
+                      selectedProject.project_type?.replace(/_/g, ' '),
+                      selectedProject.created_by,
+                      [selectedProject.city, selectedProject.state].filter(Boolean).join(', '),
+                    ].filter(Boolean).join(' · ')}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-gray-400 shrink-0">
+                  {lastRefreshed && <span>Last synced {lastRefreshed.toLocaleTimeString()}</span>}
+                  <button
+                    onClick={() => fetchProjectData(projectId)}
+                    className="p-1 rounded hover:text-accent hover:bg-gray-100 transition-colors"
+                    title="Refresh data"
+                  >
+                    <RefreshCw size={13} />
+                  </button>
+                </div>
               </div>
 
-              {atRiskPermits.length > 0 && (
-                <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
-                  <AlertTriangle className="text-red-600 shrink-0" size={20} />
-                  <div>
-                    <p className="font-medium text-red-800">{atRiskPermits.length} permit(s) at risk</p>
-                    <ul className="text-sm text-red-700 mt-1 list-disc list-inside">
-                      {atRiskPermits.map((p) => (
-                        <li key={p.id}>{p.permit_type.replace(/_/g, ' ')} — {p.is_overdue ? `${p.days_overdue} days overdue` : 'deadline approaching'}</li>
-                      ))}
-                    </ul>
+              {/* Section 1b: Identity block */}
+              <div className="bg-white border border-gray-200 rounded-xl p-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-3">
+                  {selectedProject.project_code && (
+                    <div className="flex gap-3">
+                      <span className="text-sm text-gray-500 w-32 shrink-0">Project No.</span>
+                      <span className="text-sm font-medium text-charcoal font-mono">{selectedProject.project_code}</span>
+                    </div>
+                  )}
+                  {selectedProject.description && (
+                    <div className="flex gap-3 sm:col-span-2">
+                      <span className="text-sm text-gray-500 w-32 shrink-0">Description</span>
+                      <span className="text-sm text-charcoal">{selectedProject.description}</span>
+                    </div>
+                  )}
+                  {selectedProject.project_type && (
+                    <div className="flex gap-3">
+                      <span className="text-sm text-gray-500 w-32 shrink-0">Type</span>
+                      <span className="text-sm text-charcoal capitalize">{selectedProject.project_type.replace(/_/g, ' ')}</span>
+                    </div>
+                  )}
+                  {selectedProject.creator_role && (
+                    <div className="flex gap-3">
+                      <span className="text-sm text-gray-500 w-32 shrink-0">Creator Role</span>
+                      <span className="text-sm text-charcoal">{selectedProject.creator_role}</span>
+                    </div>
+                  )}
+                  {(selectedProject.city || selectedProject.state) && (
+                    <div className="flex gap-3">
+                      <span className="text-sm text-gray-500 w-32 shrink-0">Location</span>
+                      <span className="text-sm text-charcoal">{[selectedProject.city, selectedProject.state].filter(Boolean).join(', ')}</span>
+                    </div>
+                  )}
+                  {(selectedProject.start_date || selectedProject.target_completion_date) && (
+                    <div className="flex gap-3">
+                      <span className="text-sm text-gray-500 w-32 shrink-0">Schedule</span>
+                      <span className="text-sm text-charcoal">
+                        {selectedProject.start_date ?? '—'} → {selectedProject.target_completion_date ?? '—'}
+                      </span>
+                    </div>
+                  )}
+                  {selectedProject.working_days && (
+                    <div className="flex gap-3">
+                      <span className="text-sm text-gray-500 w-32 shrink-0">Working Days</span>
+                      <span className="text-sm text-charcoal">{selectedProject.working_days}</span>
+                    </div>
+                  )}
+                  <div className="flex gap-3">
+                    <span className="text-sm text-gray-500 w-32 shrink-0">Budget</span>
+                    <span className="text-sm text-charcoal">
+                      {selectedProject.contract_value != null
+                        ? fmtUSD(selectedProject.contract_value)
+                        : 'No contract value set for this project'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: Project progress + Financial progress */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                {/* Left: Project Progress (bullet bar) */}
+                <Card title="Project Progress">
+                  <div className="pt-6 pb-2">
+                    <BulletBar
+                      fill={weightedComplete}
+                      target={scheduleElapsed}
+                      label={`${(weightedComplete * 100).toFixed(1)}% complete (weighted by contract value)`}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 mt-5 border-t border-gray-100 pt-4">
+                    <StatCell label="Completed" value={fmtPct(weightedComplete)} />
+                    <StatCell label="Pending" value={fmtPct(Math.max(0, 1 - weightedComplete))} />
+                    {scheduleElapsed == null && (
+                      <p className="col-span-2 text-xs text-gray-400">
+                        Schedule dates not set — target marker unavailable.
+                      </p>
+                    )}
+                  </div>
+                </Card>
+
+                {/* Right: Financial Progress (stacked bar) */}
+                <Card title="Financial Progress">
+                  {contractValue <= 0 ? (
+                    <p className="text-sm text-gray-400 py-4">No contract value set for this project.</p>
+                  ) : (
+                    <>
+                      <div className="pt-2 pb-2">
+                        <StackedBar
+                          paid={amtPaid}
+                          retainage={retainageHeld ?? 0}
+                          committed={summary.total_committed}
+                          total={contractValue}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-6 gap-y-3 mt-5 border-t border-gray-100 pt-4">
+                        <StatCell label="Contract Value" value={fmtUSD(contractValue)} />
+                        <StatCell label="Total Completed" value={cashLatest ? fmtUSD(totalCompleted) : '—'} />
+                        <StatCell
+                          label="Balance to Finish"
+                          value={balanceToFinish != null ? fmtUSD(balanceToFinish) : '—'}
+                        />
+                        <StatCell label="Amount Paid" value={cashLatest ? fmtUSD(amtPaid) : '—'} />
+                        <StatCell
+                          label="Retainage"
+                          value={retainageHeld != null ? fmtUSD(retainageHeld) : 'not tracked'}
+                          valueClass={retainageHeld == null ? 'text-gray-400' : undefined}
+                        />
+                        <StatCell
+                          label="Cost Impact (Approved COs)"
+                          value={fmtUSD(costImpact)}
+                          valueClass={costImpact > 0 ? 'text-red-600' : undefined}
+                        />
+                      </div>
+                      {!cashLatest && (
+                        <p className="text-xs text-gray-400 mt-3">No financial snapshot recorded yet — paid / retainage figures unavailable.</p>
+                      )}
+                    </>
+                  )}
+                </Card>
+              </div>
+
+              {/* Section 3: Attention Required */}
+              {attentionItems.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-5">
+                  <h3 className="font-semibold text-red-800 flex items-center gap-2 mb-3 text-sm">
+                    <AlertTriangle size={15} />
+                    Attention Required — top {attentionItems.length} issue{attentionItems.length !== 1 ? 's' : ''} across all categories
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {attentionItems.map((item) => (
+                      <AttentionCard key={item.id} item={item} onNavigate={setTab} />
+                    ))}
                   </div>
                 </div>
               )}
 
-              {explanation && (
-                <Card title="AI Cost Explanation">
-                  <p className="text-sm text-charcoal">{explanation.text}</p>
-                  <button onClick={() => setExplanation(null)} className="text-xs text-gray-400 mt-2 hover:text-gray-600">Dismiss</button>
-                </Card>
+              {/* Section 3b: Daily progress photos preview */}
+              {latestPhotosEntry && latestPhotosEntry.photos.length > 0 && (
+                <div className="bg-white border border-gray-200 rounded-xl p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Camera className="h-4 w-4 text-gray-500" />
+                      <h3 className="text-sm font-semibold text-charcoal">
+                        Daily Progress Photos
+                        <span className="ml-2 text-gray-400 font-normal">{latestPhotosEntry.entry_date}</span>
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => setTab('documents')}
+                      className="text-xs text-accent hover:text-accent-dark flex items-center gap-0.5"
+                    >
+                      View all <ChevronRight size={11} />
+                    </button>
+                  </div>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {latestPhotosEntry.photos.slice(0, 8).map((photo) => (
+                      <img
+                        key={photo.id}
+                        src={`${(import.meta.env.VITE_API_BASE_URL as string | undefined) || ''}/uploads/${photo.file_reference}`}
+                        alt={photo.caption || 'Progress photo'}
+                        className="h-20 w-20 object-cover rounded-lg shrink-0 border border-gray-100 cursor-pointer hover:opacity-90 transition-opacity"
+                        onClick={() => setTab('documents')}
+                        title={photo.caption ?? undefined}
+                      />
+                    ))}
+                    {latestPhotosEntry.photo_count > 8 && (
+                      <button
+                        onClick={() => setTab('documents')}
+                        className="h-20 w-20 shrink-0 rounded-lg border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 hover:border-accent hover:text-accent transition-colors"
+                      >
+                        <span className="text-sm font-semibold">+{latestPhotosEntry.photo_count - 8}</span>
+                        <span className="text-xs mt-0.5">more</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
               )}
 
-              <ErrorBoundary>
-                <Card title="Cost Divisions (SOV)">
-                  <Table columns={tradeColumns} data={trades} emptyMessage="No cost divisions for this project" />
+              {/* Section 4: Vendor compliance heatmap + Schedule delay */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card title="Vendor Compliance">
+                  <ErrorBoundary>
+                    <VendorHeatmap docs={complianceDocs} />
+                  </ErrorBoundary>
                 </Card>
-              </ErrorBoundary>
 
-              <ErrorBoundary>
-                <Card title="Budget vs Actual by Division">
-                  {chartData.length === 0 ? (
-                    <p className="text-gray-400 text-center py-8">No division data</p>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={320}>
-                      <BarChart data={chartData}>
-                        <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={70} />
-                        <YAxis tickFormatter={(v) => `$${(v / 1e6).toFixed(1)}M`} />
-                        <Tooltip formatter={(v: number) => fmtUSD(v)} />
-                        <Legend />
-                        <Bar dataKey="budgeted" fill="#0E3B36" name="Budgeted" radius={[2, 2, 0, 0]} />
-                        <Bar dataKey="actual" fill="#2F8F7A" name="Actual" radius={[2, 2, 0, 0]} />
-                        <Bar dataKey="committed" fill="#4BA892" name="Committed" radius={[2, 2, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
+                <Card title="Schedule Delay Ranking">
+                  <ErrorBoundary>
+                    <ScheduleDelayChart
+                      tasks={scheduleTasks}
+                      onViewAll={() => setTab('schedule')}
+                    />
+                  </ErrorBoundary>
                 </Card>
-              </ErrorBoundary>
+              </div>
 
-              <ErrorBoundary>
-                <Card title="Permits">
-                  <Table columns={permitColumns} data={permits} emptyMessage="No permits for this project" />
-                </Card>
-              </ErrorBoundary>
-            </>
+              {/* Section 5: Division cost exposure */}
+              <Card title="Division Cost Exposure — sorted worst variance first">
+                <ErrorBoundary>
+                  <CostExposureChart trades={trades} />
+                </ErrorBoundary>
+              </Card>
+
+              {/* Section 6: Change orders summary + link */}
+              <Card title="Change Orders">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="grid grid-cols-3 gap-6">
+                    <StatCell label="Total" value={String(changeOrders.length)} />
+                    <StatCell label="Pending Exposure" value={fmtUSD(coSummary.pending_exposure)} />
+                    <StatCell label="Approved Total" value={fmtUSD(coSummary.approved_total)} />
+                  </div>
+                  <button
+                    onClick={() => setTab('change_orders')}
+                    className="flex items-center gap-1 text-sm text-accent hover:text-accent-dark shrink-0"
+                  >
+                    View all change orders <ChevronRight size={14} />
+                  </button>
+                </div>
+              </Card>
+            </div>
           )}
 
+          {tab === 'overview' && !selectedProject && (
+            <p className="text-gray-400 text-center py-12">Select a project to view the dashboard.</p>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
+              COSTS & SOV TAB
+          ══════════════════════════════════════════════════════════════════ */}
+          {tab === 'costs' && (
+            <ErrorBoundary>
+              <ConstructionSOV projectId={projectId} />
+            </ErrorBoundary>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
+              PAY APPLICATIONS TAB
+          ══════════════════════════════════════════════════════════════════ */}
+          {tab === 'pay_applications' && (
+            <ErrorBoundary>
+              <ConstructionPayApplications projectId={projectId} />
+            </ErrorBoundary>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
+              EXPENSES TAB
+          ══════════════════════════════════════════════════════════════════ */}
+          {tab === 'expenses' && (
+            <ErrorBoundary>
+              <ConstructionExpenses projectId={projectId} />
+            </ErrorBoundary>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
+              CHANGE ORDERS TAB
+          ══════════════════════════════════════════════════════════════════ */}
           {tab === 'change_orders' && (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -580,6 +1172,18 @@ export default function Construction() {
             </>
           )}
 
+          {/* ══════════════════════════════════════════════════════════════════
+              TASK SCHEDULE TAB
+          ══════════════════════════════════════════════════════════════════ */}
+          {tab === 'task_schedule' && (
+            <ErrorBoundary>
+              <ConstructionTaskSchedule projectId={projectId} />
+            </ErrorBoundary>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
+              SCHEDULE TAB (executive late-task exception view — unchanged)
+          ══════════════════════════════════════════════════════════════════ */}
           {tab === 'schedule' && (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -604,6 +1208,18 @@ export default function Construction() {
             </>
           )}
 
+          {/* ══════════════════════════════════════════════════════════════════
+              LOAN TRACKER TAB
+          ══════════════════════════════════════════════════════════════════ */}
+          {tab === 'loan_tracker' && (
+            <ErrorBoundary>
+              <ConstructionLoanTracker />
+            </ErrorBoundary>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
+              COMPLIANCE TAB
+          ══════════════════════════════════════════════════════════════════ */}
           {tab === 'compliance' && (
             <>
               {vendorGaps.length > 0 && (
@@ -627,6 +1243,54 @@ export default function Construction() {
             </>
           )}
 
+          {/* ══════════════════════════════════════════════════════════════════
+              CHANGE REQUESTS TAB
+          ══════════════════════════════════════════════════════════════════ */}
+          {tab === 'change_requests' && (
+            <ErrorBoundary>
+              <ConstructionCR projectId={projectId} />
+            </ErrorBoundary>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
+              WORK LOG TAB
+          ══════════════════════════════════════════════════════════════════ */}
+          {tab === 'work_log' && (
+            <ErrorBoundary>
+              <ConstructionWorkLog projectId={projectId} />
+            </ErrorBoundary>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
+              QUALITY CHECK TAB
+          ══════════════════════════════════════════════════════════════════ */}
+          {tab === 'quality_check' && (
+            <ErrorBoundary>
+              <ConstructionQC projectId={projectId} />
+            </ErrorBoundary>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
+              INSPECTIONS TAB
+          ══════════════════════════════════════════════════════════════════ */}
+          {tab === 'inspections' && (
+            <ErrorBoundary>
+              <ConstructionInspections projectId={projectId} />
+            </ErrorBoundary>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
+              DOCUMENTS TAB
+          ══════════════════════════════════════════════════════════════════ */}
+          {tab === 'documents' && (
+            <ErrorBoundary>
+              <ConstructionDocuments projectId={projectId} />
+            </ErrorBoundary>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
+              FINANCIALS & ROI TAB
+          ══════════════════════════════════════════════════════════════════ */}
           {tab === 'financials' && (
             <>
               <ErrorBoundary>

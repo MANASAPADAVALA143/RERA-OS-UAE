@@ -20,9 +20,9 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/accept-invite" element={<AcceptInvite />} />
+          <Route path="/login" element={<Navigate to="/executive-summary" replace />} />
+          <Route path="/register" element={<Navigate to="/executive-summary" replace />} />
+          <Route path="/accept-invite" element={<Navigate to="/executive-summary" replace />} />
           <Route
             element={
               <ProtectedRoute>

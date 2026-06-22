@@ -16,6 +16,9 @@ def ensure_local_demo(db: Session) -> None:
 
     existing = db.query(TenantUser).filter(TenantUser.email == DEMO_EMAIL).first()
     if existing:
+        # User exists but rental data may not be seeded yet — check and seed if missing
+        from scripts.seed_rentals import seed as seed_rentals
+        seed_rentals()
         return
 
     logger.info("Creating local demo tenant: %s / %s", DEMO_EMAIL, DEMO_PASSWORD)
@@ -39,5 +42,7 @@ def ensure_local_demo(db: Session) -> None:
     db.commit()
 
     from scripts.seed_demo_tenant import seed
-
     seed(tenant.id, skip_if_seeded=True)
+
+    from scripts.seed_rentals import seed as seed_rentals
+    seed_rentals()

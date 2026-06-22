@@ -101,6 +101,10 @@ class Project(Base):
     hurricane_zone: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     insurance_coverage_amount: Mapped[float | None] = mapped_column(Numeric(16, 2), nullable=True)
     insurance_renewal_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Extended identity fields (added via schema_patches for existing deployments)
+    description: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    creator_role: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    working_days: Mapped[str | None] = mapped_column(String(255), nullable=True)  # e.g. "Mon, Tue, Wed, Thu, Fri, Sat"
     created_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
@@ -120,5 +124,7 @@ class Project(Base):
     roi_assumptions: Mapped["ProjectROIAssumptions | None"] = relationship(
         "ProjectROIAssumptions", back_populates="project", uselist=False
     )
+    pay_applications: Mapped[list["PayApplication"]] = relationship("PayApplication", back_populates="project")
+    expenses: Mapped[list["ProjectExpense"]] = relationship("ProjectExpense", back_populates="project")
 
     __table_args__ = (Index("ix_projects_tenant_entity", "tenant_id", "entity_id"),)

@@ -5,7 +5,7 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from config import settings
-from database import get_db
+from database import get_db, set_rls_tenant
 from models.tenancy import TenantUser, UserRole, UserStatus
 from services.local_auth import decode_local_token
 
@@ -57,6 +57,22 @@ async def get_current_user(
     db: Session = Depends(get_db),
 ) -> CurrentUser:
     auth_header = request.headers.get("Authorization")
+
+    # Demo bypass: in local mode with no token, auto-authenticate as the demo user
+    if settings.effective_auth_mode == "local" and (
+        not auth_header or not auth_header.startswith("Bearer ")
+    ):
+        from services.local_auth import DEMO_EMAIL
+        demo_user = db.query(TenantUser).filter(TenantUser.email == DEMO_EMAIL).first()
+        if demo_user:
+            set_rls_tenant(db, str(demo_user.tenant_id))
+            return CurrentUser(
+                user_id=str(demo_user.supabase_user_id),
+                tenant_id=demo_user.tenant_id,
+                role=demo_user.role,
+                email=demo_user.email or DEMO_EMAIL,
+            )
+
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -74,6 +90,8 @@ async def get_current_user(
             detail="Token missing sub claim",
         )
 
+    # tenant_users is intentionally excluded from RLS (it's the auth lookup table),
+    # so this query works before the RLS context is set.
     tenant_user = (
         db.query(TenantUser)
         .filter(TenantUser.supabase_user_id == user_id)
@@ -91,6 +109,12 @@ async def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is disabled",
         )
+
+    # Set Postgres RLS tenant context for this session.
+    # FastAPI caches Depends(get_db) per request, so `db` here is the same
+    # Session object that will be injected into the route handler. Any queries
+    # the handler runs will see only this tenant's rows.
+    set_rls_tenant(db, str(tenant_user.tenant_id))
 
     return CurrentUser(
         user_id=user_id,

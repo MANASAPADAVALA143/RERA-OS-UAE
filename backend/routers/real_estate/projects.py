@@ -51,6 +51,10 @@ def _project_dict(p: Project):
         "flood_zone": p.flood_zone,
         "wildfire_risk_zone": p.wildfire_risk_zone,
         "hurricane_zone": p.hurricane_zone,
+        "description": p.description,
+        "creator_role": p.creator_role,
+        "working_days": p.working_days,
+        "created_by": p.created_by,
     }
 
 

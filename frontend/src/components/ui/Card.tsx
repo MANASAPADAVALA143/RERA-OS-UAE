@@ -4,12 +4,18 @@ interface CardProps {
   children: ReactNode;
   className?: string;
   title?: string;
+  action?: ReactNode;
 }
 
-export function Card({ children, className = '', title }: CardProps) {
+export function Card({ children, className = '', title, action }: CardProps) {
   return (
     <div className={`bg-white rounded-xl border border-gray-200 shadow-sm ${className}`}>
-      {title && <div className="px-5 py-3 border-b border-gray-100 font-semibold text-primary">{title}</div>}
+      {(title || action) && (
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-3">
+          {title && <span className="font-semibold text-primary">{title}</span>}
+          {action && <div className="flex-shrink-0">{action}</div>}
+        </div>
+      )}
       <div className="p-5">{children}</div>
     </div>
   );

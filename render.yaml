@@ -1,0 +1,42 @@
+services:
+  # ── Backend (FastAPI) ───────────────────────────────────────────────────────
+  - type: web
+    name: estatecfo-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    plan: starter          # ~$7/mo — change to "free" for testing (sleeps after 15min)
+    region: oregon         # closest to us-west-1 (your RDS)
+    envVars:
+      - key: AUTH_MODE
+        value: local
+      - key: LOCAL_JWT_SECRET
+        generateValue: true          # Render auto-generates a secure secret
+      - key: DATABASE_URL
+        sync: false                  # you paste this manually in Render dashboard
+      - key: S3_BUCKET
+        value: ""
+      - key: AWS_REGION
+        value: us-west-1
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+
+  # ── Frontend (Vite/React) ───────────────────────────────────────────────────
+  - type: web
+    name: estatecfo-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    plan: free                       # static sites are always free on Render
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: estatecfo-api
+          type: web
+          property: host
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html     # SPA fallback — required for React Router

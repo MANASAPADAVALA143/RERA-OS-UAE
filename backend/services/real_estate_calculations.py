@@ -260,6 +260,32 @@ def capital_available_now(facilities: list[dict]) -> dict:
     return {"total": round(total, 2), "breakdown": breakdown}
 
 
+def validate_period_completion(prior: float, current: float, earned_to_date: float) -> dict:
+    """
+    Validates that prior_period_completed + current_period_completed equals
+    earned_to_date within a $1 rounding tolerance.
+
+    Returns {"valid": True} on success.
+    Returns {"valid": False, "detail": "..."} on failure — caller should
+    raise HTTP 422 rather than silently accepting the drift.
+    """
+    prior = _to_float(prior)
+    current = _to_float(current)
+    earned = _to_float(earned_to_date)
+    total = prior + current
+    diff = abs(total - earned)
+    if diff <= 1.0:
+        return {"valid": True}
+    return {
+        "valid": False,
+        "detail": (
+            f"Prior ({prior:,.2f}) + This Period ({current:,.2f}) = {total:,.2f} "
+            f"but Earned to Date = {earned:,.2f} "
+            f"(${diff:,.2f} outside the $1 tolerance — data entry error)"
+        ),
+    }
+
+
 def schedule_task_late_days(
     planned_end: date | None,
     actual_end: date | None,
@@ -279,3 +305,35 @@ def schedule_task_late_days(
 
     days_late = (today - planned_end).days
     return {"days_late": days_late, "is_late": days_late > 0}
+
+
+def validate_task_status_consistency(
+    status: str,
+    pct_done: float,
+    actual_end: date | None,
+) -> dict:
+    """
+    Guard against bad data: a task marked 'complete' with pct_done < 100% or
+    no actual_end is inconsistent data, not a valid state. The only escape hatch
+    is an explicit override with a logged reason — this function flags but never
+    silently accepts the inconsistency.
+
+    Returns {"valid": True} or {"valid": False, "detail": str, "flag": "status_pct_inconsistency"}
+    """
+    if status != "complete":
+        return {"valid": True}
+
+    issues = []
+    pct = _to_float(pct_done)
+    if pct < 0.999:
+        issues.append(f"% Done is {pct * 100:.0f}% (must be 100% for Completed status)")
+    if actual_end is None:
+        issues.append("Actual End date is not set (required when status = Completed)")
+
+    if issues:
+        return {
+            "valid": False,
+            "flag": "status_pct_inconsistency",
+            "detail": "; ".join(issues) + ". Use Override Status with a logged reason to force this state.",
+        }
+    return {"valid": True}
