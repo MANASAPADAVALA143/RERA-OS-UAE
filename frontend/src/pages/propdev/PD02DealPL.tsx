@@ -58,9 +58,11 @@ export default function PD02DealPL() {
   if (!p) return <div className="p-4 text-gray-500">No data</div>;
 
   const totalOther = Object.values(costs).reduce((s, v) => s + v, 0);
-  const managementFee = (totalOther) * p.managementFeeRate;
+  // Management fee: 9% of Land Cost (per Annexure I Note 4)
+  const managementFee = p.landCost * p.managementFeeRate;
   const totalExclLandComm = totalOther + managementFee;
-  const commission = p.saleConsideration * p.commissionRate;
+  // Commission: use explicit amount if set, otherwise rate × sale consideration
+  const commission = p.commission ?? (p.saleConsideration * p.commissionRate);
   const totalExclLand = totalExclLandComm + commission;
   const totalExpenses = p.landCost + totalExclLand;
   const netProfit = p.saleConsideration - totalExpenses;
@@ -75,8 +77,9 @@ export default function PD02DealPL() {
     { name: 'Stressed (−10%)', priceMultiplier: 0.90 },
   ].map(s => {
     const rev = p.saleConsideration * s.priceMultiplier;
-    const comm = rev * p.commissionRate;
-    const np = rev - p.landCost - totalOther - managementFee - comm;
+    const comm = p.commission ?? (rev * p.commissionRate);
+    const mgmtFee = p.landCost * p.managementFeeRate;
+    const np = rev - p.landCost - totalOther - mgmtFee - comm;
     return { name: s.name, revenue: fmt(rev), netProfit: fmt(np), margin: `${((np / rev) * 100).toFixed(1)}%` };
   });
 
@@ -162,7 +165,7 @@ export default function PD02DealPL() {
               </tr>
               {/* Management Fee */}
               <tr className="border-t border-gray-50 hover:bg-gray-50">
-                <td className="px-5 py-2.5 pl-10 text-gray-700">Management Fee ({(p.managementFeeRate*100).toFixed(0)}% of Other Exp)</td>
+                <td className="px-5 py-2.5 pl-10 text-gray-700">Management Fee ({(p.managementFeeRate*100).toFixed(0)}% of Land Cost — Note 4)</td>
                 <td className="px-5 py-2.5 text-right">{fmt(managementFee)}</td>
                 <td className="px-5 py-2.5 text-right text-xs text-gray-500">{fmt(managementFee / totalLots)}</td>
                 <td className="px-5 py-2.5 text-right text-xs text-gray-500">{pct(managementFee, p.saleConsideration)}</td>
@@ -174,7 +177,11 @@ export default function PD02DealPL() {
               </tr>
               {/* Commission */}
               <tr className="border-t border-gray-50 hover:bg-gray-50">
-                <td className="px-5 py-2.5 pl-10 text-gray-700">Sale Commission ({(p.commissionRate*100).toFixed(1)}% of Sale)</td>
+                <td className="px-5 py-2.5 pl-10 text-gray-700">
+                  {p.commission != null
+                    ? `Sale Commission (6% for 1 lot & 3% for 26 lots — Note 2)`
+                    : `Sale Commission (${(p.commissionRate*100).toFixed(1)}% of Sale)`}
+                </td>
                 <td className="px-5 py-2.5 text-right">{fmt(commission)}</td>
                 <td className="px-5 py-2.5 text-right text-xs text-gray-500">{fmt(commission / totalLots)}</td>
                 <td className="px-5 py-2.5 text-right text-xs text-gray-500">{pct(commission, p.saleConsideration)}</td>
@@ -254,11 +261,13 @@ export default function PD02DealPL() {
           { label: 'Revenue', getValue: c => c.property.saleConsideration },
           { label: 'Land Cost', getValue: c => c.property.landCost, higherIsBetter: false },
           { label: 'Net Margin', getValue: c => {
-              const tot = c.property.landCost + c.property.hardCost + c.property.softCost
-                + c.property.titleCharges + c.property.otherCharges + c.property.propertyTax
-                + c.property.loanProcessing + c.property.professionalCharges + c.property.legalFees + c.property.interestOnLoan;
-              const np = c.property.saleConsideration - tot - tot * 0.09 - c.property.saleConsideration * 0.045;
-              return c.property.saleConsideration > 0 ? (np / c.property.saleConsideration) * 100 : 0;
+              const p = c.property;
+              const tot = p.hardCost + p.softCost + p.titleCharges + p.otherCharges
+                + p.propertyTax + p.loanProcessing + p.professionalCharges + p.legalFees + p.interestOnLoan;
+              const mgmt = p.landCost * p.managementFeeRate;
+              const comm = p.commission ?? (p.saleConsideration * p.commissionRate);
+              const np = p.saleConsideration - p.landCost - tot - mgmt - comm;
+              return p.saleConsideration > 0 ? (np / p.saleConsideration) * 100 : 0;
             },
             format: v => `${v.toFixed(1)}%`,
           },

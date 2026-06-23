@@ -50,7 +50,9 @@ export interface Property {
   landCost: number; hardCost: number; softCost: number; titleCharges: number;
   otherCharges: number; propertyTax: number; loanProcessing: number;
   professionalCharges: number; legalFees: number; interestOnLoan: number;
-  managementFeeRate: number; commissionRate: number; cashAvailable: number;
+  managementFeeRate: number; commissionRate: number;
+  commission?: number;  // explicit commission amount; overrides commissionRate when set
+  cashAvailable: number;
   monthlyData: { month: string; lotsSold: number; revenue: number }[];
 }
 export interface CompanyData {
@@ -204,13 +206,31 @@ interface CompanyCfg {
   cashAvailable: number;
   partners: { name: string; pct: number; capital: number }[];
   loans: { bank: string; amount: number; rate: number }[];
+  // Optional explicit expense overrides (if omitted, formulas are used)
+  titleCharges?: number;
+  otherCharges?: number;
+  propertyTax?: number;
+  loanProcessing?: number;
+  professionalCharges?: number;
+  legalFees?: number;
+  interestOnLoan?: number;
+  commission?: number;       // explicit commission amount; overrides commissionRate formula
+  managementFeeRate?: number; // default 0.09 (9% of land cost per Note 4)
+  commissionRate?: number;    // only used when commission is not explicit
 }
 
 const COMPANY_CONFIGS: CompanyCfg[] = [
   {
     id: 'c1', name: 'Celina Ventures LLC', address: 'Celina, TX 75009',
     totalLots: 27, totalAcres: 45.2, landCost: 3367555, saleConsideration: 8150000,
-    hardCost: 120000, softCost: 85000, soldCount: 10, contractedCount: 5, cashAvailable: 342500,
+    // Exact values from Annexure I Excel
+    hardCost: 850000, softCost: 320000,
+    titleCharges: 45000, otherCharges: 25000, propertyTax: 62000,
+    loanProcessing: 18000, professionalCharges: 35000, legalFees: 28000,
+    interestOnLoan: 95000,
+    commission: 255000,       // "6% for 1 lot & 3% for 26 lots" per Note 2
+    managementFeeRate: 0.09,  // 9% of landCost per Note 4 = $303,080
+    soldCount: 10, contractedCount: 5, cashAvailable: 342500,
     partners: [
       { name: 'GP Holdings LLC', pct: 50, capital: 600000 },
       { name: 'ABC LTD', pct: 11, capital: 129212 },
@@ -348,13 +368,17 @@ function buildCompany(cfg: CompanyCfg): CompanyData {
     totalLots: cfg.totalLots, totalAcres: cfg.totalAcres,
     saleConsideration: cfg.saleConsideration, landCost: cfg.landCost,
     hardCost: cfg.hardCost, softCost: cfg.softCost,
-    titleCharges: Math.round(cfg.saleConsideration * 0.005),
-    otherCharges: Math.round(cfg.saleConsideration * 0.002),
-    propertyTax: Math.round(totalMonthlyEMI * 0.246),
-    loanProcessing: Math.round(loans[0].amount * 0.008),
-    professionalCharges: 9000, legalFees: 15000,
-    interestOnLoan: totalMonthlyEMI * 6,
-    managementFeeRate: 0.09, commissionRate: 0.045,
+    titleCharges:         cfg.titleCharges         ?? Math.round(cfg.saleConsideration * 0.005),
+    otherCharges:         cfg.otherCharges         ?? Math.round(cfg.saleConsideration * 0.002),
+    propertyTax:          cfg.propertyTax          ?? Math.round(totalMonthlyEMI * 0.246),
+    loanProcessing:       cfg.loanProcessing       ?? Math.round(loans[0].amount * 0.008),
+    professionalCharges:  cfg.professionalCharges  ?? 9000,
+    legalFees:            cfg.legalFees            ?? 15000,
+    interestOnLoan:       cfg.interestOnLoan       ?? totalMonthlyEMI * 6,
+    managementFeeRate:    cfg.managementFeeRate    ?? 0.09,
+    // commissionRate encodes explicit amount as negative sentinel; PD02 reads commission field directly
+    commissionRate:       cfg.commissionRate       ?? 0.045,
+    commission:           cfg.commission,   // explicit override; undefined = use commissionRate
     cashAvailable: cfg.cashAvailable,
     monthlyData: MONTHS.map((month, i) => {
       const soldPerMonth = Math.ceil(cfg.soldCount / 6);
