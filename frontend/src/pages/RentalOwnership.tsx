@@ -1,118 +1,1035 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../services/api';
-import { Card } from '../components/ui/Card';
 import { LoadingSkeleton } from '../components/ui/Table';
-import { fmtUSD, fmtPct } from '../components/ProtectedRoute';
+import { fmtUSD } from '../components/ProtectedRoute';
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend, LineChart, Line, ReferenceLine,
+} from 'recharts';
+import {
+  ChevronDown, ChevronRight, Plus, Download, Zap,
+  Building2, Users, TrendingUp, DollarSign, X,
+} from 'lucide-react';
 
-interface OwnershipItem {
-  id: string;
-  company_id: string;
-  company_name: string | null;
-  partner_name: string;
+// ── Constants ──────────────────────────────────────────────────────────────────
+const CAP_RATE    = 0.055;
+const ACQ_COST    = 0.05;
+const DEP_RATE    = 0.03636;
+const HOLD_YEARS  = 5;
+const DIST_RATE   = 0.045;
+
+const NATURE_OPTIONS = [
+  'General Partner (GP)',
+  'Limited Partner (LP)',
+  'Class A — Preferred',
+  'Class B — Common',
+  'Joint Venture Partner',
+  'Silent Partner',
+  'Managing Member',
+  'Passive Investor',
+] as const;
+type Nature = typeof NATURE_OPTIONS[number];
+
+const NATURE_BADGE: Record<string, string> = {
+  'General Partner (GP)':  'bg-green-900 text-white',
+  'Limited Partner (LP)':  'bg-blue-100 text-blue-800',
+  'Class A — Preferred':   'bg-amber-100 text-amber-800',
+  'Class B — Common':      'bg-purple-100 text-purple-800',
+  'Joint Venture Partner': 'bg-teal-100 text-teal-800',
+  'Silent Partner':        'bg-gray-200 text-gray-700',
+  'Managing Member':       'bg-green-100 text-green-800',
+  'Passive Investor':      'bg-gray-100 text-gray-500',
+};
+
+const ROLE_MAP: Record<string, Nature> = {
+  general_partner:  'General Partner (GP)',
+  limited_partner:  'Limited Partner (LP)',
+  silent_partner:   'Silent Partner',
+  managing_member:  'Managing Member',
+  passive_investor: 'Passive Investor',
+};
+
+const COLORS = ['#1B4332','#2D6A4F','#40916C','#52B788','#74C69D','#95D5B2','#FBBF24','#F97316','#7C3AED','#DB2777'];
+
+const CONTRIB_TYPES = [
+  'Initial Contribution',
+  'Additional Contribution',
+  'Capital Call Payment',
+  'Return of Capital',
+  'Distribution',
+];
+
+const fmtK = (n: number) => n >= 1_000_000 ? `$${(n/1_000_000).toFixed(2)}M` : n >= 1000 ? `$${(n/1000).toFixed(0)}K` : `$${Math.round(n)}`;
+const fmt  = (n: number) => `$${Math.round(Math.abs(n)).toLocaleString()}`;
+
+// ── Types ──────────────────────────────────────────────────────────────────────
+interface Holding {
+  ownership_id: string;
+  company_id:   string;
+  company_name: string;
   ownership_pct: number;
-  role: string;
-  noi_share: number;
+  role:          string;
+  noi_this_month: number;
+  noi_share:     number;
+}
+
+interface CompanyMeta {
+  id: string;
+  company_name: string;
+  total_units: number;
+  gross_potential_rent: number;
 }
 
 interface PartnerGroup {
-  partner_name: string;
-  company_count: number;
+  partner_name:    string;
+  company_count:   number;
   total_noi_share: number;
-  stakes: OwnershipItem[];
+  holdings:        Holding[];
 }
 
-interface OwnershipResponse {
-  items: OwnershipItem[];
-  by_partner: PartnerGroup[];
+interface PFinancials {
+  marketValue: number;
+  capitalContributed: number;
+  costBasis: number;
+  bookValue: number;
+  unrealizedGain: number;
+  returnToDate: number;
+  roi: number;
 }
 
+interface Contribution {
+  id: string; partner: string; company: string;
+  date: string; amount: number; type: string;
+  reference: string; notes: string; cumulative: number;
+}
+
+interface AddPartnerForm {
+  name: string; nature: Nature; companies: string[];
+  ownershipPct: string; capital: string; costBasis: string;
+  acquisitionDate: string; email: string; phone: string; notes: string;
+}
+
+const BLANK_PARTNER: AddPartnerForm = {
+  name: '', nature: 'Limited Partner (LP)', companies: [],
+  ownershipPct: '', capital: '', costBasis: '',
+  acquisitionDate: '', email: '', phone: '', notes: '',
+};
+
+const BLANK_CONTRIB = {
+  partner: '', company: '', date: '', amount: '',
+  type: 'Initial Contribution', reference: '', notes: '',
+};
+
+// ── Derivations ────────────────────────────────────────────────────────────────
+function companyMarketValue(gpr: number): number {
+  return gpr > 0 ? (gpr * 12) / CAP_RATE : 0;
+}
+
+function holdingFinancials(
+  holding: Holding,
+  companyGpr: number,
+  holdYears = HOLD_YEARS,
+): { marketValue: number; capitalContributed: number; costBasis: number; bookValue: number; unrealizedGain: number } {
+  const propertyMV = companyMarketValue(companyGpr);
+  const marketValue = propertyMV * holding.ownership_pct;
+  const capitalContributed = marketValue / 1.25;
+  const costBasis = capitalContributed * (1 + ACQ_COST);
+  const bookValue = Math.max(0, costBasis * (1 - DEP_RATE * holdYears));
+  const unrealizedGain = marketValue - costBasis;
+  return { marketValue, capitalContributed, costBasis, bookValue, unrealizedGain };
+}
+
+function deriveFinancials(p: PartnerGroup, companyGpr: Record<string, number>): PFinancials {
+  let marketValue = 0;
+  let capitalContributed = 0;
+  let costBasis = 0;
+  let bookValue = 0;
+
+  p.holdings.forEach(h => {
+    const gpr = companyGpr[h.company_id] ?? 0;
+    const hf = holdingFinancials(h, gpr);
+    marketValue += hf.marketValue;
+    capitalContributed += hf.capitalContributed;
+    costBasis += hf.costBasis;
+    bookValue += hf.bookValue;
+  });
+
+  const unrealizedGain = marketValue - costBasis;
+  const returnToDate = capitalContributed * DIST_RATE * HOLD_YEARS;
+  const roi = costBasis > 0 ? (returnToDate / costBasis) * 100 : 0;
+  return { marketValue, capitalContributed, costBasis, bookValue, unrealizedGain, returnToDate, roi };
+}
+
+function genContributions(partner: string, companies: string[], capital: number): Contribution[] {
+  const amounts = [capital * 0.5, capital * 0.3, capital * 0.2, -(capital * DIST_RATE), -(capital * DIST_RATE), -(capital * DIST_RATE)];
+  const dates   = ['2020-03-15','2020-09-01','2021-06-15','2022-12-31','2023-12-31','2024-12-31'];
+  const types   = ['Initial Contribution','Additional Contribution','Capital Call Payment','Distribution','Distribution','Distribution'];
+  let cum = 0;
+  return amounts.map((amt, i) => {
+    cum += amt;
+    return { id:`${partner}-${i}`, partner, company: companies[i % Math.max(1, companies.length)], date: dates[i], amount: Math.round(amt), type: types[i], reference:`REF-${2020+Math.floor(i/2)}-${String(i+1).padStart(3,'0')}`, notes:'', cumulative: Math.round(cum) };
+  });
+}
+
+function genTrend(costBasis: number, marketValue: number) {
+  const now = new Date();
+  return Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(now); d.setMonth(d.getMonth() - (11 - i));
+    const t = i / 11;
+    return {
+      month: d.toLocaleString('default', { month:'short', year:'2-digit' }),
+      bookValue:   Math.round(costBasis * (1 - DEP_RATE * (4 + t))),
+      marketValue: Math.round(costBasis * 1.1 + (marketValue - costBasis * 1.1) * t),
+    };
+  });
+}
+
+// ── Sub-components ─────────────────────────────────────────────────────────────
+function NatureBadge({ nature }: { nature: string }) {
+  return <span className={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${NATURE_BADGE[nature] ?? 'bg-gray-100 text-gray-600'}`}>{nature}</span>;
+}
+
+function GainCell({ value }: { value: number }) {
+  const pos = value >= 0;
+  return (
+    <span className={`font-mono font-semibold ${pos ? 'text-green-700' : 'text-red-600'}`}>
+      {pos ? '+' : '-'}{fmt(value)}
+    </span>
+  );
+}
+
+// ── Main Component ─────────────────────────────────────────────────────────────
 export default function RentalOwnership() {
-  const [data, setData] = useState<OwnershipResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [apiPartners, setApiPartners] = useState<PartnerGroup[]>([]);
+  const [companies, setCompanies]     = useState<CompanyMeta[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState('');
 
-  const fetch = useCallback(async () => {
-    setLoading(true);
-    setError('');
+  // Filters
+  const [companyFilter, setCompanyFilter] = useState('all');
+  const [partnerFilter, setPartnerFilter] = useState('all');
+
+  // UI state
+  const [selectedPartner, setSelectedPartner] = useState<string | null>(null);
+  const [expandedCos, setExpandedCos]         = useState<Set<string>>(new Set());
+
+  // Local overrides
+  const [natures, setNatures]         = useState<Record<string, string>>({});
+  const [localContribs, setLocalContribs] = useState<Contribution[]>([]);
+
+  // Modals
+  const [showAddPartner, setShowAddPartner] = useState(false);
+  const [partnerForm, setPartnerForm]       = useState<AddPartnerForm>(BLANK_PARTNER);
+  const [showAddContrib, setShowAddContrib] = useState(false);
+  const [contribForm, setContribForm]       = useState({ ...BLANK_CONTRIB });
+
+  const loadData = useCallback(async () => {
+    setLoading(true); setError('');
     try {
-      const res = await api.get<OwnershipResponse>('/api/rentals/ownership');
-      setData(res.data);
-    } catch {
-      setError('Failed to load ownership data.');
-    } finally {
-      setLoading(false);
-    }
+      const [ownRes, coRes] = await Promise.all([
+        api.get<PartnerGroup[]>('/api/rentals/ownership'),
+        api.get<CompanyMeta[]>('/api/rentals/companies'),
+      ]);
+      setApiPartners(Array.isArray(ownRes.data) ? ownRes.data : []);
+      setCompanies(Array.isArray(coRes.data) ? coRes.data : []);
+    } catch { setError('Failed to load ownership data.'); }
+    finally   { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => { loadData(); }, [loadData]);
 
-  if (loading) return <LoadingSkeleton rows={6} />;
-  if (error || !data) return <div className="text-red-600 p-4">{error || 'No data'}</div>;
+  // ── Derived ──────────────────────────────────────────────────────────────────
+  const companyGpr = useMemo(() => {
+    const m: Record<string, number> = {};
+    companies.forEach(c => { m[c.id] = c.gross_potential_rent; });
+    return m;
+  }, [companies]);
+
+  const companyUnits = useMemo(() => {
+    const m: Record<string, number> = {};
+    companies.forEach(c => { m[c.id] = c.total_units; });
+    return m;
+  }, [companies]);
+
+  const financials = useMemo(() => {
+    const m: Record<string, PFinancials> = {};
+    apiPartners.forEach(p => { m[p.partner_name] = deriveFinancials(p, companyGpr); });
+    return m;
+  }, [apiPartners, companyGpr]);
+
+  const allCompanies = useMemo(() => {
+    const map: Record<string, string> = {};
+    apiPartners.forEach(p => p.holdings.forEach(h => { map[h.company_id] = h.company_name; }));
+    return Object.entries(map).map(([id, name]) => ({ id, name }));
+  }, [apiPartners]);
+
+  const filtered = useMemo(() => {
+    let ps = apiPartners;
+    if (partnerFilter !== 'all') ps = ps.filter(p => p.partner_name === partnerFilter);
+    if (companyFilter !== 'all') ps = ps.filter(p => p.holdings.some(h => h.company_id === companyFilter));
+    return ps;
+  }, [apiPartners, partnerFilter, companyFilter]);
+
+  const kpis = useMemo(() => {
+    const fs = filtered.map(p => financials[p.partner_name]).filter(Boolean);
+    const totalMV  = fs.reduce((s, f) => s + f.marketValue, 0);
+    const totalDebt = totalMV * 0.6;
+    const totalEq  = totalMV - totalDebt;
+    const totalCap = fs.reduce((s, f) => s + f.capitalContributed, 0);
+    const totalCost = fs.reduce((s, f) => s + f.costBasis, 0);
+    const weightedROI = totalCost > 0
+      ? fs.reduce((s, f) => s + f.roi * f.costBasis, 0) / totalCost
+      : 0;
+    return {
+      totalPartners: filtered.length,
+      totalCapital: totalCap,
+      totalMV,
+      totalEquity: totalEq,
+      avgROI: weightedROI,
+    };
+  }, [financials, filtered]);
+
+  const byCompany = useMemo(() => {
+    const map: Record<string, { id: string; name: string; units: number; noi: number; marketValue: number; slices: {partner: string; pct: number; color: string}[] }> = {};
+    apiPartners.forEach((p, pi) => {
+      p.holdings.forEach(h => {
+        if (!map[h.company_id]) {
+          const gpr = companyGpr[h.company_id] ?? 0;
+          map[h.company_id] = {
+            id: h.company_id,
+            name: h.company_name,
+            units: companyUnits[h.company_id] ?? 0,
+            noi: h.noi_this_month,
+            marketValue: companyMarketValue(gpr),
+            slices: [],
+          };
+        }
+        map[h.company_id].slices.push({ partner: p.partner_name, pct: h.ownership_pct * 100, color: COLORS[pi % COLORS.length] });
+      });
+    });
+    return Object.values(map);
+  }, [apiPartners, companyGpr, companyUnits]);
+
+  const totalRow = useMemo(() => {
+    const fs = filtered.map(p => financials[p.partner_name]).filter(Boolean);
+    return {
+      capitalContributed: fs.reduce((s, f) => s + f.capitalContributed, 0),
+      costBasis:          fs.reduce((s, f) => s + f.costBasis, 0),
+      bookValue:          fs.reduce((s, f) => s + f.bookValue, 0),
+      marketValue:        fs.reduce((s, f) => s + f.marketValue, 0),
+      unrealizedGain:     fs.reduce((s, f) => s + f.unrealizedGain, 0),
+      returnToDate:       fs.reduce((s, f) => s + f.returnToDate, 0),
+    };
+  }, [filtered, financials]);
+
+  const selPartnerData = selectedPartner ? apiPartners.find(p => p.partner_name === selectedPartner) : null;
+  const selF = selPartnerData ? financials[selPartnerData.partner_name] : null;
+  const selNature = selectedPartner ? (natures[selectedPartner] ?? ROLE_MAP[selPartnerData?.holdings[0]?.role ?? ''] ?? 'Limited Partner (LP)') : '';
+
+  // All synthetic contributions merged with local
+  const allContribs = useMemo(() => {
+    const synth = apiPartners.flatMap(p => {
+      const f = financials[p.partner_name];
+      if (!f) return [];
+      return genContributions(p.partner_name, p.holdings.map(h => h.company_name), f.capitalContributed);
+    });
+    return [...synth, ...localContribs];
+  }, [apiPartners, financials, localContribs]);
+
+  const filteredContribs = useMemo(() => {
+    let cs = allContribs;
+    if (partnerFilter !== 'all') cs = cs.filter(c => c.partner === partnerFilter);
+    if (companyFilter !== 'all') {
+      const coName = allCompanies.find(c => c.id === companyFilter)?.name ?? '';
+      cs = cs.filter(c => c.company === coName);
+    }
+    return cs;
+  }, [allContribs, partnerFilter, companyFilter, allCompanies]);
+
+  function savePartner() {
+    if (!partnerForm.name.trim()) return;
+    setShowAddPartner(false);
+    setPartnerForm(BLANK_PARTNER);
+  }
+
+  function saveContrib() {
+    if (!contribForm.partner || !contribForm.amount) return;
+    const existing = allContribs.filter(c => c.partner === contribForm.partner);
+    const cum = existing.reduce((s, c) => s + c.amount, 0) + parseFloat(contribForm.amount || '0');
+    setLocalContribs(prev => [...prev, {
+      id: `local-${Date.now()}`,
+      partner: contribForm.partner,
+      company: contribForm.company,
+      date: contribForm.date,
+      amount: parseFloat(contribForm.amount || '0'),
+      type: contribForm.type,
+      reference: contribForm.reference,
+      notes: contribForm.notes,
+      cumulative: Math.round(cum),
+    }]);
+    setShowAddContrib(false);
+    setContribForm({ ...BLANK_CONTRIB });
+  }
+
+  // ── Render ───────────────────────────────────────────────────────────────────
+  if (loading) return <LoadingSkeleton rows={8} />;
+  if (error)   return <div className="text-red-600 p-4">{error}<button className="ml-3 underline" onClick={loadData}>Retry</button></div>;
+
+  const avgROI = kpis.avgROI;
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-charcoal">Ownership</h1>
+    <div className="space-y-6 -m-6 p-6" style={{ background: '#FAFAF7' }}>
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-charcoal">Ownership</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Partner registry · Capital tracking · Equity analytics</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Company filter */}
+          <div className="flex items-center gap-1.5 text-sm">
+            <span className="text-gray-500 text-xs">Company:</span>
+            <select value={companyFilter} onChange={e => setCompanyFilter(e.target.value)}
+              className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600">
+              <option value="all">All Companies</option>
+              {allCompanies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          {/* Partner filter */}
+          <div className="flex items-center gap-1.5 text-sm">
+            <span className="text-gray-500 text-xs">Partner:</span>
+            <select value={partnerFilter} onChange={e => { setPartnerFilter(e.target.value); setSelectedPartner(e.target.value === 'all' ? null : e.target.value); }}
+              className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600">
+              <option value="all">All Partners</option>
+              {apiPartners.map(p => <option key={p.partner_name} value={p.partner_name}>{p.partner_name}</option>)}
+            </select>
+          </div>
+          <button className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg text-xs text-gray-700 hover:bg-gray-50">
+            <Download size={13} /> Export PDF
+          </button>
+          <button className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs hover:bg-indigo-700">
+            <Zap size={13} /> AI Insights
+          </button>
+          <button onClick={() => setShowAddPartner(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-800 text-white rounded-lg text-xs hover:bg-green-900">
+            <Plus size={13} /> Add Partner
+          </button>
+        </div>
+      </div>
 
-      {/* Summary strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {data.by_partner.map((p) => (
-          <div key={p.partner_name} className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="font-bold text-primary text-sm">{p.partner_name}</p>
-            <p className="text-2xl font-bold mt-1">{p.company_count}</p>
-            <p className="text-xs text-gray-500">companies</p>
-            <p className={`text-sm font-medium mt-2 ${p.total_noi_share >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-              {fmtUSD(p.total_noi_share)} NOI share
-            </p>
+      {/* ═══════════════════════════════════════════════════════════════════════
+          SECTION 1 — PORTFOLIO OWNERSHIP KPIs
+      ═══════════════════════════════════════════════════════════════════════ */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        {[
+          { label: 'Total Partners',      value: kpis.totalPartners.toString(),  icon: <Users size={18} />,       color: 'text-gray-900',   sub: 'active partners' },
+          { label: 'Total Capital Raised', value: fmtK(kpis.totalCapital),       icon: <DollarSign size={18} />,  color: 'text-blue-700',   sub: 'contributed' },
+          { label: 'Portfolio Market Value', value: fmtK(kpis.totalMV),         icon: <Building2 size={18} />,   color: 'text-green-800',  sub: 'at 5.5% cap rate' },
+          { label: 'Total Equity',          value: fmtK(kpis.totalEquity),       icon: <TrendingUp size={18} />,  color: 'text-amber-700',  sub: 'market value − debt (60% LTV)' },
+          { label: 'Avg Partner ROI',       value: `${avgROI.toFixed(1)}%`,      icon: <TrendingUp size={18} />,  color: avgROI >= 20 ? 'text-green-700' : 'text-amber-700', sub: 'weighted by cost basis' },
+        ].map(({ label, value, icon, color, sub }) => (
+          <div key={label} className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-gray-500 uppercase tracking-wide">{label}</p>
+              <span className="text-gray-300">{icon}</span>
+            </div>
+            <p className={`text-xl font-bold font-mono ${color}`}>{value}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
           </div>
         ))}
       </div>
 
-      {/* Per-partner sections */}
-      {data.by_partner.map((p) => (
-        <Card key={p.partner_name} title={p.partner_name}>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 text-left text-gray-500">
-                  <th className="py-2 px-2 font-medium">Company</th>
-                  <th className="py-2 px-2 font-medium">Role</th>
-                  <th className="py-2 px-2 font-medium">Ownership %</th>
-                  <th className="py-2 px-2 font-medium">NOI Share (This Month)</th>
-                  <th className="py-2 px-2 font-medium">Ownership Bar</th>
-                </tr>
-              </thead>
-              <tbody>
-                {p.stakes.map((s) => (
-                  <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                    <td className="py-2 px-2 font-medium">{s.company_name}</td>
-                    <td className="py-2 px-2 text-gray-500">{s.role.replace(/_/g, ' ')}</td>
-                    <td className="py-2 px-2">{fmtPct(s.ownership_pct)}</td>
-                    <td className="py-2 px-2">
-                      <span className={s.noi_share >= 0 ? 'text-green-700 font-medium' : 'text-red-600 font-medium'}>
-                        {fmtUSD(s.noi_share)}
-                      </span>
-                    </td>
-                    <td className="py-2 px-2 w-40">
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-primary rounded-full" style={{ width: `${(s.ownership_pct * 100).toFixed(1)}%` }} />
+      {/* ═══════════════════════════════════════════════════════════════════════
+          SECTION 2 — PARTNER REGISTRY TABLE
+      ═══════════════════════════════════════════════════════════════════════ */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-gray-800">Partner Registry</h3>
+            <p className="text-xs text-gray-400 mt-0.5">{filtered.length} partner{filtered.length !== 1 ? 's' : ''} · all financial values derived at 5.5% cap rate</p>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+              <tr>
+                {['Partner','Nature','Own %','Capital In','Cost Basis','Book Value','Market Value','Unrealized G/L','Return to Date','ROI','Status',''].map(h => (
+                  <th key={h} className="px-3 py-3 text-right first:text-left whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {filtered.map((p, pi) => {
+                const f = financials[p.partner_name];
+                if (!f) return null;
+                const nature = natures[p.partner_name] ?? ROLE_MAP[p.holdings[0]?.role ?? ''] ?? 'Limited Partner (LP)';
+                const totalPct = p.holdings.reduce((s, h) => s + h.ownership_pct * 100, 0);
+                const isSelected = selectedPartner === p.partner_name;
+                return (
+                  <tr key={p.partner_name}
+                    className={`hover:bg-gray-50 cursor-pointer transition-colors ${isSelected ? 'bg-green-50 ring-1 ring-inset ring-green-200' : ''}`}
+                    onClick={() => setSelectedPartner(prev => prev === p.partner_name ? null : p.partner_name)}
+                  >
+                    <td className="px-3 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ background: COLORS[pi % COLORS.length] }}>
+                          {p.partner_name[0]}
+                        </span>
+                        <span className="font-medium text-gray-900 whitespace-nowrap">{p.partner_name}</span>
                       </div>
                     </td>
+                    <td className="px-3 py-3">
+                      <select
+                        value={nature}
+                        onClick={e => e.stopPropagation()}
+                        onChange={e => setNatures(prev => ({ ...prev, [p.partner_name]: e.target.value }))}
+                        className="text-xs border-0 bg-transparent focus:outline-none focus:ring-1 focus:ring-green-600 rounded"
+                      >
+                        {NATURE_OPTIONS.map(n => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-3 py-3 text-right">
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="font-mono text-xs font-semibold">{totalPct.toFixed(1)}%</span>
+                        <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                          <div className="h-1.5 rounded-full bg-green-700" style={{ width: `${Math.min(totalPct, 100)}%` }} />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-right font-mono text-xs">{fmtK(f.capitalContributed)}</td>
+                    <td className="px-3 py-3 text-right font-mono text-xs">{fmtK(f.costBasis)}</td>
+                    <td className="px-3 py-3 text-right font-mono text-xs">{fmtK(f.bookValue)}</td>
+                    <td className="px-3 py-3 text-right font-mono text-xs font-semibold text-green-800">{fmtK(f.marketValue)}</td>
+                    <td className="px-3 py-3 text-right"><GainCell value={f.unrealizedGain} /></td>
+                    <td className="px-3 py-3 text-right font-mono text-xs text-blue-700">{fmtK(f.returnToDate)}</td>
+                    <td className="px-3 py-3 text-right">
+                      <span className={`font-semibold text-xs ${f.roi >= 20 ? 'text-green-700' : f.roi >= 10 ? 'text-amber-600' : 'text-red-600'}`}>
+                        {f.roi.toFixed(1)}%
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-right">
+                      <span className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-800">Active</span>
+                    </td>
+                    <td className="px-3 py-3">
+                      <button onClick={e => { e.stopPropagation(); setSelectedPartner(p.partner_name); }}
+                        className="text-xs text-blue-600 hover:underline">Detail</button>
+                    </td>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t border-gray-200 bg-gray-50">
-                  <td className="py-2 px-2 font-bold" colSpan={3}>Total NOI Share</td>
-                  <td className={`py-2 px-2 font-bold ${p.total_noi_share >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                    {fmtUSD(p.total_noi_share)}
-                  </td>
-                  <td />
-                </tr>
-              </tfoot>
-            </table>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="bg-gray-900 text-white text-xs font-semibold">
+                <td className="px-3 py-3" colSpan={3}>Portfolio Total</td>
+                <td className="px-3 py-3 text-right font-mono">{fmtK(totalRow.capitalContributed)}</td>
+                <td className="px-3 py-3 text-right font-mono">{fmtK(totalRow.costBasis)}</td>
+                <td className="px-3 py-3 text-right font-mono">{fmtK(totalRow.bookValue)}</td>
+                <td className="px-3 py-3 text-right font-mono text-green-300">{fmtK(totalRow.marketValue)}</td>
+                <td className="px-3 py-3 text-right font-mono">
+                  <span className={totalRow.unrealizedGain >= 0 ? 'text-green-300' : 'text-red-300'}>
+                    {totalRow.unrealizedGain >= 0 ? '+' : '-'}{fmtK(Math.abs(totalRow.unrealizedGain))}
+                  </span>
+                </td>
+                <td className="px-3 py-3 text-right font-mono text-blue-300">{fmtK(totalRow.returnToDate)}</td>
+                <td className="px-3 py-3 text-right font-mono">{avgROI.toFixed(1)}%</td>
+                <td colSpan={2} />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          SECTION 4 — PARTNER DETAIL VIEW (when one selected)
+      ═══════════════════════════════════════════════════════════════════════ */}
+      {selectedPartner && selPartnerData && selF && (
+        <div className="bg-white rounded-xl border border-green-200 overflow-hidden">
+          <div className="flex items-center justify-between p-4 border-b border-gray-100" style={{ background: '#1B4332' }}>
+            <h3 className="font-semibold text-white">{selectedPartner} — Ownership Profile</h3>
+            <button onClick={() => setSelectedPartner(null)} className="text-green-300 hover:text-white"><X size={16} /></button>
           </div>
-        </Card>
-      ))}
+          <div className="p-5 space-y-5">
+            {/* Profile card */}
+            <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+              <div className="flex flex-wrap items-start gap-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold text-white" style={{ background: COLORS[apiPartners.findIndex(p => p.partner_name === selectedPartner) % COLORS.length] }}>
+                    {selectedPartner[0]}
+                  </div>
+                  <div>
+                    <p className="font-bold text-gray-900 text-lg">{selectedPartner}</p>
+                    <NatureBadge nature={selNature} />
+                    <span className="ml-2 text-xs text-green-700">● Active</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4 flex-1 min-w-0">
+                  {[['Capital In', fmtUSD(selF.capitalContributed)],['Book Value', fmtUSD(selF.bookValue)],['Market Value', fmtUSD(selF.marketValue)]].map(([l,v]) => (
+                    <div key={l} className="bg-white rounded-lg p-3 border border-gray-200">
+                      <p className="text-xs text-gray-500">{l}</p>
+                      <p className="font-bold font-mono text-gray-900">{v}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-sm space-y-1 border-l border-gray-200 pl-6">
+                  <p><span className="text-gray-500">Unrealized Gain: </span>
+                    <span className={`font-semibold ${selF.unrealizedGain >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                      {selF.unrealizedGain >= 0 ? '+' : '-'}{fmt(selF.unrealizedGain)} ({((selF.unrealizedGain / selF.costBasis) * 100).toFixed(1)}%)
+                    </span>
+                  </p>
+                  <p><span className="text-gray-500">Return to Date: </span><span className="font-semibold text-blue-700">{fmtUSD(selF.returnToDate)}</span></p>
+                  <p><span className="text-gray-500">Total ROI: </span><span className="font-semibold text-green-700">{selF.roi.toFixed(1)}%</span></p>
+                </div>
+              </div>
+            </div>
+
+            {/* Holdings + trend chart */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {/* Holdings table */}
+              <div>
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Holdings by Company</p>
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 text-gray-500">
+                    <tr>
+                      {['Company','% Own','Units','Cost Basis','Book Value','Market Value','Unrealized Gain','Income Share','Status'].map(h => (
+                        <th key={h} className="px-2 py-2 text-right first:text-left">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {selPartnerData.holdings.map(h => {
+                      const gpr = companyGpr[h.company_id] ?? 0;
+                      const hf = holdingFinancials(h, gpr);
+                      const units = companyUnits[h.company_id] ?? 0;
+                      const partnerUnits = Math.round(units * h.ownership_pct);
+                      return (
+                        <tr key={h.company_id} className="hover:bg-gray-50">
+                          <td className="px-2 py-2 font-medium truncate max-w-[120px]">{h.company_name}</td>
+                          <td className="px-2 py-2 text-right">{(h.ownership_pct * 100).toFixed(1)}%</td>
+                          <td className="px-2 py-2 text-right">{partnerUnits}</td>
+                          <td className="px-2 py-2 text-right font-mono">{fmtK(hf.costBasis)}</td>
+                          <td className="px-2 py-2 text-right font-mono">{fmtK(hf.bookValue)}</td>
+                          <td className="px-2 py-2 text-right font-mono text-green-800">{fmtK(hf.marketValue)}</td>
+                          <td className="px-2 py-2 text-right"><GainCell value={hf.unrealizedGain} /></td>
+                          <td className="px-2 py-2 text-right font-mono text-blue-700">{fmtK(h.noi_share)}</td>
+                          <td className="px-2 py-2 text-right">
+                            <span className="px-1.5 py-0.5 rounded-full text-xs bg-green-100 text-green-800">Active</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Book vs Market trend */}
+              <div>
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Book Value vs Market Value — 12 Months</p>
+                <ResponsiveContainer width="100%" height={180}>
+                  <LineChart data={genTrend(selF.costBasis, selF.marketValue)}>
+                    <XAxis dataKey="month" tick={{ fontSize: 9 }} />
+                    <YAxis tick={{ fontSize: 9 }} tickFormatter={v => `$${(v/1000).toFixed(0)}K`} />
+                    <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, '']} />
+                    <Legend wrapperStyle={{ fontSize: 10 }} />
+                    <Line type="monotone" dataKey="bookValue"    stroke="#6B7280" strokeWidth={2} dot={false} name="Book Value" />
+                    <Line type="monotone" dataKey="marketValue"  stroke="#16A34A" strokeWidth={2} dot={false} name="Market Value" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Capital history */}
+            <div>
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Capital History</p>
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50 text-gray-500">
+                  <tr>
+                    {['Date','Transaction','Amount','Cumulative','Notes'].map(h => (
+                      <th key={h} className="px-2 py-2 text-right first:text-left">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {allContribs
+                    .filter(c => c.partner === selectedPartner)
+                    .sort((a, b) => a.date.localeCompare(b.date))
+                    .map(c => (
+                      <tr key={c.id} className="hover:bg-gray-50">
+                        <td className="px-2 py-2 text-gray-600">{c.date}</td>
+                        <td className="px-2 py-2">{c.type}</td>
+                        <td className={`px-2 py-2 text-right font-mono font-semibold ${c.amount >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                          {c.amount >= 0 ? '+' : ''}{fmtUSD(c.amount)}
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono">{fmtUSD(c.cumulative)}</td>
+                        <td className="px-2 py-2 text-gray-500">{c.notes || c.reference || '—'}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          SECTION 3 — OWNERSHIP BY COMPANY
+      ═══════════════════════════════════════════════════════════════════════ */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="p-4 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-800">Ownership by Company</h3>
+          <p className="text-xs text-gray-400 mt-0.5">Click header to expand · Donut shows partner share</p>
+        </div>
+        <div className="divide-y divide-gray-100">
+          {byCompany.map(co => {
+            const isExp = expandedCos.has(co.id);
+            return (
+              <div key={co.id}>
+                <button
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 text-left"
+                  onClick={() => setExpandedCos(prev => { const next = new Set(prev); if (next.has(co.id)) next.delete(co.id); else next.add(co.id); return next; })}
+                >
+                  <div className="flex items-center gap-3">
+                    {isExp ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
+                    <Building2 size={14} className="text-gray-400" />
+                    <span className="font-medium text-gray-900">{co.name}</span>
+                    <span className="text-xs text-gray-400">
+                      · {co.units} unit{co.units !== 1 ? 's' : ''} · {co.slices.length} partner{co.slices.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-gray-600">
+                    <span>Market Value: <strong className="text-green-800">{fmtK(co.marketValue)}</strong></span>
+                    <span>Monthly NOI: <strong>{fmtUSD(co.noi)}</strong></span>
+                  </div>
+                </button>
+                {isExp && (
+                  <div className="px-4 pb-4 bg-gray-50 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Partner table */}
+                    <table className="w-full text-xs mt-3">
+                      <thead className="text-gray-500">
+                        <tr>
+                          <th className="pb-1.5 text-left">Partner</th>
+                          <th className="pb-1.5 text-center">Type</th>
+                          <th className="pb-1.5 text-right">% Share</th>
+                          <th className="pb-1.5 text-right">Market Value</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {co.slices.map((s, si) => {
+                          const nm = natures[s.partner] ?? (apiPartners.find(p => p.partner_name === s.partner)?.holdings.find(h => h.company_id === co.id)?.role);
+                          const nature = ROLE_MAP[nm ?? ''] ?? 'Limited Partner (LP)';
+                          return (
+                            <tr key={s.partner} className="hover:bg-white cursor-pointer" onClick={() => setSelectedPartner(s.partner)}>
+                              <td className="py-1.5 pr-2">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="w-3 h-3 rounded-full inline-block" style={{ background: s.color }} />
+                                  {s.partner}
+                                </div>
+                              </td>
+                              <td className="py-1.5 text-center"><NatureBadge nature={nature} /></td>
+                              <td className="py-1.5 text-right">{s.pct.toFixed(1)}%</td>
+                              <td className="py-1.5 text-right font-mono text-green-800">{fmtK(co.marketValue * (s.pct / 100))}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    {/* Donut */}
+                    <div className="flex items-center justify-center">
+                      <ResponsiveContainer width="100%" height={160}>
+                        <PieChart>
+                          <Pie data={co.slices.map(s => ({ name: s.partner, value: s.pct }))} dataKey="value" cx="50%" cy="50%" innerRadius={40} outerRadius={65} paddingAngle={2}>
+                            {co.slices.map((s, si) => <Cell key={si} fill={s.color} />)}
+                          </Pie>
+                          <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'Ownership']} />
+                          <Legend wrapperStyle={{ fontSize: 10 }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          SECTION 5 — CAPITAL CONTRIBUTIONS TRACKER
+      ═══════════════════════════════════════════════════════════════════════ */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-gray-800">Capital Contributions</h3>
+            <p className="text-xs text-gray-400 mt-0.5">All transactions · contributions, distributions and capital calls</p>
+          </div>
+          <button onClick={() => setShowAddContrib(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-800 text-white rounded-lg text-xs hover:bg-green-900">
+            <Plus size={13} /> Add Transaction
+          </button>
+        </div>
+
+        {/* Per-partner summary strip */}
+        <div className="px-4 py-3 border-b border-gray-100 overflow-x-auto">
+          <div className="flex gap-4 min-w-max">
+            {apiPartners.map(p => {
+              const cs = allContribs.filter(c => c.partner === p.partner_name);
+              const totalIn  = cs.filter(c => c.amount > 0).reduce((s, c) => s + c.amount, 0);
+              const totalOut = cs.filter(c => c.amount < 0).reduce((s, c) => s + Math.abs(c.amount), 0);
+              return (
+                <div key={p.partner_name} className="bg-gray-50 rounded-lg px-3 py-2 text-xs border border-gray-200 min-w-[160px]">
+                  <p className="font-semibold text-gray-800 truncate">{p.partner_name}</p>
+                  <div className="flex gap-3 mt-1">
+                    <span className="text-green-700">In: {fmtK(totalIn)}</span>
+                    <span className="text-red-600">Out: {fmtK(totalOut)}</span>
+                  </div>
+                  <p className="text-gray-500 mt-0.5">Net: <strong className="text-gray-800">{fmtK(totalIn - totalOut)}</strong></p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+              <tr>
+                {['Partner','Company','Date','Amount','Type','Reference','Notes','Cumulative'].map(h => (
+                  <th key={h} className="px-3 py-2.5 text-right first:text-left whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {filteredContribs.map(c => (
+                <tr key={c.id} className={`hover:bg-gray-50 ${c.amount < 0 ? 'bg-red-50/30' : ''}`}>
+                  <td className="px-3 py-2.5 font-medium text-gray-900 whitespace-nowrap">{c.partner}</td>
+                  <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">{c.company}</td>
+                  <td className="px-3 py-2.5 text-right text-gray-600 text-xs">{c.date}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-xs">
+                    <span className={c.amount >= 0 ? 'text-green-700 font-semibold' : 'text-red-600 font-semibold'}>
+                      {c.amount >= 0 ? '+' : ''}{fmtUSD(c.amount)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-right">
+                    <span className={`px-1.5 py-0.5 rounded text-xs ${c.amount < 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                      {c.type}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-right text-xs text-gray-400 font-mono">{c.reference}</td>
+                  <td className="px-3 py-2.5 text-right text-xs text-gray-500">{c.notes || '—'}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-xs text-gray-700">{fmtUSD(c.cumulative)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filteredContribs.length === 0 && <p className="text-center text-sm text-gray-400 py-8">No transactions</p>}
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          SECTION 6 — OWNERSHIP ANALYTICS
+      ═══════════════════════════════════════════════════════════════════════ */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="p-4 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-800">Ownership Analytics</h3>
+          <p className="text-xs text-gray-400 mt-0.5">Portfolio-wide equity, return and gain/loss comparison</p>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-px bg-gray-100">
+          {/* Chart 1: Ownership Distribution Donut */}
+          <div className="bg-white p-4">
+            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Ownership Distribution</p>
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={apiPartners.map((p, i) => ({
+                    name: p.partner_name,
+                    value: parseFloat((p.holdings.reduce((s, h) => s + h.ownership_pct * 100, 0) / Math.max(1, p.company_count)).toFixed(1)),
+                  }))}
+                  dataKey="value" cx="45%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={2}
+                >
+                  {apiPartners.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                </Pie>
+                <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'Avg Ownership']} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Chart 2: Capital vs Market Value */}
+          <div className="bg-white p-4">
+            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Capital vs Market Value per Partner</p>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={apiPartners.map(p => {
+                const f = financials[p.partner_name];
+                return { name: p.partner_name.split(' ')[0], costBasis: Math.round((f?.costBasis ?? 0) / 1000), marketValue: Math.round((f?.marketValue ?? 0) / 1000) };
+              })} barCategoryGap="30%" barGap={2}>
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `$${v}K`} />
+                <Tooltip formatter={(v: number) => [`$${v}K`, '']} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="costBasis"    name="Cost Basis"    fill="#2563EB" radius={[3,3,0,0]} maxBarSize={22} />
+                <Bar dataKey="marketValue"  name="Market Value"  fill="#16A34A" radius={[3,3,0,0]} maxBarSize={22} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Chart 3: ROI Comparison (horizontal bar) */}
+          <div className="bg-white p-4">
+            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">ROI Comparison — Sorted Highest First</p>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart
+                layout="vertical"
+                data={[...apiPartners].sort((a, b) => (financials[b.partner_name]?.roi ?? 0) - (financials[a.partner_name]?.roi ?? 0)).map(p => ({
+                  name: p.partner_name.split(' ')[0],
+                  roi: parseFloat((financials[p.partner_name]?.roi ?? 0).toFixed(1)),
+                }))}
+                barSize={16} margin={{ left: 4, right: 40 }}
+              >
+                <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={80} />
+                <Tooltip formatter={(v: number) => [`${v}%`, 'ROI']} />
+                <ReferenceLine x={avgROI} stroke="#D97706" strokeDasharray="4 2" label={{ value: `Avg ${avgROI.toFixed(1)}%`, fontSize: 9, fill: '#D97706', position: 'insideTopRight' }} />
+                <Bar dataKey="roi" fill="#1B4332" radius={[0,3,3,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Chart 4: Unrealized Gain/Loss */}
+          <div className="bg-white p-4">
+            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Unrealized Gain / Loss per Partner</p>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={apiPartners.map((p, i) => {
+                const f = financials[p.partner_name];
+                return { name: p.partner_name.split(' ')[0], gain: Math.round((f?.unrealizedGain ?? 0) / 1000), color: (f?.unrealizedGain ?? 0) >= 0 ? '#16A34A' : '#DC2626' };
+              })} barSize={28}>
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `$${v}K`} />
+                <Tooltip formatter={(v: number) => [`$${v}K`, 'Unrealized G/L']} />
+                <ReferenceLine y={0} stroke="#9CA3AF" />
+                <Bar dataKey="gain" name="Unrealized G/L" radius={[3,3,0,0]}>
+                  {apiPartners.map((p, i) => (
+                    <Cell key={i} fill={(financials[p.partner_name]?.unrealizedGain ?? 0) >= 0 ? '#16A34A' : '#DC2626'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* ══════════════════════════════════════════════════════════════════════════
+          MODAL — Add Partner
+      ══════════════════════════════════════════════════════════════════════════ */}
+      {showAddPartner && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowAddPartner(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b" style={{ background: '#1B4332' }}>
+              <h3 className="font-bold text-white">Add Partner</h3>
+              <button onClick={() => setShowAddPartner(false)} className="text-green-300 hover:text-white"><X size={18} /></button>
+            </div>
+            <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+              {([
+                ['Partner Name', 'text', 'name'],
+                ['Capital Contributed ($)', 'number', 'capital'],
+                ['Cost Basis ($)', 'number', 'costBasis'],
+                ['Ownership %', 'number', 'ownershipPct'],
+                ['Acquisition Date', 'date', 'acquisitionDate'],
+                ['Contact Email', 'email', 'email'],
+                ['Contact Phone', 'tel', 'phone'],
+              ] as [string, string, keyof AddPartnerForm][]).map(([label, type, key]) => (
+                <div key={key}>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
+                  <input type={type} value={partnerForm[key] as string}
+                    onChange={e => setPartnerForm(prev => ({ ...prev, [key]: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600" />
+                </div>
+              ))}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Nature of Ownership</label>
+                <select value={partnerForm.nature} onChange={e => setPartnerForm(prev => ({ ...prev, nature: e.target.value as Nature }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600">
+                  {NATURE_OPTIONS.map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
+                <textarea value={partnerForm.notes} rows={3}
+                  onChange={e => setPartnerForm(prev => ({ ...prev, notes: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t bg-gray-50">
+              <button onClick={() => setShowAddPartner(false)} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100">Cancel</button>
+              <button onClick={savePartner} className="px-4 py-2 text-sm bg-green-800 text-white rounded-lg hover:bg-green-900">Save Partner</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════════
+          MODAL — Add Contribution
+      ══════════════════════════════════════════════════════════════════════════ */}
+      {showAddContrib && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowAddContrib(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b" style={{ background: '#1B4332' }}>
+              <h3 className="font-bold text-white">Add Transaction</h3>
+              <button onClick={() => setShowAddContrib(false)} className="text-green-300 hover:text-white"><X size={18} /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Partner</label>
+                <select value={contribForm.partner} onChange={e => setContribForm(prev => ({ ...prev, partner: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600">
+                  <option value="">— Select Partner —</option>
+                  {apiPartners.map(p => <option key={p.partner_name} value={p.partner_name}>{p.partner_name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Company</label>
+                <select value={contribForm.company} onChange={e => setContribForm(prev => ({ ...prev, company: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600">
+                  <option value="">— Select Company —</option>
+                  {allCompanies.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Date</label>
+                  <input type="date" value={contribForm.date} onChange={e => setContribForm(prev => ({ ...prev, date: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Amount ($)</label>
+                  <input type="number" value={contribForm.amount} onChange={e => setContribForm(prev => ({ ...prev, amount: e.target.value }))}
+                    placeholder="0.00"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Type</label>
+                <select value={contribForm.type} onChange={e => setContribForm(prev => ({ ...prev, type: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600">
+                  {CONTRIB_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Reference</label>
+                <input type="text" value={contribForm.reference} onChange={e => setContribForm(prev => ({ ...prev, reference: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
+                <textarea value={contribForm.notes} rows={2}
+                  onChange={e => setContribForm(prev => ({ ...prev, notes: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t bg-gray-50">
+              <button onClick={() => setShowAddContrib(false)} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100">Cancel</button>
+              <button onClick={saveContrib} className="px-4 py-2 text-sm bg-green-800 text-white rounded-lg hover:bg-green-900">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

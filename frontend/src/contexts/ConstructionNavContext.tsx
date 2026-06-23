@@ -20,6 +20,7 @@ export const ALL_TABS: NavItem[] = [
   { id: 'costs',             label: 'Costs & SOV',       Icon: DollarSign      },
   { id: 'pay_applications',  label: 'Pay Applications',  Icon: Receipt         },
   { id: 'expenses',          label: 'Expenses',          Icon: CreditCard      },
+  { id: 'receivables',       label: 'Receivables',       Icon: Receipt         },
   { id: 'change_orders',     label: 'Change Orders',     Icon: FileCheck       },
   { id: 'change_requests',   label: 'Change Requests',   Icon: Edit            },
   { id: 'financials',        label: 'Financials & ROI',  Icon: TrendingUp      },
@@ -31,7 +32,6 @@ export const ALL_TABS: NavItem[] = [
   { id: 'quality_check',     label: 'Quality Check',     Icon: CheckSquare     },
   { id: 'inspections',       label: 'Inspections',       Icon: Search          },
   { id: 'documents',         label: 'Documents',         Icon: FolderOpen      },
-  { id: 'receivables',       label: 'Receivables',       Icon: Receipt         },
 ];
 
 export interface ProjectSummary {

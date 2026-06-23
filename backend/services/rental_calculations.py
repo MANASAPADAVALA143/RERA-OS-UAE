@@ -39,9 +39,11 @@ def company_summary(
 
     total = len(units)
     occupied = sum(1 for u in units if u["status"] == "occupied")
-    vacant_count = sum(1 for u in units if u["status"] == "vacant")
+    # vacant = all units that are not occupied (notice, reserved, truly vacant, etc.)
+    vacant_count = total - occupied
     notice_count = sum(1 for u in units if u["status"] == "notice")
     gross_potential = sum(_f(u["monthly_rent"]) for u in units)
+    # vacancy_loss uses only units explicitly marked vacant (not notice/reserved)
     vacancy_loss = sum(_f(u["monthly_rent"]) for u in units if u["status"] == "vacant")
 
     billed_this_month = sum(

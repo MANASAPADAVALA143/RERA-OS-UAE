@@ -3,6 +3,7 @@ import api from '../services/api';
 import { Card, KpiCard } from '../components/ui/Card';
 import { Table, LoadingSkeleton, type Column } from '../components/ui/Table';
 import { fmtUSD } from '../components/ProtectedRoute';
+import { occupancyStats } from '../utils/occupancyStats';
 
 interface UnitRow extends Record<string, unknown> {
   id: string;
@@ -67,8 +68,10 @@ export default function RentalUnits() {
   useEffect(() => { fetchCompanies(); }, [fetchCompanies]);
   useEffect(() => { fetchUnits(); }, [fetchUnits]);
 
-  const occupiedCount = useMemo(() => units.filter(u => u.status === 'occupied').length, [units]);
-  const vacantCount = useMemo(() => units.filter(u => u.status === 'vacant').length, [units]);
+  const { occupied: occupiedCount, vacant: vacantCount } = useMemo(
+    () => occupancyStats(units),
+    [units],
+  );
   const totalArrears = useMemo(() => units.reduce((s, u) => s + (u.arrears ?? 0), 0), [units]);
 
   const columns: Column<UnitRow>[] = [

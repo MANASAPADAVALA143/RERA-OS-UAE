@@ -531,12 +531,14 @@ def update_lease(
 @router.get("/collections")
 def list_collections(
     company_id: str = Query(None),
+    month: str = Query(None),  # YYYY-MM, defaults to current month
     fmt: str = Query(None, alias="format"),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     tid = current_user.tenant_id
     today = date.today()
+    cur_month = month if month else today.strftime("%Y-%m")
     q = db.query(RentalInvoice).filter(RentalInvoice.tenant_id == tid)
     if company_id:
         try:
@@ -548,7 +550,8 @@ def list_collections(
                 return {"items": [], "summary": {}}
         except ValueError:
             pass
-    invoices = q.all()
+    # Filter invoices to the selected billing month
+    invoices = [i for i in q.all() if str(i.billing_period)[:7] == cur_month]
     inv_dicts = [_inv_dict(i) for i in invoices]
 
     items = []
@@ -588,6 +591,7 @@ def list_collections(
         )
     return {
         "items": items,
+        "month": cur_month,
         "summary": {
             "total_billed": round(total_billed, 2),
             "total_collected": round(total_collected, 2),

@@ -6,6 +6,7 @@ import {
   Wrench, ClipboardCheck, AlertTriangle, Receipt,
   Upload, TrendingUp, ArrowDownUp, Table2, CalendarCheck, Activity,
   Landmark, Store, BookOpen,
+  CircleDollarSign, LayoutGrid, CalendarRange,
 } from "lucide-react";
 
 export type RentalTab =
@@ -14,7 +15,8 @@ export type RentalTab =
   | "collections" | "vacancy" | "expenses" | "ar-dashboard"
   | "ap-dashboard" | "vendor-management"
   | "ownership" | "reports" | "financials"
-  | "portfolio-upload" | "cfo-dashboard" | "income-bridge" | "entity-rollup" | "compliance";
+  | "portfolio-upload" | "cfo-dashboard" | "income-bridge" | "entity-rollup" | "compliance"
+  | "building-expenses" | "loan-tracker" | "cfo-portfolio" | "13-week-cf";
 
 type LucideIcon = React.FC<{ size?: number; className?: string }>;
 export interface RentalNavItem {
@@ -47,7 +49,34 @@ export const RENTAL_TABS: RentalNavItem[] = [
   { id: "income-bridge",     label: "Income Bridge",     Icon: ArrowDownUp     },
   { id: "entity-rollup",     label: "Entity Roll-up",    Icon: Table2          },
   { id: "compliance",        label: "Compliance",        Icon: CalendarCheck   },
+  // ── CFO Suite ─────────────────────────────────────────────────────────────
+  { id: "building-expenses", label: "Building Expenses", Icon: Receipt,         groupLabel: "CFO Suite" },
+  { id: "loan-tracker",      label: "Loan Tracker",      Icon: CircleDollarSign },
+  { id: "cfo-portfolio",     label: "CFO Portfolio",     Icon: LayoutGrid       },
+  { id: "13-week-cf",        label: "13-Week Cash Flow", Icon: CalendarRange    },
 ];
+
+const TAB_PATHS: Partial<Record<RentalTab, string>> = {
+  "building-expenses": "/rental/building-expenses",
+  "loan-tracker":      "/rental/loan-tracker",
+  "cfo-portfolio":     "/rental/cfo-portfolio",
+  "13-week-cf":        "/rental/13-week-cf",
+};
+
+const PATH_TO_TAB: Record<string, RentalTab> = {
+  "/rental/building-expenses": "building-expenses",
+  "/rental/loan-tracker":      "loan-tracker",
+  "/rental/cfo-portfolio":     "cfo-portfolio",
+  "/rental/13-week-cf":        "13-week-cf",
+};
+
+export function rentalPathForTab(tab: RentalTab): string {
+  return TAB_PATHS[tab] ?? "/rental";
+}
+
+export function tabFromRentalPath(path: string): RentalTab | null {
+  return PATH_TO_TAB[path] ?? null;
+}
 
 interface RentalNavState {
   tab: RentalTab;

@@ -1,13 +1,17 @@
 import { useState } from 'react';
-import { X, Sparkles, TrendingUp, AlertTriangle, CheckCircle2, RefreshCw, Send, MessageSquare } from 'lucide-react';
+import { X, Sparkles, TrendingUp, AlertTriangle, CheckCircle2, RefreshCw, Send, MessageSquare, Building2 } from 'lucide-react';
 import { usePropDev } from '../../contexts/PropertyDevContext';
 import { usePropDevNav } from '../../contexts/PropDevNavContext';
 
 interface Props { onClose: () => void; }
 
+// ── Company-aware insight generator ──────────────────────────────────────────
+
 function generateInsights(tab: string, data: ReturnType<typeof usePropDev>) {
-  const { lots, loans, partners, capitalCalls, customers, properties, companies, isConsolidated, selectedCompanyId } = data;
+  const { lots, loans, partners, capitalCalls, customers, properties, companies, isConsolidated } = data;
   const p = properties[0];
+  const companyLabel = isConsolidated ? `Portfolio (${companies.length} companies)` : p?.name ?? 'Company';
+
   const soldLots = lots.filter(l => l.status === 'sold');
   const availableLots = lots.filter(l => l.status === 'available');
   const contractedLots = lots.filter(l => l.status === 'contracted');
@@ -16,105 +20,151 @@ function generateInsights(tab: string, data: ReturnType<typeof usePropDev>) {
   const overdueCalls = capitalCalls.filter(c => c.status === 'Overdue');
   const pendingReceivables = customers.reduce((s, c) => s + (c.contractValue - c.collected), 0);
   const soldPct = lots.length > 0 ? ((soldLots.length / lots.length) * 100).toFixed(0) : '0';
-  const totalCost = p ? p.landCost + p.hardCost + p.softCost + p.titleCharges + p.otherCharges
-    + p.propertyTax + p.loanProcessing + p.professionalCharges + p.legalFees + p.interestOnLoan : 0;
-  const netProfit = p ? p.saleConsideration - totalCost - p.saleConsideration * 0.09 - p.saleConsideration * 0.045 : 0;
+
+  // Correct formulas (management fee = 9% of land cost, commission uses explicit override)
+  const totalCost = p
+    ? p.landCost + p.hardCost + p.softCost + p.titleCharges + p.otherCharges
+      + p.propertyTax + p.loanProcessing + p.professionalCharges + p.legalFees + p.interestOnLoan
+    : 0;
+  const managementFee = p ? p.landCost * p.managementFeeRate : 0;
+  const commission = p ? (p.commission ?? p.saleConsideration * p.commissionRate) : 0;
+  const netProfit = p ? p.saleConsideration - totalCost - managementFee - commission : 0;
   const netMargin = p && p.saleConsideration > 0 ? ((netProfit / p.saleConsideration) * 100).toFixed(1) : '0';
+  const totalCapital = partners.reduce((s, x) => s + x.capitalContributed, 0);
+  const roi = totalCapital > 0 ? ((netProfit / totalCapital) * 100).toFixed(1) : '0';
+
+  const fmt = (n: number) => `$${Math.round(n).toLocaleString()}`;
 
   const insights: Record<string, { bullets: string[]; actions: string[]; riskScore: number }> = {
     dashboard: {
       bullets: [
-        `Portfolio is ${soldPct}% sold — ${soldLots.length} of ${lots.length} lots closed across ${isConsolidated ? companies.length + ' companies' : '1 property'}.`,
-        `${contractedLots.length} lots under contract represent $${(contractedLots.reduce((s,l) => s+l.listPrice,0)/1000).toFixed(0)}K in near-term revenue.`,
+        `${companyLabel}: ${soldPct}% sold — ${soldLots.length} of ${lots.length} lots closed, generating ${fmt(totalRevenue)} in realized revenue.`,
+        `${contractedLots.length} lots under contract represent ${fmt(contractedLots.reduce((s,l) => s+l.listPrice,0))} in near-term revenue.`,
         `${availableLots.length} lots still available — velocity risk if unsold past 12 months.`,
         overdueCalls.length > 0
-          ? `⚠️ ${overdueCalls.length} capital call${overdueCalls.length > 1 ? 's' : ''} overdue — total $${overdueCalls.reduce((s,c) => s+c.totalDue-c.received,0).toLocaleString()} outstanding.`
+          ? `⚠️ ${overdueCalls.length} capital call${overdueCalls.length > 1 ? 's' : ''} overdue — ${fmt(overdueCalls.reduce((s,c) => s+c.totalDue-c.received,0))} outstanding.`
           : 'All capital calls current — no overdue obligations.',
-        `Total loan exposure: $${(totalLoanBalance / 1_000_000).toFixed(2)}M across ${loans.length} facilities — monitor DSCR monthly.`,
+        `Total loan exposure: ${fmt(totalLoanBalance)} across ${loans.length} facilit${loans.length === 1 ? 'y' : 'ies'}.`,
       ],
       actions: [
-        'Follow up immediately on overdue capital calls — send demand notices.',
+        overdueCalls.length > 0
+          ? `Send demand notices for ${overdueCalls.length} overdue call${overdueCalls.length > 1 ? 's' : ''} — ${fmt(overdueCalls.reduce((s,c) => s+c.totalDue-c.received,0))} at risk.`
+          : 'Issue next capital call before cash drops below 2× monthly EMI.',
         `Accelerate pricing on ${availableLots.length} available lots — consider 3–5% discount for Q3 closings.`,
-        'Review loan maturity schedule — refinance opportunities if rates drop below 7%.',
+        'Review loan maturity schedule — start refinancing conversations now if rates below 7%.',
       ],
       riskScore: overdueCalls.length > 1 ? 7 : 4,
     },
     'deal-pl': {
       bullets: [
-        `Projected net margin is ${netMargin}% — ${parseFloat(netMargin) >= 35 ? 'exceeds' : 'below'} the 35% target threshold.`,
-        `Land cost represents ${p ? ((p.landCost / p.saleConsideration) * 100).toFixed(0) : '0'}% of revenue — typical range is 35–45%.`,
-        `Management fee (9%) + Commission (4.5%) together consume 13.5% of gross revenue.`,
-        `Break-even price per lot: $${p ? Math.round(totalCost / lots.length).toLocaleString() : '—'}.`,
-        `Net profit per lot: $${p ? Math.round(netProfit / lots.length).toLocaleString() : '—'}.`,
+        `${companyLabel}: net margin ${netMargin}% — ${parseFloat(netMargin) >= 35 ? 'exceeds' : 'below'} the 35% target.`,
+        `Land cost ${fmt(p?.landCost ?? 0)} = ${p ? ((p.landCost / p.saleConsideration) * 100).toFixed(0) : '0'}% of sale consideration (target 35–45%).`,
+        `Management fee (${(p?.managementFeeRate ?? 0.09)*100}% of land) = ${fmt(managementFee)}, commission = ${fmt(commission)}.`,
+        `Net profit ${fmt(netProfit)} on ${lots.length} lots = ${fmt(netProfit / Math.max(1, lots.length))} per lot.`,
+        `ROI on partner capital: ${roi}% — equity multiple ${totalCapital > 0 ? ((totalCapital + netProfit) / totalCapital).toFixed(2) : '—'}x.`,
       ],
       actions: [
-        'Negotiate bulk discount on remaining legal fees — potential 15–20% savings.',
-        'Review management fee structure — performance-based model could align incentives better.',
-        'Model a 5% price increase scenario — with 50% of lots remaining, impact is significant.',
+        'Negotiate bulk discount on legal fees — potential 15–20% saving.',
+        'Model a 5% price increase — with unsold lots remaining, revenue impact is significant.',
+        'Review management fee structure — performance-based model aligns incentives better.',
       ],
       riskScore: parseFloat(netMargin) < 25 ? 7 : 3,
     },
-    loans: {
+    pricing: {
       bullets: [
-        `Total loan portfolio: $${(totalLoanBalance / 1_000_000).toFixed(2)}M outstanding across ${loans.length} facilities.`,
-        `Weighted avg rate: ${loans.length > 0 ? (loans.reduce((s,l) => s + l.interestRate * l.balance, 0) / totalLoanBalance).toFixed(2) : '0'}% — market refinance opportunity below 7%.`,
-        `Monthly EMI burden: $${loans.reduce((s,l) => s+l.emi, 0).toLocaleString()} — ensure collections cover debt service.`,
-        `Earliest maturity: Jun 2026 — refinancing pipeline should start now if needed.`,
-        `LTV ratio: ${loans.length > 0 ? ((totalLoanBalance / (p?.saleConsideration ?? 1)) * 100).toFixed(0) : '0'}% of sale consideration.`,
+        `${companyLabel}: ${availableLots.length} lots available, avg list ${fmt(availableLots.reduce((s,l)=>s+l.listPrice,0)/Math.max(1,availableLots.length))}.`,
+        `Break-even per lot (basic) ≈ ${fmt((totalCost + managementFee + commission) / Math.max(1, lots.length))}.`,
+        `${contractedLots.length} lots contracted — maintain pricing to protect margin on remaining inventory.`,
+        `Sold lots avg price: ${fmt(soldLots.reduce((s,l)=>s+(l.salePrice??0),0)/Math.max(1,soldLots.length))}.`,
+        `Total unsold inventory value: ${fmt(availableLots.reduce((s,l)=>s+l.listPrice,0))}.`,
       ],
       actions: [
-        'Initiate refinancing conversations for loans above 7.5% — potential $X/month savings.',
-        'Negotiate interest-only periods to preserve cash flow during sales velocity push.',
-        'Set up automated EMI reminders 7 days prior to each due date.',
+        'Price all lots above the Partnership break-even threshold to cover preferred returns.',
+        `Reprice lowest-margin available lots first — run Scenario Slider to test +5% impact.`,
+        'Offer corner/premium lots at a 5–8% premium vs interior lots to improve blended margin.',
+      ],
+      riskScore: availableLots.some(l => l.listPrice < (totalCost + managementFee + commission) / Math.max(1, lots.length)) ? 6 : 3,
+    },
+    loans: {
+      bullets: [
+        `${companyLabel}: ${fmt(totalLoanBalance)} loan balance across ${loans.length} facilit${loans.length === 1 ? 'y' : 'ies'}.`,
+        `Weighted avg rate: ${loans.length > 0 ? (loans.reduce((s,l) => s + l.interestRate * l.balance, 0) / Math.max(1, totalLoanBalance)).toFixed(2) : '0'}% — market refinance threshold is 7%.`,
+        `Monthly EMI burden: ${fmt(loans.reduce((s,l) => s+l.emi, 0))} — verify collections cover debt service.`,
+        `Earliest maturity: Jun 2026 — begin refinancing pipeline 6–9 months before.`,
+        `LTV: ${p ? ((totalLoanBalance / p.saleConsideration) * 100).toFixed(0) : '0'}% of sale consideration.`,
+      ],
+      actions: [
+        loans.some(l => l.interestRate > 7.5)
+          ? `Refinance ${loans.filter(l=>l.interestRate>7.5).length} loan(s) above 7.5% — estimated saving ${fmt(loans.filter(l=>l.interestRate>7.5).reduce((s,l)=>s+l.balance*(l.interestRate-6.5)/100/12,0))}/month.`
+          : 'All loans within acceptable rate range. Monitor market for sub-6.5% windows.',
+        'Negotiate interest-only periods to preserve cash flow during sales push.',
+        'Set EMI reminders 7 days before each due date to avoid defaults.',
       ],
       riskScore: loans.some(l => l.interestRate > 8) ? 6 : 3,
     },
-    receivables: {
+    partners: {
       bullets: [
-        `$${(pendingReceivables / 1000).toFixed(0)}K in outstanding receivables across ${customers.length} customers.`,
-        `${customers.filter(c => c.installments.some(i => i.status === 'bounced')).length} bounced payments — immediate legal action required.`,
-        `Collection ratio: ${customers.length > 0 ? ((customers.reduce((s,c) => s+c.collected,0) / customers.reduce((s,c) => s+c.contractValue,0)) * 100).toFixed(0) : '0'}% — target is 90%+.`,
-        `${customers.filter(c => c.installments.some(i => i.status === 'overdue')).length} customers have overdue installments — escalate collection.`,
-        `Average days outstanding per customer is approaching 45 days — tighten terms.`,
+        `${companyLabel}: ${partners.length} partner${partners.length === 1 ? '' : 's'}, ${fmt(totalCapital)} total capital contributed.`,
+        `Projected ROI on capital: ${roi}% — target for this asset class is 20%+.`,
+        `Preferred return obligations: ${fmt(totalCapital * 0.08)} at 8% (must be distributed before profit split).`,
+        `${partners.filter(p=>p.distributionsReceived>0).length} partner${partners.filter(p=>p.distributionsReceived>0).length!==1?'s have':' has'} received distributions so far.`,
+        `Largest stake: ${partners.sort((a,b)=>b.sharePercent-a.sharePercent)[0]?.name ?? '—'} at ${partners.sort((a,b)=>b.sharePercent-a.sharePercent)[0]?.sharePercent ?? 0}%.`,
       ],
       actions: [
-        'Send formal demand notices to all customers with overdue >30 days.',
-        'Offer 2% early payment discount to accelerate collections.',
-        'Review escrow requirements for new contracts going forward.',
+        'Run Distribution Waterfall calculator to confirm entitlements before any payout.',
+        'Preferred return distribution should trigger once 75% of lots are sold.',
+        'Send quarterly capital account statements to all partners to maintain trust.',
       ],
-      riskScore: customers.filter(c => c.installments.some(i => i.status === 'bounced')).length > 0 ? 7 : 4,
+      riskScore: 3,
+    },
+    'capital-calls': {
+      bullets: [
+        `${companyLabel}: ${overdueCalls.length} overdue, ${capitalCalls.filter(c=>c.status==='Outstanding').length} outstanding, ${capitalCalls.filter(c=>c.status==='Paid').length} paid.`,
+        overdueCalls.length > 0
+          ? `Overdue total: ${fmt(overdueCalls.reduce((s,c)=>s+c.totalDue-c.received,0))} — legal action threshold approaching.`
+          : 'No overdue capital calls — all partners current.',
+        `Monthly EMI: ${fmt(loans.reduce((s,l)=>s+l.emi,0))} — cash ${fmt(p?.cashAvailable ?? 0)} covers ${fmt(p?.cashAvailable??0) !== '$0' ? ((p?.cashAvailable??0) / Math.max(1, loans.reduce((s,l)=>s+l.emi,0))).toFixed(1) : '0'} months.`,
+        `Total outstanding receivables from partners: ${fmt(capitalCalls.filter(c=>c.status!=='Paid').reduce((s,c)=>s+c.totalDue-c.received,0))}.`,
+        'Issue capital calls at least 14 days before cash falls below 1.5× monthly EMI.',
+      ],
+      actions: [
+        overdueCalls.length > 0 ? 'Send formal demand notices to overdue partners immediately.' : 'Prepare next call based on 6-month expense forecast.',
+        'Use Expense Builder to calculate call amount before issuing.',
+        'Follow up 48 hours after due date — escalate to legal at day 30.',
+      ],
+      riskScore: overdueCalls.length > 0 ? 7 : 3,
     },
     'cash-flow': {
       bullets: [
-        `Cash on hand: $${p ? p.cashAvailable.toLocaleString() : '0'} — ${p && p.cashAvailable < 200000 ? '⚠️ critically low' : 'adequate for 2+ months'}.`,
-        `Monthly obligations: $${loans.reduce((s,l) => s+l.emi,0).toLocaleString()} EMI + operating expenses.`,
-        `Collections expected next 30 days: $${(pendingReceivables * 0.35 / 1000).toFixed(0)}K based on installment schedule.`,
-        `Capital calls pending: $${capitalCalls.filter(c => c.status !== 'Paid').reduce((s,c) => s+c.totalDue-c.received,0).toLocaleString()} — timing critical for liquidity.`,
-        `Distribution obligations: $${partners.reduce((s,p) => s+p.distributionsReceived,0).toLocaleString()} already paid — more likely due Q3.`,
+        `${companyLabel}: ${fmt(p?.cashAvailable ?? 0)} cash on hand — ${p && p.cashAvailable < 200000 ? '⚠️ critically low' : 'adequate for operations'}.`,
+        `Monthly EMI: ${fmt(loans.reduce((s,l)=>s+l.emi,0))} — runway ${p ? ((p.cashAvailable / Math.max(1, loans.reduce((s,l)=>s+l.emi,0))).toFixed(1)) : '0'} months.`,
+        `Collections next 30 days: ~${fmt(pendingReceivables * 0.35)} per installment schedule.`,
+        `Capital calls pending: ${fmt(capitalCalls.filter(c=>c.status!=='Paid').reduce((s,c)=>s+c.totalDue-c.received,0))} — timing critical for liquidity.`,
+        `Partner distributions paid: ${fmt(partners.reduce((s,p)=>s+p.distributionsReceived,0))}.`,
       ],
       actions: [
-        'Accelerate collections on contracted lots to cover EMI and operating costs.',
-        'Delay non-critical capital expenditures until Q3 collections materialize.',
-        'Consider credit line drawdown if collections slip — preserve minimum $150K reserve.',
+        'Accelerate collections on contracted lots to cover EMI + operating expenses.',
+        'Delay non-critical capex until Q3 collections materialize.',
+        'Maintain minimum $150K cash reserve — draw credit line if collections slip.',
       ],
       riskScore: p && p.cashAvailable < 200000 ? 8 : 4,
     },
     performance: {
       bullets: [
-        `Portfolio ROI: ${p ? ((netProfit / partners.reduce((s,p) => s+p.capitalContributed, 1)) * 100).toFixed(1) : '0'}% on invested capital.`,
-        `Equity multiple: ${p ? ((partners.reduce((s,x) => s+x.capitalContributed,0) + netProfit) / Math.max(1, partners.reduce((s,x) => s+x.capitalContributed,0))).toFixed(2) : '0'}x — target 1.8x+ for this asset class.`,
-        `${soldLots.length} lots closed generating $${(totalRevenue / 1_000_000).toFixed(2)}M in realized revenue.`,
+        `${companyLabel}: ${roi}% ROI on ${fmt(totalCapital)} invested capital — equity multiple ${totalCapital > 0 ? ((totalCapital + netProfit) / totalCapital).toFixed(2) : '—'}x.`,
+        `${soldLots.length} lots closed generating ${fmt(totalRevenue)} realized revenue (${((soldLots.length/Math.max(1,lots.length))*100).toFixed(0)}% of portfolio).`,
+        `Net profit ${fmt(netProfit)} = ${netMargin}% net margin.`,
         isConsolidated
-          ? `Top performer: ${companies.sort((a,b) => (b.property.saleConsideration - b.property.landCost) - (a.property.saleConsideration - a.property.landCost))[0]?.name ?? 'N/A'}.`
-          : `Gross profit as % of revenue: ${p ? (((p.saleConsideration - totalCost) / p.saleConsideration) * 100).toFixed(1) : '0'}%.`,
-        `Partner preferred returns of 6–8% must be serviced before general distributions.`,
+          ? `Top performer: ${[...companies].sort((a,b) => (b.property.saleConsideration - b.property.landCost) - (a.property.saleConsideration - a.property.landCost))[0]?.name ?? '—'}.`
+          : `Gross profit before fees: ${fmt(p ? p.saleConsideration - totalCost : 0)} (${p ? (((p.saleConsideration-totalCost)/p.saleConsideration)*100).toFixed(1) : '0'}% gross margin).`,
+        'Partner preferred returns (8%) must be funded before general profit distribution.',
       ],
       actions: [
         'Accelerate lot sales to lock in IRR before holding costs compound.',
-        'Initiate preferred return distribution to partners once 75% sold.',
-        isConsolidated ? 'Reallocate GP time to bottom-3 performing properties.' : 'Model exit scenarios — bulk sale vs. individual lots.',
+        'Initiate preferred return distribution once 75%+ of lots are sold.',
+        isConsolidated ? 'Reallocate GP attention to bottom-3 performing properties.' : 'Model bulk sale vs. individual lot exit — compare IRR outcomes.',
       ],
-      riskScore: 4,
+      riskScore: parseFloat(roi) < 15 ? 6 : 4,
     },
   };
 
@@ -124,49 +174,68 @@ function generateInsights(tab: string, data: ReturnType<typeof usePropDev>) {
 // ── Quick-question answer generator ──────────────────────────────────────────
 
 function answerQuickQuestion(q: string, data: ReturnType<typeof usePropDev>): string {
-  const { lots, loans, partners, capitalCalls, properties } = data;
+  const { lots, loans, partners, capitalCalls, properties, isConsolidated, companies } = data;
   const p = properties[0];
+  const companyName = isConsolidated ? `the portfolio (${companies.length} companies)` : (p?.name ?? 'this company');
   const overdue = capitalCalls.filter(c => c.status === 'Overdue');
   const pending = capitalCalls.filter(c => c.status !== 'Paid');
   const cash = p?.cashAvailable ?? 0;
   const monthlyEmi = loans.reduce((s, l) => s + l.emi, 0);
   const availLots = lots.filter(l => l.status === 'available');
+  const fmt = (n: number) => `$${Math.round(n).toLocaleString()}`;
+
+  // Management fee: 9% of land cost (correct formula)
+  const totalCost = p
+    ? p.landCost + p.hardCost + p.softCost + p.titleCharges + p.otherCharges
+      + p.propertyTax + p.loanProcessing + p.professionalCharges + p.legalFees + p.interestOnLoan
+    : 0;
+  const managementFee = p ? p.landCost * p.managementFeeRate : 0;
+  const commission = p ? (p.commission ?? p.saleConsideration * p.commissionRate) : 0;
+  const fullBreakEven = lots.length > 0 ? (totalCost + managementFee + commission) / lots.length : 0;
 
   if (q.includes('capital call')) {
     if (overdue.length > 0)
-      return `YES — you should call now. ${overdue.length} capital call${overdue.length > 1 ? 's are' : ' is'} already overdue totaling $${overdue.reduce((s, c) => s + c.totalDue - c.received, 0).toLocaleString()}. Send demand notices immediately.`;
+      return `YES — ${companyName} should call NOW. ${overdue.length} call${overdue.length>1?'s are':' is'} overdue totaling ${fmt(overdue.reduce((s,c)=>s+c.totalDue-c.received,0))}. Send demand notices immediately.`;
     if (cash < monthlyEmi * 3)
-      return `YES — cash of $${cash.toLocaleString()} covers only ${(cash / monthlyEmi).toFixed(1)} months of EMIs. Call now before you hit a shortfall.`;
-    return `NOT URGENTLY — cash position of $${cash.toLocaleString()} is adequate. Next call due: ${pending[0]?.dueDate ?? 'N/A'}. Monitor monthly.`;
+      return `YES — ${companyName} cash of ${fmt(cash)} covers only ${(cash/Math.max(1,monthlyEmi)).toFixed(1)} months of EMIs (${fmt(monthlyEmi)}/mo). Issue a call now before hitting shortfall.`;
+    return `NOT URGENTLY — ${companyName} cash of ${fmt(cash)} is adequate. Next call due: ${pending[0]?.dueDate ?? 'TBD'}. Monitor monthly.`;
   }
+
   if (q.includes('reprice') || q.includes('lot')) {
-    const cheapLots = availLots.filter(l => l.listPrice < 300000);
+    const cheapLots = availLots.filter(l => l.listPrice < fullBreakEven);
     if (cheapLots.length > 0)
-      return `${cheapLots.length} available lots are priced below $300K — consider 5–8% price increase to improve margins. Focus on corner lots and premium-facing inventory first.`;
-    return `All ${availLots.length} available lots are competitively priced. If velocity slows, consider a 3% incentive on bulk purchases rather than lowering list prices.`;
+      return `${cheapLots.length} available lot${cheapLots.length>1?'s':''} in ${companyName} priced BELOW break-even (${fmt(fullBreakEven)}): ${cheapLots.map(l=>l.lotNo).slice(0,5).join(', ')}. Raise to at least ${fmt(Math.ceil(fullBreakEven*1.1/1000)*1000)} (+10% buffer).`;
+    const lowMargin = availLots.filter(l => (l.listPrice - fullBreakEven)/l.listPrice < 0.15);
+    if (lowMargin.length > 0)
+      return `${lowMargin.length} lots in ${companyName} have <15% margin above break-even. Consider 5–8% price increase. Focus on corner/premium-facing lots first.`;
+    return `All ${availLots.length} available lots in ${companyName} clear break-even (${fmt(fullBreakEven)}). If velocity slows, try 3% bulk-purchase incentive rather than list price cuts.`;
   }
+
   if (q.includes('refinanc')) {
     const highRate = loans.filter(l => l.interestRate > 7.5);
     if (highRate.length > 0)
-      return `YES — ${highRate.length} loan${highRate.length > 1 ? 's' : ''} above 7.5% (avg ${(highRate.reduce((s, l) => s + l.interestRate, 0) / highRate.length).toFixed(2)}%). Refinancing at 6.5% saves ~$${Math.round(highRate.reduce((s, l) => s + l.balance * 0.01 / 12, 0)).toLocaleString()}/month.`;
-    return `No urgent refinancing needed — all loans are at or below 7.5%. Watch the market and act when rates drop below 6%.`;
+      return `YES — ${companyName} has ${highRate.length} loan${highRate.length>1?'s':''} above 7.5% (avg ${(highRate.reduce((s,l)=>s+l.interestRate,0)/highRate.length).toFixed(2)}%). Refinancing at 6.5% saves ~${fmt(highRate.reduce((s,l)=>s+l.balance*0.01/12,0))}/month.`;
+    return `No urgent refinancing for ${companyName} — all loans at or below 7.5%. Watch the market and act when rates drop below 6.5%.`;
   }
+
   if (q.includes('partner') || q.includes('distribut')) {
     const totalCapital = partners.reduce((s, p) => s + p.capitalContributed, 0);
-    const totalProfit = partners.reduce((s, p) => s + p.shareOfProfit, 0);
     const prefReturn = totalCapital * 0.08;
-    const remaining = Math.max(0, totalProfit - totalCapital - prefReturn);
-    return `Partners get: ① Return of capital $${totalCapital.toLocaleString()} ② Preferred return (8%) $${Math.round(prefReturn).toLocaleString()} ③ Pro-rata split of remaining $${Math.round(remaining).toLocaleString()}. Total distributable: $${Math.round(totalCapital + prefReturn + remaining).toLocaleString()}.`;
+    const totalProfit = p ? (p.saleConsideration - totalCost - managementFee - commission) : 0;
+    const afterPref = Math.max(0, totalProfit - prefReturn);
+    return `${companyName} waterfall:\n① Return of capital: ${fmt(totalCapital)}\n② Preferred return (8%): ${fmt(Math.round(prefReturn))}\n③ Remaining profit split: ${fmt(Math.round(afterPref))}\nTotal distributable: ${fmt(Math.round(totalCapital + prefReturn + afterPref))}`;
   }
+
   if (q.includes('cash')) {
     const runway = monthlyEmi > 0 ? (cash / monthlyEmi).toFixed(1) : '∞';
     if (cash < 200000)
-      return `⚠️ CRITICAL — cash of $${cash.toLocaleString()} is dangerously low. Only ${runway} months of EMI coverage. Accelerate receivables collections and delay discretionary capex immediately.`;
+      return `⚠️ CRITICAL — ${companyName} cash ${fmt(cash)} dangerously low. Only ${runway} months EMI coverage. Accelerate receivables and suspend discretionary capex immediately.`;
     if (cash < 500000)
-      return `CAUTION — $${cash.toLocaleString()} cash provides ${runway} months of EMI runway. Acceptable, but pursue receivable collections proactively.`;
-    return `SAFE — $${cash.toLocaleString()} cash covers ${runway} months of obligations. No immediate action needed.`;
+      return `CAUTION — ${companyName} has ${fmt(cash)} cash (${runway} months EMI runway). Acceptable short-term — pursue collections proactively.`;
+    return `SAFE — ${companyName} has ${fmt(cash)} cash (${runway} months runway). No immediate action needed.`;
   }
-  return `Based on current portfolio data: ${lots.length} total lots, $${(loans.reduce((s,l) => s+l.balance,0)/1e6).toFixed(2)}M loan exposure, $${cash.toLocaleString()} cash available. Navigate to a specific page for detailed analysis.`;
+
+  return `${companyName} snapshot: ${lots.length} lots (${lots.filter(l=>l.status==='sold').length} sold), ${fmt(p?.cashAvailable??0)} cash, ${fmt(loans.reduce((s,l)=>s+l.balance,0))} loan balance, ${fmt(totalCost + managementFee + commission)} total cost. Navigate to a specific tab for detailed analysis.`;
 }
 
 const QUICK_QUESTIONS = [
@@ -180,6 +249,12 @@ const QUICK_QUESTIONS = [
 export default function AiInsightsPanel({ onClose }: Props) {
   const data = usePropDev();
   const { tab } = usePropDevNav();
+  const { properties, isConsolidated, companies } = data;
+  const p = properties[0];
+  const companyName = isConsolidated
+    ? `Portfolio — ${companies.length} Companies`
+    : (p?.name ?? 'Company');
+
   const { bullets, actions, riskScore } = generateInsights(tab, data);
   const [freeText, setFreeText] = useState('');
   const [answer, setAnswer] = useState('');
@@ -203,12 +278,18 @@ export default function AiInsightsPanel({ onClose }: Props) {
   }
 
   return (
-    <div className="fixed right-0 top-0 h-full w-[400px] bg-gray-900 text-white shadow-2xl z-50 flex flex-col">
+    <div className="fixed right-0 top-0 h-full w-[420px] bg-gray-900 text-white shadow-2xl z-50 flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-white/10 bg-gradient-to-r from-violet-900 to-blue-900">
-        <div className="flex items-center gap-2">
-          <Sparkles size={18} className="text-violet-300" />
-          <span className="font-semibold">AI Insights</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <Sparkles size={18} className="text-violet-300 shrink-0" />
+          <div className="min-w-0">
+            <div className="text-xs text-violet-300 font-medium">AI Insights</div>
+            <div className="flex items-center gap-1 mt-0.5">
+              <Building2 size={11} className="text-white/60 shrink-0" />
+              <span className="text-sm font-bold text-white truncate">{companyName}</span>
+            </div>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={() => { setAnswer(''); setActiveQ(''); }} className="text-gray-400 hover:text-white" title="Reset">
@@ -250,7 +331,7 @@ export default function AiInsightsPanel({ onClose }: Props) {
               value={freeText}
               onChange={e => setFreeText(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleAnalyze()}
-              placeholder="Ask anything about the portfolio…"
+              placeholder={`Ask about ${isConsolidated ? 'the portfolio' : companyName}…`}
               className="flex-1 bg-white/10 text-white text-xs rounded-lg px-3 py-2 placeholder-gray-500 border border-white/10 focus:outline-none focus:border-violet-500"
             />
             <button
@@ -265,7 +346,7 @@ export default function AiInsightsPanel({ onClose }: Props) {
           {answer && (
             <div className="mt-3 p-3 bg-violet-900/50 border border-violet-700/50 rounded-xl">
               <p className="text-xs text-violet-300 font-medium mb-1.5">{activeQ}</p>
-              <p className="text-sm text-white leading-relaxed">{answer}</p>
+              <p className="text-sm text-white leading-relaxed whitespace-pre-line">{answer}</p>
             </div>
           )}
         </div>
@@ -289,7 +370,7 @@ export default function AiInsightsPanel({ onClose }: Props) {
         <div>
           <div className="flex items-center gap-2 mb-3">
             <TrendingUp size={14} className="text-blue-400" />
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-300">Key Insights</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-300">Key Insights — {isConsolidated ? 'All Companies' : companyName}</h3>
           </div>
           <div className="space-y-3">
             {bullets.map((b, i) => (
@@ -319,7 +400,7 @@ export default function AiInsightsPanel({ onClose }: Props) {
       </div>
 
       <div className="p-4 border-t border-white/10 text-xs text-gray-500 text-center">
-        Insights generated from live portfolio data · {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        Data: {companyName} · {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </div>
     </div>
   );

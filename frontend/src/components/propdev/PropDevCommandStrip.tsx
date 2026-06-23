@@ -23,7 +23,7 @@ export default function PropDevCommandStrip({ onAiInsights }: Props) {
     dashboard: 'Command Center', 'deal-pl': 'Deal P&L', pricing: 'Lot Pricing',
     inventory: 'Lot Inventory', partners: 'Partners / JV', 'capital-calls': 'Capital Calls',
     loans: 'Loan Tracker', sales: 'Sale of Property', performance: 'Performance',
-    receivables: 'Receivables', 'cash-flow': 'Cash Flow', documents: 'Documents',
+    'cash-flow': 'Cash Flow', documents: 'Documents',
   };
 
   return (

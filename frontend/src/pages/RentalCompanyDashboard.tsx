@@ -20,6 +20,7 @@ interface DashboardData {
   property_count: number;
   total_units: number;
   occupied_units: number;
+  vacant_units: number;
   occupancy_pct: number;
   billed_this_month: number;
   collected_this_month: number;
@@ -145,7 +146,7 @@ export default function RentalCompanyDashboard({ companyId }: Props) {
       <div>
         <h2 className="text-xl font-bold text-charcoal">{data.company_name}</h2>
         <p className="text-sm text-gray-500">
-          {data.property_name} · {data.total_units} units · {data.occupied_units} occupied
+          {data.property_name} · {data.total_units} units · {data.occupied_units} occupied · {data.vacant_units} vacant
         </p>
       </div>
 
@@ -170,7 +171,8 @@ export default function RentalCompanyDashboard({ companyId }: Props) {
       {dashTab === 'overview' && (
         <div className="space-y-6">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <KpiCard label="Occupancy"       value={fmtPct(data.occupancy_pct)}           sub={`${data.occupied_units}/${data.total_units}`} accent />
+            <KpiCard label="Occupancy"       value={fmtPct(data.occupancy_pct)}           sub={`${data.occupied_units} / ${data.total_units} units`} accent />
+            <KpiCard label="Occupied / Vacant" value={`${data.occupied_units} / ${data.vacant_units}`} sub={`${data.total_units} total units`} />
             <KpiCard label="Rent Collected"  value={fmtUSD(data.collected_this_month)}    sub={`of ${fmtUSD(data.billed_this_month)} due`} />
             <KpiCard label="Arrears"         value={fmtUSD(data.arrears_total)} />
             <KpiCard label="NOI This Month"  value={fmtUSD(data.noi_this_month)}          sub={`Exp: ${fmtUSD(data.total_expense_this_month)}`} accent />

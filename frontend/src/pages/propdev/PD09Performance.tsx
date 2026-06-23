@@ -16,8 +16,10 @@ export default function PD09Performance() {
   const projectedRevenue = p.saleConsideration;
   const totalCost = p.landCost + p.hardCost + p.softCost + p.titleCharges + p.otherCharges
     + p.propertyTax + p.loanProcessing + p.professionalCharges + p.legalFees + p.interestOnLoan;
-  const managementFee = p.saleConsideration * p.managementFeeRate;
-  const commission = p.saleConsideration * p.commissionRate;
+  // Management fee: 9% of Land Cost per Note 4 (NOT of revenue)
+  const managementFee = p.landCost * p.managementFeeRate;
+  // Commission: use explicit amount if set, otherwise rate × sale consideration
+  const commission = p.commission ?? (p.saleConsideration * p.commissionRate);
   const netProfit = p.saleConsideration - totalCost - managementFee - commission;
 
   // Metrics
@@ -134,8 +136,8 @@ export default function PD09Performance() {
                 { label: 'Projected Revenue', value: fmt(projectedRevenue), sub: `27 lots × avg ${fmt(projectedRevenue/lots.length)}` },
                 { label: 'Revenue Collected (Sold)', value: fmt(revenueToDate), sub: `${soldLots.length} lots closed` },
                 { label: 'Gross Profit', value: fmt(projectedRevenue - totalCost), sub: 'Before Mgmt fee & Commission' },
-                { label: 'Management Fee', value: fmt(managementFee), sub: `${(p.managementFeeRate*100).toFixed(0)}% of revenue` },
-                { label: 'Commission', value: fmt(commission), sub: `${(p.commissionRate*100).toFixed(1)}% of revenue` },
+                { label: 'Management Fee', value: fmt(managementFee), sub: `${(p.managementFeeRate*100).toFixed(0)}% of land cost (Note 4)` },
+                { label: 'Commission', value: fmt(commission), sub: p.commission != null ? '6% for 1 lot, 3% for 26 lots (Note 2)' : `${(p.commissionRate*100).toFixed(1)}% of revenue` },
                 { label: 'Net Profit', value: fmt(netProfit), sub: 'After all deductions', bold: true },
                 { label: 'Profit per Lot', value: fmt(netProfit / lots.length), sub: '' },
                 { label: 'Revenue per Sqft', value: `$${(projectedRevenue / lots.reduce((s,l) => s + l.sizeSqft, 0)).toFixed(2)}`, sub: '' },

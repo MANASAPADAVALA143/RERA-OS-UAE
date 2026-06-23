@@ -102,9 +102,9 @@ function InsightCard({ icon, color, title, body }: { icon: React.ReactNode; colo
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function PD02DealPL() {
-  const { properties, lots, partners, loans, companies } = usePropDev();
+  const { companies } = usePropDev();
 
-  // Company selector
+  // Company selector — always pick a single company (never "all")
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
   useEffect(() => {
     if (companies.length > 0 && !selectedCompanyId) {
@@ -112,10 +112,11 @@ export default function PD02DealPL() {
     }
   }, [companies, selectedCompanyId]);
 
-  const p = properties.find(pr => pr.companyId === selectedCompanyId) ?? properties[0];
-  const companyLots = lots.filter(l => l.companyId === (p?.companyId ?? ''));
-  const companyPartners = partners.filter(pt => pt.companyId === (p?.companyId ?? ''));
-  const companyLoans = loans.filter(ln => ln.companyId === (p?.companyId ?? ''));
+  const selectedCompany = companies.find(c => c.id === selectedCompanyId) ?? companies[0];
+  const p = selectedCompany?.property;
+  const companyLots = selectedCompany?.lots ?? [];
+  const companyPartners = selectedCompany?.partners ?? [];
+  const companyLoans = selectedCompany?.loans ?? [];
 
   const costsFromProperty = (prop: typeof p) => ({
     hardCost: prop?.hardCost ?? 120000,

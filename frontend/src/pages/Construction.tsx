@@ -23,7 +23,8 @@ import ConstructionPayApplications from './ConstructionPayApplications';
 import ConstructionExpenses from './ConstructionExpenses';
 import ConstructionTaskSchedule from './ConstructionTaskSchedule';
 import ConstructionLoanTracker from './ConstructionLoanTracker';
-import RentalArAp from './RentalArAp';
+import PD10Receivables from './propdev/PD10Receivables';
+import { PropertyDevProvider } from '../contexts/PropertyDevContext';
 
 const safe = (n: number | null | undefined) => (n == null || Number.isNaN(n) ? 0 : n);
 
@@ -1294,7 +1295,9 @@ export default function Construction() {
           ══════════════════════════════════════════════════════════════════ */}
           {tab === 'receivables' && (
             <ErrorBoundary>
-              <RentalArAp />
+              <PropertyDevProvider>
+                <PD10Receivables />
+              </PropertyDevProvider>
             </ErrorBoundary>
           )}
 

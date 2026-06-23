@@ -242,7 +242,7 @@ interface ImportSummary {
 
 export default function PD00Upload() {
   const { companies, selectedCompanyId, properties, partners: ctxPartners, loans: ctxLoans,
-          setProperty, setPartners, setLoans, setCapitalCalls } = usePropDev();
+          setProperty, setPartners, setLoans, setCapitalCalls, addUploadRecord, uploadHistory } = usePropDev();
   const { setTab } = usePropDevNav();
 
   const [dragOver, setDragOver] = useState(false);
@@ -313,6 +313,16 @@ export default function PD00Upload() {
 
     setSummary(s);
     setConfirmed(true);
+
+    // Record this upload in history
+    const sheetsImported = sheets.filter(sh => sh.detected !== 'Unknown').map(sh => sh.detected);
+    addUploadRecord({
+      companyId: targetCompany.id,
+      companyName: targetCompany.name,
+      fileName,
+      uploadDate: new Date().toISOString(),
+      sheetsImported,
+    });
   }
 
   const sheetCount = sheets?.length ?? 0;
@@ -487,6 +497,33 @@ export default function PD00Upload() {
           <Upload size={14} /> Download Template
         </button>
       </div>
+
+      {/* Upload History */}
+      {uploadHistory.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200">
+          <div className="p-4 border-b border-gray-100">
+            <h3 className="font-semibold text-gray-800">Upload History</h3>
+            <p className="text-xs text-gray-400 mt-0.5">All previous uploads — latest first. Data is cumulative per session.</p>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {uploadHistory.map(rec => (
+              <div key={rec.id} className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50">
+                <FileSpreadsheet size={16} className="text-green-500 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-medium text-gray-800 truncate">{rec.fileName}</p>
+                    <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full">{rec.companyName}</span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {new Date(rec.uploadDate).toLocaleString()} · {rec.sheetsImported.length} sheet{rec.sheetsImported.length !== 1 ? 's' : ''}: {rec.sheetsImported.join(', ')}
+                  </p>
+                </div>
+                <CheckCircle2 size={14} className="text-green-500 shrink-0 mt-1" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

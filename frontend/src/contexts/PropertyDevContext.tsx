@@ -441,6 +441,17 @@ function aggregateProperty(companies: CompanyData[]): Property {
   };
 }
 
+// ── Upload History ─────────────────────────────────────────────────────────────
+
+export interface UploadRecord {
+  id: string;
+  companyId: string;
+  companyName: string;
+  fileName: string;
+  uploadDate: string;   // ISO string
+  sheetsImported: string[];
+}
+
 // ── Context ────────────────────────────────────────────────────────────────────
 
 interface PropertyDevState {
@@ -459,6 +470,10 @@ interface PropertyDevState {
   expenses: DevExpense[];
   isConsolidated: boolean;
 
+  // Upload history (all companies)
+  uploadHistory: UploadRecord[];
+  addUploadRecord: (rec: Omit<UploadRecord, 'id'>) => void;
+
   // Mutators — operate on selected company only
   setLots: (lots: Lot[]) => void;
   setDocs: (docs: ComplianceDoc[]) => void;
@@ -473,6 +488,7 @@ const Ctx = createContext<PropertyDevState | null>(null);
 export function PropertyDevProvider({ children }: { children: ReactNode }) {
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>('all');
   const [companiesState, setCompaniesState] = useState<CompanyData[]>(ALL_COMPANIES);
+  const [uploadHistory, setUploadHistory] = useState<UploadRecord[]>([]);
 
   const derived = useMemo(() => {
     if (selectedCompanyId === 'all') {
@@ -527,10 +543,16 @@ export function PropertyDevProvider({ children }: { children: ReactNode }) {
     setCompaniesState(prev => prev.map(c => c.id === selectedCompanyId ? { ...c, property } : c));
   }
 
+  function addUploadRecord(rec: Omit<UploadRecord, 'id'>) {
+    const id = `upload-${Date.now()}`;
+    setUploadHistory(prev => [{ ...rec, id }, ...prev]);
+  }
+
   return (
     <Ctx.Provider value={{
       companies: companiesState, selectedCompanyId, setSelectedCompanyId,
-      ...derived, setLots, setDocs, setCapitalCalls, setLoans, setPartners, setProperty,
+      ...derived, uploadHistory, addUploadRecord,
+      setLots, setDocs, setCapitalCalls, setLoans, setPartners, setProperty,
     }}>
       {children}
     </Ctx.Provider>

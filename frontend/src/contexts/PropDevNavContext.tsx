@@ -3,14 +3,14 @@ import type { ReactNode } from 'react';
 import {
   LayoutDashboard, TrendingUp, Grid3X3, Warehouse,
   Users, Phone, Landmark, Home, BarChart2,
-  Receipt, Waves, FolderOpen, Upload,
+  Waves, FolderOpen, Upload,
 } from 'lucide-react';
 
 export type PropDevTab =
   | 'upload'
   | 'dashboard' | 'deal-pl' | 'pricing' | 'inventory'
   | 'partners' | 'capital-calls' | 'loans' | 'sales'
-  | 'performance' | 'receivables' | 'cash-flow' | 'documents';
+  | 'performance' | 'cash-flow' | 'documents';
 
 type LIcon = React.FC<{ size?: number; className?: string }>;
 
@@ -32,7 +32,6 @@ export const PROPDEV_TABS: PropDevNavItem[] = [
   { id: 'loans',         label: 'Loan Tracker',       Icon: Landmark        },
   { id: 'sales',         label: 'Sale of Property',   Icon: Home            },
   { id: 'performance',   label: 'Performance',        Icon: BarChart2       },
-  { id: 'receivables',   label: 'Receivables',        Icon: Receipt         },
   { id: 'cash-flow',     label: 'Cash Flow',          Icon: Waves           },
   { id: 'documents',     label: 'Documents',          Icon: FolderOpen      },
 ];

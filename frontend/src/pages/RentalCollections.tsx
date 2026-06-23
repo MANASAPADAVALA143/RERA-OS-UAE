@@ -30,12 +30,18 @@ interface CollectionsResponse {
   kpis: { total_billed: number; total_collected: number; collection_rate: number; total_arrears: number };
   items: InvoiceRow[];
   arrears_aging: ArrearsAging;
+  month: string;
+}
+
+function currentMonth() {
+  return new Date().toISOString().slice(0, 7); // YYYY-MM
 }
 
 export default function RentalCollections() {
   const [data, setData] = useState<CollectionsResponse | null>(null);
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [filterCompany, setFilterCompany] = useState('');
+  const [filterMonth, setFilterMonth] = useState(currentMonth());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -52,7 +58,7 @@ export default function RentalCollections() {
     setLoading(true);
     setError('');
     try {
-      const params: Record<string, string> = {};
+      const params: Record<string, string> = { month: filterMonth };
       if (filterCompany) params.company_id = filterCompany;
       const res = await api.get<CollectionsResponse>('/api/rentals/collections', { params });
       setData(res.data);
@@ -61,7 +67,7 @@ export default function RentalCollections() {
     } finally {
       setLoading(false);
     }
-  }, [filterCompany]);
+  }, [filterCompany, filterMonth]);
 
   useEffect(() => { fetchCompanies(); }, [fetchCompanies]);
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -73,11 +79,23 @@ export default function RentalCollections() {
     { bucket: '90+d',   amount: data.arrears_aging['90_plus'] },
   ] : [];
 
+  const shortfall = data ? data.kpis.total_billed - data.kpis.total_collected : 0;
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-charcoal">Collections</h1>
 
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-3 items-center">
+        {/* Month picker */}
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-500 font-medium">Month</label>
+          <input
+            type="month"
+            value={filterMonth}
+            onChange={(e) => setFilterMonth(e.target.value)}
+            className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
         <select
           value={filterCompany}
           onChange={(e) => setFilterCompany(e.target.value)}
@@ -86,6 +104,14 @@ export default function RentalCollections() {
           <option value="">All Companies</option>
           {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
         </select>
+        {filterMonth !== currentMonth() && (
+          <button
+            onClick={() => setFilterMonth(currentMonth())}
+            className="text-xs text-primary underline"
+          >
+            Back to current month
+          </button>
+        )}
       </div>
 
       {loading ? <LoadingSkeleton rows={8} /> : error ? (
@@ -93,13 +119,13 @@ export default function RentalCollections() {
       ) : data ? (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <KpiCard label="Total Billed" value={fmtUSD(data.kpis.total_billed)} />
-            <KpiCard label="Total Collected" value={fmtUSD(data.kpis.total_collected)} accent />
-            <KpiCard label="Collection Rate" value={fmtPct(data.kpis.collection_rate)} />
+            <KpiCard label="Total Billed" value={fmtUSD(data.kpis.total_billed)} sub={filterMonth} />
+            <KpiCard label="Total Collected" value={fmtUSD(data.kpis.total_collected)} accent sub={`of ${fmtUSD(data.kpis.total_billed)} billed`} />
+            <KpiCard label="Collection Rate" value={fmtPct(data.kpis.collection_rate)} sub={shortfall > 0 ? `${fmtUSD(shortfall)} uncollected` : 'Fully collected'} />
             <KpiCard label="Total Arrears" value={fmtUSD(data.kpis.total_arrears)} />
           </div>
 
-          <Card title="Invoice Collections">
+          <Card title={`Invoice Collections — ${filterMonth}`}>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -114,7 +140,9 @@ export default function RentalCollections() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.items.map((r) => {
+                  {data.items.length === 0 ? (
+                    <tr><td colSpan={7} className="py-8 text-center text-gray-400">No invoices for {filterMonth}</td></tr>
+                  ) : data.items.map((r) => {
                     const bal = r.amount_billed - r.amount_collected;
                     const st = bal <= 0 ? 'paid' : r.amount_collected > 0 ? 'partial' : 'unpaid';
                     const stClass = bal <= 0 ? 'bg-green-100 text-green-800' : r.amount_collected > 0 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800';

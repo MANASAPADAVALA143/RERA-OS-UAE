@@ -1,4 +1,6 @@
-import { useRentalNav } from '../contexts/RentalNavContext';
+import { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+import { useRentalNav, tabFromRentalPath } from '../contexts/RentalNavContext';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import RentalOverview from './RentalOverview';
 import RentalCompanies from './RentalCompanies';
@@ -21,9 +23,19 @@ import RentalIncomeBridge from './RentalIncomeBridge';
 import RentalEntityRollup from './RentalEntityRollup';
 import RentalCompliance from './RentalCompliance';
 import RentalFinancials from './RentalFinancials';
+import RentalBuildingExpenses from './rental/RentalBuildingExpenses';
+import RentalLoanTracker from './rental/RentalLoanTracker';
+import RentalCfoPortfolio from './rental/RentalCfoPortfolio';
+import Rental13WeekCashFlow from './rental/Rental13WeekCashFlow';
 
 export default function Rental() {
-  const { tab } = useRentalNav();
+  const { tab, setTab } = useRentalNav();
+  const location = useLocation();
+
+  useEffect(() => {
+    const t = tabFromRentalPath(location.pathname);
+    if (t) setTab(t);
+  }, [location.pathname, setTab]);
   return (
     <div className="space-y-6">
       {tab === 'overview'     && <ErrorBoundary><RentalOverview /></ErrorBoundary>}
@@ -47,6 +59,10 @@ export default function Rental() {
       {tab === 'entity-rollup'     && <ErrorBoundary><RentalEntityRollup /></ErrorBoundary>}
       {tab === 'compliance'        && <ErrorBoundary><RentalCompliance /></ErrorBoundary>}
       {tab === 'financials'        && <ErrorBoundary><RentalFinancials /></ErrorBoundary>}
+      {tab === 'building-expenses' && <ErrorBoundary><RentalBuildingExpenses /></ErrorBoundary>}
+      {tab === 'loan-tracker'      && <ErrorBoundary><RentalLoanTracker /></ErrorBoundary>}
+      {tab === 'cfo-portfolio'     && <ErrorBoundary><RentalCfoPortfolio /></ErrorBoundary>}
+      {tab === '13-week-cf'        && <ErrorBoundary><Rental13WeekCashFlow /></ErrorBoundary>}
     </div>
   );
 }

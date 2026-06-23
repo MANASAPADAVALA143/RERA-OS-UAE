@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, HardHat, Building2, Landmark, Home,
   ShieldAlert, Map, Settings, LogOut, HardDriveUpload,
@@ -14,6 +14,7 @@ import {
   RentalNavProvider,
   useRentalNav,
   RENTAL_TABS,
+  rentalPathForTab,
 } from '../../contexts/RentalNavContext';
 import { RentalPortfolioProvider } from '../../contexts/RentalPortfolioContext';
 import {
@@ -41,6 +42,7 @@ function SidebarInner() {
   const onPropDev = location.pathname.startsWith('/property-dev');
   const { tab, setTab, projectId, setProjectId, projects } = useConstructionNav();
   const { tab: rentalTab, setTab: setRentalTab } = useRentalNav();
+  const navigate = useNavigate();
   const { tab: propDevTab, setTab: setPropDevTab } = usePropDevNav();
 
   return (
@@ -81,7 +83,11 @@ function SidebarInner() {
                         </p>
                       )}
                       <button
-                        onClick={() => setRentalTab(id)}
+                        onClick={() => {
+                          setRentalTab(id);
+                          const path = rentalPathForTab(id);
+                          if (path !== location.pathname) navigate(path);
+                        }}
                         className={`w-full flex items-center gap-2 pl-7 pr-3 py-1.5 rounded-lg text-xs transition-colors text-left ${
                           rentalTab === id
                             ? 'bg-accent text-white'

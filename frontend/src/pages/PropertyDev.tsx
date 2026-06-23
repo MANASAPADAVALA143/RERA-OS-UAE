@@ -13,7 +13,6 @@ import PD06CapitalCalls from './propdev/PD06CapitalCalls';
 import PD07Loans from './propdev/PD07Loans';
 import PD08Sales from './propdev/PD08Sales';
 import PD09Performance from './propdev/PD09Performance';
-import PD10Receivables from './propdev/PD10Receivables';
 import PD11CashFlow from './propdev/PD11CashFlow';
 import PD12Documents from './propdev/PD12Documents';
 import PD00Upload from './propdev/PD00Upload';
@@ -39,7 +38,6 @@ function PropertyDevInner() {
         {tab === 'loans'         && <ErrorBoundary><PD07Loans /></ErrorBoundary>}
         {tab === 'sales'         && <ErrorBoundary><PD08Sales /></ErrorBoundary>}
         {tab === 'performance'   && <ErrorBoundary><PD09Performance /></ErrorBoundary>}
-        {tab === 'receivables'   && <ErrorBoundary><PD10Receivables /></ErrorBoundary>}
         {tab === 'cash-flow'     && <ErrorBoundary><PD11CashFlow /></ErrorBoundary>}
         {tab === 'documents'     && <ErrorBoundary><PD12Documents /></ErrorBoundary>}
       </div>
