@@ -11,7 +11,6 @@ import RentalVacancy from './RentalVacancy';
 import RentalExpenses from './RentalExpenses';
 import RentalOwnership from './RentalOwnership';
 import RentalReports from './RentalReports';
-import RentalArAp from './RentalArAp';
 import RentalArDashboard from './RentalArDashboard';
 import RentalApDashboard from './RentalApDashboard';
 import RentalVendorManagement from './RentalVendorManagement';
@@ -21,6 +20,7 @@ import RentalCfoDashboard from './RentalCfoDashboard';
 import RentalIncomeBridge from './RentalIncomeBridge';
 import RentalEntityRollup from './RentalEntityRollup';
 import RentalCompliance from './RentalCompliance';
+import RentalFinancials from './RentalFinancials';
 
 export default function Rental() {
   const { tab } = useRentalNav();
@@ -36,7 +36,6 @@ export default function Rental() {
       {tab === 'collections'  && <ErrorBoundary><RentalCollections /></ErrorBoundary>}
       {tab === 'vacancy'      && <ErrorBoundary><RentalVacancy /></ErrorBoundary>}
       {tab === 'expenses'     && <ErrorBoundary><RentalExpenses /></ErrorBoundary>}
-      {tab === 'ar-ap'        && <ErrorBoundary><RentalArAp /></ErrorBoundary>}
       {tab === 'ar-dashboard'      && <ErrorBoundary><RentalArDashboard /></ErrorBoundary>}
       {tab === 'ap-dashboard'      && <ErrorBoundary><RentalApDashboard /></ErrorBoundary>}
       {tab === 'vendor-management' && <ErrorBoundary><RentalVendorManagement /></ErrorBoundary>}
@@ -47,6 +46,7 @@ export default function Rental() {
       {tab === 'income-bridge'     && <ErrorBoundary><RentalIncomeBridge /></ErrorBoundary>}
       {tab === 'entity-rollup'     && <ErrorBoundary><RentalEntityRollup /></ErrorBoundary>}
       {tab === 'compliance'        && <ErrorBoundary><RentalCompliance /></ErrorBoundary>}
+      {tab === 'financials'        && <ErrorBoundary><RentalFinancials /></ErrorBoundary>}
     </div>
   );
 }

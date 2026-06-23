@@ -5,15 +5,15 @@ import {
   CreditCard, TrendingDown, DollarSign, Users, BarChart2,
   Wrench, ClipboardCheck, AlertTriangle, Receipt,
   Upload, TrendingUp, ArrowDownUp, Table2, CalendarCheck, Activity,
-  Landmark, Store,
+  Landmark, Store, BookOpen,
 } from "lucide-react";
 
 export type RentalTab =
   | "overview" | "companies" | "units" | "leases"
   | "maintenance" | "inspections" | "vendor-risk"
-  | "collections" | "vacancy" | "expenses" | "ar-ap" | "ar-dashboard"
+  | "collections" | "vacancy" | "expenses" | "ar-dashboard"
   | "ap-dashboard" | "vendor-management"
-  | "ownership" | "reports"
+  | "ownership" | "reports" | "financials"
   | "portfolio-upload" | "cfo-dashboard" | "income-bridge" | "entity-rollup" | "compliance";
 
 type LucideIcon = React.FC<{ size?: number; className?: string }>;
@@ -35,10 +35,10 @@ export const RENTAL_TABS: RentalNavItem[] = [
   { id: "collections",       label: "Collections",       Icon: CreditCard      },
   { id: "vacancy",           label: "Vacancy & Loss",    Icon: TrendingDown    },
   { id: "expenses",          label: "Expenses",          Icon: DollarSign      },
-  { id: "ar-ap",             label: "AR & AP",           Icon: Receipt         },
   { id: "ar-dashboard",      label: "AR Dashboard",      Icon: Activity        },
   { id: "ap-dashboard",      label: "AP Dashboard",      Icon: Landmark        },
   { id: "vendor-management", label: "Vendor Mgmt",       Icon: Store           },
+  { id: "financials",        label: "Financials",        Icon: BookOpen        },
   { id: "ownership",         label: "Ownership",         Icon: Users           },
   { id: "reports",           label: "Reports",           Icon: BarChart2       },
   // ── CFO Portfolio View ────────────────────────────────────────────────────

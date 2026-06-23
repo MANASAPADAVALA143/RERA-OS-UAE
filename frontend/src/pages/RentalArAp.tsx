@@ -161,6 +161,12 @@ export default function RentalArAp() {
 
   return (
     <div className="space-y-6">
+      {/* Page header */}
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Construction Receivables</h1>
+        <p className="text-sm text-gray-500 mt-1">Contractor billing, progress claims and collections</p>
+      </div>
+
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total AR" value={fmt(totAr)} />
@@ -293,12 +299,12 @@ export default function RentalArAp() {
 
       {/* Portfolio table */}
       <Card>
-        <h3 className="font-semibold text-gray-800 mb-3">AR & AP by Entity</h3>
+        <h3 className="font-semibold text-gray-800 mb-3">AR & AP by Contractor/Client</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-gray-700">
             <thead>
               <tr className="bg-[#0E3B36] text-white text-xs">
-                <th className="px-3 py-2 text-left whitespace-nowrap">Entity</th>
+                <th className="px-3 py-2 text-left whitespace-nowrap">Contractor/Client</th>
                 <th className="px-3 py-2 text-right whitespace-nowrap">AR Current</th>
                 <th className="px-3 py-2 text-right whitespace-nowrap">AR 1-30</th>
                 <th className="px-3 py-2 text-right whitespace-nowrap">AR 31-60</th>
@@ -344,7 +350,7 @@ export default function RentalArAp() {
             {rows.length > 0 && (
               <tfoot>
                 <tr className="bg-[#0E3B36] text-white font-semibold">
-                  <td className="px-3 py-2">Portfolio Total</td>
+                  <td className="px-3 py-2">Project Total</td>
                   <td className="px-3 py-2 text-right" colSpan={5}></td>
                   <td className="px-3 py-2 text-right">{fmt(totAr)}</td>
                   <td className="px-3 py-2 text-right" colSpan={4}></td>

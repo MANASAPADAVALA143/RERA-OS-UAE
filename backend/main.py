@@ -136,6 +136,9 @@ app.include_router(rentals_arap_router)
 app.include_router(rentals_vendor_risk_router)
 app.include_router(rentals_export_router)
 
+from routers.propdev.deal_advisor import router as deal_advisor_router  # noqa: E402
+app.include_router(deal_advisor_router)
+
 # Serve uploaded files from local disk only when S3 is not configured (local dev).
 # In production, files are served via S3 pre-signed URLs — no static mount needed.
 if not settings.s3_bucket:

@@ -23,6 +23,7 @@ import ConstructionPayApplications from './ConstructionPayApplications';
 import ConstructionExpenses from './ConstructionExpenses';
 import ConstructionTaskSchedule from './ConstructionTaskSchedule';
 import ConstructionLoanTracker from './ConstructionLoanTracker';
+import RentalArAp from './RentalArAp';
 
 const safe = (n: number | null | undefined) => (n == null || Number.isNaN(n) ? 0 : n);
 
@@ -1285,6 +1286,15 @@ export default function Construction() {
           {tab === 'documents' && (
             <ErrorBoundary>
               <ConstructionDocuments projectId={projectId} />
+            </ErrorBoundary>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════
+              RECEIVABLES TAB
+          ══════════════════════════════════════════════════════════════════ */}
+          {tab === 'receivables' && (
+            <ErrorBoundary>
+              <RentalArAp />
             </ErrorBoundary>
           )}
 

@@ -10,7 +10,7 @@ export type Tab =
   | 'overview' | 'costs' | 'change_orders' | 'change_requests'
   | 'financials' | 'loan_tracker' | 'compliance' | 'schedule' | 'task_schedule' | 'work_log'
   | 'quality_check' | 'inspections' | 'documents'
-  | 'pay_applications' | 'expenses';
+  | 'pay_applications' | 'expenses' | 'receivables';
 
 type LucideIcon = React.FC<{ size?: number; className?: string }>;
 export interface NavItem { id: Tab; label: string; Icon: LucideIcon }
@@ -31,6 +31,7 @@ export const ALL_TABS: NavItem[] = [
   { id: 'quality_check',     label: 'Quality Check',     Icon: CheckSquare     },
   { id: 'inspections',       label: 'Inspections',       Icon: Search          },
   { id: 'documents',         label: 'Documents',         Icon: FolderOpen      },
+  { id: 'receivables',       label: 'Receivables',       Icon: Receipt         },
 ];
 
 export interface ProjectSummary {

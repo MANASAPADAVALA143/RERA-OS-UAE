@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     aws_secret_access_key: str = ""  # Leave empty in production — IAM role is used instead
     aws_region: str = "us-east-1"
 
+    # ── Anthropic ─────────────────────────────────────────────────────────────
+    anthropic_api_key: str = ""
+
     # ── S3 file storage ───────────────────────────────────────────────────────
     # Set to the bucket name output by Terraform (outputs.tf → s3_bucket_name).
     # Leave empty for local dev (files go to backend/uploads/ on disk).
