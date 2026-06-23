@@ -18,18 +18,25 @@ from models.propdev.expense import PropDevExpense
 router = APIRouter(prefix="/api/propdev", tags=["propdev"])
 
 
+HEADER_KEYWORDS = {'Company', 'Date', 'Week Starting', 'Sl', 'Partner Name', 'Particulars'}
+
 def parse_excel_file(content: bytes) -> dict:
-    wb = openpyxl.load_workbook(BytesIO(content))
+    # data_only=True returns calculated cell values instead of formula strings
+    wb = openpyxl.load_workbook(BytesIO(content), data_only=True)
     sheets = {}
     for sheet_name in wb.sheetnames:
         ws = wb[sheet_name]
         rows = []
         headers = None
-        for i, row in enumerate(ws.iter_rows(values_only=True)):
-            if i == 0:
-                headers = [str(h).strip() if h else f"col_{j}" for j, h in enumerate(row)]
-            elif any(cell is not None for cell in row):
-                rows.append({headers[j]: row[j] for j in range(len(headers))})
+        for row in ws.iter_rows(values_only=True):
+            if headers is None:
+                # Skip title/description rows; detect header row by known keywords
+                row_vals = [str(v or '').strip() for v in row]
+                if any(v in HEADER_KEYWORDS for v in row_vals[:4]):
+                    headers = [str(h).strip() if h else f"col_{j}" for j, h in enumerate(row)]
+                continue
+            if any(cell is not None for cell in row):
+                rows.append({headers[j]: row[j] for j in range(min(len(headers), len(row)))})
         sheets[sheet_name] = rows
     return sheets
 
