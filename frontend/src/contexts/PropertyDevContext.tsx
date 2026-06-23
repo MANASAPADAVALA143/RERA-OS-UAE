@@ -439,6 +439,9 @@ interface PropertyDevState {
   setLots: (lots: Lot[]) => void;
   setDocs: (docs: ComplianceDoc[]) => void;
   setCapitalCalls: (calls: CapitalCall[]) => void;
+  setLoans: (loans: Loan[]) => void;
+  setPartners: (partners: Partner[]) => void;
+  setProperty: (property: Property) => void;
 }
 
 const Ctx = createContext<PropertyDevState | null>(null);
@@ -487,11 +490,23 @@ export function PropertyDevProvider({ children }: { children: ReactNode }) {
     if (selectedCompanyId === 'all') return;
     setCompaniesState(prev => prev.map(c => c.id === selectedCompanyId ? { ...c, capitalCalls } : c));
   }
+  function setLoans(loans: Loan[]) {
+    if (selectedCompanyId === 'all') return;
+    setCompaniesState(prev => prev.map(c => c.id === selectedCompanyId ? { ...c, loans } : c));
+  }
+  function setPartners(partners: Partner[]) {
+    if (selectedCompanyId === 'all') return;
+    setCompaniesState(prev => prev.map(c => c.id === selectedCompanyId ? { ...c, partners } : c));
+  }
+  function setProperty(property: Property) {
+    if (selectedCompanyId === 'all') return;
+    setCompaniesState(prev => prev.map(c => c.id === selectedCompanyId ? { ...c, property } : c));
+  }
 
   return (
     <Ctx.Provider value={{
       companies: companiesState, selectedCompanyId, setSelectedCompanyId,
-      ...derived, setLots, setDocs, setCapitalCalls,
+      ...derived, setLots, setDocs, setCapitalCalls, setLoans, setPartners, setProperty,
     }}>
       {children}
     </Ctx.Provider>
