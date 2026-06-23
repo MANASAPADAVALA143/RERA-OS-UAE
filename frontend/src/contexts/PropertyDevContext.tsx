@@ -15,7 +15,7 @@ export interface Lot {
 export interface Partner {
   id: string; companyId: string; name: string; type: 'Class A' | 'Class B';
   sharePercent: number; capitalContributed: number; distributionsReceived: number;
-  preferredReturn: number; status: 'Active' | 'Exited';
+  shareOfProfit: number; preferredReturn: number; status: 'Active' | 'Exited';
 }
 export interface Loan {
   id: string; companyId: string; company: string; property: string;
@@ -108,6 +108,7 @@ function makePartners(companyId: string, configs: { name: string; pct: number; c
     name: c.name, type: (i === 0 ? 'Class B' : 'Class A') as Partner['type'],
     sharePercent: c.pct, capitalContributed: c.capital,
     distributionsReceived: i === 0 ? Math.round(c.capital * 0.08) : 0,
+    shareOfProfit: Math.round(c.capital * (0.18 + i * 0.03)),
     preferredReturn: i === 0 ? 6 : 8, status: 'Active',
   }));
 }
