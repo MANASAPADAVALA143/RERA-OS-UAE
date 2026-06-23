@@ -3,11 +3,11 @@ import type { ReactNode } from 'react';
 import {
   LayoutDashboard, TrendingUp, Grid3X3, Warehouse,
   Users, Phone, Landmark, Home, BarChart2,
-  Waves, FolderOpen, Upload,
+  Waves, FolderOpen, Upload, Building2,
 } from 'lucide-react';
 
 export type PropDevTab =
-  | 'upload'
+  | 'company-setup' | 'upload'
   | 'dashboard' | 'deal-pl' | 'pricing' | 'inventory'
   | 'partners' | 'capital-calls' | 'loans' | 'sales'
   | 'performance' | 'cash-flow' | 'documents';
@@ -22,6 +22,7 @@ export interface PropDevNavItem {
 }
 
 export const PROPDEV_TABS: PropDevNavItem[] = [
+  { id: 'company-setup', label: 'Company Registry',   Icon: Building2,      groupLabel: 'Setup'       },
   { id: 'upload',        label: 'Upload Data',        Icon: Upload,         groupLabel: 'Data Import' },
   { id: 'dashboard',     label: 'Command Center',     Icon: LayoutDashboard, groupLabel: 'Analytics'  },
   { id: 'deal-pl',       label: 'Deal P&L',           Icon: TrendingUp      },

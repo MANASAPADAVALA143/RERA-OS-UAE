@@ -60,6 +60,12 @@ import models.rentals.maintenance  # noqa: F401
 import models.rentals.unit_inspection  # noqa: F401
 import models.rentals.vendor  # noqa: F401
 import models.rentals.ar_ap  # noqa: F401
+import models.propdev.company  # noqa: F401
+import models.propdev.lot  # noqa: F401
+import models.propdev.partner  # noqa: F401
+import models.propdev.loan  # noqa: F401
+import models.propdev.capital_call  # noqa: F401
+import models.propdev.expense  # noqa: F401
 
 app = FastAPI(title="EstateCFO API", version="1.0.0")
 
@@ -137,7 +143,13 @@ app.include_router(rentals_vendor_risk_router)
 app.include_router(rentals_export_router)
 
 from routers.propdev.deal_advisor import router as deal_advisor_router  # noqa: E402
+from routers.propdev.companies import router as propdev_companies_router  # noqa: E402
+from routers.propdev.excel_import import router as propdev_excel_router  # noqa: E402
+from routers.propdev.capital_import import router as propdev_capital_router  # noqa: E402
 app.include_router(deal_advisor_router)
+app.include_router(propdev_companies_router)
+app.include_router(propdev_excel_router)
+app.include_router(propdev_capital_router)
 
 # Serve uploaded files from local disk only when S3 is not configured (local dev).
 # In production, files are served via S3 pre-signed URLs — no static mount needed.

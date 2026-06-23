@@ -30,7 +30,15 @@ function detectSheetType(name: string, rows: Record<string, string | number>[]):
     return 'Loan Sheet';
   if (n.includes('expense') || allText.includes('plumbing') || allText.includes('electrical'))
     return 'Expense Dashboard';
+  // Company-named sheets (e.g. "JKL LLC", "MNO LLC") with capital call data
+  if (/\b(llc|lp|inc|ltd|corp|holdings|ventures|development|group|partners|land|realty|properties|estate)\b/i.test(name))
+    return 'Company Capital Call';
   return 'Unknown';
+}
+
+function isCapitalContributionFile(sheets: ParsedSheet[]): boolean {
+  return sheets.every(s => s.detected === 'Company Capital Call' || s.detected === 'Unknown')
+    && sheets.some(s => s.detected === 'Company Capital Call');
 }
 
 function parseExcelFile(file: File): Promise<ParsedSheet[]> {
@@ -250,6 +258,7 @@ export default function PD00Upload() {
   const [parsing, setParsing] = useState(false);
   const [sheets, setSheets] = useState<ParsedSheet[] | null>(null);
   const [fileName, setFileName] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState('');
   const [summary, setSummary] = useState<ImportSummary | null>(null);
@@ -281,6 +290,7 @@ export default function PD00Upload() {
     setConfirmed(false);
     setSummary(null);
     setFileName(file.name);
+    setSelectedFile(file);
     try {
       const result = await parseExcelFile(file);
       setSheets(result);
@@ -298,58 +308,66 @@ export default function PD00Upload() {
     if (file) handleFile(file);
   }
 
-  function handleConfirm() {
-    if (!sheets) return;
+  async function handleConfirm() {
+    if (!sheets || sheets.length === 0) return;
 
-    let company = targetCompany ?? createEmptyCompany(
-      `c-${Date.now()}`,
-      inferCompanyName(sheets) ?? (fileName.replace(/\.(xlsx|xls|xlsm)$/i, '') || 'Imported Company'),
-    );
-
-    let property = company.property;
-    let partners = company.partners;
-    let loans = company.loans;
-    let capitalCalls = company.capitalCalls;
-    const s: ImportSummary = { dealPL: false, partners: 0, loans: 0, capitalCalls: 0 };
-
-    for (const sheet of sheets) {
-      if (sheet.detected === 'Deal P&L (Annexure I)') {
-        property = extractProperty(sheet.rows, property);
-        s.dealPL = true;
-      }
-      if (sheet.detected === 'Partner Summary (Annexure II)') {
-        const extracted = extractPartners(sheet.rows, company.id);
-        if (extracted.length > 0) { partners = extracted; s.partners = extracted.length; }
-      }
-      if (sheet.detected === 'Loan Sheet') {
-        const extracted = extractLoans(sheet.rows, company.id, company.name);
-        if (extracted.length > 0) { loans = extracted; s.loans = extracted.length; }
-      }
-      if (sheet.detected === 'Capital Call Sheet') {
-        const extracted = extractCapitalCalls(sheet.rows, company.id);
-        if (extracted.length > 0) { capitalCalls = extracted; s.capitalCalls = extracted.length; }
-      }
+    if (!selectedFile) {
+      setError('No file selected');
+      return;
     }
 
-    const updated: typeof company = { ...company, property, partners, loans, capitalCalls };
-    if (targetCompany) {
-      setCompanies(companies.map(c => c.id === updated.id ? updated : c));
-    } else {
-      setCompanies([updated]);
+    setParsing(true);
+    setError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+
+      // Route to correct endpoint based on file type
+      const endpoint = isCapitalContributionFile(sheets)
+        ? '/api/propdev/import-capital-contributions'
+        : '/api/propdev/import-excel';
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || 'Import failed');
+      }
+
+      const data = await res.json();
+      setSummary({
+        dealPL: true,
+        partners: data.companies.length,
+        loans: data.companies.length,
+        capitalCalls: data.companies.length,
+      });
+      setConfirmed(true);
+
+      // Trigger a refresh of companies
+      const companiesRes = await fetch('/api/propdev/companies');
+      if (companiesRes.ok) {
+        const companiesData = await companiesRes.json();
+        // This will trigger the context update through the API fetch
+        window.location.reload();
+      }
+
+      const sheetsImported = sheets.filter(sh => sh.detected !== 'Unknown').map(sh => sh.detected);
+      addUploadRecord({
+        companyId: data.companies[0]?.id || 'unknown',
+        companyName: data.companies[0]?.name || 'Imported',
+        fileName,
+        uploadDate: new Date().toISOString(),
+        sheetsImported,
+      });
+    } catch (err) {
+      setError(`Upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setParsing(false);
     }
-    setSelectedCompanyId(updated.id);
-
-    setSummary(s);
-    setConfirmed(true);
-
-    const sheetsImported = sheets.filter(sh => sh.detected !== 'Unknown').map(sh => sh.detected);
-    addUploadRecord({
-      companyId: updated.id,
-      companyName: updated.name,
-      fileName,
-      uploadDate: new Date().toISOString(),
-      sheetsImported,
-    });
   }
 
   const sheetCount = sheets?.length ?? 0;

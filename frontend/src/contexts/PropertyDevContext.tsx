@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -379,6 +379,119 @@ export function PropertyDevProvider({ children }: { children: ReactNode }) {
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>('all');
   const [companiesState, setCompaniesState] = useState<CompanyData[]>(ALL_COMPANIES);
   const [uploadHistory, setUploadHistory] = useState<UploadRecord[]>([]);
+
+  // Fetch companies from API on mount
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      try {
+        const res = await fetch('/api/propdev/companies');
+        if (res.ok) {
+          const data = await res.json();
+          const transformed = data.companies.map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            property: {
+              id: c.id + '-prop',
+              companyId: c.id,
+              name: c.property_name,
+              address: c.address,
+              totalLots: c.total_lots,
+              totalAcres: c.total_acres,
+              saleConsideration: c.sale_consideration,
+              landCost: c.land_cost,
+              hardCost: c.hard_cost,
+              softCost: c.soft_cost,
+              titleCharges: c.title_charges,
+              otherCharges: c.other_charges,
+              propertyTax: c.property_tax,
+              loanProcessing: c.loan_processing,
+              professionalCharges: c.professional_charges,
+              legalFees: c.legal_fees,
+              interestOnLoan: c.interest_on_loan,
+              managementFeeRate: c.management_fee_rate,
+              commissionRate: c.commission_rate,
+              commission: c.commission,
+              cashAvailable: c.cash_available,
+              monthlyData: [],
+            },
+            lots: (c.lots || []).map((l: any) => ({
+              id: l.id,
+              companyId: c.id,
+              lotNo: l.lot_no,
+              block: l.block,
+              sizeSqft: l.size_sqft,
+              sizeAcres: l.size_sqft / 43560,
+              listPrice: l.list_price,
+              salePrice: l.sale_price,
+              status: l.status,
+              buyerName: l.buyer_name,
+              contractDate: l.contract_date,
+              closeDate: l.close_date,
+              landCost: 0,
+              devCost: 0,
+            })),
+            partners: (c.partners || []).map((p: any) => ({
+              id: p.id,
+              companyId: c.id,
+              name: p.name,
+              type: p.type,
+              sharePercent: p.share_percent * 100,
+              capitalContributed: p.capital_contributed,
+              distributionsReceived: p.distributions_received,
+              shareOfProfit: 0,
+              preferredReturn: p.preferred_return * 100,
+              status: p.status,
+            })),
+            loans: (c.loans || []).map((ln: any) => ({
+              id: ln.id,
+              companyId: c.id,
+              company: c.name,
+              property: c.property_name,
+              bank: ln.bank,
+              loanDate: '2023-01-15',
+              accountNo: '',
+              amount: ln.loan_amount,
+              balance: ln.balance,
+              interestRate: ln.interest_rate * 100,
+              emi: ln.emi,
+              maturityDate: ln.maturity_date,
+              emiDate: 15,
+              lenderName: '',
+              lenderEmail: '',
+              lenderPhone: '',
+              status: 'Active',
+            })),
+            capitalCalls: (c.capital_calls || []).map((cc: any) => ({
+              id: cc.id,
+              companyId: c.id,
+              period: 'Jan–Jun 2025',
+              partnerId: '',
+              partnerName: cc.partner_name,
+              sharePercent: cc.share_percent * 100,
+              totalCallAmount: cc.total_call_amount,
+              partnerShare: cc.partner_share,
+              oldDues: 0,
+              totalDue: cc.partner_share,
+              received: cc.amount_received,
+              receivedDate: null,
+              status: cc.status,
+            })),
+            customers: [],
+            docs: [],
+            expenses: (c.expenses || []).map((e: any) => ({
+              particulars: e.expense_type,
+              amount: e.amount,
+              category: e.category,
+            })),
+          }));
+          setCompaniesState(transformed);
+        }
+      } catch (e) {
+        console.error('Failed to fetch companies:', e);
+      }
+    };
+    fetchCompanies();
+  }, []);
 
   const derived = useMemo(() => {
     const empty = {
