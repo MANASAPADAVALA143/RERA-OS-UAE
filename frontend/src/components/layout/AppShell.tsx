@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, HardHat, Building2, Landmark, Home,
-  ShieldAlert, Map, Settings, LogOut,
+  ShieldAlert, Map, Settings, LogOut, HardDriveUpload,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Badge } from '../ui/Badge';
@@ -16,12 +16,18 @@ import {
   RENTAL_TABS,
 } from '../../contexts/RentalNavContext';
 import { RentalPortfolioProvider } from '../../contexts/RentalPortfolioContext';
+import {
+  PropDevNavProvider,
+  usePropDevNav,
+  PROPDEV_TABS,
+} from '../../contexts/PropDevNavContext';
 
 const NAV = [
   { to: '/executive-summary', label: 'Executive Summary', icon: LayoutDashboard },
   { to: '/construction',      label: 'Construction',      icon: HardHat         },
   { to: '/development',       label: 'Development',       icon: Building2       },
   { to: '/reit',              label: 'REIT',              icon: Landmark        },
+  { to: '/property-dev',      label: 'Property Dev',      icon: HardDriveUpload },
   { to: '/rental',            label: 'Rental & Lease',    icon: Home            },
   { to: '/capital-risk',      label: 'Capital & Risk',    icon: ShieldAlert     },
   { to: '/pipeline-market',   label: 'Pipeline & Market', icon: Map             },
@@ -32,8 +38,10 @@ function SidebarInner() {
   const location = useLocation();
   const onConstruction = location.pathname.startsWith('/construction');
   const onRental = location.pathname.startsWith('/rental');
+  const onPropDev = location.pathname.startsWith('/property-dev');
   const { tab, setTab, projectId, setProjectId, projects } = useConstructionNav();
   const { tab: rentalTab, setTab: setRentalTab } = useRentalNav();
+  const { tab: propDevTab, setTab: setPropDevTab } = usePropDevNav();
 
   return (
     <div className="flex min-h-screen bg-surface">
@@ -84,6 +92,26 @@ function SidebarInner() {
                         {itemLabel}
                       </button>
                     </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Property Dev sub-nav — only when route is active */}
+              {to === '/property-dev' && onPropDev && (
+                <div className="mt-1 mb-1">
+                  {PROPDEV_TABS.map(({ id, label: itemLabel, Icon: ItemIcon }) => (
+                    <button
+                      key={id}
+                      onClick={() => setPropDevTab(id)}
+                      className={`w-full flex items-center gap-2 pl-7 pr-3 py-1.5 rounded-lg text-xs transition-colors text-left ${
+                        propDevTab === id
+                          ? 'bg-accent text-white'
+                          : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      <ItemIcon size={13} className="shrink-0" />
+                      {itemLabel}
+                    </button>
                   ))}
                 </div>
               )}
@@ -155,7 +183,9 @@ export default function AppShell() {
     <ConstructionNavProvider>
       <RentalNavProvider>
         <RentalPortfolioProvider>
-          <SidebarInner />
+          <PropDevNavProvider>
+            <SidebarInner />
+          </PropDevNavProvider>
         </RentalPortfolioProvider>
       </RentalNavProvider>
     </ConstructionNavProvider>

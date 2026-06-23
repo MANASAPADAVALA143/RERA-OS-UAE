@@ -11,6 +11,7 @@ import Development from './pages/Development';
 import Reit from './pages/Reit';
 import ReitPropertyDetail from './pages/ReitPropertyDetail';
 import Rental from './pages/Rental';
+import PropertyDev from './pages/PropertyDev';
 import CapitalRisk from './pages/CapitalRisk';
 import PipelineMarket from './pages/PipelineMarket';
 import Settings from './pages/Settings';
@@ -36,6 +37,7 @@ export default function App() {
             <Route path="/reit" element={<Reit />} />
             <Route path="/reit/:propertyId" element={<ReitPropertyDetail />} />
             <Route path="/rental" element={<Rental />} />
+            <Route path="/property-dev" element={<PropertyDev />} />
             <Route path="/capital-risk" element={<CapitalRisk />} />
             <Route path="/pipeline-market" element={<PipelineMarket />} />
             <Route path="/settings" element={<Settings />} />
