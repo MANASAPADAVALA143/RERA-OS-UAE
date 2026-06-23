@@ -29,7 +29,8 @@ export interface CapitalCall {
   id: string; companyId: string; period: string; partnerId: string; partnerName: string;
   sharePercent: number; totalCallAmount: number; partnerShare: number;
   oldDues: number; totalDue: number; received: number;
-  receivedDate: string | null; status: 'Paid' | 'Partial' | 'Outstanding' | 'Overdue';
+  receivedDate: string | null; dueDate?: string;
+  status: 'Paid' | 'Partial' | 'Outstanding' | 'Overdue';
 }
 export interface Customer {
   id: string; companyId: string; name: string; lotNo: string;

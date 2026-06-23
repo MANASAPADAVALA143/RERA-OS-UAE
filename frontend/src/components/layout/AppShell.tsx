@@ -99,19 +99,25 @@ function SidebarInner() {
               {/* Property Dev sub-nav — only when route is active */}
               {to === '/property-dev' && onPropDev && (
                 <div className="mt-1 mb-1">
-                  {PROPDEV_TABS.map(({ id, label: itemLabel, Icon: ItemIcon }) => (
-                    <button
-                      key={id}
-                      onClick={() => setPropDevTab(id)}
-                      className={`w-full flex items-center gap-2 pl-7 pr-3 py-1.5 rounded-lg text-xs transition-colors text-left ${
-                        propDevTab === id
-                          ? 'bg-accent text-white'
-                          : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                      }`}
-                    >
-                      <ItemIcon size={13} className="shrink-0" />
-                      {itemLabel}
-                    </button>
+                  {PROPDEV_TABS.map(({ id, label: itemLabel, Icon: ItemIcon, groupLabel }) => (
+                    <div key={id}>
+                      {groupLabel && (
+                        <p className="pl-7 pr-3 pt-2 pb-0.5 text-xs uppercase tracking-wider text-amber-400 font-medium">
+                          ─── {groupLabel} ───
+                        </p>
+                      )}
+                      <button
+                        onClick={() => setPropDevTab(id)}
+                        className={`w-full flex items-center gap-2 pl-7 pr-3 py-1.5 rounded-lg text-xs transition-colors text-left ${
+                          propDevTab === id
+                            ? 'bg-accent text-white'
+                            : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        <ItemIcon size={13} className="shrink-0" />
+                        {itemLabel}
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}

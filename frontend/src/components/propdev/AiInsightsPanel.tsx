@@ -1,4 +1,5 @@
-import { X, Sparkles, TrendingUp, AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { X, Sparkles, TrendingUp, AlertTriangle, CheckCircle2, RefreshCw, Send, MessageSquare } from 'lucide-react';
 import { usePropDev } from '../../contexts/PropertyDevContext';
 import { usePropDevNav } from '../../contexts/PropDevNavContext';
 
@@ -120,14 +121,86 @@ function generateInsights(tab: string, data: ReturnType<typeof usePropDev>) {
   return insights[tab] ?? insights.dashboard;
 }
 
+// ── Quick-question answer generator ──────────────────────────────────────────
+
+function answerQuickQuestion(q: string, data: ReturnType<typeof usePropDev>): string {
+  const { lots, loans, partners, capitalCalls, properties } = data;
+  const p = properties[0];
+  const overdue = capitalCalls.filter(c => c.status === 'Overdue');
+  const pending = capitalCalls.filter(c => c.status !== 'Paid');
+  const cash = p?.cashAvailable ?? 0;
+  const monthlyEmi = loans.reduce((s, l) => s + l.emi, 0);
+  const availLots = lots.filter(l => l.status === 'available');
+
+  if (q.includes('capital call')) {
+    if (overdue.length > 0)
+      return `YES — you should call now. ${overdue.length} capital call${overdue.length > 1 ? 's are' : ' is'} already overdue totaling $${overdue.reduce((s, c) => s + c.totalDue - c.received, 0).toLocaleString()}. Send demand notices immediately.`;
+    if (cash < monthlyEmi * 3)
+      return `YES — cash of $${cash.toLocaleString()} covers only ${(cash / monthlyEmi).toFixed(1)} months of EMIs. Call now before you hit a shortfall.`;
+    return `NOT URGENTLY — cash position of $${cash.toLocaleString()} is adequate. Next call due: ${pending[0]?.dueDate ?? 'N/A'}. Monitor monthly.`;
+  }
+  if (q.includes('reprice') || q.includes('lot')) {
+    const cheapLots = availLots.filter(l => l.listPrice < 300000);
+    if (cheapLots.length > 0)
+      return `${cheapLots.length} available lots are priced below $300K — consider 5–8% price increase to improve margins. Focus on corner lots and premium-facing inventory first.`;
+    return `All ${availLots.length} available lots are competitively priced. If velocity slows, consider a 3% incentive on bulk purchases rather than lowering list prices.`;
+  }
+  if (q.includes('refinanc')) {
+    const highRate = loans.filter(l => l.interestRate > 7.5);
+    if (highRate.length > 0)
+      return `YES — ${highRate.length} loan${highRate.length > 1 ? 's' : ''} above 7.5% (avg ${(highRate.reduce((s, l) => s + l.interestRate, 0) / highRate.length).toFixed(2)}%). Refinancing at 6.5% saves ~$${Math.round(highRate.reduce((s, l) => s + l.balance * 0.01 / 12, 0)).toLocaleString()}/month.`;
+    return `No urgent refinancing needed — all loans are at or below 7.5%. Watch the market and act when rates drop below 6%.`;
+  }
+  if (q.includes('partner') || q.includes('distribut')) {
+    const totalCapital = partners.reduce((s, p) => s + p.capitalContributed, 0);
+    const totalProfit = partners.reduce((s, p) => s + p.shareOfProfit, 0);
+    const prefReturn = totalCapital * 0.08;
+    const remaining = Math.max(0, totalProfit - totalCapital - prefReturn);
+    return `Partners get: ① Return of capital $${totalCapital.toLocaleString()} ② Preferred return (8%) $${Math.round(prefReturn).toLocaleString()} ③ Pro-rata split of remaining $${Math.round(remaining).toLocaleString()}. Total distributable: $${Math.round(totalCapital + prefReturn + remaining).toLocaleString()}.`;
+  }
+  if (q.includes('cash')) {
+    const runway = monthlyEmi > 0 ? (cash / monthlyEmi).toFixed(1) : '∞';
+    if (cash < 200000)
+      return `⚠️ CRITICAL — cash of $${cash.toLocaleString()} is dangerously low. Only ${runway} months of EMI coverage. Accelerate receivables collections and delay discretionary capex immediately.`;
+    if (cash < 500000)
+      return `CAUTION — $${cash.toLocaleString()} cash provides ${runway} months of EMI runway. Acceptable, but pursue receivable collections proactively.`;
+    return `SAFE — $${cash.toLocaleString()} cash covers ${runway} months of obligations. No immediate action needed.`;
+  }
+  return `Based on current portfolio data: ${lots.length} total lots, $${(loans.reduce((s,l) => s+l.balance,0)/1e6).toFixed(2)}M loan exposure, $${cash.toLocaleString()} cash available. Navigate to a specific page for detailed analysis.`;
+}
+
+const QUICK_QUESTIONS = [
+  { label: 'Should I make a capital call?',  key: 'capital call'  },
+  { label: 'Which lots to reprice?',          key: 'reprice lot'   },
+  { label: 'Should I refinance?',             key: 'refinanc'      },
+  { label: 'What do partners get now?',       key: 'partner distribut' },
+  { label: 'Is my cash position safe?',       key: 'cash'          },
+];
+
 export default function AiInsightsPanel({ onClose }: Props) {
   const data = usePropDev();
   const { tab } = usePropDevNav();
   const { bullets, actions, riskScore } = generateInsights(tab, data);
+  const [freeText, setFreeText] = useState('');
+  const [answer, setAnswer] = useState('');
+  const [activeQ, setActiveQ] = useState('');
 
   const riskColor = riskScore >= 7 ? 'text-red-400' : riskScore >= 5 ? 'text-amber-400' : 'text-green-400';
   const riskLabel = riskScore >= 7 ? 'High Risk' : riskScore >= 5 ? 'Medium Risk' : 'Low Risk';
   const riskBars = Array.from({ length: 10 }, (_, i) => i < riskScore);
+
+  function handleQuickQuestion(label: string, key: string) {
+    setActiveQ(label);
+    setFreeText('');
+    setAnswer(answerQuickQuestion(key, data));
+  }
+
+  function handleAnalyze() {
+    if (!freeText.trim()) return;
+    setActiveQ(freeText);
+    setAnswer(answerQuickQuestion(freeText.toLowerCase(), data));
+    setFreeText('');
+  }
 
   return (
     <div className="fixed right-0 top-0 h-full w-[400px] bg-gray-900 text-white shadow-2xl z-50 flex flex-col">
@@ -138,7 +211,7 @@ export default function AiInsightsPanel({ onClose }: Props) {
           <span className="font-semibold">AI Insights</span>
         </div>
         <div className="flex items-center gap-3">
-          <button className="text-gray-400 hover:text-white">
+          <button onClick={() => { setAnswer(''); setActiveQ(''); }} className="text-gray-400 hover:text-white" title="Reset">
             <RefreshCw size={14} />
           </button>
           <button onClick={onClose} className="text-gray-400 hover:text-white">
@@ -148,6 +221,55 @@ export default function AiInsightsPanel({ onClose }: Props) {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-5">
+        {/* Quick Questions */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <MessageSquare size={14} className="text-violet-400" />
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-300">Quick Questions</h3>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {QUICK_QUESTIONS.map(({ label, key }) => (
+              <button
+                key={label}
+                onClick={() => handleQuickQuestion(label, key)}
+                className={`text-left px-3 py-2 rounded-lg text-xs transition-colors ${
+                  activeQ === label
+                    ? 'bg-violet-700 text-white'
+                    : 'bg-white/5 hover:bg-white/10 text-gray-300'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Free-text input */}
+          <div className="flex gap-2 mt-2">
+            <input
+              type="text"
+              value={freeText}
+              onChange={e => setFreeText(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAnalyze()}
+              placeholder="Ask anything about the portfolio…"
+              className="flex-1 bg-white/10 text-white text-xs rounded-lg px-3 py-2 placeholder-gray-500 border border-white/10 focus:outline-none focus:border-violet-500"
+            />
+            <button
+              onClick={handleAnalyze}
+              className="px-3 py-2 bg-violet-600 hover:bg-violet-700 rounded-lg text-xs flex items-center gap-1"
+            >
+              <Send size={12} /> Analyze
+            </button>
+          </div>
+
+          {/* Answer box */}
+          {answer && (
+            <div className="mt-3 p-3 bg-violet-900/50 border border-violet-700/50 rounded-xl">
+              <p className="text-xs text-violet-300 font-medium mb-1.5">{activeQ}</p>
+              <p className="text-sm text-white leading-relaxed">{answer}</p>
+            </div>
+          )}
+        </div>
+
         {/* Risk Score */}
         <div className="bg-white/5 rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">

@@ -16,6 +16,7 @@ import PD09Performance from './propdev/PD09Performance';
 import PD10Receivables from './propdev/PD10Receivables';
 import PD11CashFlow from './propdev/PD11CashFlow';
 import PD12Documents from './propdev/PD12Documents';
+import PD00Upload from './propdev/PD00Upload';
 
 function PropertyDevInner() {
   const { tab } = usePropDevNav();
@@ -28,6 +29,7 @@ function PropertyDevInner() {
 
       {/* Page content */}
       <div className={`p-6 lg:p-8 transition-all ${aiOpen ? 'pr-[420px]' : ''}`}>
+        {tab === 'upload'        && <ErrorBoundary><PD00Upload /></ErrorBoundary>}
         {tab === 'dashboard'     && <ErrorBoundary><PD01Dashboard /></ErrorBoundary>}
         {tab === 'deal-pl'       && <ErrorBoundary><PD02DealPL /></ErrorBoundary>}
         {tab === 'pricing'       && <ErrorBoundary><PD03Pricing /></ErrorBoundary>}
