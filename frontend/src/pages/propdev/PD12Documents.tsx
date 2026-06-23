@@ -716,7 +716,7 @@ export default function PD12Documents() {
                   value={uploadForm.name}
                   onChange={e => setUploadForm(f => ({ ...f, name: e.target.value }))}
                   className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-                  placeholder="e.g. Partner Agreement — Celina 2025"
+                  placeholder="e.g. Partner Agreement — 2025"
                 />
               </div>
 

@@ -95,7 +95,7 @@ export default function PropDevCommandStrip({ onAiInsights }: Props) {
       </div>
 
       {/* Consolidated banner */}
-      {selectedCompanyId === 'all' && (
+      {selectedCompanyId === 'all' && companies.length > 0 && (
         <div className="px-3 py-1.5 bg-blue-50 border-t border-blue-100 flex items-center gap-2 text-xs text-blue-700">
           <span className="font-semibold">Portfolio View:</span>
           <span>{companies.length} companies · {companies.reduce((s, c) => s + c.property.totalLots, 0)} lots total</span>

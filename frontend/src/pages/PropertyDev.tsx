@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
-import { PropertyDevProvider } from '../contexts/PropertyDevContext';
+import { PropertyDevProvider, usePropDev } from '../contexts/PropertyDevContext';
 import { usePropDevNav } from '../contexts/PropDevNavContext';
 import PropDevCommandStrip from '../components/propdev/PropDevCommandStrip';
+import PropDevEmptyState from '../components/propdev/PropDevEmptyState';
 import AiInsightsPanel from '../components/propdev/AiInsightsPanel';
 import PD01Dashboard from './propdev/PD01Dashboard';
 import PD02DealPL from './propdev/PD02DealPL';
@@ -19,7 +20,10 @@ import PD00Upload from './propdev/PD00Upload';
 
 function PropertyDevInner() {
   const { tab } = usePropDevNav();
+  const { companies } = usePropDev();
   const [aiOpen, setAiOpen] = useState(false);
+  const hasData = companies.length > 0;
+  const showPage = hasData || tab === 'upload';
 
   return (
     <div className="relative -m-6 lg:-m-8">
@@ -28,18 +32,24 @@ function PropertyDevInner() {
 
       {/* Page content */}
       <div className={`p-6 lg:p-8 transition-all ${aiOpen ? 'pr-[420px]' : ''}`}>
-        {tab === 'upload'        && <ErrorBoundary><PD00Upload /></ErrorBoundary>}
-        {tab === 'dashboard'     && <ErrorBoundary><PD01Dashboard /></ErrorBoundary>}
-        {tab === 'deal-pl'       && <ErrorBoundary><PD02DealPL /></ErrorBoundary>}
-        {tab === 'pricing'       && <ErrorBoundary><PD03Pricing /></ErrorBoundary>}
-        {tab === 'inventory'     && <ErrorBoundary><PD04Inventory /></ErrorBoundary>}
-        {tab === 'partners'      && <ErrorBoundary><PD05Partners /></ErrorBoundary>}
-        {tab === 'capital-calls' && <ErrorBoundary><PD06CapitalCalls /></ErrorBoundary>}
-        {tab === 'loans'         && <ErrorBoundary><PD07Loans /></ErrorBoundary>}
-        {tab === 'sales'         && <ErrorBoundary><PD08Sales /></ErrorBoundary>}
-        {tab === 'performance'   && <ErrorBoundary><PD09Performance /></ErrorBoundary>}
-        {tab === 'cash-flow'     && <ErrorBoundary><PD11CashFlow /></ErrorBoundary>}
-        {tab === 'documents'     && <ErrorBoundary><PD12Documents /></ErrorBoundary>}
+        {!showPage ? (
+          <PropDevEmptyState />
+        ) : (
+          <>
+            {tab === 'upload'        && <ErrorBoundary><PD00Upload /></ErrorBoundary>}
+            {tab === 'dashboard'     && <ErrorBoundary><PD01Dashboard /></ErrorBoundary>}
+            {tab === 'deal-pl'       && <ErrorBoundary><PD02DealPL /></ErrorBoundary>}
+            {tab === 'pricing'       && <ErrorBoundary><PD03Pricing /></ErrorBoundary>}
+            {tab === 'inventory'     && <ErrorBoundary><PD04Inventory /></ErrorBoundary>}
+            {tab === 'partners'      && <ErrorBoundary><PD05Partners /></ErrorBoundary>}
+            {tab === 'capital-calls' && <ErrorBoundary><PD06CapitalCalls /></ErrorBoundary>}
+            {tab === 'loans'         && <ErrorBoundary><PD07Loans /></ErrorBoundary>}
+            {tab === 'sales'         && <ErrorBoundary><PD08Sales /></ErrorBoundary>}
+            {tab === 'performance'   && <ErrorBoundary><PD09Performance /></ErrorBoundary>}
+            {tab === 'cash-flow'     && <ErrorBoundary><PD11CashFlow /></ErrorBoundary>}
+            {tab === 'documents'     && <ErrorBoundary><PD12Documents /></ErrorBoundary>}
+          </>
+        )}
       </div>
 
       {/* AI Insights Side Panel */}

@@ -34,7 +34,7 @@ export default function PD01Dashboard() {
   const totalLoanBalance = loans.reduce((s, l) => s + l.balance, 0);
   const overdueCalls   = capitalCalls.filter(c => c.status === 'Overdue' || c.status === 'Partial');
   const overdueCapital = overdueCalls.reduce((s, c) => s + c.totalDue - c.received, 0);
-  const pendingDistributions = 380000;
+  const pendingDistributions = customers.reduce((s, c) => s + Math.max(0, c.contractValue - c.collected), 0);
 
   const totalCost = p ? p.landCost + p.hardCost + p.softCost + p.titleCharges + p.otherCharges
     + p.propertyTax + p.loanProcessing + p.professionalCharges + p.legalFees + p.interestOnLoan : 0;
@@ -65,7 +65,6 @@ export default function PD01Dashboard() {
     ...overdueCalls.map(c => ({ level: 'critical' as const, msg: `Capital call overdue — ${c.partnerName}: $${(c.totalDue - c.received).toLocaleString()} outstanding` })),
     ...customers.filter(c => c.installments.some(i => i.status === 'bounced')).map(c => ({ level: 'critical' as const, msg: `Bounced payment — ${c.name} (Lot ${c.lotNo}): $${(c.contractValue - c.collected).toLocaleString()} pending` })),
     ...loans.filter(l => l.interestRate > 8).map(l => ({ level: 'high' as const, msg: `High rate loan — ${l.bank} at ${l.interestRate}% — refinancing opportunity` })),
-    { level: 'watch' as const, msg: 'NOC - Water expiring in <30 days for 1 property — action needed' },
     availableLots.length > 15 ? { level: 'watch' as const, msg: `${availableLots.length} lots still available — pricing strategy review recommended` } : null,
   ].filter(Boolean) as { level: string; msg: string }[];
 

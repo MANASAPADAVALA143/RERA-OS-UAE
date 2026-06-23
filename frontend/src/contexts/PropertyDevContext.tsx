@@ -64,12 +64,7 @@ export interface CompanyData {
 
 // ── Data Factory ───────────────────────────────────────────────────────────────
 
-const BUYERS = [
-  'John Smith','Maria Garcia','Robert Johnson','Emily Davis','Michael Wilson',
-  'Sarah Brown','James Martinez','Jennifer Taylor','William Anderson','Patricia Thomas',
-  'Charles Jackson','Barbara White','Daniel Harris','Susan Lewis','Paul Walker',
-  'Nancy Hall','Mark Allen','Betty Young','Donald King','Dorothy Wright',
-];
+const BUYERS: string[] = [];
 const MONTHS = ['Jan 25','Feb 25','Mar 25','Apr 25','May 25','Jun 25'];
 
 function makeLots(companyId: string, cfg: CompanyCfg): Lot[] {
@@ -219,135 +214,26 @@ interface CompanyCfg {
   commissionRate?: number;    // only used when commission is not explicit
 }
 
-const COMPANY_CONFIGS: CompanyCfg[] = [
-  {
-    id: 'c1', name: 'Celina Ventures LLC', address: 'Celina, TX 75009',
-    totalLots: 27, totalAcres: 45.2, landCost: 3367555, saleConsideration: 8150000,
-    // Exact values from Annexure I Excel
-    hardCost: 850000, softCost: 320000,
-    titleCharges: 45000, otherCharges: 25000, propertyTax: 62000,
-    loanProcessing: 18000, professionalCharges: 35000, legalFees: 28000,
-    interestOnLoan: 95000,
-    commission: 255000,       // "6% for 1 lot & 3% for 26 lots" per Note 2
-    managementFeeRate: 0.09,  // 9% of landCost per Note 4 = $303,080
-    soldCount: 10, contractedCount: 5, cashAvailable: 342500,
-    partners: [
-      { name: 'GP Holdings LLC', pct: 50, capital: 600000 },
-      { name: 'ABC LTD', pct: 11, capital: 129212 },
-      { name: 'Sunrise Capital', pct: 25, capital: 290000 },
-      { name: 'Celina Investors LP', pct: 14, capital: 162000 },
-    ],
-    loans: [{ bank: 'ABC BANK', amount: 1500000, rate: 7.5 }],
-  },
-  {
-    id: 'c2', name: 'Lone Star Development I', address: 'Frisco, TX 75034',
-    totalLots: 32, totalAcres: 54.8, landCost: 4200000, saleConsideration: 10200000,
-    hardCost: 145000, softCost: 98000, soldCount: 14, contractedCount: 8, cashAvailable: 520000,
-    partners: [
-      { name: 'Lone Star GP LLC', pct: 45, capital: 810000 },
-      { name: 'Frisco RE Partners', pct: 30, capital: 540000 },
-      { name: 'DFW Capital Fund', pct: 25, capital: 450000 },
-    ],
-    loans: [
-      { bank: 'Wells Fargo', amount: 2100000, rate: 7.25 },
-      { bank: 'Chase Bank', amount: 800000, rate: 7.75 },
-    ],
-  },
-  {
-    id: 'c3', name: 'Lone Star Development II', address: 'McKinney, TX 75070',
-    totalLots: 24, totalAcres: 38.6, landCost: 2950000, saleConsideration: 7800000,
-    hardCost: 110000, softCost: 75000, soldCount: 9, contractedCount: 4, cashAvailable: 215000,
-    partners: [
-      { name: 'Lone Star GP LLC', pct: 50, capital: 590000 },
-      { name: 'McKinney Land Trust', pct: 30, capital: 354000 },
-      { name: 'North TX Investors', pct: 20, capital: 236000 },
-    ],
-    loans: [{ bank: 'Texas Capital Bank', amount: 1400000, rate: 7.9 }],
-  },
-  {
-    id: 'c4', name: 'Texas Land Holdings I', address: 'Allen, TX 75013',
-    totalLots: 35, totalAcres: 62.4, landCost: 5100000, saleConsideration: 11500000,
-    hardCost: 180000, softCost: 120000, soldCount: 18, contractedCount: 7, cashAvailable: 680000,
-    partners: [
-      { name: 'TLH Management LLC', pct: 40, capital: 1040000 },
-      { name: 'Allen RE Fund I', pct: 35, capital: 910000 },
-      { name: 'Collin County Partners', pct: 25, capital: 650000 },
-    ],
-    loans: [
-      { bank: 'Prosperity Bank', amount: 2500000, rate: 7.1 },
-      { bank: 'Guaranty Bank', amount: 1000000, rate: 8.0 },
-    ],
-  },
-  {
-    id: 'c5', name: 'Texas Land Holdings II', address: 'Prosper, TX 75078',
-    totalLots: 28, totalAcres: 47.1, landCost: 3800000, saleConsideration: 9200000,
-    hardCost: 135000, softCost: 92000, soldCount: 12, contractedCount: 6, cashAvailable: 390000,
-    partners: [
-      { name: 'TLH Management LLC', pct: 40, capital: 745000 },
-      { name: 'Prosper Land LLC', pct: 35, capital: 652000 },
-      { name: 'Star Equity Group', pct: 25, capital: 465000 },
-    ],
-    loans: [{ bank: 'First National Bank', amount: 1800000, rate: 7.5 }],
-  },
-  {
-    id: 'c6', name: 'Brazos Land Partners', address: 'Waco, TX 76706',
-    totalLots: 22, totalAcres: 35.4, landCost: 2300000, saleConsideration: 6800000,
-    hardCost: 95000, softCost: 68000, soldCount: 7, contractedCount: 3, cashAvailable: 178000,
-    partners: [
-      { name: 'Brazos GP LLC', pct: 55, capital: 580000 },
-      { name: 'Central TX Fund', pct: 25, capital: 264000 },
-      { name: 'Baylor Area RE', pct: 20, capital: 211000 },
-    ],
-    loans: [{ bank: 'Heritage Bank', amount: 1100000, rate: 8.25 }],
-  },
-  {
-    id: 'c7', name: 'Hill Country Dev LLC', address: 'Dripping Springs, TX 78620',
-    totalLots: 30, totalAcres: 58.9, landCost: 4500000, saleConsideration: 9800000,
-    hardCost: 160000, softCost: 108000, soldCount: 13, contractedCount: 7, cashAvailable: 445000,
-    partners: [
-      { name: 'Hill Country GP', pct: 45, capital: 900000 },
-      { name: 'Austin Land Trust', pct: 30, capital: 600000 },
-      { name: 'Texas Hill Fund', pct: 25, capital: 500000 },
-    ],
-    loans: [
-      { bank: 'Frost Bank', amount: 2200000, rate: 7.35 },
-      { bank: 'Comerica Bank', amount: 700000, rate: 7.85 },
-    ],
-  },
-  {
-    id: 'c8', name: 'Trinity Land Group', address: 'Fort Worth, TX 76102',
-    totalLots: 18, totalAcres: 28.7, landCost: 1850000, saleConsideration: 5900000,
-    hardCost: 80000, softCost: 55000, soldCount: 6, contractedCount: 2, cashAvailable: 142000,
-    partners: [
-      { name: 'Trinity GP LLC', pct: 60, capital: 540000 },
-      { name: 'Tarrant RE Fund', pct: 25, capital: 225000 },
-      { name: 'FW Land Trust', pct: 15, capital: 135000 },
-    ],
-    loans: [{ bank: 'Veritex Community', amount: 900000, rate: 8.5 }],
-  },
-  {
-    id: 'c9', name: 'Pecan Grove Development', address: 'Richmond, TX 77406',
-    totalLots: 25, totalAcres: 42.3, landCost: 3100000, saleConsideration: 8500000,
-    hardCost: 115000, softCost: 80000, soldCount: 11, contractedCount: 5, cashAvailable: 312000,
-    partners: [
-      { name: 'Pecan Grove GP', pct: 48, capital: 780000 },
-      { name: 'Sugar Land Capital', pct: 32, capital: 520000 },
-      { name: 'Fort Bend Partners', pct: 20, capital: 325000 },
-    ],
-    loans: [{ bank: 'Cadence Bank', amount: 1600000, rate: 7.6 }],
-  },
-  {
-    id: 'c10', name: 'Red River Land Co', address: 'Denison, TX 75021',
-    totalLots: 20, totalAcres: 33.8, landCost: 2050000, saleConsideration: 6400000,
-    hardCost: 90000, softCost: 62000, soldCount: 6, contractedCount: 3, cashAvailable: 165000,
-    partners: [
-      { name: 'Red River GP LLC', pct: 50, capital: 480000 },
-      { name: 'Grayson County RE', pct: 30, capital: 288000 },
-      { name: 'N Texas Land Fund', pct: 20, capital: 192000 },
-    ],
-    loans: [{ bank: 'Interbank TX', amount: 980000, rate: 8.1 }],
-  },
-];
+const COMPANY_CONFIGS: CompanyCfg[] = [];
+
+// ── Empty company factory (used when importing from Excel) ─────────────────────
+
+export function createEmptyCompany(id: string, name: string): CompanyData {
+  const property: Property = {
+    id: `${id}-prop`, companyId: id,
+    name, address: '',
+    totalLots: 0, totalAcres: 0, saleConsideration: 0,
+    landCost: 0, hardCost: 0, softCost: 0,
+    titleCharges: 0, otherCharges: 0, propertyTax: 0,
+    loanProcessing: 0, professionalCharges: 0, legalFees: 0, interestOnLoan: 0,
+    managementFeeRate: 0.09, commissionRate: 0.045,
+    cashAvailable: 0, monthlyData: [],
+  };
+  return {
+    id, name, property,
+    lots: [], partners: [], loans: [], capitalCalls: [], customers: [], docs: [], expenses: [],
+  };
+}
 
 // ── Build companies from configs ───────────────────────────────────────────────
 
@@ -400,6 +286,9 @@ const ALL_COMPANIES: CompanyData[] = COMPANY_CONFIGS.map(buildCompanySafe);
 // ── Aggregation helpers ────────────────────────────────────────────────────────
 
 function aggregateProperty(companies: CompanyData[]): Property {
+  if (companies.length === 0) {
+    return createEmptyCompany('consolidated', 'All Companies (Portfolio)').property;
+  }
   const total = companies.reduce(
     (acc, c) => {
       const p = c.property;
@@ -481,6 +370,7 @@ interface PropertyDevState {
   setLoans: (loans: Loan[]) => void;
   setPartners: (partners: Partner[]) => void;
   setProperty: (property: Property) => void;
+  setCompanies: (companies: CompanyData[]) => void;
 }
 
 const Ctx = createContext<PropertyDevState | null>(null);
@@ -491,6 +381,20 @@ export function PropertyDevProvider({ children }: { children: ReactNode }) {
   const [uploadHistory, setUploadHistory] = useState<UploadRecord[]>([]);
 
   const derived = useMemo(() => {
+    const empty = {
+      properties: [] as Property[],
+      lots: [] as Lot[],
+      partners: [] as Partner[],
+      loans: [] as Loan[],
+      capitalCalls: [] as CapitalCall[],
+      customers: [] as Customer[],
+      docs: [] as ComplianceDoc[],
+      expenses: [] as DevExpense[],
+      isConsolidated: true,
+    };
+
+    if (companiesState.length === 0) return empty;
+
     if (selectedCompanyId === 'all') {
       return {
         properties: [aggregateProperty(companiesState)],
@@ -500,11 +404,12 @@ export function PropertyDevProvider({ children }: { children: ReactNode }) {
         capitalCalls: companiesState.flatMap(c => c.capitalCalls),
         customers: companiesState.flatMap(c => c.customers),
         docs: companiesState.flatMap(c => c.docs),
-        expenses: companiesState[0].expenses,
+        expenses: companiesState[0]?.expenses ?? [],
         isConsolidated: true,
       };
     }
-    const c = companiesState.find(x => x.id === selectedCompanyId)!;
+    const c = companiesState.find(x => x.id === selectedCompanyId);
+    if (!c) return empty;
     return {
       properties: [c.property],
       lots: c.lots,
@@ -548,11 +453,18 @@ export function PropertyDevProvider({ children }: { children: ReactNode }) {
     setUploadHistory(prev => [{ ...rec, id }, ...prev]);
   }
 
+  function setCompanies(companies: CompanyData[]) {
+    setCompaniesState(companies);
+    if (companies.length === 1) {
+      setSelectedCompanyId(companies[0].id);
+    }
+  }
+
   return (
     <Ctx.Provider value={{
       companies: companiesState, selectedCompanyId, setSelectedCompanyId,
       ...derived, uploadHistory, addUploadRecord,
-      setLots, setDocs, setCapitalCalls, setLoans, setPartners, setProperty,
+      setLots, setDocs, setCapitalCalls, setLoans, setPartners, setProperty, setCompanies,
     }}>
       {children}
     </Ctx.Provider>

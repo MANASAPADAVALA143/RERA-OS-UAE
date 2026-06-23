@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { usePropDev } from '../../contexts/PropertyDevContext';
 import type { Loan, Partner, CapitalCall, Property } from '../../contexts/PropertyDevContext';
+import { createEmptyCompany } from '../../contexts/PropertyDevContext';
 import { usePropDevNav } from '../../contexts/PropDevNavContext';
 
 interface ParsedSheet {
@@ -241,8 +242,8 @@ interface ImportSummary {
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function PD00Upload() {
-  const { companies, selectedCompanyId, properties, partners: ctxPartners, loans: ctxLoans,
-          setProperty, setPartners, setLoans, setCapitalCalls, addUploadRecord, uploadHistory } = usePropDev();
+  const { companies, selectedCompanyId, setSelectedCompanyId, setCompanies,
+          addUploadRecord, uploadHistory } = usePropDev();
   const { setTab } = usePropDevNav();
 
   const [dragOver, setDragOver] = useState(false);
@@ -257,6 +258,17 @@ export default function PD00Upload() {
   const targetCompany = selectedCompanyId === 'all'
     ? companies[0]
     : companies.find(c => c.id === selectedCompanyId) ?? companies[0];
+
+  function inferCompanyName(sheetList: ParsedSheet[]): string | null {
+    for (const sheet of sheetList) {
+      for (const row of sheet.rows.slice(0, 20)) {
+        const vals = Object.values(row).map(v => String(v).trim());
+        const companyCell = vals.find(v => /llc|lp|inc|holdings|ventures|development/i.test(v));
+        if (companyCell && companyCell.length > 3) return companyCell;
+      }
+    }
+    return null;
+  }
 
   async function handleFile(file: File) {
     if (!file.name.match(/\.(xlsx|xls|xlsm)$/i)) {
@@ -288,37 +300,52 @@ export default function PD00Upload() {
 
   function handleConfirm() {
     if (!sheets) return;
-    const cid = targetCompany.id;
+
+    let company = targetCompany ?? createEmptyCompany(
+      `c-${Date.now()}`,
+      inferCompanyName(sheets) ?? (fileName.replace(/\.(xlsx|xls|xlsm)$/i, '') || 'Imported Company'),
+    );
+
+    let property = company.property;
+    let partners = company.partners;
+    let loans = company.loans;
+    let capitalCalls = company.capitalCalls;
     const s: ImportSummary = { dealPL: false, partners: 0, loans: 0, capitalCalls: 0 };
 
     for (const sheet of sheets) {
       if (sheet.detected === 'Deal P&L (Annexure I)') {
-        const updated = extractProperty(sheet.rows, properties[0]);
-        setProperty(updated);
+        property = extractProperty(sheet.rows, property);
         s.dealPL = true;
       }
       if (sheet.detected === 'Partner Summary (Annexure II)') {
-        const extracted = extractPartners(sheet.rows, cid);
-        if (extracted.length > 0) { setPartners(extracted); s.partners = extracted.length; }
+        const extracted = extractPartners(sheet.rows, company.id);
+        if (extracted.length > 0) { partners = extracted; s.partners = extracted.length; }
       }
       if (sheet.detected === 'Loan Sheet') {
-        const extracted = extractLoans(sheet.rows, cid, targetCompany.name);
-        if (extracted.length > 0) { setLoans(extracted); s.loans = extracted.length; }
+        const extracted = extractLoans(sheet.rows, company.id, company.name);
+        if (extracted.length > 0) { loans = extracted; s.loans = extracted.length; }
       }
       if (sheet.detected === 'Capital Call Sheet') {
-        const extracted = extractCapitalCalls(sheet.rows, cid);
-        if (extracted.length > 0) { setCapitalCalls(extracted); s.capitalCalls = extracted.length; }
+        const extracted = extractCapitalCalls(sheet.rows, company.id);
+        if (extracted.length > 0) { capitalCalls = extracted; s.capitalCalls = extracted.length; }
       }
     }
+
+    const updated: typeof company = { ...company, property, partners, loans, capitalCalls };
+    if (targetCompany) {
+      setCompanies(companies.map(c => c.id === updated.id ? updated : c));
+    } else {
+      setCompanies([updated]);
+    }
+    setSelectedCompanyId(updated.id);
 
     setSummary(s);
     setConfirmed(true);
 
-    // Record this upload in history
     const sheetsImported = sheets.filter(sh => sh.detected !== 'Unknown').map(sh => sh.detected);
     addUploadRecord({
-      companyId: targetCompany.id,
-      companyName: targetCompany.name,
+      companyId: updated.id,
+      companyName: updated.name,
       fileName,
       uploadDate: new Date().toISOString(),
       sheetsImported,
@@ -338,11 +365,18 @@ export default function PD00Upload() {
       </div>
 
       {/* Target company */}
-      <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-        <CheckCircle2 size={16} className="shrink-0" />
-        Uploading to: <strong className="ml-1">{targetCompany.name}</strong>
-        {selectedCompanyId === 'all' && <span className="text-blue-500 ml-1">(select a specific company in the top bar to target another)</span>}
-      </div>
+      {targetCompany ? (
+        <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+          <CheckCircle2 size={16} className="shrink-0" />
+          Uploading to: <strong className="ml-1">{targetCompany.name}</strong>
+          {selectedCompanyId === 'all' && <span className="text-blue-500 ml-1">(select a specific company in the top bar to target another)</span>}
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+          <AlertCircle size={16} className="shrink-0" />
+          No companies yet — your first upload will create a new company from the Excel file.
+        </div>
+      )}
 
       {/* Drop Zone */}
       {!sheets && (
@@ -427,7 +461,7 @@ export default function PD00Upload() {
           <div className="flex items-center gap-3">
             <CheckCircle2 size={32} className="text-green-500" />
             <div>
-              <p className="text-lg font-bold text-green-800">Data Imported into {targetCompany.name}</p>
+              <p className="text-lg font-bold text-green-800">Data Imported into {targetCompany?.name ?? 'new company'}</p>
               <p className="text-sm text-green-700">{sheetCount} sheets processed</p>
             </div>
           </div>

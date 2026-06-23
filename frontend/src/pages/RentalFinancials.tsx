@@ -32,19 +32,7 @@ interface CompanyFinancials {
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const COMPANIES = [
-  'All Companies',
-  'Lone Star Holdings I',
-  'Lone Star Holdings II',
-  'Bluebonnet Rentals',
-  'Hill Country Props',
-  'Trinity Units LLC',
-  'Brazos Portfolio',
-  'Alamo Residential',
-  'Pecan Grove LLC',
-  'Gulf Coast Homes',
-  'Red River Rentals',
-];
+const COMPANIES = ['All Companies'];
 
 const PERIODS = ['Q1 2026', 'Q2 2026', 'Q3 2026', 'Q4 2026', 'FY 2025', 'FY 2026'];
 

@@ -346,7 +346,7 @@ export default function ConstructionLoanTracker() {
                 <input
                   value={form.company_name}
                   onChange={e => setForm(f => ({ ...f, company_name: e.target.value }))}
-                  placeholder="Lone Star Development LLC"
+                  placeholder="Company name"
                   className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none"
                 />
               </div>
