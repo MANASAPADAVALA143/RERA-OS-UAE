@@ -86,7 +86,7 @@ function DistributionCalculator({ partners }: { partners: ReturnType<typeof useP
                 <h4 className="text-xs font-bold text-blue-800 uppercase tracking-wide">Distribution Waterfall</h4>
                 {[
                   { step: '① Return of Capital',       amount: result.step1, note: 'Pro-rata by capital contributed',    color: 'text-blue-800'  },
-                  { step: '② Preferred Return (8%)',   amount: result.step2, note: 'On each partner's capital balance',  color: 'text-purple-700' },
+                  { step: '② Preferred Return (8%)',   amount: result.step2, note: "On each partner's capital balance",  color: 'text-purple-700' },
                   { step: '③ Remaining (Equity Split)',amount: result.step3, note: 'Pro-rata by ownership %',            color: 'text-green-700' },
                 ].map(({ step, amount, note, color }) => (
                   <div key={step} className="flex items-center justify-between">
