@@ -2,8 +2,10 @@ import uuid
 from datetime import datetime, timezone
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
 from config import settings
@@ -20,6 +22,7 @@ from services.local_auth import (
 )
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+limiter = Limiter(key_func=get_remote_address)
 
 INVITE_ROLES = {"owner", "admin", "cfo", "controller", "analyst", "viewer"}
 
@@ -61,7 +64,8 @@ def auth_config():
 
 
 @router.post("/login")
-def login(body: LoginRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def login(request: Request, body: LoginRequest, db: Session = Depends(get_db)):
     if settings.effective_auth_mode != "local":
         raise HTTPException(status_code=400, detail="Use Supabase sign-in for this deployment")
 

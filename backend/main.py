@@ -1,9 +1,12 @@
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from config import settings
 from database import Base, SessionLocal, engine
@@ -30,6 +33,7 @@ from routers.real_estate import (
     work_log,
 )
 from routers.reit import cash_flow, financials as reit_financials, portfolio_summary as reit_portfolio, properties as reit_properties, units as reit_units
+from middleware.auth import get_current_user
 from services.bootstrap import ensure_local_demo
 from services.schema_patches import apply_schema_patches
 
@@ -66,7 +70,10 @@ import models.propdev.loan  # noqa: F401
 import models.propdev.capital_call  # noqa: F401
 import models.propdev.expense  # noqa: F401
 
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="EstateCFO API", version="1.0.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.exception_handler(Exception)
@@ -167,7 +174,7 @@ def startup():
 
 
 @app.get("/api/routes")
-def list_routes():
+def list_routes(current_user=Depends(get_current_user)):
     routes = []
     for route in app.routes:
         if hasattr(route, "methods"):
