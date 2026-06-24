@@ -24,7 +24,7 @@ services:
 
   # ── Frontend (Vite/React static site) ──────────────────────────────────────
   - type: web
-    name: estatecfo-frontend
+    name: allinone-mis
     runtime: static
     rootDir: frontend
     buildCommand: npm install && npm run build
