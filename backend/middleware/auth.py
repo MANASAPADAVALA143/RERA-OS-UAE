@@ -58,21 +58,6 @@ async def get_current_user(
 ) -> CurrentUser:
     auth_header = request.headers.get("Authorization")
 
-    # Demo bypass: in local mode with no token, auto-authenticate as the demo user
-    if settings.effective_auth_mode == "local" and (
-        not auth_header or not auth_header.startswith("Bearer ")
-    ):
-        from services.local_auth import DEMO_EMAIL
-        demo_user = db.query(TenantUser).filter(TenantUser.email == DEMO_EMAIL).first()
-        if demo_user:
-            set_rls_tenant(db, str(demo_user.tenant_id))
-            return CurrentUser(
-                user_id=str(demo_user.supabase_user_id),
-                tenant_id=demo_user.tenant_id,
-                role=demo_user.role,
-                email=demo_user.email or DEMO_EMAIL,
-            )
-
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

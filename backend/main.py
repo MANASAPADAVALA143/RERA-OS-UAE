@@ -1,4 +1,3 @@
-import traceback
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -71,9 +70,10 @@ app = FastAPI(title="EstateCFO API", version="1.0.0")
 
 
 @app.exception_handler(Exception)
-async def _debug_exception_handler(request: Request, exc: Exception):
-    tb = traceback.format_exc()
-    return JSONResponse(status_code=500, content={"detail": str(exc), "traceback": tb})
+async def _global_exception_handler(request: Request, exc: Exception):
+    import logging
+    logging.getLogger(__name__).exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "An internal error occurred"})
 
 
 _cors_kwargs = {

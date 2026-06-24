@@ -57,8 +57,6 @@ class AuthMeResponse(BaseModel):
 def auth_config():
     return {
         "auth_mode": settings.effective_auth_mode,
-        "demo_email": DEMO_EMAIL if settings.effective_auth_mode == "local" else None,
-        "demo_password": DEMO_PASSWORD if settings.effective_auth_mode == "local" else None,
     }
 
 
