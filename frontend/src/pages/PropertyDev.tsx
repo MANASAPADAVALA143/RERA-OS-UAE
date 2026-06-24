@@ -18,13 +18,14 @@ import PD11CashFlow from './propdev/PD11CashFlow';
 import PD12Documents from './propdev/PD12Documents';
 import PD00Upload from './propdev/PD00Upload';
 import PDCompanySetup from './propdev/PDCompanySetup';
+import PropDevFinancials from './propdev/PropDevFinancials';
 
 function PropertyDevInner() {
   const { tab } = usePropDevNav();
   const { companies } = usePropDev();
   const [aiOpen, setAiOpen] = useState(false);
   const hasData = companies.length > 0;
-  const showPage = hasData || tab === 'upload' || tab === 'company-setup';
+  const showPage = hasData || tab === 'upload' || tab === 'company-setup' || tab === 'financials';
 
   return (
     <div className="relative -m-6 lg:-m-8">
@@ -50,6 +51,7 @@ function PropertyDevInner() {
             {tab === 'performance'   && <ErrorBoundary><PD09Performance /></ErrorBoundary>}
             {tab === 'cash-flow'     && <ErrorBoundary><PD11CashFlow /></ErrorBoundary>}
             {tab === 'documents'     && <ErrorBoundary><PD12Documents /></ErrorBoundary>}
+            {tab === 'financials'    && <ErrorBoundary><PropDevFinancials /></ErrorBoundary>}
           </>
         )}
       </div>

@@ -10,7 +10,8 @@ export type PropDevTab =
   | 'company-setup' | 'upload'
   | 'dashboard' | 'deal-pl' | 'pricing' | 'inventory'
   | 'partners' | 'capital-calls' | 'loans' | 'sales'
-  | 'performance' | 'cash-flow' | 'documents';
+  | 'performance' | 'cash-flow' | 'documents'
+  | 'financials';
 
 type LIcon = React.FC<{ size?: number; className?: string }>;
 
@@ -35,6 +36,7 @@ export const PROPDEV_TABS: PropDevNavItem[] = [
   { id: 'performance',   label: 'Performance',        Icon: BarChart2       },
   { id: 'cash-flow',     label: 'Cash Flow',          Icon: Waves           },
   { id: 'documents',     label: 'Documents',          Icon: FolderOpen      },
+  { id: 'financials',   label: 'Financials',         Icon: BarChart2,      groupLabel: 'Financials' },
 ];
 
 interface PropDevNavState {
