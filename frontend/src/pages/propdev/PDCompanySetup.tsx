@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Building2, Plus, Trash2, Check, X, AlertCircle, Upload } from 'lucide-react';
 import { usePropDevNav } from '../../contexts/PropDevNavContext';
+import api from '../../services/api';
 
 interface CompanyRow {
   id: string;
@@ -23,17 +24,15 @@ export default function PDCompanySetup() {
 
   async function loadCompanies() {
     try {
-      const res = await fetch('/api/propdev/companies');
-      if (res.ok) {
-        const data = await res.json();
-        setCompanies(data.companies.map((c: any) => ({
-          id: c.id,
-          name: c.name,
-          propertyName: c.property_name || '',
-          totalLots: c.total_lots || 0,
-          hasData: (c.sale_consideration || 0) > 0 || (c.total_lots || 0) > 0,
-        })));
-      }
+      const res = await api.get('/api/propdev/companies');
+      const data = res.data;
+      setCompanies(data.companies.map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        propertyName: c.property_name || '',
+        totalLots: c.total_lots || 0,
+        hasData: (c.sale_consideration || 0) > 0 || (c.total_lots || 0) > 0,
+      })));
     } catch {
       setError('Failed to load companies');
     } finally {
@@ -48,16 +47,7 @@ export default function PDCompanySetup() {
     setSaving(true);
     setError('');
     try {
-      const res = await fetch('/api/propdev/companies', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName.trim(), property_name: newProperty.trim() }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        setError(err.detail || 'Failed to add company');
-        return;
-      }
+      await api.post('/api/propdev/companies', { name: newName.trim(), property_name: newProperty.trim() });
       setNewName('');
       setNewProperty('');
       setAdding(false);
@@ -75,11 +65,7 @@ export default function PDCompanySetup() {
     if (!window.confirm(`Delete "${name}" and all its data?`)) return;
     setError('');
     try {
-      const res = await fetch(`/api/propdev/companies/${id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        setError('Failed to delete company');
-        return;
-      }
+      await api.delete(`/api/propdev/companies/${id}`);
       setSuccess('Deleted');
       setTimeout(() => setSuccess(''), 2000);
       await loadCompanies();

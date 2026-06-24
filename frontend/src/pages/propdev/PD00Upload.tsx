@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import api from '../../services/api';
 import * as XLSX from 'xlsx';
 import {
   Upload, FileSpreadsheet, CheckCircle2, AlertCircle, X,
@@ -348,12 +349,8 @@ export default function PD00Upload() {
       setConfirmed(true);
 
       // Trigger a refresh of companies
-      const companiesRes = await fetch('/api/propdev/companies');
-      if (companiesRes.ok) {
-        const companiesData = await companiesRes.json();
-        // This will trigger the context update through the API fetch
-        window.location.reload();
-      }
+      await api.get('/api/propdev/companies');
+      window.location.reload();
 
       const sheetsImported = sheets.filter(sh => sh.detected !== 'Unknown').map(sh => sh.detected);
       addUploadRecord({
