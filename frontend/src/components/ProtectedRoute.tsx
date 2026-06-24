@@ -2,7 +2,9 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  // Auth bypassed for demo — no login required
+  const { isAuthenticated, loading } = useAuth();
+  if (loading) return null;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
 
