@@ -73,14 +73,23 @@ class LoanResponse:
         self.interest_rate = float(loan.interest_rate)
         self.emi = float(loan.emi)
         self.maturity_date = loan.maturity_date.isoformat() if loan.maturity_date else None
+        self.emi_day = int(loan.emi_day) if loan.emi_day else 15
         self.emi_status = loan.emi_status
+        self.account_no = loan.account_no or ''
+        self.lender_name = loan.lender_name or ''
+        self.lender_email = loan.lender_email or ''
+        self.lender_phone = loan.lender_phone or ''
+        self.loan_date = loan.loan_date.isoformat() if loan.loan_date else None
 
     def to_dict(self):
         return {
             'id': self.id, 'bank': self.bank, 'loan_amount': self.loan_amount,
             'balance': self.balance, 'interest_rate': self.interest_rate,
             'emi': self.emi, 'maturity_date': self.maturity_date,
-            'emi_status': self.emi_status,
+            'emi_day': self.emi_day, 'emi_status': self.emi_status,
+            'account_no': self.account_no, 'lender_name': self.lender_name,
+            'lender_email': self.lender_email, 'lender_phone': self.lender_phone,
+            'loan_date': self.loan_date,
         }
 
 

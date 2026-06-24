@@ -412,7 +412,21 @@ export function PropertyDevProvider({ children }: { children: ReactNode }) {
               commissionRate: c.commission_rate,
               commission: c.commission,
               cashAvailable: c.cash_available,
-              monthlyData: [],
+              monthlyData: (() => {
+                const map: Record<string, { lotsSold: number; revenue: number }> = {};
+                (c.lots || []).forEach((l: any) => {
+                  if (l.close_date && l.sale_price) {
+                    const d = new Date(l.close_date);
+                    const key = d.toLocaleString('default', { month: 'short' }) + ' ' + String(d.getFullYear()).slice(2);
+                    if (!map[key]) map[key] = { lotsSold: 0, revenue: 0 };
+                    map[key].lotsSold += 1;
+                    map[key].revenue += l.sale_price;
+                  }
+                });
+                return Object.entries(map)
+                  .sort((a, b) => new Date('1 ' + a[0]).getTime() - new Date('1 ' + b[0]).getTime())
+                  .map(([month, v]) => ({ month, ...v }));
+              })(),
             },
             lots: (c.lots || []).map((l: any) => ({
               id: l.id,
@@ -448,18 +462,18 @@ export function PropertyDevProvider({ children }: { children: ReactNode }) {
               company: c.name,
               property: c.property_name,
               bank: ln.bank,
-              loanDate: '2023-01-15',
-              accountNo: '',
+              loanDate: ln.loan_date || '2023-01-15',
+              accountNo: ln.account_no || '',
               amount: ln.loan_amount,
               balance: ln.balance,
               interestRate: ln.interest_rate * 100,
               emi: ln.emi,
               maturityDate: ln.maturity_date,
-              emiDate: 15,
-              lenderName: '',
-              lenderEmail: '',
-              lenderPhone: '',
-              status: 'Active',
+              emiDate: ln.emi_day || 15,
+              lenderName: ln.lender_name || '',
+              lenderEmail: ln.lender_email || '',
+              lenderPhone: ln.lender_phone || '',
+              status: (ln.emi_status === 'Paid Off' ? 'Paid Off' : ln.emi_status === 'In Default' ? 'In Default' : 'Active') as 'Active' | 'Paid Off' | 'In Default',
             })),
             capitalCalls: (c.capital_calls || []).map((cc: any) => ({
               id: cc.id,

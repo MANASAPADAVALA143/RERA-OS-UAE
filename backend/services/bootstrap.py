@@ -14,11 +14,14 @@ def ensure_local_demo(db: Session) -> None:
     if settings.effective_auth_mode != "local":
         return
 
+    from database import is_sqlite
+
     existing = db.query(TenantUser).filter(TenantUser.email == DEMO_EMAIL).first()
     if existing:
-        # User exists but rental data may not be seeded yet — check and seed if missing
-        from scripts.seed_rentals import seed as seed_rentals
-        seed_rentals()
+        # Only seed locally — skip over-the-wire RDS seeding on every restart
+        if is_sqlite:
+            from scripts.seed_rentals import seed as seed_rentals
+            seed_rentals()
         return
 
     logger.info("Creating local demo tenant: %s / %s", DEMO_EMAIL, DEMO_PASSWORD)
@@ -41,8 +44,10 @@ def ensure_local_demo(db: Session) -> None:
     )
     db.commit()
 
-    from scripts.seed_demo_tenant import seed
-    seed(tenant.id, skip_if_seeded=True)
+    # Skip heavy demo seeding on PostgreSQL — too slow over network
+    if is_sqlite:
+        from scripts.seed_demo_tenant import seed
+        seed(tenant.id, skip_if_seeded=True)
 
-    from scripts.seed_rentals import seed as seed_rentals
-    seed_rentals()
+        from scripts.seed_rentals import seed as seed_rentals
+        seed_rentals()
