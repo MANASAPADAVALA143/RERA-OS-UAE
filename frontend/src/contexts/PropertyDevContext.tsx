@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import api from '../services/api';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -384,9 +385,9 @@ export function PropertyDevProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const fetchCompanies = async () => {
       try {
-        const res = await fetch('/api/propdev/companies');
-        if (res.ok) {
-          const data = await res.json();
+        const res = await api.get('/api/propdev/companies');
+        if (res.status === 200) {
+          const data = res.data;
           const transformed = data.companies.map((c: any) => ({
             id: c.id,
             name: c.name,
