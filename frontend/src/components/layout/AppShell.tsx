@@ -50,7 +50,7 @@ function SidebarInner() {
       <aside className="w-64 bg-primary text-white flex flex-col shrink-0">
         {/* Brand */}
         <div className="p-5 border-b border-white/10">
-          <h1 className="text-xl font-bold tracking-tight">EstateCFO</h1>
+          <h1 className="text-xl font-bold tracking-tight">All in one MIS</h1>
           <p className="text-xs text-accent-light mt-1 truncate">{profile?.company_name}</p>
         </div>
 

@@ -33,7 +33,7 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-primary">
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
-        <h1 className="text-2xl font-bold text-primary mb-1">EstateCFO</h1>
+        <h1 className="text-2xl font-bold text-primary mb-1">All in one MIS</h1>
         <p className="text-gray-500 text-sm mb-4">Local demo mode — no Supabase required</p>
 
         <div className="mb-4 p-3 rounded-lg bg-accent/10 border border-accent/30 text-sm text-primary">
