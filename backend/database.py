@@ -6,10 +6,6 @@ from config import settings
 _db_url = settings.effective_database_url
 is_sqlite = _db_url.startswith("sqlite")  # exported — used by middleware/auth.py for RLS guard
 
-# Enforce SSL on all PostgreSQL connections
-if not is_sqlite and "sslmode" not in _db_url:
-    _db_url += ("&" if "?" in _db_url else "?") + "sslmode=require"
-
 engine_kwargs: dict = {"pool_pre_ping": True}
 if is_sqlite:
     engine_kwargs["connect_args"] = {"check_same_thread": False}
