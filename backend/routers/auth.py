@@ -1,11 +1,11 @@
+import threading
 import uuid
-from datetime import datetime, timezone
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
 from config import settings
@@ -22,7 +22,19 @@ from services.local_auth import (
 )
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
-limiter = Limiter(key_func=get_remote_address)
+
+_login_attempts: dict = defaultdict(list)
+_login_lock = threading.Lock()
+
+def _check_login_rate(request: Request) -> None:
+    ip = request.client.host if request.client else "unknown"
+    now = datetime.utcnow()
+    cutoff = now - timedelta(minutes=1)
+    with _login_lock:
+        _login_attempts[ip] = [t for t in _login_attempts[ip] if t > cutoff]
+        if len(_login_attempts[ip]) >= 5:
+            raise HTTPException(status_code=429, detail="Too many login attempts. Wait 1 minute.")
+        _login_attempts[ip].append(now)
 
 INVITE_ROLES = {"owner", "admin", "cfo", "controller", "analyst", "viewer"}
 
@@ -64,8 +76,8 @@ def auth_config():
 
 
 @router.post("/login")
-@limiter.limit("5/minute")
 def login(request: Request, body: LoginRequest, db: Session = Depends(get_db)):
+    _check_login_rate(request)
     if settings.effective_auth_mode != "local":
         raise HTTPException(status_code=400, detail="Use Supabase sign-in for this deployment")
 
