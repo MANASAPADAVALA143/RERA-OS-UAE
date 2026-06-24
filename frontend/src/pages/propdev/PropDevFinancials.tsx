@@ -183,7 +183,7 @@ function PLTab({ selectedId }: { selectedId: string }) {
             <tr className="bg-gray-900 text-white">
               <th className="text-left px-4 py-2.5 font-semibold w-48">Line Item</th>
               {selectedId === 'all'
-                ? companies.map(({c}) => <th key={c.id} className="text-right px-3 py-2.5">{short(c.name)}</th>)
+                ? companies.map(c => <th key={c.id} className="text-right px-3 py-2.5">{short(c.name)}</th>)
                 : years.map(({yr}) => <th key={yr} className="text-right px-4 py-2.5">{yr}</th>)
               }
             </tr>
