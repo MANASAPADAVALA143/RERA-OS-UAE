@@ -46,8 +46,8 @@ function SidebarInner() {
   const { tab: propDevTab, setTab: setPropDevTab } = usePropDevNav();
 
   return (
-    <div className="flex min-h-screen bg-surface">
-      <aside className="w-64 bg-primary text-white flex flex-col shrink-0">
+    <div className="flex h-screen overflow-hidden bg-surface">
+      <aside className="w-64 bg-primary text-white flex flex-col shrink-0 h-screen overflow-hidden">
         {/* Brand */}
         <div className="p-5 border-b border-white/10">
           <h1 className="text-xl font-bold tracking-tight">All in one MIS</h1>
@@ -183,7 +183,7 @@ function SidebarInner() {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto p-6 lg:p-8">
+      <main className="flex-1 overflow-y-auto p-6 lg:p-8">
         <Outlet />
       </main>
     </div>
