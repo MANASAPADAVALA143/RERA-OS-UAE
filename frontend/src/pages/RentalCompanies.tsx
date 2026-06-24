@@ -28,7 +28,7 @@ interface CompanyListItem {
   total_expense_this_month: number;
 }
 
-type IconComp = React.FC<{ size?: number; className?: string }>;
+type IconComp = React.FC<{ size?: number | string; className?: string }>;
 
 const COMPANY_STYLES: { Icon: IconComp; bg: string; text: string }[] = [
   { Icon: Building2, bg: 'bg-emerald-100', text: 'text-emerald-700' },

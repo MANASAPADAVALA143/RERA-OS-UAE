@@ -191,7 +191,7 @@ export default function RentalVendorManagement() {
 
   function updateLocal(id: string, patch: Partial<VendorLocal>) {
     setLocals(prev => {
-      const next = { ...prev, [id]: { id, ...BLANK_LOCAL, ...(prev[id] ?? {}), ...patch } };
+      const next = { ...prev, [id]: { ...BLANK_LOCAL, ...(prev[id] ?? {}), ...patch, id } };
       saveLocal(next);
       return next;
     });

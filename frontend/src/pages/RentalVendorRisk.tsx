@@ -110,7 +110,7 @@ export default function RentalVendorRisk() {
     }
   }
 
-  if (loading) return <LoadingSkeleton rows={6} cols={7} />;
+  if (loading) return <LoadingSkeleton rows={6} />;
   if (error) return <p className="text-red-600 p-4">{error}</p>;
   if (!data) return null;
 
