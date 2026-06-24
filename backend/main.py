@@ -81,14 +81,10 @@ _cors_kwargs = {
     "allow_methods": ["*"],
     "allow_headers": ["*"],
 }
-if settings.effective_auth_mode == "local":
-    # Vite may use 5173, 5174, 5175, etc. when ports are busy
-    _cors_kwargs["allow_origin_regex"] = r"http://(localhost|127\.0\.0\.1):\d+"
-else:
-    _cors_kwargs["allow_origins"] = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ]
+# Always allow local dev + any *.onrender.com origin (production frontend on Render)
+_cors_kwargs["allow_origin_regex"] = (
+    r"http://(localhost|127\.0\.0\.1):\d+|https://[a-zA-Z0-9-]+\.onrender\.com"
+)
 
 app.add_middleware(CORSMiddleware, **_cors_kwargs)
 

@@ -1,6 +1,10 @@
 import axios from 'axios';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+// VITE_API_URL is injected by Render (the backend service hostname).
+// In dev, it's not set so API_BASE is '' and the Vite proxy routes /api/* to localhost:8000.
+const API_BASE = import.meta.env.VITE_API_URL
+  ? `https://${import.meta.env.VITE_API_URL}`
+  : '';
 const TOKEN_KEY = 'estatecfo_access_token';
 
 export const api = axios.create({ baseURL: API_BASE });
