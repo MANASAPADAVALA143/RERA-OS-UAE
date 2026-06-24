@@ -376,10 +376,30 @@ interface PropertyDevState {
 
 const Ctx = createContext<PropertyDevState | null>(null);
 
+const STORAGE_KEY = 'estatecfo_propdev_v1';
+
+function loadPersisted(): { companies: CompanyData[]; uploadHistory: UploadRecord[] } {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { companies?: CompanyData[]; uploadHistory?: UploadRecord[] };
+      return {
+        companies: Array.isArray(parsed.companies) ? parsed.companies : ALL_COMPANIES,
+        uploadHistory: Array.isArray(parsed.uploadHistory) ? parsed.uploadHistory : [],
+      };
+    }
+  } catch { /* ignore corrupt storage */ }
+  return { companies: ALL_COMPANIES, uploadHistory: [] };
+}
+
 export function PropertyDevProvider({ children }: { children: ReactNode }) {
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>('all');
-  const [companiesState, setCompaniesState] = useState<CompanyData[]>(ALL_COMPANIES);
-  const [uploadHistory, setUploadHistory] = useState<UploadRecord[]>([]);
+  const [companiesState, setCompaniesState] = useState<CompanyData[]>(() => loadPersisted().companies);
+  const [uploadHistory, setUploadHistory] = useState<UploadRecord[]>(() => loadPersisted().uploadHistory);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ companies: companiesState, uploadHistory }));
+  }, [companiesState, uploadHistory]);
 
   // Fetch companies from API on mount
   useEffect(() => {
