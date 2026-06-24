@@ -31,10 +31,7 @@ services:
     staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
-        fromService:
-          name: estatecfo-api
-          type: web
-          property: host
+        value: estatecfo-api.onrender.com
     routes:
       - type: rewrite
         source: /*
