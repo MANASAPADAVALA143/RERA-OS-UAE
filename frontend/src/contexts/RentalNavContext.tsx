@@ -6,7 +6,7 @@ import {
   Wrench, ClipboardCheck, AlertTriangle, Receipt,
   Upload, TrendingUp, ArrowDownUp, Table2, CalendarCheck, Activity,
   Landmark, Store, BookOpen,
-  CircleDollarSign, LayoutGrid, CalendarRange,
+  CircleDollarSign, LayoutGrid, CalendarRange, Tag,
 } from "lucide-react";
 
 export type RentalTab =
@@ -16,7 +16,8 @@ export type RentalTab =
   | "ap-dashboard" | "vendor-management"
   | "ownership" | "reports" | "financials"
   | "portfolio-upload" | "cfo-dashboard" | "income-bridge" | "entity-rollup" | "compliance"
-  | "building-expenses" | "loan-tracker" | "cfo-portfolio" | "13-week-cf";
+  | "building-expenses" | "loan-tracker" | "cfo-portfolio" | "13-week-cf"
+  | "discounts";
 
 type LucideIcon = React.FC<{ size?: number; className?: string }>;
 export interface RentalNavItem {
@@ -30,6 +31,7 @@ export const RENTAL_TABS: RentalNavItem[] = [
   { id: "overview",          label: "Overview",          Icon: LayoutDashboard },
   { id: "companies",         label: "Companies",         Icon: Building2       },
   { id: "units",             label: "Units",             Icon: Home            },
+  { id: "discounts",         label: "Discounts",         Icon: Tag             },
   { id: "leases",            label: "Leases",            Icon: FileText        },
   { id: "maintenance",       label: "Maintenance",       Icon: Wrench          },
   { id: "inspections",       label: "Inspections",       Icon: ClipboardCheck  },

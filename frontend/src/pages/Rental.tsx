@@ -23,6 +23,7 @@ import RentalIncomeBridge from './RentalIncomeBridge';
 import RentalEntityRollup from './RentalEntityRollup';
 import RentalCompliance from './RentalCompliance';
 import RentalFinancials from './RentalFinancials';
+import RentalDiscounts from './RentalDiscounts';
 import RentalBuildingExpenses from './rental/RentalBuildingExpenses';
 import RentalLoanTracker from './rental/RentalLoanTracker';
 import RentalCfoPortfolio from './rental/RentalCfoPortfolio';
@@ -41,6 +42,7 @@ export default function Rental() {
       {tab === 'overview'     && <ErrorBoundary><RentalOverview /></ErrorBoundary>}
       {tab === 'companies'    && <ErrorBoundary><RentalCompanies /></ErrorBoundary>}
       {tab === 'units'        && <ErrorBoundary><RentalUnits /></ErrorBoundary>}
+      {tab === 'discounts'    && <ErrorBoundary><RentalDiscounts /></ErrorBoundary>}
       {tab === 'leases'       && <ErrorBoundary><RentalLeases /></ErrorBoundary>}
       {tab === 'maintenance'  && <ErrorBoundary><RentalMaintenance /></ErrorBoundary>}
       {tab === 'inspections'  && <ErrorBoundary><RentalInspections /></ErrorBoundary>}
