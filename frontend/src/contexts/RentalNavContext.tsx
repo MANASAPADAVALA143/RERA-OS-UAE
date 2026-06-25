@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import {
   LayoutDashboard, Building2, Home, FileText,
   CreditCard, TrendingDown, DollarSign, Users, BarChart2,
-  Wrench, ClipboardCheck, AlertTriangle, Receipt,
+  Wrench, AlertTriangle, Receipt,
   TrendingUp, ArrowDownUp, Table2, CalendarCheck, Activity,
   Landmark, Store, BookOpen,
   CircleDollarSign, CalendarRange, Tag, Percent,
@@ -11,7 +11,7 @@ import {
 
 export type RentalTab =
   | "overview" | "companies" | "units" | "leases"
-  | "maintenance" | "inspections" | "vendor-risk"
+  | "maintenance" | "vendor-risk"
   | "collections" | "vacancy" | "expenses" | "ar-dashboard"
   | "ap-dashboard" | "vendor-management"
   | "ownership" | "reports" | "financials"
@@ -35,7 +35,6 @@ export const RENTAL_TABS: RentalNavItem[] = [
   { id: "discounts",         label: "Discounts",         Icon: Tag             },
   { id: "leases",            label: "Leases",            Icon: FileText        },
   { id: "maintenance",       label: "Maintenance",       Icon: Wrench          },
-  { id: "inspections",       label: "Inspections",       Icon: ClipboardCheck  },
   // ── FINANCIALS & RISK ─────────────────────────────────────────────────────
   { id: "ar-dashboard",      label: "AR Dashboard",      Icon: Activity,        groupLabel: "FINANCIALS & RISK" },
   { id: "ap-dashboard",      label: "AP Dashboard",      Icon: Landmark        },

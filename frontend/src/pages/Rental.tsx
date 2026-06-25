@@ -7,7 +7,6 @@ import RentalCompanies from './RentalCompanies';
 import RentalUnits from './RentalUnits';
 import RentalLeases from './RentalLeases';
 import RentalMaintenance from './RentalMaintenance';
-import RentalInspections from './RentalInspections';
 import RentalCollections from './RentalCollections';
 import RentalVacancy from './RentalVacancy';
 import RentalExpenses from './RentalExpenses';
@@ -46,7 +45,6 @@ export default function Rental() {
       {tab === 'discounts'    && <ErrorBoundary><RentalDiscounts /></ErrorBoundary>}
       {tab === 'leases'       && <ErrorBoundary><RentalLeases /></ErrorBoundary>}
       {tab === 'maintenance'  && <ErrorBoundary><RentalMaintenance /></ErrorBoundary>}
-      {tab === 'inspections'  && <ErrorBoundary><RentalInspections /></ErrorBoundary>}
       {tab === 'vendor-risk'  && <ErrorBoundary><RentalVendorRisk /></ErrorBoundary>}
       {tab === 'collections'  && <ErrorBoundary><RentalCollections /></ErrorBoundary>}
       {tab === 'vacancy'      && <ErrorBoundary><RentalVacancy /></ErrorBoundary>}
