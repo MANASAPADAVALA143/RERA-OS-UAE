@@ -1,12 +1,12 @@
-﻿import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState } from "react";
 import type { ReactNode } from "react";
 import {
   LayoutDashboard, Building2, Home, FileText,
   CreditCard, TrendingDown, DollarSign, Users, BarChart2,
   Wrench, ClipboardCheck, AlertTriangle, Receipt,
-  Upload, TrendingUp, ArrowDownUp, Table2, CalendarCheck, Activity,
+  TrendingUp, ArrowDownUp, Table2, CalendarCheck, Activity,
   Landmark, Store, BookOpen,
-  CircleDollarSign, LayoutGrid, CalendarRange, Tag,
+  CircleDollarSign, CalendarRange, Tag, Percent,
 } from "lucide-react";
 
 export type RentalTab =
@@ -17,7 +17,7 @@ export type RentalTab =
   | "ownership" | "reports" | "financials"
   | "portfolio-upload" | "cfo-dashboard" | "income-bridge" | "entity-rollup" | "compliance"
   | "building-expenses" | "loan-tracker" | "cfo-portfolio" | "13-week-cf"
-  | "discounts";
+  | "discounts" | "financial-ratios";
 
 type LucideIcon = React.FC<{ size?: number; className?: string }>;
 export interface RentalNavItem {
@@ -28,33 +28,34 @@ export interface RentalNavItem {
 }
 
 export const RENTAL_TABS: RentalNavItem[] = [
-  { id: "overview",          label: "Overview",          Icon: LayoutDashboard },
+  // ── RENTAL & LEASE ────────────────────────────────────────────────────────
+  { id: "overview",          label: "Overview",          Icon: LayoutDashboard, groupLabel: "RENTAL & LEASE" },
   { id: "companies",         label: "Companies",         Icon: Building2       },
   { id: "units",             label: "Units",             Icon: Home            },
   { id: "discounts",         label: "Discounts",         Icon: Tag             },
   { id: "leases",            label: "Leases",            Icon: FileText        },
   { id: "maintenance",       label: "Maintenance",       Icon: Wrench          },
   { id: "inspections",       label: "Inspections",       Icon: ClipboardCheck  },
+  // ── FINANCIALS & RISK ─────────────────────────────────────────────────────
+  { id: "ar-dashboard",      label: "AR Dashboard",      Icon: Activity,        groupLabel: "FINANCIALS & RISK" },
+  { id: "ap-dashboard",      label: "AP Dashboard",      Icon: Landmark        },
+  { id: "expenses",          label: "Expenses",          Icon: DollarSign      },
   { id: "vendor-risk",       label: "Vendor Risk",       Icon: AlertTriangle   },
   { id: "collections",       label: "Collections",       Icon: CreditCard      },
   { id: "vacancy",           label: "Vacancy & Loss",    Icon: TrendingDown    },
-  { id: "expenses",          label: "Expenses",          Icon: DollarSign      },
-  { id: "ar-dashboard",      label: "AR Dashboard",      Icon: Activity        },
-  { id: "ap-dashboard",      label: "AP Dashboard",      Icon: Landmark        },
-  { id: "vendor-management", label: "Vendor Mgmt",       Icon: Store           },
   { id: "financials",        label: "Financials",        Icon: BookOpen        },
-  { id: "ownership",         label: "Ownership",         Icon: Users           },
-  { id: "reports",           label: "Reports",           Icon: BarChart2       },
-  // ── CFO Portfolio View ────────────────────────────────────────────────────
-  { id: "portfolio-upload",  label: "Portfolio Upload",  Icon: Upload,         groupLabel: "CFO Portfolio View" },
-  { id: "cfo-dashboard",     label: "CFO Dashboard",     Icon: TrendingUp      },
-  { id: "income-bridge",     label: "Income Bridge",     Icon: ArrowDownUp     },
-  { id: "entity-rollup",     label: "Entity Roll-up",    Icon: Table2          },
-  { id: "compliance",        label: "Compliance",        Icon: CalendarCheck   },
-  // ── CFO Suite ─────────────────────────────────────────────────────────────
-  { id: "building-expenses", label: "Building Expenses", Icon: Receipt,         groupLabel: "CFO Suite" },
+  { id: "financial-ratios",  label: "Financial Ratios",  Icon: Percent         },
+  // ── OPERATIONS ────────────────────────────────────────────────────────────
+  { id: "building-expenses", label: "Building Expenses", Icon: Receipt,         groupLabel: "OPERATIONS" },
   { id: "loan-tracker",      label: "Loan Tracker",      Icon: CircleDollarSign },
-  { id: "cfo-portfolio",     label: "CFO Portfolio",     Icon: LayoutGrid       },
+  { id: "vendor-management", label: "Vendor Mgmt",       Icon: Store            },
+  { id: "ownership",         label: "Ownership",         Icon: Users            },
+  { id: "reports",           label: "Reports",           Icon: BarChart2        },
+  // ── CFO VIEW ──────────────────────────────────────────────────────────────
+  { id: "cfo-dashboard",     label: "CFO Dashboard",     Icon: TrendingUp,      groupLabel: "CFO VIEW" },
+  { id: "income-bridge",     label: "Income Bridge",     Icon: ArrowDownUp      },
+  { id: "entity-rollup",     label: "Entity Roll-up",    Icon: Table2           },
+  { id: "compliance",        label: "Compliance",        Icon: CalendarCheck    },
   { id: "13-week-cf",        label: "13-Week Cash Flow", Icon: CalendarRange    },
 ];
 
@@ -63,6 +64,7 @@ const TAB_PATHS: Partial<Record<RentalTab, string>> = {
   "loan-tracker":      "/rental/loan-tracker",
   "cfo-portfolio":     "/rental/cfo-portfolio",
   "13-week-cf":        "/rental/13-week-cf",
+  "financial-ratios":  "/rental/financial-ratios",
 };
 
 const PATH_TO_TAB: Record<string, RentalTab> = {
@@ -70,6 +72,7 @@ const PATH_TO_TAB: Record<string, RentalTab> = {
   "/rental/loan-tracker":      "loan-tracker",
   "/rental/cfo-portfolio":     "cfo-portfolio",
   "/rental/13-week-cf":        "13-week-cf",
+  "/rental/financial-ratios":  "financial-ratios",
 };
 
 export function rentalPathForTab(tab: RentalTab): string {

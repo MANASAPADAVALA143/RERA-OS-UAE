@@ -24,6 +24,7 @@ import RentalEntityRollup from './RentalEntityRollup';
 import RentalCompliance from './RentalCompliance';
 import RentalFinancials from './RentalFinancials';
 import RentalDiscounts from './RentalDiscounts';
+import RentalFinancialRatios from './rental/RentalFinancialRatios';
 import RentalBuildingExpenses from './rental/RentalBuildingExpenses';
 import RentalLoanTracker from './rental/RentalLoanTracker';
 import RentalCfoPortfolio from './rental/RentalCfoPortfolio';
@@ -61,6 +62,7 @@ export default function Rental() {
       {tab === 'entity-rollup'     && <ErrorBoundary><RentalEntityRollup /></ErrorBoundary>}
       {tab === 'compliance'        && <ErrorBoundary><RentalCompliance /></ErrorBoundary>}
       {tab === 'financials'        && <ErrorBoundary><RentalFinancials /></ErrorBoundary>}
+      {tab === 'financial-ratios'  && <ErrorBoundary><RentalFinancialRatios /></ErrorBoundary>}
       {tab === 'building-expenses' && <ErrorBoundary><RentalBuildingExpenses /></ErrorBoundary>}
       {tab === 'loan-tracker'      && <ErrorBoundary><RentalLoanTracker /></ErrorBoundary>}
       {tab === 'cfo-portfolio'     && <ErrorBoundary><RentalCfoPortfolio /></ErrorBoundary>}

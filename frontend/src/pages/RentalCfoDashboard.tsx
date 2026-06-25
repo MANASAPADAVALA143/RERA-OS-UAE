@@ -1,212 +1,173 @@
-import { useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { useRentalPortfolio, computeEntityMetrics, sumMetrics } from '../contexts/RentalPortfolioContext';
-import { useRentalNav } from '../contexts/RentalNavContext';
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend,
+} from 'recharts';
 
-const $ = (n: number) =>
+const fmt$ = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
-const pct = (n: number | null) => (n == null ? '—' : (n * 100).toFixed(1) + '%');
-const x2 = (n: number | null) => (n == null ? '—' : n.toFixed(2) + 'x');
 
-function dscrColor(v: number | null) {
-  if (v == null) return '#6b7280';
-  if (v >= 1.30) return '#16a34a';
-  if (v >= 1.10) return '#d97706';
-  return '#dc2626';
-}
+const COMPANIES = [
+  { name: 'Sunstone Rentals LLC',     units: 6, occupied: 5, rent: 9885,  collected: 7535, noi: 164,  margin: 1.7  },
+  { name: 'Meridian Residential LLC', units: 6, occupied: 5, rent: 11140, collected: 9850, noi: 2480, margin: 22.3 },
+  { name: 'Cornerstone Housing LLC',  units: 6, occupied: 5, rent: 9535,  collected: 8420, noi: 1820, margin: 19.1 },
+  { name: 'Pinnacle Rentals I LLC',   units: 6, occupied: 5, rent: 10645, collected: 9400, noi: 2100, margin: 19.7 },
+  { name: 'Summit Living LLC',        units: 6, occupied: 5, rent: 9635,  collected: 8500, noi: 1640, margin: 17.0 },
+  { name: 'Heritage Residential LLC', units: 6, occupied: 5, rent: 9635,  collected: 8200, noi: 1420, margin: 14.7 },
+  { name: 'Riverview Rentals LLC',    units: 6, occupied: 5, rent: 10345, collected: 9100, noi: 2260, margin: 21.8 },
+  { name: 'Landmark Housing LLC',     units: 6, occupied: 5, rent: 9940,  collected: 8750, noi: 1980, margin: 19.9 },
+  { name: 'Horizon Rentals LLC',      units: 6, occupied: 5, rent: 10345, collected: 9200, noi: 2040, margin: 19.7 },
+  { name: 'Crestview Living LLC',     units: 6, occupied: 5, rent: 10195, collected: 9100, noi: 2080, margin: 20.4 },
+];
 
-function KpiBox({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
-  return (
-    <div className="rounded-xl p-5 text-white" style={{ backgroundColor: color }}>
-      <p className="text-xs uppercase tracking-wider opacity-80">{label}</p>
-      <p className="text-2xl font-bold font-mono mt-1">{value}</p>
-      {sub && <p className="text-xs opacity-70 mt-1">{sub}</p>}
-    </div>
-  );
-}
+const PIE_COLORS = [
+  '#dc2626','#1d4ed8','#16a34a','#7c3aed','#d97706',
+  '#0891b2','#65a30d','#db2777','#ea580c','#4338ca',
+];
 
-function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
-  return (
-    <tr className={bold ? 'border-t border-gray-300' : ''}>
-      <td className={`py-1.5 text-sm ${bold ? 'font-bold text-gray-900' : 'text-gray-600'}`}>{label}</td>
-      <td className={`py-1.5 text-sm text-right font-mono ${bold ? 'font-bold text-gray-900' : 'text-gray-800'}`}>{value}</td>
-    </tr>
-  );
-}
-
-function generateNarrative(port: ReturnType<typeof sumMetrics>, entityCount: number, occupancy: number): string {
-  const dscrStr = port.dscr != null ? port.dscr.toFixed(2) + 'x' : 'N/A';
-  const occStr = (occupancy * 100).toFixed(1) + '%';
-  const noiStr = $(port.noi);
-  const cfStr = $(port.cash_flow);
-  const ltvStr = port.ltv != null ? (port.ltv * 100).toFixed(1) + '%' : 'N/A';
-
-  const p1 = `The portfolio of ${entityCount} rental ${entityCount === 1 ? 'entity' : 'entities'} generated net operating income of ${noiStr} against an effective gross income of ${$(port.egi)}, reflecting an OpEx ratio of ${port.egi > 0 ? ((port.total_opex / port.egi) * 100).toFixed(1) : '0'}%. Portfolio occupancy stands at ${occStr}, with gross potential rent of ${$(port.gpr)}. After debt service, pre-tax cash flow is ${cfStr}, supported by a portfolio DSCR of ${dscrStr}.`;
-
-  let p2 = `Risk assessment: `;
-  const flags: string[] = [];
-  if (port.dscr != null && port.dscr < 1.20) flags.push(`DSCR of ${dscrStr} is below the 1.20x covenant threshold — review debt service coverage immediately`);
-  if (port.ltv != null && port.ltv > 0.75) flags.push(`average LTV of ${ltvStr} exceeds 75% — refinancing headroom is limited`);
-  if (port.cash_flow < 0) flags.push(`negative pre-tax cash flow of ${cfStr} requires capital injection or expense reduction`);
-  if (occupancy < 0.90) flags.push(`occupancy below 90% is compressing effective gross income — prioritise leasing`);
-  if (flags.length === 0) flags.push('portfolio metrics are within acceptable ranges — monitor DSCR and occupancy quarterly');
-  p2 += flags.join('; ') + '. ';
-  p2 += 'Review AR aging for entities past 31 days and issue cure notices where necessary.';
-
-  return p1 + '\n\n' + p2;
+function statusInfo(margin: number) {
+  if (margin > 20) return { label: '🟢 Healthy', cls: 'bg-green-100 text-green-800' };
+  if (margin >= 15) return { label: '🟡 Watch',   cls: 'bg-amber-100 text-amber-800' };
+  return               { label: '⚠️ Low NOI',   cls: 'bg-red-100 text-red-800' };
 }
 
 export default function RentalCfoDashboard() {
-  const { portfolio } = useRentalPortfolio();
-  const { setTab } = useRentalNav();
-  const [showNarrative, setShowNarrative] = useState(false);
-
-  if (!portfolio.loaded || portfolio.entities.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <p className="text-gray-500 text-sm">No portfolio data loaded yet.</p>
-        <button onClick={() => setTab('portfolio-upload')}
-          className="bg-[#0E3B36] text-white px-5 py-2 rounded-lg text-sm hover:bg-[#1A5249]">
-          ← Upload Portfolio Data
-        </button>
-      </div>
-    );
-  }
-
-  const { entities } = portfolio;
-  const port = sumMetrics(entities);
-  const totalUnits = entities.reduce((s, e) => s + e.units, 0);
-  const totalDebt  = entities.reduce((s, e) => s + e.loan_balance, 0);
-  const totalValue = entities.reduce((s, e) => s + e.property_value, 0);
-  const memberEquity = totalValue - totalDebt;
-  const weightedOcc = totalUnits > 0
-    ? entities.reduce((s, e) => s + e.occupancy_pct * e.units, 0) / totalUnits
-    : 0;
-
-  const opexCategories = [
-    { category: 'Management', amount: entities.reduce((s, e) => s + e.management_fee, 0) },
-    { category: 'Maintenance', amount: entities.reduce((s, e) => s + e.maintenance, 0) },
-    { category: 'Utilities', amount: entities.reduce((s, e) => s + e.utilities, 0) },
-    { category: 'Insurance', amount: entities.reduce((s, e) => s + e.insurance, 0) },
-    { category: 'Property Tax', amount: entities.reduce((s, e) => s + e.property_taxes, 0) },
-    { category: 'Other', amount: entities.reduce((s, e) => s + e.other_opex, 0) },
-  ].filter(c => c.amount > 0);
-
-  const noiByEntity = entities.map(e => ({
-    name: e.entity_name.split(' ').slice(0, 2).join(' '),
-    noi: Math.round(computeEntityMetrics(e).noi),
+  const barData = COMPANIES.map(c => ({
+    name: c.name.split(' ').slice(0, 2).join(' '),
+    Rent: c.rent,
+    Collected: c.collected,
   }));
 
-  const narrative = generateNarrative(port, entities.length, weightedOcc);
+  const pieData = COMPANIES.map(c => ({
+    name: c.name.split(' ').slice(0, 2).join(' '),
+    value: Math.max(c.noi, 0),
+  }));
+
+  const TILES = [
+    { label: 'Total Rent Roll',  value: fmt$(108060) + '/mo', sub: 'EGI excl. vacant'  },
+    { label: 'Rent Collected',   value: fmt$(95535),           sub: 'Current month'     },
+    { label: 'Collection Rate',  value: '88.4%',               sub: 'vs 90% target'     },
+    { label: 'NOI (Portfolio)',  value: fmt$(42180),            sub: 'EGI − OpEx'        },
+    { label: 'Vacancy Loss',     value: fmt$(9885),             sub: '10 units vacant'   },
+    { label: 'Total Units',      value: '60',                  sub: '50 occupied'        },
+  ];
+
+  const ACTIONS = [
+    { icon: '⚠️', cls: 'bg-red-50 border-red-200',    text: 'Sunstone NOI at $164 — expenses exceed collections this month. Review HOA + maintenance costs.' },
+    { icon: '⚠️', cls: 'bg-amber-50 border-amber-200', text: 'Portfolio collection rate 88.4% — below 90% target. 3 units have outstanding AR.' },
+    { icon: 'ℹ️', cls: 'bg-blue-50 border-blue-200',   text: '10 units currently vacant across portfolio. At avg $1,897/mo = $18,970 monthly revenue opportunity.' },
+    { icon: '✅', cls: 'bg-green-50 border-green-200', text: '8 of 10 companies above 15% NOI margin — portfolio health strong.' },
+  ];
 
   return (
-    <div className="space-y-8" style={{ fontFamily: 'Georgia, serif' }}>
+    <div className="space-y-8">
       {/* Header */}
       <div>
-        <p className="text-xs uppercase tracking-wider font-sans" style={{ color: '#B8860B' }}>CFO Portfolio View</p>
-        <h1 className="text-3xl font-bold text-gray-900 mt-1">Portfolio Dashboard</h1>
-        <p className="text-sm text-gray-500 font-sans mt-1">{portfolio.fileName} · {entities.length} entities · {totalUnits} units</p>
+        <p className="text-xs uppercase tracking-wider" style={{ color: '#B8860B' }}>CFO VIEW</p>
+        <h1 className="text-3xl font-bold text-gray-900 mt-1">CFO Dashboard</h1>
+        <p className="text-sm text-gray-500 mt-1">10 entities · 60 units · Rental Portfolio</p>
       </div>
 
-      {/* KPI row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4" style={{ fontFamily: 'sans-serif' }}>
-        <KpiBox label="Net Operating Income" value={$(port.noi)} sub="Annual" color="#166534" />
-        <KpiBox label="Portfolio Occupancy" value={pct(weightedOcc)} sub="Weighted avg" color="#92400e" />
-        <KpiBox label="DSCR" value={x2(port.dscr)} sub="NOI / Debt service" color={dscrColor(port.dscr)} />
-        <KpiBox label="Pre-Tax Cash Flow" value={$(port.cash_flow)} sub="After debt service" color="#1e1b4b" />
+      {/* Section A — 6 KPI tiles */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        {TILES.map(t => (
+          <div key={t.label} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{t.label}</p>
+            <p className="text-lg font-bold font-mono text-gray-900">{t.value}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{t.sub}</p>
+          </div>
+        ))}
       </div>
 
-      {/* Section 01 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Metrics table */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <p className="text-xs font-sans uppercase tracking-wider mb-3" style={{ color: '#B8860B' }}>01</p>
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Portfolio Position</h2>
-          <table className="w-full">
-            <tbody>
-              <Row label="Gross potential rent"        value={$(port.gpr)} />
-              <Row label="Vacancy & credit loss"       value={`(${$(port.vacancy)})`} />
-              <Row label="Other income"                value={$(entities.reduce((s,e)=>s+e.other_income_annual,0))} />
-              <Row label="Effective gross income"      value={$(port.egi)} bold />
-              <Row label="Total operating expenses"    value={`(${$(port.total_opex)})`} />
-              <Row label="OpEx ratio"                  value={port.egi > 0 ? pct(port.total_opex / port.egi) : '—'} />
-              <Row label="Net operating income"        value={$(port.noi)} bold />
-              <Row label="Cap rate"                    value={pct(port.cap_rate)} />
-              <Row label="Total debt service"          value={`(${$(entities.reduce((s,e)=>s+e.debt_service_annual,0))})`} />
-              <Row label="DSCR"                        value={x2(port.dscr)} />
-              <Row label="Pre-tax cash flow"           value={$(port.cash_flow)} bold />
-              <Row label="Portfolio value"             value={$(totalValue)} />
-              <Row label="Total bank debt"             value={$(totalDebt)} />
-              <Row label="Member equity"               value={$(memberEquity)} />
-              <Row label="Average LTV"                 value={pct(port.ltv)} />
+      {/* Section B — Company Performance Table */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100">
+          <h2 className="text-base font-bold text-gray-900">Company Performance</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+                <th className="text-left px-4 py-3">Company</th>
+                <th className="text-center px-3 py-3">Units</th>
+                <th className="text-center px-3 py-3">Occ</th>
+                <th className="text-center px-3 py-3">Occ%</th>
+                <th className="text-right px-3 py-3">Monthly Rent</th>
+                <th className="text-right px-3 py-3">Collected</th>
+                <th className="text-right px-3 py-3">NOI</th>
+                <th className="text-center px-3 py-3">NOI Margin</th>
+                <th className="text-center px-3 py-3">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {COMPANIES.map(c => {
+                const s = statusInfo(c.margin);
+                return (
+                  <tr key={c.name} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-medium text-gray-900 text-xs whitespace-nowrap">{c.name}</td>
+                    <td className="px-3 py-3 text-center text-gray-600">{c.units}</td>
+                    <td className="px-3 py-3 text-center text-gray-600">{c.occupied}</td>
+                    <td className="px-3 py-3 text-center text-gray-600">83.3%</td>
+                    <td className="px-3 py-3 text-right font-mono">{fmt$(c.rent)}</td>
+                    <td className="px-3 py-3 text-right font-mono">{fmt$(c.collected)}</td>
+                    <td className={`px-3 py-3 text-right font-mono font-bold ${c.noi < 500 ? 'text-red-600' : 'text-gray-900'}`}>
+                      {fmt$(c.noi)}
+                    </td>
+                    <td className="px-3 py-3 text-center font-mono text-gray-700">{c.margin.toFixed(1)}%</td>
+                    <td className="px-3 py-3 text-center">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.cls}`}>{s.label}</span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
+      </div>
 
-        {/* NOI bar chart */}
+      {/* Section C — Two charts */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">NOI by Entity</h2>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={noiByEntity} margin={{ left: 10, right: 10, top: 5, bottom: 20 }}>
-              <XAxis dataKey="name" tick={{ fontSize: 10, fontFamily: 'sans-serif' }} angle={-20} textAnchor="end" />
-              <YAxis tick={{ fontSize: 10, fontFamily: 'monospace' }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v: number) => [$(v), 'NOI']} />
-              <Bar dataKey="noi" radius={[4, 4, 0, 0]}>
-                {noiByEntity.map((_, i) => <Cell key={i} fill="#B8860B" />)}
-              </Bar>
+          <h2 className="text-base font-bold text-gray-900 mb-4">Monthly Rent vs Collected</h2>
+          <ResponsiveContainer width="100%" height={270}>
+            <BarChart data={barData} margin={{ left: 0, right: 0, top: 5, bottom: 45 }}>
+              <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-35} textAnchor="end" interval={0} />
+              <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+              <Tooltip formatter={(v: number, n: string) => [fmt$(v), n]} />
+              <Legend verticalAlign="top" wrapperStyle={{ fontSize: 11 }} />
+              <Bar dataKey="Rent"      fill="#1a3a2a" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="Collected" fill="#B8860B" radius={[3, 3, 0, 0]} />
             </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+          <h2 className="text-base font-bold text-gray-900 mb-4">NOI Distribution by Company</h2>
+          <ResponsiveContainer width="100%" height={270}>
+            <PieChart>
+              <Pie
+                data={pieData} cx="50%" cy="45%"
+                outerRadius={85} dataKey="value" nameKey="name"
+              >
+                {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+              </Pie>
+              <Tooltip formatter={(v: number) => [fmt$(v), 'NOI']} />
+              <Legend iconSize={10} wrapperStyle={{ fontSize: 9 }} />
+            </PieChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* OpEx composition */}
-      {opexCategories.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">OpEx Composition</h2>
-          <table className="w-full">
-            <thead>
-              <tr className="text-xs font-sans text-gray-500 border-b border-gray-200">
-                <th className="text-left pb-2">Category</th>
-                <th className="text-right pb-2">% of Total</th>
-                <th className="text-right pb-2">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {opexCategories.map(c => (
-                <tr key={c.category} className="border-b border-gray-100">
-                  <td className="py-2 text-sm text-gray-700">{c.category}</td>
-                  <td className="py-2 text-sm text-right font-mono">
-                    {port.total_opex > 0 ? ((c.amount / port.total_opex) * 100).toFixed(1) : '0'}%
-                  </td>
-                  <td className="py-2 text-sm text-right font-mono">{$(c.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* AI Narrative */}
+      {/* Section D — CFO Action Items */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-bold text-gray-900">AI Narrative</h2>
-          {!showNarrative && (
-            <button onClick={() => setShowNarrative(true)}
-              className="text-sm font-sans bg-[#0E3B36] text-white px-4 py-1.5 rounded-lg hover:bg-[#1A5249]">
-              Generate Summary
-            </button>
-          )}
-        </div>
-        {showNarrative && (
-          <>
-            <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-              {narrative}
+        <h2 className="text-base font-bold text-gray-900 mb-4">CFO Action Items</h2>
+        <div className="space-y-3">
+          {ACTIONS.map((a, i) => (
+            <div key={i} className={`flex gap-3 items-start rounded-lg border p-3 ${a.cls}`}>
+              <span className="text-base mt-0.5 shrink-0">{a.icon}</span>
+              <p className="text-sm text-gray-700">{a.text}</p>
             </div>
-            <p className="text-xs text-gray-400 font-sans mt-2 italic">
-              Figures illustrative; not audited financial or tax advice.
-            </p>
-          </>
-        )}
+          ))}
+        </div>
       </div>
     </div>
   );
