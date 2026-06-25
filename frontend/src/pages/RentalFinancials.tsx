@@ -1,621 +1,573 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import {
-  Upload, ChevronDown, ChevronRight, Sparkles, X,
-  AlertTriangle, CheckCircle, Building2, FileSpreadsheet,
-} from 'lucide-react';
+  BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
+  PieChart, Pie, Cell, LineChart, Line, CartesianGrid,
+} from 'recharts';
+import { Upload, Building2, FileSpreadsheet, TrendingUp } from 'lucide-react';
 
-// ── Types ──────────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-interface ParsedRow {
-  particulars: string;
-  noteNo: string;
-  current: number;
-  prior: number;
-  isHeader: boolean;
+interface FinItem {
+  label: string;
+  values: Record<number, number>;
+  indent: number;
   isTotal: boolean;
-  isSubtotal: boolean;
-  isProfit: boolean;
+  isSectionHeader: boolean;
+  isNetIncome: boolean;
 }
 
-interface CompanyFinancials {
+interface ParsedFinancials {
   companyName: string;
-  period: string;
+  dateRange: string;
   fileName: string;
   uploadedAt: string;
-  hasRefErrors: boolean;
-  pl: ParsedRow[];
-  bs: ParsedRow[];
-  schedulesBs: ParsedRow[];
-  schedulesPl: ParsedRow[];
+  years: number[];
+  pl: FinItem[];
+  bs: FinItem[];
 }
 
-// ── Constants ──────────────────────────────────────────────────────────────────
-
-const COMPANIES = ['All Companies'];
-
-const PERIODS = ['Q1 2026', 'Q2 2026', 'Q3 2026', 'Q4 2026', 'FY 2025', 'FY 2026'];
-
-// ── Parsing ────────────────────────────────────────────────────────────────────
-
-function parseValue(v: unknown): { value: number; hasError: boolean } {
-  if (v === null || v === undefined || v === '') return { value: 0, hasError: false };
-  if (typeof v === 'number') return { value: v, hasError: false };
-  const s = String(v).trim();
-  if (s.startsWith('#') || s === 'N/A') return { value: 0, hasError: true };
-  const n = parseFloat(s.replace(/[$,]/g, ''));
-  return { value: isNaN(n) ? 0 : n, hasError: false };
+interface KpiData {
+  totalRevenue: number; totalExpenses: number; netIncome: number; noi: number;
+  rentalIncome: number; otherIncome: number;
+  interestExpense: number; propertyTax: number; managementFee: number;
+  hoaFees: number; legalFees: number; utilities: number; repairs: number;
+  totalAssets: number; totalLiabilities: number; equity: number; cash: number;
+  buildings: number; accumDep: number; longTermLoans: number; securityDeposits: number;
 }
 
-function classifyRow(particulars: string) {
-  const p = particulars.trim().toUpperCase();
-  const isTotal =
-    p.startsWith('TOTAL') ||
-    p === 'GRAND TOTAL' ||
-    p.includes('TOTAL INCOME') ||
-    p.includes('TOTAL EXPENSE') ||
-    p.includes('TOTAL REVENUE');
-  const isSubtotal =
-    !isTotal && (p.includes('TOTAL') || p.startsWith('SUB-TOTAL') || p.startsWith('SUBTOTAL'));
-  const isAllCaps =
-    particulars.trim().length > 2 &&
-    particulars.trim() === particulars.trim().toUpperCase() &&
-    !/\d/.test(particulars);
-  const isHeader = isAllCaps && !isTotal && !isSubtotal;
-  const isProfit =
-    p.includes('PROFIT') ||
-    p.includes('LOSS') ||
-    p.includes('NET INCOME') ||
-    p.includes('PBT') ||
-    p.includes('PAT') ||
-    p.includes('EBITDA');
-  return { isHeader, isTotal, isSubtotal, isProfit };
-}
+// ── Constants ─────────────────────────────────────────────────────────────────
 
-function parseSheet(wb: XLSX.WorkBook, sheetName: string): { rows: ParsedRow[]; hasErrors: boolean } {
-  const ws = wb.Sheets[sheetName];
-  if (!ws) return { rows: [], hasErrors: false };
+const RENTAL_COMPANIES = [
+  'All Companies',
+  'ABC LLC',
+  'Sunstone Rentals LLC',
+  'Meridian Residential LLC',
+  'Cornerstone Housing LLC',
+  'Pinnacle Rentals I LLC',
+  'Summit Living LLC',
+  'Heritage Residential LLC',
+  'Riverview Rentals LLC',
+  'Landmark Housing LLC',
+  'Horizon Rentals LLC',
+  'Crestview Living LLC',
+];
 
-  const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' });
-  let hasErrors = false;
+const TABS = ['P&L Statement', 'Balance Sheet', 'KPI Dashboard', 'CFO Dashboard'] as const;
+type FinTab = typeof TABS[number];
 
-  let headerIdx = 0;
-  for (let i = 0; i < Math.min(raw.length, 20); i++) {
-    const row = raw[i] as unknown[];
-    const joined = row.map(c => String(c).toLowerCase()).join(' ');
-    if (joined.includes('particular') || joined.includes('description') || joined.includes('items')) {
-      headerIdx = i;
-      break;
+const CC = ['#2E75B6','#70AD47','#ED7D31','#FFC000','#5A2D82','#C00000','#00B0F0','#FF0066'];
+
+const lsKey = (c: string) => `rental_financials_${c.replace(/\s+/g, '_')}`;
+
+// ── Parser ────────────────────────────────────────────────────────────────────
+
+function detectYearHeaders(raw: unknown[][]): { headerRowIdx: number; yearCols: Array<{year:number;col:number}> } | null {
+  for (let r = 0; r < Math.min(raw.length, 15); r++) {
+    const row = raw[r] as unknown[];
+    const yearCols: Array<{year:number;col:number}> = [];
+    for (let c = 0; c < row.length; c++) {
+      const v = Number(row[c]);
+      if (Number.isInteger(v) && v >= 2018 && v <= 2030) yearCols.push({ year: v, col: c });
     }
+    if (yearCols.length >= 2) return { headerRowIdx: r, yearCols };
   }
-
-  const rows: ParsedRow[] = [];
-  for (let i = headerIdx + 1; i < raw.length; i++) {
-    const row = raw[i] as unknown[];
-    const particulars = String(row[0] ?? '').trim();
-    if (!particulars) continue;
-
-    const noteNo = String(row[1] ?? '').trim();
-    const curr = parseValue(row[2]);
-    const prior = parseValue(row[3]);
-    if (curr.hasError || prior.hasError) hasErrors = true;
-
-    const { isHeader, isTotal, isSubtotal, isProfit } = classifyRow(particulars);
-    rows.push({
-      particulars,
-      noteNo,
-      current: curr.value,
-      prior: prior.value,
-      isHeader,
-      isTotal,
-      isSubtotal,
-      isProfit,
-    });
-  }
-  return { rows, hasErrors };
+  return null;
 }
 
-function parseExcel(file: File, companyName: string, period: string): Promise<CompanyFinancials> {
+function detectSheetType(raw: unknown[][]): 'pl' | 'bs' | 'unknown' {
+  for (let r = 0; r < Math.min(6, raw.length); r++) {
+    const joined = (raw[r] as unknown[]).map(c => String(c ?? '').toLowerCase()).join(' ');
+    if (joined.includes('profit and loss') || joined.includes('income statement')) return 'pl';
+    if (joined.includes('balance sheet')) return 'bs';
+  }
+  return 'unknown';
+}
+
+function parseSheetRows(raw: unknown[][], headerRowIdx: number, yearCols: Array<{year:number;col:number}>): FinItem[] {
+  const items: FinItem[] = [];
+  for (let r = headerRowIdx + 1; r < raw.length; r++) {
+    const row = raw[r] as unknown[];
+    const rawLabel = String(row[0] ?? '');
+    const trimmed = rawLabel.trim();
+    if (!trimmed) continue;
+    const indent = rawLabel.length - rawLabel.trimStart().length;
+    const isTotal = /^total\s+for\s+/i.test(trimmed) || /^total\s+(assets|liabilities|equity)/i.test(trimmed);
+    const isNetIncome = /^net\s+income$/i.test(trimmed);
+    const values: Record<number,number> = {};
+    let hasAny = false;
+    for (const { year, col } of yearCols) {
+      const raw_v = row[col];
+      const v = (raw_v === '' || raw_v === null || raw_v === undefined) ? 0 : Number(raw_v);
+      values[year] = isNaN(v) ? 0 : v;
+      if (values[year] !== 0) hasAny = true;
+    }
+    const isSectionHeader = !hasAny && !isTotal && !isNetIncome;
+    if (!hasAny && !isSectionHeader) continue;
+    items.push({ label: trimmed, indent, values, isTotal, isSectionHeader, isNetIncome });
+  }
+  return items;
+}
+
+function getCompanyName(raw: unknown[][]): string {
+  for (let r = 0; r < Math.min(3, raw.length); r++) {
+    const val = String((raw[r] as unknown[])[0] ?? '').trim();
+    if (val && val.length > 2 && !/profit|loss|balance|sheet/i.test(val)) return val;
+  }
+  return '';
+}
+
+function getDateRange(raw: unknown[][]): string {
+  for (let r = 0; r < Math.min(6, raw.length); r++) {
+    const joined = (raw[r] as unknown[]).join(' ').trim();
+    if (/\d{4}/.test(joined) && /jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(joined)) return joined;
+  }
+  return '';
+}
+
+function parseExcel(file: File, companyName: string): Promise<ParsedFinancials> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target!.result as ArrayBuffer);
         const wb = XLSX.read(data, { type: 'array', cellFormula: false, cellHTML: false });
-
-        const pl = parseSheet(wb, 'P&L');
-        const bs = parseSheet(wb, 'B-S');
-        const schedBs = parseSheet(wb, 'Schedules BS');
-        const schedPl = parseSheet(wb, 'Schedules PL');
-
-        resolve({
-          companyName,
-          period,
-          fileName: file.name,
-          uploadedAt: new Date().toISOString(),
-          hasRefErrors: pl.hasErrors || bs.hasErrors || schedBs.hasErrors || schedPl.hasErrors,
-          pl: pl.rows,
-          bs: bs.rows,
-          schedulesBs: schedBs.rows,
-          schedulesPl: schedPl.rows,
-        });
-      } catch (err) {
-        reject(err);
-      }
+        let plItems: FinItem[] = [];
+        let bsItems: FinItem[] = [];
+        let detectedYears: number[] = [];
+        let detectedName = companyName;
+        let dateRange = '';
+        for (const sheetName of wb.SheetNames) {
+          const ws = wb.Sheets[sheetName];
+          if (!ws) continue;
+          const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' });
+          const sheetType = detectSheetType(raw);
+          const yearInfo = detectYearHeaders(raw);
+          if (!yearInfo) continue;
+          const name = getCompanyName(raw);
+          if (name && !detectedName) detectedName = name;
+          if (!dateRange) dateRange = getDateRange(raw);
+          const years = yearInfo.yearCols.map(yc => yc.year).sort((a,b) => a-b);
+          const items = parseSheetRows(raw, yearInfo.headerRowIdx, yearInfo.yearCols);
+          if (sheetType === 'pl') { plItems = items; detectedYears = years; }
+          else if (sheetType === 'bs') { bsItems = items; if (!detectedYears.length) detectedYears = years; }
+          else {
+            if (!plItems.length) { plItems = items; detectedYears = years; }
+            else if (!bsItems.length) { bsItems = items; }
+          }
+        }
+        resolve({ companyName: detectedName || companyName, dateRange, fileName: file.name, uploadedAt: new Date().toISOString(), years: detectedYears, pl: plItems, bs: bsItems });
+      } catch (err) { reject(err); }
     };
     reader.onerror = reject;
     reader.readAsArrayBuffer(file);
   });
 }
 
-// ── Formatters ─────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fmtAmt(n: number): string {
+const fmt = (n: number): string => {
   if (n === 0) return '—';
   const abs = Math.abs(n);
-  const s =
-    abs >= 1_000_000
-      ? `$${(abs / 1_000_000).toFixed(2)}M`
-      : abs >= 1_000
-      ? `$${(abs / 1_000).toFixed(1)}K`
-      : `$${abs.toLocaleString()}`;
+  const s = abs >= 1_000_000 ? `$${(abs/1_000_000).toFixed(2)}M` : abs >= 1_000 ? `$${(abs/1_000).toFixed(1)}K` : `$${abs.toLocaleString()}`;
   return n < 0 ? `(${s})` : s;
+};
+
+const fmtFull = (n: number): string => {
+  if (n === 0) return '—';
+  const abs = new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(Math.abs(n));
+  return n < 0 ? `(${abs})` : abs;
+};
+
+function getYV(items: FinItem[], pattern: RegExp, year: number): number {
+  return items.find(i => pattern.test(i.label))?.values[year] ?? 0;
 }
 
-function variance(current: number, prior: number) {
-  const diff = current - prior;
-  const pct = prior !== 0 ? ((diff / Math.abs(prior)) * 100).toFixed(1) : null;
-  return {
-    dollar: diff === 0 ? '—' : diff > 0 ? `+${fmtAmt(diff)}` : fmtAmt(diff),
-    pct: pct !== null ? (diff >= 0 ? `+${pct}%` : `${pct}%`) : '—',
-    positive: diff >= 0,
-  };
+function sumI(items: FinItem[], pattern: RegExp, year: number): number {
+  return items.filter(i => !i.isSectionHeader && !i.isTotal && pattern.test(i.label))
+    .reduce((s,i) => s + (i.values[year] ?? 0), 0);
 }
 
-// ── Row styling ────────────────────────────────────────────────────────────────
-
-function rowCls(row: ParsedRow): string {
-  if (row.isTotal) return 'bg-gray-900 text-white font-bold';
-  if (row.isSubtotal) return 'bg-gray-100 font-semibold text-gray-800 border-t border-gray-300';
-  if (row.isHeader) return 'bg-gray-50 text-gray-600 font-bold text-xs uppercase tracking-wider';
-  if (row.isProfit) return 'bg-emerald-50 font-semibold text-emerald-900 border-t border-emerald-200';
-  return 'text-gray-700 hover:bg-gray-50/50';
+function calcKpis(fin: ParsedFinancials, year: number): KpiData {
+  const pl = fin.pl; const bs = fin.bs;
+  const totalRevenue = getYV(pl,/^total\s+for\s+income$/i,year) || getYV(pl,/^total\s+income$/i,year) || sumI(pl,/income|revenue|rent/i,year);
+  const totalExpenses = getYV(pl,/^total\s+for\s+expenses?$/i,year) || getYV(pl,/^total\s+expenses?$/i,year);
+  const netIncome = getYV(pl,/^net\s+income$/i,year);
+  const interestExpense = Math.abs(sumI(pl,/interest/i,year)) || Math.abs(getYV(pl,/interest\s+paid/i,year));
+  const noi = totalRevenue - totalExpenses + interestExpense;
+  const rentalIncome = getYV(pl,/^total\s+for\s+rental\s+income$/i,year) || sumI(pl,/^rent\s+suit|^rental\s+income$/i,year);
+  const otherIncome = sumI(pl,/^other\s+income$|^services$/i,year);
+  const propertyTax = Math.abs(sumI(pl,/property\s+tax/i,year));
+  const managementFee = Math.abs(sumI(pl,/management\s+fee/i,year));
+  const hoaFees = Math.abs(sumI(pl,/^hoa$/i,year));
+  const legalFees = Math.abs(sumI(pl,/legal/i,year));
+  const utilities = Math.abs(sumI(pl,/electricity|internet|utilities/i,year));
+  const repairs = Math.abs(sumI(pl,/repair|maintenance/i,year));
+  const totalAssets = getYV(bs,/^total\s+for\s+assets$/i,year) || getYV(bs,/^total\s+assets$/i,year);
+  const totalLiabilities = getYV(bs,/^total\s+for\s+liabilities$/i,year) || getYV(bs,/^total\s+liabilities$/i,year);
+  const equity = getYV(bs,/^total\s+for\s+equity$/i,year) || getYV(bs,/^total\s+equity$/i,year);
+  const cash = getYV(bs,/^total\s+for\s+bank\s+accounts$/i,year) || sumI(bs,/^bank|checking|savings/i,year);
+  const buildings = Math.abs(getYV(bs,/^buildings$/i,year));
+  const accumDep = getYV(bs,/accumulated\s+dep/i,year);
+  const longTermLoans = Math.abs(getYV(bs,/^total\s+for\s+long.term/i,year) || sumI(bs,/long.term\s+(business\s+)?loan/i,year));
+  const securityDeposits = Math.abs(getYV(bs,/security\s+deposit/i,year));
+  return { totalRevenue, totalExpenses, netIncome, noi, rentalIncome, otherIncome, interestExpense, propertyTax, managementFee, hoaFees, legalFees, utilities, repairs, totalAssets, totalLiabilities, equity, cash, buildings, accumDep, longTermLoans, securityDeposits };
 }
 
-// ── Statement Table ────────────────────────────────────────────────────────────
+// ── Empty State ───────────────────────────────────────────────────────────────
 
-function StatementTable({
-  rows,
-  title,
-  showVariance = true,
-}: {
-  rows: ParsedRow[];
-  title: string;
-  showVariance?: boolean;
-}) {
-  if (rows.length === 0)
-    return <p className="text-gray-400 text-sm py-6 text-center">No data parsed from "{title}" sheet</p>;
-
+function EmptyUpload({ onUpload, company }: { onUpload: () => void; company: string }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm border-collapse" style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}>
-        <thead>
-          <tr className="border-b-2 border-gray-400">
-            <th className="text-left py-2 px-3 text-gray-600 font-semibold w-5/12">Particulars</th>
-            <th className="text-center py-2 px-2 text-gray-500 font-medium w-12 text-xs">Note</th>
-            <th className="text-right py-2 px-3 text-gray-600 font-semibold">Current Period</th>
-            <th className="text-right py-2 px-3 text-gray-600 font-semibold">Prior Period</th>
-            {showVariance && (
-              <th className="text-right py-2 px-3 text-gray-600 font-semibold w-28">Variance</th>
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => {
-            const v = variance(row.current, row.prior);
-            return (
-              <tr key={i} className={`border-b border-gray-100 transition-colors ${rowCls(row)}`}>
-                <td className={`py-1.5 px-3 ${row.isHeader || row.isTotal ? '' : 'pl-7'}`}>
-                  {row.particulars}
-                </td>
-                <td className="py-1.5 px-2 text-center text-xs" style={{ color: '#B8860B' }}>
-                  {row.noteNo}
-                </td>
-                <td className="py-1.5 px-3 text-right tabular-nums">{fmtAmt(row.current)}</td>
-                <td className={`py-1.5 px-3 text-right tabular-nums ${row.isTotal ? 'text-gray-300' : 'text-gray-500'}`}>
-                  {fmtAmt(row.prior)}
-                </td>
-                {showVariance && (
-                  <td className="py-1.5 px-3 text-right tabular-nums text-xs">
-                    <span className={v.positive ? 'text-green-600' : 'text-red-600'}>
-                      {v.dollar}
-                    </span>
-                    <br />
-                    <span className={`text-xs ${v.positive ? 'text-green-500' : 'text-red-500'}`}>
-                      {v.pct}
-                    </span>
-                  </td>
-                )}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+    <div className="flex flex-col items-center justify-center py-24 text-center">
+      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+        <FileSpreadsheet className="w-8 h-8 text-gray-400" />
+      </div>
+      <h3 className="text-lg font-semibold text-gray-700 mb-2">No Financial Data Uploaded</h3>
+      <p className="text-sm text-gray-500 mb-6 max-w-sm">
+        {company === 'All Companies'
+          ? 'Select a specific company from the dropdown above to upload their financials.'
+          : `Upload ${company}'s Excel financial statements (P&L and Balance Sheet).`}
+      </p>
+      {company !== 'All Companies' && (
+        <button onClick={onUpload} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors">
+          <Upload size={16} /> Upload Excel File
+        </button>
+      )}
+      <p className="text-xs text-gray-400 mt-4">Supported format: Excel (.xlsx) with P&L and Balance Sheet data</p>
     </div>
   );
 }
 
-// ── Balance Sheet split layout ─────────────────────────────────────────────────
+// ── P&L Table ─────────────────────────────────────────────────────────────────
 
-function BSSplit({ rows }: { rows: ParsedRow[] }) {
-  if (rows.length === 0)
-    return <p className="text-gray-400 text-sm py-6 text-center">No data parsed from "B-S" sheet</p>;
-
-  // Find where ASSETS section starts
-  const assetIdx = rows.findIndex(
-    (r) => r.isHeader && /\bASSET/i.test(r.particulars)
-  );
-
-  const liabRows = assetIdx > 0 ? rows.slice(0, assetIdx) : rows;
-  const assetRows = assetIdx > 0 ? rows.slice(assetIdx) : [];
-
-  const totalLiab = liabRows.filter((r) => r.isTotal).reduce((s, r) => s + r.current, 0);
-  const totalAssets = assetRows.filter((r) => r.isTotal).reduce((s, r) => s + r.current, 0);
-  const isBalanced = assetRows.length > 0 && Math.abs(totalLiab - totalAssets) < 1;
-
-  const HalfTable = ({ half, label }: { half: ParsedRow[]; label: string }) => (
-    <div>
-      <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 border-b border-gray-200 pb-1">
-        {label}
-      </div>
-      <table className="w-full text-sm" style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}>
+function PLTable({ fin }: { fin: ParsedFinancials }) {
+  if (!fin.pl.length) return <p className="text-center text-gray-400 py-12 text-sm">No P&amp;L data found in the uploaded file. Ensure the Excel contains a "Profit and Loss" sheet or section.</p>;
+  const years = fin.years;
+  const rowBg = (item: FinItem) => {
+    if (item.isNetIncome) return 'bg-gray-900 text-white font-bold';
+    if (item.isTotal) return 'bg-blue-50 font-semibold text-blue-900 border-t border-blue-200';
+    if (item.isSectionHeader) return 'bg-amber-50 text-amber-800 font-semibold text-xs uppercase tracking-wide';
+    return 'hover:bg-gray-50 text-gray-700';
+  };
+  const padCls = (item: FinItem) => item.isTotal || item.isSectionHeader ? 'px-4' : item.indent > 4 ? 'pl-12 pr-4' : item.indent > 1 ? 'pl-8 pr-4' : 'pl-5 pr-4';
+  return (
+    <div className="overflow-x-auto rounded-lg border border-gray-200">
+      <table className="w-full text-xs">
         <thead>
-          <tr className="border-b border-gray-200">
-            <th className="text-left py-1 px-2 text-gray-500 text-xs">Particulars</th>
-            <th className="text-right py-1 px-2 text-gray-500 text-xs">Current</th>
-            <th className="text-right py-1 px-2 text-gray-500 text-xs">Prior</th>
+          <tr className="bg-gray-900 text-white">
+            <th className="text-left px-4 py-2.5 w-72">Line Item</th>
+            {years.map(y => <th key={y} className="text-right px-3 py-2.5 min-w-[110px]">{y}</th>)}
           </tr>
         </thead>
         <tbody>
-          {half.map((row, i) => (
-            <tr key={i} className={`border-b border-gray-50 transition-colors ${rowCls(row)}`}>
-              <td className={`py-1 px-2 text-xs ${row.isHeader || row.isTotal ? '' : 'pl-5'}`}>
-                {row.particulars}
-              </td>
-              <td className="py-1 px-2 text-right tabular-nums text-xs">{fmtAmt(row.current)}</td>
-              <td className={`py-1 px-2 text-right tabular-nums text-xs ${row.isTotal ? 'text-gray-300' : 'text-gray-400'}`}>
-                {fmtAmt(row.prior)}
-              </td>
+          {fin.pl.map((item, i) => (
+            <tr key={i} className={`border-t border-gray-100 ${rowBg(item)}`}>
+              <td className={`py-1.5 ${padCls(item)}`}>{item.label}</td>
+              {years.map(y => (
+                <td key={y} className={`py-1.5 px-3 text-right font-mono ${item.isNetIncome ? 'text-white' : item.values[y] < 0 ? 'text-red-600' : ''}`}>
+                  {item.values[y] === 0 ? '—' : fmtFull(item.values[y])}
+                </td>
+              ))}
             </tr>
           ))}
         </tbody>
       </table>
     </div>
   );
-
-  return (
-    <div>
-      {assetRows.length > 0 ? (
-        <div className="grid grid-cols-2 gap-8">
-          <HalfTable half={liabRows} label="Equity & Liabilities" />
-          <HalfTable half={assetRows} label="Assets" />
-        </div>
-      ) : (
-        <StatementTable rows={rows} title="B-S" showVariance={false} />
-      )}
-      <div
-        className={`mt-4 flex items-center gap-2 text-sm font-medium ${
-          isBalanced ? 'text-emerald-600' : 'text-red-600'
-        }`}
-      >
-        {isBalanced ? <CheckCircle size={15} /> : <AlertTriangle size={15} />}
-        {isBalanced
-          ? 'Balance Sheet is Balanced'
-          : `Out of balance — Liabilities: ${fmtAmt(totalLiab)}, Assets: ${fmtAmt(totalAssets)}`}
-      </div>
-    </div>
-  );
 }
 
-// ── Schedules ──────────────────────────────────────────────────────────────────
+// ── Balance Sheet Table ───────────────────────────────────────────────────────
 
-function SchedulesSection({ bsRows, plRows }: { bsRows: ParsedRow[]; plRows: ParsedRow[] }) {
-  const [open, setOpen] = useState(false);
-  const all = [...bsRows, ...plRows];
-  if (all.length === 0) return null;
-
-  return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 transition-colors"
-      >
-        <span className="font-semibold text-gray-800">Schedules & Notes to Financial Statements</span>
-        {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-      </button>
-      {open && (
-        <div className="border-t border-gray-100 p-4 space-y-6">
-          {bsRows.length > 0 && (
-            <div>
-              <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
-                Balance Sheet Schedules
-              </div>
-              <StatementTable rows={bsRows} title="Schedules BS" showVariance={false} />
-            </div>
-          )}
-          {plRows.length > 0 && (
-            <div>
-              <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
-                P&L Schedules
-              </div>
-              <StatementTable rows={plRows} title="Schedules PL" showVariance={false} />
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Multi-company comparison ───────────────────────────────────────────────────
-
-function ComparisonTable({ all }: { all: Record<string, CompanyFinancials> }) {
-  const entries = Object.values(all);
-  if (entries.length < 2)
-    return (
-      <p className="text-gray-400 text-sm text-center py-8">
-        Upload financials for at least 2 companies to see the comparison
-      </p>
-    );
-
-  const metric = (fin: CompanyFinancials, key: string): number => {
-    const rows = key === 'assets' ? fin.bs : fin.pl;
-    if (key === 'revenue')
-      return rows.find((r) => r.isTotal && /INCOME|REVENUE/i.test(r.particulars))?.current ?? 0;
-    if (key === 'expenses')
-      return rows.find((r) => r.isTotal && /EXPENSE/i.test(r.particulars))?.current ?? 0;
-    if (key === 'profit')
-      return rows.find((r) => r.isProfit || (r.isTotal && /PROFIT|LOSS/i.test(r.particulars)))?.current ?? 0;
-    if (key === 'assets')
-      return rows.find((r) => r.isTotal)?.current ?? 0;
-    return 0;
+function BSTable({ fin }: { fin: ParsedFinancials }) {
+  if (!fin.bs.length) return <p className="text-center text-gray-400 py-12 text-sm">No Balance Sheet data found. Ensure the Excel contains a "Balance Sheet" sheet or section.</p>;
+  const years = fin.years;
+  const rowBg = (item: FinItem) => {
+    const lbl = item.label.toLowerCase();
+    if (/total\s+(for\s+)?(liabilities\s+and\s+equity|assets$)/.test(lbl)) return 'bg-gray-900 text-white font-bold';
+    if (/total\s+for\s+liabilities$/.test(lbl)) return 'bg-orange-100 font-bold text-orange-900 border-t border-orange-300';
+    if (/total\s+for\s+equity$/.test(lbl)) return 'bg-green-100 font-bold text-green-900 border-t border-green-300';
+    if (item.isTotal) return 'bg-blue-50 font-semibold text-blue-900 border-t border-blue-200';
+    if (item.isSectionHeader) return 'bg-gray-50 text-gray-700 font-semibold text-xs uppercase tracking-wide';
+    return 'hover:bg-gray-50 text-gray-700';
   };
-
-  const best = (vals: number[]) => Math.max(...vals);
-  const worst = (vals: number[]) => Math.min(...vals);
-
-  const revenues = entries.map((e) => metric(e, 'revenue'));
-  const profits = entries.map((e) => metric(e, 'profit'));
-  const assets = entries.map((e) => metric(e, 'assets'));
-
+  const padCls = (item: FinItem) => item.isTotal || item.isSectionHeader ? 'px-4' : item.indent > 4 ? 'pl-12 pr-4' : item.indent > 1 ? 'pl-8 pr-4' : 'pl-5 pr-4';
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+    <div className="overflow-x-auto rounded-lg border border-gray-200">
+      <table className="w-full text-xs">
         <thead>
-          <tr className="bg-gray-50 border-b border-gray-200">
-            {['Company', 'Revenue', 'Total Expenses', 'Net Profit', 'Margin %', 'Total Assets', 'Period'].map(
-              (h) => (
-                <th key={h} className="py-3 px-4 text-left font-semibold text-gray-700 text-xs uppercase">
-                  {h}
-                </th>
-              )
-            )}
+          <tr className="bg-gray-900 text-white">
+            <th className="text-left px-4 py-2.5 w-72">Item</th>
+            {years.map(y => <th key={y} className="text-right px-3 py-2.5 min-w-[120px]">Dec 31, {y}</th>)}
           </tr>
         </thead>
         <tbody>
-          {entries.map((fin, i) => {
-            const rev = revenues[i];
-            const exp = metric(fin, 'expenses');
-            const pft = profits[i];
-            const ast = assets[i];
-            const margin = rev > 0 ? ((pft / rev) * 100).toFixed(1) : null;
-            return (
-              <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                <td className="py-3 px-4 font-medium text-gray-900">{fin.companyName}</td>
-                <td className={`py-3 px-4 tabular-nums font-medium ${rev === best(revenues) ? 'text-emerald-600' : ''}`}>
-                  {fmtAmt(rev)}
+          {fin.bs.map((item, i) => (
+            <tr key={i} className={`border-t border-gray-100 ${rowBg(item)}`}>
+              <td className={`py-1.5 ${padCls(item)}`}>{item.label}</td>
+              {years.map(y => (
+                <td key={y} className={`py-1.5 px-3 text-right font-mono ${item.values[y] < 0 ? 'text-red-500' : ''}`}>
+                  {item.values[y] === 0 ? '—' : fmtFull(item.values[y])}
                 </td>
-                <td className="py-3 px-4 tabular-nums text-red-600">{fmtAmt(exp)}</td>
-                <td
-                  className={`py-3 px-4 tabular-nums font-semibold ${
-                    pft === best(profits) ? 'text-emerald-600' : pft === worst(profits) ? 'text-red-600' : 'text-gray-800'
-                  }`}
-                >
-                  {fmtAmt(pft)}
-                </td>
-                <td
-                  className={`py-3 px-4 ${
-                    margin !== null && parseFloat(margin) > 15 ? 'text-emerald-600' : 'text-gray-700'
-                  }`}
-                >
-                  {margin !== null ? `${margin}%` : '—'}
-                </td>
-                <td className="py-3 px-4 tabular-nums text-gray-700">{fmtAmt(ast)}</td>
-                <td className="py-3 px-4 text-gray-400 text-xs">{fin.period}</td>
-              </tr>
-            );
-          })}
+              ))}
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
   );
 }
 
-// ── AI Insights Modal ──────────────────────────────────────────────────────────
+// ── KPI Card ──────────────────────────────────────────────────────────────────
 
-function AIInsightsModal({ fin, onClose }: { fin: CompanyFinancials; onClose: () => void }) {
-  const revenue = fin.pl.find((r) => r.isTotal && /INCOME|REVENUE/i.test(r.particulars))?.current ?? 0;
-  const priorRevenue = fin.pl.find((r) => r.isTotal && /INCOME|REVENUE/i.test(r.particulars))?.prior ?? 0;
-  const expenses = fin.pl.find((r) => r.isTotal && /EXPENSE/i.test(r.particulars))?.current ?? 0;
-  const profit =
-    fin.pl.find((r) => r.isProfit || (r.isTotal && /PROFIT|LOSS/i.test(r.particulars)))?.current ?? 0;
-  const priorProfit =
-    fin.pl.find((r) => r.isProfit || (r.isTotal && /PROFIT|LOSS/i.test(r.particulars)))?.prior ?? 0;
-  const totalAssets = fin.bs.find((r) => r.isTotal)?.current ?? 0;
+function KCard({ label, value, sub, status }: { label:string; value:string; sub:string; status:'good'|'warn'|'bad'|'info' }) {
+  const border = { good:'border-green-500 bg-green-50', warn:'border-amber-500 bg-amber-50', bad:'border-red-500 bg-red-50', info:'border-blue-500 bg-blue-50' }[status];
+  const pill   = { good:'bg-green-100 text-green-700', warn:'bg-amber-100 text-amber-700', bad:'bg-red-100 text-red-700', info:'bg-blue-100 text-blue-700' }[status];
+  const pillTx = { good:'✓ Healthy', warn:'⚠ Monitor', bad:'✗ Review', info:'ℹ Info' }[status];
+  return (
+    <div className={`border-l-4 ${border} rounded-lg p-4 shadow-sm`}>
+      <p className="text-xs text-gray-500 mb-1">{label}</p>
+      <p className="text-xl font-bold font-mono text-gray-900">{value}</p>
+      <p className="text-xs text-gray-500 mt-1">{sub}</p>
+      <span className={`inline-block text-xs px-2 py-0.5 rounded-full mt-2 font-medium ${pill}`}>{pillTx}</span>
+    </div>
+  );
+}
 
-  const margin = revenue > 0 ? ((profit / revenue) * 100).toFixed(1) : '—';
-  const revGrowth =
-    priorRevenue > 0 ? (((revenue - priorRevenue) / priorRevenue) * 100).toFixed(1) : null;
-  const profitGrowth =
-    priorProfit !== 0 ? (((profit - priorProfit) / Math.abs(priorProfit)) * 100).toFixed(1) : null;
-  const expRatio = revenue > 0 ? ((expenses / revenue) * 100).toFixed(1) : '—';
+// ── KPI Dashboard Tab ─────────────────────────────────────────────────────────
 
-  const topExpenses = fin.pl
-    .filter((r) => !r.isHeader && !r.isTotal && !r.isSubtotal && r.current > 0)
-    .sort((a, b) => b.current - a.current)
-    .slice(0, 4);
+function KPITab({ fin }: { fin: ParsedFinancials }) {
+  const lastY = fin.years[fin.years.length - 1];
+  const prevY = fin.years.length >= 2 ? fin.years[fin.years.length - 2] : null;
+  const k = calcKpis(fin, lastY);
+  const kP = prevY ? calcKpis(fin, prevY) : null;
+
+  const noiM  = k.totalRevenue > 0 ? k.noi / k.totalRevenue * 100 : 0;
+  const netM  = k.totalRevenue > 0 ? k.netIncome / k.totalRevenue * 100 : 0;
+  const expR  = k.totalRevenue > 0 ? k.totalExpenses / k.totalRevenue * 100 : 0;
+  const revG  = kP && kP.totalRevenue > 0 ? (k.totalRevenue - kP.totalRevenue) / kP.totalRevenue * 100 : null;
+  const rentP = k.totalRevenue > 0 ? k.rentalIncome / k.totalRevenue * 100 : 0;
+  const iCov  = k.interestExpense > 0 ? k.noi / k.interestExpense : 0;
+  const mgmtP = k.totalRevenue > 0 ? k.managementFee / k.totalRevenue * 100 : 0;
+  const repP  = k.totalRevenue > 0 ? k.repairs / k.totalRevenue * 100 : 0;
+  const ltv   = k.buildings > 0 ? k.longTermLoans / k.buildings * 100 : 0;
+  const alR   = k.totalLiabilities > 0 ? k.totalAssets / k.totalLiabilities : 0;
+  const dte   = k.equity > 0 ? k.totalLiabilities / k.equity : 0;
+
+  const trendData = fin.years.map(y => {
+    const kk = calcKpis(fin, y);
+    return { year: String(y), Revenue: kk.totalRevenue, Expenses: kk.totalExpenses, 'Net Income': kk.netIncome, NOI: kk.noi };
+  });
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <Sparkles size={20} className="text-amber-500" />
-            <h2 className="text-lg font-bold text-gray-900">AI Financial Insights</h2>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-            <X size={18} />
-          </button>
+    <div className="space-y-6">
+      <p className="text-xs text-gray-500">KPIs for latest year: <strong>{lastY}</strong></p>
+
+      <div>
+        <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">Profitability</p>
+        <div className="grid grid-cols-4 gap-4">
+          <KCard label="NOI Margin" value={`${noiM.toFixed(1)}%`} sub={`NOI: ${fmt(k.noi)}`} status={noiM>=40?'good':noiM>=20?'warn':'bad'} />
+          <KCard label="Net Income Margin" value={`${netM.toFixed(1)}%`} sub={`Net: ${fmt(k.netIncome)}`} status={netM>=10?'good':netM>=0?'warn':'bad'} />
+          <KCard label="Revenue Growth YoY" value={revG!==null?`${revG>=0?'+':''}${revG.toFixed(1)}%`:'N/A'} sub={prevY?`${lastY} vs ${prevY}`:'Only 1 year'} status={revG===null?'info':revG>=3?'good':revG>=0?'warn':'bad'} />
+          <KCard label="Expense Ratio" value={`${expR.toFixed(1)}%`} sub={`Total exp: ${fmt(k.totalExpenses)}`} status={expR<=70?'good':expR<=85?'warn':'bad'} />
         </div>
+      </div>
 
-        <div className="p-6 space-y-6 text-sm">
-          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-            <div className="font-semibold text-blue-900">{fin.companyName}</div>
-            <div className="text-blue-700 text-xs mt-0.5">Period: {fin.period}</div>
-          </div>
+      <div>
+        <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">Rental Performance</p>
+        <div className="grid grid-cols-4 gap-4">
+          <KCard label="Rental Income %" value={`${rentP.toFixed(1)}%`} sub={`${fmt(k.rentalIncome)} of ${fmt(k.totalRevenue)}`} status={rentP>=80?'good':'info'} />
+          <KCard label="Interest Coverage" value={iCov>0?`${iCov.toFixed(2)}x`:'N/A'} sub={`NOI ÷ Interest (${fmt(k.interestExpense)})`} status={iCov>=2?'good':iCov>=1.2?'warn':'bad'} />
+          <KCard label="Mgmt Fee %" value={`${mgmtP.toFixed(1)}%`} sub={`${fmt(k.managementFee)} of revenue`} status={mgmtP<=10?'good':mgmtP<=15?'warn':'bad'} />
+          <KCard label="Repair % of Revenue" value={`${repP.toFixed(1)}%`} sub={`${fmt(k.repairs)} repairs/maint`} status={repP<=5?'good':repP<=10?'warn':'bad'} />
+        </div>
+      </div>
 
-          {/* KPI summary */}
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { label: 'Revenue', value: fmtAmt(revenue), sub: revGrowth ? `${Number(revGrowth) >= 0 ? '▲' : '▼'} ${revGrowth}% YoY` : '' },
-              { label: 'Net Profit', value: fmtAmt(profit), sub: `${margin}% margin` },
-              { label: 'Total Assets', value: fmtAmt(totalAssets), sub: '' },
-            ].map((k) => (
-              <div key={k.label} className="bg-gray-50 rounded-lg p-3 text-center">
-                <div className="text-xs text-gray-500 mb-1">{k.label}</div>
-                <div className="font-bold text-gray-900">{k.value}</div>
-                {k.sub && <div className="text-xs text-gray-500 mt-0.5">{k.sub}</div>}
-              </div>
-            ))}
-          </div>
+      <div>
+        <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">Balance Sheet</p>
+        <div className="grid grid-cols-4 gap-4">
+          <KCard label="LTV (Loans / Building)" value={ltv>0?`${ltv.toFixed(1)}%`:'N/A'} sub={`Loans: ${fmt(k.longTermLoans)}`} status={ltv>0&&ltv<=75?'good':ltv<=85?'warn':'bad'} />
+          <KCard label="Asset / Liability Ratio" value={alR>0?`${alR.toFixed(2)}x`:'N/A'} sub={`Assets: ${fmt(k.totalAssets)}`} status={alR>=1.5?'good':alR>=1?'warn':'bad'} />
+          <KCard label="Debt-to-Equity" value={dte>0?`${dte.toFixed(2)}x`:'N/A'} sub={`Equity: ${fmt(k.equity)}`} status={dte>0&&dte<=2?'good':dte<=4?'warn':'bad'} />
+          <KCard label="Cash Balance" value={fmt(k.cash)} sub={`As of Dec 31, ${lastY}`} status={k.cash>10000?'good':k.cash>0?'warn':'bad'} />
+        </div>
+      </div>
 
-          {/* 1 Revenue */}
-          <div>
-            <div className="font-semibold text-gray-800 mb-2">1. Revenue & Profitability</div>
-            <p className="text-gray-700 leading-relaxed">
-              Total revenue is <strong>{fmtAmt(revenue)}</strong>
-              {revGrowth && (
-                <>, representing a <strong className={Number(revGrowth) >= 0 ? 'text-emerald-600' : 'text-red-600'}>{revGrowth}%</strong> change vs prior period ({fmtAmt(priorRevenue)})</>
-              )}
-              . Net profit of <strong className={profit >= 0 ? 'text-emerald-600' : 'text-red-600'}>{fmtAmt(profit)}</strong> yields a <strong>{margin}%</strong> margin
-              {profitGrowth && <> ({Number(profitGrowth) >= 0 ? '▲' : '▼'} {profitGrowth}% YoY)</>}.
-              {profit < 0 && <span className="text-red-600 font-medium"> The entity is operating at a loss — immediate cost review is recommended.</span>}
-              {Number(margin) > 20 && <span className="text-emerald-600 font-medium"> Profit margin above 20% signals healthy operations.</span>}
-            </p>
-          </div>
-
-          {/* 2 Expenses */}
-          <div>
-            <div className="font-semibold text-gray-800 mb-2">2. Key Expense Categories</div>
-            <p className="text-gray-700 leading-relaxed mb-2">
-              Total expenses: <strong>{fmtAmt(expenses)}</strong> ({expRatio}% of revenue).
-            </p>
-            {topExpenses.length > 0 && (
-              <ul className="space-y-1">
-                {topExpenses.map((e, i) => (
-                  <li key={i} className="flex justify-between text-gray-700 border-b border-gray-100 pb-1">
-                    <span>{e.particulars}</span>
-                    <span className="font-medium">{fmtAmt(e.current)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {/* 3 Balance Sheet */}
-          {totalAssets > 0 && (
-            <div>
-              <div className="font-semibold text-gray-800 mb-2">3. Balance Sheet Strength</div>
-              <p className="text-gray-700">Total assets stand at <strong>{fmtAmt(totalAssets)}</strong>. Review debt-to-equity ratio and ensure long-term loans are within serviceable limits.</p>
-            </div>
-          )}
-
-          {/* 4 YoY */}
-          <div>
-            <div className="font-semibold text-gray-800 mb-2">4. YoY Performance</div>
-            <p className="text-gray-700">
-              {revGrowth
-                ? `Revenue ${Number(revGrowth) >= 0 ? 'grew' : 'declined'} by ${revGrowth}% year-on-year. `
-                : 'Prior period data not available for YoY comparison. '}
-              {profitGrowth
-                ? `Profit ${Number(profitGrowth) >= 0 ? 'improved' : 'declined'} by ${profitGrowth}% vs prior period.`
-                : ''}
-            </p>
-          </div>
-
-          {/* 5 Risks */}
-          <div>
-            <div className="font-semibold text-gray-800 mb-2">5. Risks & Recommendations</div>
-            <ul className="space-y-1.5 text-gray-700">
-              {fin.hasRefErrors && (
-                <li className="flex gap-2"><span className="text-red-500 mt-0.5">⚠</span> Fix #REF! formula errors in the source Excel — they may understate true figures.</li>
-              )}
-              {Number(expRatio) > 80 && (
-                <li className="flex gap-2"><span className="text-amber-500 mt-0.5">⚠</span> Expense ratio ({expRatio}%) exceeds 80% of revenue — identify cost reduction opportunities.</li>
-              )}
-              {profit < 0 && (
-                <li className="flex gap-2"><span className="text-red-500 mt-0.5">⚠</span> Operating at a net loss. Review rent pricing and vacancy rates immediately.</li>
-              )}
-              {Number(margin) < 10 && profit >= 0 && (
-                <li className="flex gap-2"><span className="text-amber-500 mt-0.5">⚠</span> Profit margin below 10%. Consider rent escalation clauses in lease renewals.</li>
-              )}
-              <li className="flex gap-2"><span className="text-emerald-500 mt-0.5">✓</span> Benchmark expense ratios against industry standard (35–45% for residential rentals).</li>
-              <li className="flex gap-2"><span className="text-emerald-500 mt-0.5">✓</span> Review finance costs and insurance premiums for renegotiation opportunity.</li>
-              <li className="flex gap-2"><span className="text-emerald-500 mt-0.5">✓</span> Ensure all loan covenants are met based on current balance sheet position.</li>
-            </ul>
-          </div>
+      <div>
+        <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">5-Year Financial Trend</p>
+        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+          <ResponsiveContainer width="100%" height={240}>
+            <LineChart data={trendData} margin={{ left:20, right:20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="year" tick={{ fontSize:11 }} />
+              <YAxis tickFormatter={v => fmt(v as number)} tick={{ fontSize:10 }} />
+              <Tooltip formatter={(v:number) => fmtFull(v)} />
+              <Legend />
+              <Line type="monotone" dataKey="Revenue" stroke={CC[0]} strokeWidth={2} dot />
+              <Line type="monotone" dataKey="Expenses" stroke={CC[5]} strokeWidth={2} dot />
+              <Line type="monotone" dataKey="Net Income" stroke={CC[1]} strokeWidth={2} dot />
+              <Line type="monotone" dataKey="NOI" stroke={CC[2]} strokeWidth={2} strokeDasharray="5 5" dot />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
       </div>
     </div>
   );
 }
 
-// ── Empty State ────────────────────────────────────────────────────────────────
+// ── CFO Dashboard Tab ─────────────────────────────────────────────────────────
 
-function EmptyState({ onUpload, company }: { onUpload: () => void; company: string }) {
+function CFOTab({ fin }: { fin: ParsedFinancials }) {
+  const lastY = fin.years[fin.years.length - 1];
+  const k = calcKpis(fin, lastY);
+
+  const snapshotRows = fin.years.map(y => {
+    const kk = calcKpis(fin, y);
+    return { year: y, revenue: kk.totalRevenue, expenses: kk.totalExpenses, netIncome: kk.netIncome, noi: kk.noi, margin: kk.totalRevenue > 0 ? kk.netIncome / kk.totalRevenue * 100 : 0 };
+  });
+
+  const revChart = fin.years.map(y => {
+    const kk = calcKpis(fin, y);
+    const svc = Math.max(0, kk.totalRevenue - kk.rentalIncome - kk.otherIncome);
+    return { year: String(y), 'Rental Income': kk.rentalIncome, 'Other Income': kk.otherIncome, 'Services': svc };
+  });
+
+  const expPie = [
+    { name:'Interest Paid',  value: k.interestExpense  },
+    { name:'Property Tax',   value: k.propertyTax      },
+    { name:'HOA Fees',       value: k.hoaFees          },
+    { name:'Legal Fees',     value: k.legalFees        },
+    { name:'Mgmt Fee',       value: k.managementFee    },
+    { name:'Utilities',      value: k.utilities        },
+    { name:'Repairs',        value: k.repairs          },
+    { name:'Other',          value: Math.max(0, k.totalExpenses - k.interestExpense - k.propertyTax - k.hoaFees - k.legalFees - k.managementFee - k.utilities - k.repairs) },
+  ].filter(e => e.value > 0);
+
+  const intPct   = k.totalRevenue > 0 ? (k.interestExpense / k.totalRevenue * 100).toFixed(1) : '0';
+  const negYrs   = snapshotRows.filter(r => r.netIncome < 0).length;
+  const firstK   = calcKpis(fin, fin.years[0]);
+  const revGrowth = firstK.totalRevenue > 0 ? ((k.totalRevenue - firstK.totalRevenue) / firstK.totalRevenue * 100).toFixed(1) : null;
+  const avgRev   = fin.years.reduce((s,y) => s + calcKpis(fin,y).totalRevenue, 0) / fin.years.length;
+  const ltv      = k.buildings > 0 ? k.longTermLoans / k.buildings * 100 : 0;
+  const ltvLabel = ltv < 80 ? '✅ Good (below 80%)' : ltv < 90 ? '⚠️ Watch (80–90%)' : '🔴 High (above 90%)';
+
+  const insights: Array<{color:string; text:string}> = [];
+  if (k.interestExpense > 0) insights.push({ color:'bg-blue-50 border-blue-200', text:`💡 Interest expense is ${intPct}% of revenue — the single largest expense at ${fmt(k.interestExpense)}. This represents mortgage interest on outstanding loans of ${fmt(k.longTermLoans)}.` });
+  if (negYrs > 0) insights.push({ color:'bg-amber-50 border-amber-200', text:`⚠️ Net income has been negative for ${negYrs} of ${fin.years.length} years due to depreciation and interest charges. NOI (pre-interest) is ${k.noi >= 0 ? 'positive' : 'negative'} at ${fmt(k.noi)}, indicating ${k.noi >= 0 ? 'healthy' : 'stressed'} operating performance.` });
+  if (revGrowth !== null) insights.push({ color:'bg-green-50 border-green-200', text:`✅ Revenue grew from ${fmt(firstK.totalRevenue)} (${fin.years[0]}) to ${fmt(k.totalRevenue)} (${lastY}) — ${revGrowth}% over ${fin.years.length - 1} years. Average annual revenue: ${fmt(avgRev)}/year.` });
+  if (k.buildings > 0) insights.push({ color:'bg-gray-50 border-gray-200', text:`📋 Property value (Buildings): ${fmt(k.buildings)} | Outstanding loans: ${fmt(k.longTermLoans)} | LTV: ${ltv.toFixed(1)}% — ${ltvLabel}` });
+
   return (
-    <div className="text-center py-24">
-      <FileSpreadsheet size={72} className="mx-auto text-gray-200 mb-6" />
-      <h2 className="text-2xl font-bold text-gray-700 mb-3">Upload Financial Statements</h2>
-      <p className="text-gray-400 mb-2 max-w-lg mx-auto">
-        {company === 'All Companies'
-          ? 'Select a specific company from the dropdown, then upload their Excel financial statements.'
-          : `Upload ${company}'s Excel file to render their P&L, Balance Sheet, and Schedule notes.`}
-      </p>
-      <p className="text-gray-400 text-sm mb-8">
-        Expected sheets:&nbsp;
-        {['B-S', 'P&L', 'Schedules BS', 'Schedules PL'].map((s) => (
-          <span key={s} className="font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded mr-1">{s}</span>
-        ))}
-      </p>
-      <button
-        onClick={onUpload}
-        className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-xl font-semibold transition-colors shadow-sm"
-      >
-        <Upload size={18} /> Upload Excel File
-      </button>
-
-      {/* Preview mockup */}
-      <div className="mt-12 max-w-2xl mx-auto border border-dashed border-gray-200 rounded-2xl p-6 text-left opacity-40">
-        <div className="h-3 bg-gray-200 rounded w-48 mb-4" />
-        {[80, 60, 90, 55, 70].map((w, i) => (
-          <div key={i} className="flex gap-4 mb-2">
-            <div className="h-2.5 bg-gray-200 rounded flex-1" />
-            <div className={`h-2.5 bg-gray-200 rounded w-${w === 80 ? '16' : '12'}`} />
-            <div className="h-2.5 bg-gray-200 rounded w-12" />
-          </div>
-        ))}
+    <div className="space-y-6">
+      {/* Section A: 5-Year Snapshot */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-gray-900 text-white px-4 py-2 text-sm font-bold">5-Year Financial Snapshot</div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200">
+                {['Year','Total Revenue','Total Expenses','Net Income','NOI','Net Margin %'].map(h => (
+                  <th key={h} className={`px-4 py-2 font-semibold text-gray-600 ${h==='Year'?'text-left':'text-right'}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {snapshotRows.map((r,i) => (
+                <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
+                  <td className="px-4 py-2 font-bold">{r.year}</td>
+                  <td className="px-4 py-2 text-right font-mono">{fmt(r.revenue)}</td>
+                  <td className="px-4 py-2 text-right font-mono text-red-600">{fmt(r.expenses)}</td>
+                  <td className={`px-4 py-2 text-right font-mono font-semibold ${r.netIncome>=0?'text-green-700':'text-red-600'}`}>{fmt(r.netIncome)}</td>
+                  <td className={`px-4 py-2 text-right font-mono ${r.noi>=0?'text-blue-700':'text-red-600'}`}>{fmt(r.noi)}</td>
+                  <td className={`px-4 py-2 text-right font-mono ${r.margin>=0?'text-green-700':'text-red-600'}`}>{r.margin.toFixed(1)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
+
+      {/* Sections B + C */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+          <p className="text-sm font-semibold text-gray-700 mb-3">Revenue Breakdown by Year</p>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={revChart} margin={{ left:10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="year" tick={{ fontSize:10 }} />
+              <YAxis tickFormatter={v => fmt(v as number)} tick={{ fontSize:9 }} />
+              <Tooltip formatter={(v:number) => fmtFull(v)} />
+              <Legend iconSize={8} wrapperStyle={{ fontSize:10 }} />
+              <Bar dataKey="Rental Income" stackId="a" fill={CC[0]} />
+              <Bar dataKey="Other Income"  stackId="a" fill={CC[1]} />
+              <Bar dataKey="Services"      stackId="a" fill={CC[3]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+          <p className="text-sm font-semibold text-gray-700 mb-3">Expense Breakdown ({lastY})</p>
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart>
+              <Pie data={expPie} cx="50%" cy="50%" outerRadius={75} dataKey="value">
+                {expPie.map((_,i) => <Cell key={i} fill={CC[i % CC.length]} />)}
+              </Pie>
+              <Tooltip formatter={(v:number) => fmtFull(v)} />
+              <Legend iconSize={8} wrapperStyle={{ fontSize:10 }} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Section D: CFO Insights */}
+      <div className="space-y-3">
+        <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">CFO Insights</p>
+        {insights.length === 0
+          ? <p className="text-sm text-gray-400">Upload complete financials to generate CFO insights.</p>
+          : insights.map((ins, i) => (
+              <div key={i} className={`border rounded-lg p-4 ${ins.color}`}>
+                <p className="text-sm text-gray-800">{ins.text}</p>
+              </div>
+            ))
+        }
+      </div>
+    </div>
+  );
+}
+
+// ── All Companies Summary ─────────────────────────────────────────────────────
+
+function AllCompaniesSummary({ all }: { all: Record<string, ParsedFinancials> }) {
+  const entries = Object.values(all);
+  if (!entries.length) return null;
+  return (
+    <div className="space-y-3">
+      {entries.map((fin, i) => {
+        const lastY = fin.years[fin.years.length - 1];
+        const k = calcKpis(fin, lastY);
+        return (
+          <div key={i} className="flex items-center gap-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-gray-900 text-sm truncate">{fin.companyName}</p>
+              <p className="text-xs text-gray-400 truncate">{fin.fileName}</p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-xs text-gray-500">Revenue ({lastY})</p>
+              <p className="font-mono font-bold text-gray-900 text-sm">{fmt(k.totalRevenue)}</p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-xs text-gray-500">Net Income</p>
+              <p className={`font-mono font-bold text-sm ${k.netIncome>=0?'text-green-700':'text-red-600'}`}>{fmt(k.netIncome)}</p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-xs text-gray-500">NOI</p>
+              <p className={`font-mono font-bold text-sm ${k.noi>=0?'text-blue-700':'text-red-600'}`}>{fmt(k.noi)}</p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-xs text-gray-500">LTV</p>
+              <p className="font-mono font-bold text-gray-700 text-sm">{k.buildings>0?`${(k.longTermLoans/k.buildings*100).toFixed(0)}%`:'—'}</p>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -624,161 +576,135 @@ function EmptyState({ onUpload, company }: { onUpload: () => void; company: stri
 
 export default function RentalFinancials() {
   const [selectedCompany, setSelectedCompany] = useState('All Companies');
-  const [selectedPeriod, setSelectedPeriod] = useState('Q1 2026');
-  const [allFinancials, setAllFinancials] = useState<Record<string, CompanyFinancials>>({});
+  const [activeTab, setActiveTab] = useState<FinTab>('P&L Statement');
+  const [allFinancials, setAllFinancials] = useState<Record<string,ParsedFinancials>>({});
   const [uploading, setUploading] = useState(false);
-  const [showAI, setShowAI] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const currentFin = selectedCompany !== 'All Companies' ? allFinancials[selectedCompany] : null;
-  const hasAnyUpload = Object.keys(allFinancials).length > 0;
-  const isAllCompanies = selectedCompany === 'All Companies';
+  useEffect(() => {
+    const loaded: Record<string,ParsedFinancials> = {};
+    for (const co of RENTAL_COMPANIES) {
+      if (co === 'All Companies') continue;
+      try {
+        const stored = localStorage.getItem(lsKey(co));
+        if (stored) loaded[co] = JSON.parse(stored);
+      } catch {}
+    }
+    if (Object.keys(loaded).length) setAllFinancials(loaded);
+  }, []);
+
+  const isAll = selectedCompany === 'All Companies';
+  const currentFin = !isAll ? allFinancials[selectedCompany] : null;
 
   const triggerUpload = useCallback(() => {
-    if (isAllCompanies) {
-      alert('Please select a specific company before uploading.');
-      return;
-    }
+    if (isAll) { alert('Please select a specific company before uploading.'); return; }
     fileRef.current?.click();
-  }, [isAllCompanies]);
+  }, [isAll]);
 
-  const handleFile = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      if (isAllCompanies) { alert('Please select a specific company first.'); return; }
-      setUploading(true);
-      try {
-        const fin = await parseExcel(file, selectedCompany, selectedPeriod);
-        setAllFinancials((prev) => ({ ...prev, [selectedCompany]: fin }));
-      } catch {
-        alert('Failed to parse the Excel file. Please check the file format and try again.');
-      } finally {
-        setUploading(false);
-        if (fileRef.current) fileRef.current.value = '';
-      }
-    },
-    [isAllCompanies, selectedCompany, selectedPeriod]
-  );
+  const handleFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || isAll) return;
+    setUploading(true);
+    try {
+      const fin = await parseExcel(file, selectedCompany);
+      setAllFinancials(prev => {
+        const next = { ...prev, [selectedCompany]: fin };
+        localStorage.setItem(lsKey(selectedCompany), JSON.stringify(fin));
+        return next;
+      });
+    } catch {
+      alert('Failed to parse the Excel file. Please check the format and try again.');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  }, [isAll, selectedCompany]);
+
+  const clearData = useCallback(() => {
+    if (!currentFin) return;
+    localStorage.removeItem(lsKey(selectedCompany));
+    setAllFinancials(prev => { const n={...prev}; delete n[selectedCompany]; return n; });
+  }, [selectedCompany, currentFin]);
 
   return (
     <div className="space-y-6">
-      {/* ── Sticky controls ── */}
+      {/* Controls bar */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-100 shadow-sm -mx-6 px-6 py-3">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Building2 size={15} className="text-gray-400" />
-            <select
-              value={selectedCompany}
-              onChange={(e) => setSelectedCompany(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            >
-              {COMPANIES.map((c) => <option key={c}>{c}</option>)}
-            </select>
-          </div>
+          <Building2 size={15} className="text-gray-400 shrink-0" />
           <select
-            value={selectedPeriod}
-            onChange={(e) => setSelectedPeriod(e.target.value)}
+            value={selectedCompany}
+            onChange={e => { setSelectedCompany(e.target.value); setActiveTab('P&L Statement'); }}
             className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
           >
-            {PERIODS.map((p) => <option key={p}>{p}</option>)}
+            {RENTAL_COMPANIES.map(c => <option key={c}>{c}</option>)}
           </select>
           <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFile} />
-          <button
-            onClick={triggerUpload}
-            disabled={uploading}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors"
-          >
-            <Upload size={14} />
-            {uploading ? 'Parsing…' : 'Upload Excel'}
-          </button>
-          {currentFin && (
-            <button
-              onClick={() => setShowAI(true)}
-              className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors"
-            >
-              <Sparkles size={14} /> AI Insights
+          {!isAll && (
+            <button onClick={triggerUpload} disabled={uploading}
+              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors">
+              <Upload size={14} />{uploading ? 'Parsing…' : 'Upload Excel'}
             </button>
           )}
           {currentFin && (
-            <span className="text-xs text-gray-400 ml-auto hidden sm:block">
-              {currentFin.fileName} · {new Date(currentFin.uploadedAt).toLocaleTimeString()}
-            </span>
+            <>
+              <span className="text-xs text-gray-400">{currentFin.fileName} · {new Date(currentFin.uploadedAt).toLocaleDateString()}</span>
+              <button onClick={clearData} className="text-xs text-red-400 hover:text-red-600 transition-colors">Clear</button>
+            </>
           )}
         </div>
       </div>
 
-      {/* ── Content ── */}
-      {isAllCompanies ? (
-        hasAnyUpload ? (
-          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-1">All Companies — Financial Comparison</h2>
-            <p className="text-gray-400 text-sm mb-6">{Object.keys(allFinancials).length} companies uploaded</p>
-            <ComparisonTable all={allFinancials} />
+      {/* Content */}
+      {isAll ? (
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <TrendingUp size={18} className="text-emerald-600" />
+            <h2 className="text-lg font-bold text-gray-900">All Companies — Portfolio Overview</h2>
           </div>
-        ) : (
-          <EmptyState onUpload={triggerUpload} company="All Companies" />
-        )
+          <p className="text-gray-400 text-sm mb-6">{Object.keys(allFinancials).length} companies with uploaded data</p>
+          {Object.keys(allFinancials).length === 0
+            ? <EmptyUpload onUpload={triggerUpload} company="All Companies" />
+            : <AllCompaniesSummary all={allFinancials} />
+          }
+        </div>
       ) : currentFin ? (
-        <div className="space-y-6">
-          {/* Header card */}
-          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6 flex items-start justify-between gap-4">
+        <div className="space-y-4">
+          {/* Header */}
+          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-4 flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <h1 className="text-xl font-bold text-gray-900">{currentFin.companyName}</h1>
-              <p className="text-gray-500 text-sm mt-0.5">
-                Financial Statements · Period: <strong>{currentFin.period}</strong>
+              <h1 className="text-lg font-bold text-gray-900">{currentFin.companyName}</h1>
+              <p className="text-gray-400 text-xs mt-0.5">
+                {currentFin.dateRange || `Financial Statements`} · Years: {currentFin.years.join(', ')}
               </p>
             </div>
-            {currentFin.hasRefErrors && (
-              <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 px-4 py-2 rounded-lg text-sm shrink-0">
-                <AlertTriangle size={14} />
-                Formula errors found — affected values set to 0
-              </div>
-            )}
-          </div>
-
-          {/* 01 P&L */}
-          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
-            <h2 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <span className="w-6 h-6 bg-emerald-600 text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">
-                1
-              </span>
-              Profit & Loss Statement
-            </h2>
-            <StatementTable rows={currentFin.pl} title="P&L" />
-          </div>
-
-          {/* 02 Balance Sheet */}
-          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
-            <h2 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <span className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">
-                2
-              </span>
-              Balance Sheet
-            </h2>
-            <BSSplit rows={currentFin.bs} />
-          </div>
-
-          {/* 03 Schedules */}
-          {(currentFin.schedulesBs.length > 0 || currentFin.schedulesPl.length > 0) && (
-            <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
-              <h2 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <span className="w-6 h-6 bg-amber-500 text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">
-                  3
-                </span>
-                Schedules & Notes
-              </h2>
-              <SchedulesSection bsRows={currentFin.schedulesBs} plRows={currentFin.schedulesPl} />
+            <div className="flex items-center gap-2 flex-wrap">
+              {currentFin.years.map(y => (
+                <span key={y} className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">{y}</span>
+              ))}
             </div>
-          )}
+          </div>
+
+          {/* Tabs */}
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+            {TABS.map(t => (
+              <button key={t} onClick={() => setActiveTab(t)}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab===t?'bg-emerald-600 text-white shadow-sm':'text-gray-600 hover:bg-white hover:text-gray-800'}`}>
+                {t}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab content */}
+          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+            {activeTab === 'P&L Statement' && <PLTable fin={currentFin} />}
+            {activeTab === 'Balance Sheet'  && <BSTable fin={currentFin} />}
+            {activeTab === 'KPI Dashboard'  && <KPITab  fin={currentFin} />}
+            {activeTab === 'CFO Dashboard'  && <CFOTab  fin={currentFin} />}
+          </div>
         </div>
       ) : (
-        <EmptyState onUpload={triggerUpload} company={selectedCompany} />
-      )}
-
-      {/* AI modal */}
-      {showAI && currentFin && (
-        <AIInsightsModal fin={currentFin} onClose={() => setShowAI(false)} />
+        <EmptyUpload onUpload={triggerUpload} company={selectedCompany} />
       )}
     </div>
   );
