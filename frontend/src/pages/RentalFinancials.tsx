@@ -608,9 +608,15 @@ export default function RentalFinancials() {
     try {
       const fin = await parseExcel(file, selectedCompany);
       setAllFinancials(prev => {
-        const next = { ...prev, [selectedCompany]: fin };
-        localStorage.setItem(lsKey(selectedCompany), JSON.stringify(fin));
-        return next;
+        const existing = prev[selectedCompany];
+        const merged = existing ? {
+          ...fin,
+          pl:    fin.pl.length    ? fin.pl    : existing.pl,
+          bs:    fin.bs.length    ? fin.bs    : existing.bs,
+          years: Array.from(new Set([...existing.years, ...fin.years])).sort((a,b)=>a-b),
+        } : fin;
+        localStorage.setItem(lsKey(selectedCompany), JSON.stringify(merged));
+        return { ...prev, [selectedCompany]: merged };
       });
     } catch {
       alert('Failed to parse the Excel file. Please check the format and try again.');
