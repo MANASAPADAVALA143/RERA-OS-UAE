@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import api from '../services/api';
 import { Card } from '../components/ui/Card';
-import { Table, LoadingSkeleton, type Column } from '../components/ui/Table';
+import { LoadingSkeleton, type Column } from '../components/ui/Table';
 import { fmtUSD, fmtPct } from '../components/ProtectedRoute';
 
 interface LeaseRow extends Record<string, unknown> {
@@ -10,9 +10,9 @@ interface LeaseRow extends Record<string, unknown> {
   company_id: string | null;
   company_name: string | null;
   tenant_name: string | null;
-  lease_start: string;
-  lease_end: string;
-  days_remaining: number | null;
+  lease_start: string | null;
+  lease_end: string | null;
+  days_until_expiry: number | null;
   status: string;
   deposit_amount: number | null;
   escalation_pct_annual: number | null;
@@ -24,20 +24,20 @@ interface CompanyOption {
 }
 
 interface LeasesResponse {
-  items: LeaseRow[];
-  pipeline: { next_30: number; next_60: number; next_90: number };
+  leases: LeaseRow[];
+  expiry_pipeline: { days_30: number; days_60: number; days_90: number };
 }
 
 const STATUS_PILL: Record<string, string> = {
-  active: 'bg-green-100 text-green-800',
+  active:       'bg-green-100 text-green-800',
   notice_given: 'bg-amber-100 text-amber-800',
-  expired: 'bg-gray-100 text-gray-800',
-  renewed: 'bg-blue-100 text-blue-800',
+  expired:      'bg-gray-100 text-gray-800',
+  renewed:      'bg-blue-100 text-blue-800',
 };
 
 export default function RentalLeases() {
   const [leases, setLeases] = useState<LeaseRow[]>([]);
-  const [pipeline, setPipeline] = useState({ next_30: 0, next_60: 0, next_90: 0 });
+  const [pipeline, setPipeline] = useState({ days_30: 0, days_60: 0, days_90: 0 });
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [filterCompany, setFilterCompany] = useState('');
   const [loading, setLoading] = useState(true);
@@ -59,8 +59,14 @@ export default function RentalLeases() {
       const params: Record<string, string> = {};
       if (filterCompany) params.company_id = filterCompany;
       const res = await api.get<LeasesResponse>('/api/rentals/leases', { params });
-      setLeases(res.data.items);
-      setPipeline(res.data.pipeline);
+      const data = res.data;
+      if (Array.isArray(data)) {
+        // backend returns [] when company filter yields no units
+        setLeases([]);
+      } else {
+        setLeases(data?.leases ?? []);
+        if (data?.expiry_pipeline) setPipeline(data.expiry_pipeline);
+      }
     } catch {
       setError('Failed to load leases.');
     } finally {
@@ -72,19 +78,23 @@ export default function RentalLeases() {
   useEffect(() => { fetchLeases(); }, [fetchLeases]);
 
   const columns: Column<LeaseRow>[] = [
-    { key: 'unit_number', label: 'Unit', sortValue: (r) => r.unit_number ?? '' },
+    { key: 'unit_number',  label: 'Unit',    sortValue: (r) => r.unit_number ?? '' },
     { key: 'company_name', label: 'Company', sortValue: (r) => r.company_name ?? '' },
-    { key: 'tenant_name', label: 'Tenant', sortValue: (r) => r.tenant_name ?? '' },
-    { key: 'lease_start', label: 'Start', sortValue: (r) => r.lease_start },
-    { key: 'lease_end', label: 'End', sortValue: (r) => r.lease_end },
+    { key: 'tenant_name',  label: 'Tenant',  sortValue: (r) => r.tenant_name ?? '' },
+    { key: 'lease_start',  label: 'Start',   sortValue: (r) => r.lease_start ?? '' },
+    { key: 'lease_end',    label: 'End',     sortValue: (r) => r.lease_end ?? '' },
     {
-      key: 'days_remaining', label: 'Days Left',
+      key: 'days_until_expiry', label: 'Days Left',
       render: (r) => {
-        const d = r.days_remaining;
+        const d = r.days_until_expiry;
         if (d == null) return '—';
-        return <span className={d <= 30 ? 'text-red-600 font-medium' : d <= 60 ? 'text-amber-600 font-medium' : ''}>{d}d</span>;
+        return (
+          <span className={d <= 30 ? 'text-red-600 font-medium' : d <= 60 ? 'text-amber-600 font-medium' : ''}>
+            {d}d
+          </span>
+        );
       },
-      sortValue: (r) => r.days_remaining ?? 9999,
+      sortValue: (r) => r.days_until_expiry ?? 9999,
     },
     {
       key: 'status', label: 'Status',
@@ -95,12 +105,20 @@ export default function RentalLeases() {
       ),
       sortValue: (r) => r.status,
     },
-    { key: 'deposit_amount', label: 'Deposit', render: (r) => r.deposit_amount != null ? fmtUSD(r.deposit_amount) : '—', sortValue: (r) => r.deposit_amount ?? 0 },
-    { key: 'escalation_pct_annual', label: 'Escalation', render: (r) => r.escalation_pct_annual != null ? fmtPct(r.escalation_pct_annual) : '—', sortValue: (r) => r.escalation_pct_annual ?? 0 },
+    {
+      key: 'deposit_amount', label: 'Deposit',
+      render: (r) => r.deposit_amount != null ? fmtUSD(r.deposit_amount) : '—',
+      sortValue: (r) => r.deposit_amount ?? 0,
+    },
+    {
+      key: 'escalation_pct_annual', label: 'Escalation',
+      render: (r) => r.escalation_pct_annual != null ? fmtPct(r.escalation_pct_annual) : '—',
+      sortValue: (r) => r.escalation_pct_annual ?? 0,
+    },
   ];
 
   const rowClass = (r: LeaseRow) => {
-    const d = r.days_remaining;
+    const d = r.days_until_expiry;
     if (d != null && d >= 0 && d <= 30) return 'bg-red-50';
     if (d != null && d >= 0 && d <= 60) return 'bg-amber-50';
     return '';
@@ -121,46 +139,51 @@ export default function RentalLeases() {
         </select>
       </div>
 
-      {loading ? <LoadingSkeleton rows={8} /> : error ? (
+      {loading ? (
+        <LoadingSkeleton rows={8} />
+      ) : error ? (
         <p className="text-red-600">{error}</p>
       ) : (
         <Card title={`Leases (${leases.length})`}>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 text-left text-gray-500">
-                  {columns.map(c => <th key={c.key} className="py-2 px-2 font-medium">{c.label}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {leases.map((r) => (
-                  <tr key={r.id} className={`border-b border-gray-50 ${rowClass(r)}`}>
-                    {columns.map(c => (
-                      <td key={c.key} className="py-2 px-2">
-                        {c.render ? c.render(r) : String(r[c.key] ?? '—')}
-                      </td>
-                    ))}
+          {leases.length === 0 ? (
+            <p className="text-gray-500 text-sm py-4 text-center">No leases found.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 text-left text-gray-500">
+                    {columns.map(c => <th key={c.key} className="py-2 px-2 font-medium">{c.label}</th>)}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {leases.map((r) => (
+                    <tr key={r.id} className={`border-b border-gray-50 hover:bg-gray-50 ${rowClass(r)}`}>
+                      {columns.map(c => (
+                        <td key={c.key} className="py-2 px-2">
+                          {c.render ? c.render(r) : String(r[c.key] ?? '—')}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
       )}
 
-      {/* Expiry pipeline panel */}
       <Card title="Expiry Pipeline">
         <div className="grid grid-cols-3 gap-4 text-center">
           <div className="p-4 bg-red-50 rounded-xl">
-            <p className="text-2xl font-bold text-red-700">{pipeline.next_30}</p>
+            <p className="text-2xl font-bold text-red-700">{pipeline.days_30}</p>
             <p className="text-sm text-red-600">Expiring in 30 days</p>
           </div>
           <div className="p-4 bg-amber-50 rounded-xl">
-            <p className="text-2xl font-bold text-amber-700">{pipeline.next_60}</p>
+            <p className="text-2xl font-bold text-amber-700">{pipeline.days_60}</p>
             <p className="text-sm text-amber-600">Expiring in 60 days</p>
           </div>
           <div className="p-4 bg-blue-50 rounded-xl">
-            <p className="text-2xl font-bold text-blue-700">{pipeline.next_90}</p>
+            <p className="text-2xl font-bold text-blue-700">{pipeline.days_90}</p>
             <p className="text-sm text-blue-600">Expiring in 90 days</p>
           </div>
         </div>
