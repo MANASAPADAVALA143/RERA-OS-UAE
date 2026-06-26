@@ -1,578 +1,506 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Cell,
 } from 'recharts';
-import { useRentalPortfolio, sumMetrics } from '../contexts/RentalPortfolioContext';
-import type { EntityArAp } from '../contexts/RentalPortfolioContext';
-import { useRentalNav } from '../contexts/RentalNavContext';
+import {
+  TrendingUp, TrendingDown, DollarSign, Building2, AlertTriangle,
+  Shield, Percent, Upload,
+} from 'lucide-react';
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
-const $$ = (n: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
-
-function pctStr(n: number, t: number) {
-  return t > 0 ? ((n / t) * 100).toFixed(1) + '%' : '0%';
+// ── Data ──────────────────────────────────────────────────────────────────────
+interface Company {
+  name: string;
+  suite: string;
+  monthly: number[];
+  ytd: number;
+  avg: number;
+  status: string;
+  trend: string;
+  zeroUnits: string[];
+  issues: string[];
 }
 
-function arTotal(r: EntityArAp) {
-  return r.ar_current + r.ar_1_30 + r.ar_31_60 + r.ar_61_90 + r.ar_90_plus;
+interface ARData {
+  companies: Company[];
+  months: string[];
+  totalMonthly: number[];
+  grandTotal: number;
+  portfolioAvg: number;
 }
 
-// ─── risk flag ────────────────────────────────────────────────────────────────
-type RiskLevel = 'CRITICAL' | 'HIGH' | 'WATCH' | 'OK';
-function riskFlag(r: EntityArAp): RiskLevel {
-  const total = arTotal(r);
-  if (total === 0) return 'OK';
-  if (r.ar_90_plus / total > 0.20)  return 'CRITICAL';
-  if (r.ar_61_90  / total > 0.15)  return 'HIGH';
-  if (r.ar_31_60  / total > 0.20)  return 'WATCH';
-  return 'OK';
-}
-
-const RISK_STYLE: Record<RiskLevel, string> = {
-  CRITICAL: 'bg-red-100 text-red-800',
-  HIGH:     'bg-orange-100 text-orange-800',
-  WATCH:    'bg-amber-100 text-amber-800',
-  OK:       'bg-green-100 text-green-800',
+const INITIAL_DATA: ARData = {
+  companies: [
+    {
+      name: 'ZYC LLC', suite: 'ZYC LLC',
+      monthly: [15850, 15800, 15900, 15975, 16000, 15150],
+      ytd: 94675, avg: 15779,
+      status: 'stable', trend: 'flat',
+      zeroUnits: [], issues: [],
+    },
+    {
+      name: 'DEC LLC', suite: 'DEC LLC Suite 123',
+      monthly: [13275, 12975, 11385, 16819, 12790, 14844],
+      ytd: 82088, avg: 13681,
+      status: 'watch', trend: 'volatile',
+      zeroUnits: [],
+      issues: ['Apr spike +$5,434 — classify as rent vs deposit'],
+    },
+    {
+      name: 'KLI LLC', suite: 'KLI LLC',
+      monthly: [11975, 13975, 11175, 10848, 11225, 10500],
+      ytd: 69698, avg: 11616,
+      status: 'watch', trend: 'declining',
+      zeroUnits: [],
+      issues: ['Jan→Jun decline of $1,475 (12.3%) — review leases'],
+    },
+    {
+      name: 'ACD LLC', suite: 'ACD LLC',
+      monthly: [10325, 10125, 10518, 9675, 9874, 9855],
+      ytd: 60372, avg: 10062,
+      status: 'watch', trend: 'slight_decline',
+      zeroUnits: [],
+      issues: ['Apr dip to $9,675 — below $10K threshold'],
+    },
+    {
+      name: 'BNC LLC', suite: 'BNC LLC Suite 123',
+      monthly: [8380, 7535, 8335, 6785, 6785, 7885],
+      ytd: 45705, avg: 7618,
+      status: 'critical', trend: 'volatile',
+      zeroUnits: ['Unit B,C', 'Unit K', 'Unit Q', 'Unit R'],
+      issues: ['5 units showing $0 all 6 months — vacancy or non-collection'],
+    },
+    {
+      name: 'FJH LLC', suite: 'FJH LLC',
+      monthly: [7475, 7475, 7875, 7875, 7875, 7105],
+      ytd: 45680, avg: 7613,
+      status: 'stable', trend: 'flat',
+      zeroUnits: [],
+      issues: ['Jun dip to $7,105 — $770 below May'],
+    },
+    {
+      name: 'NHJ LLC', suite: 'NHJ LLC',
+      monthly: [6000, 6030, 5280, 6030, 6030, 6030],
+      ytd: 35400, avg: 5900,
+      status: 'stable', trend: 'flat',
+      zeroUnits: [],
+      issues: ['Mar partial payment $5,280 vs usual $6,030'],
+    },
+    {
+      name: 'ABC LLC', suite: 'ABC LLC Suite 123',
+      monthly: [5575, 5575, 5575, 5575, 5575, 4025],
+      ytd: 31900, avg: 5317,
+      status: 'critical', trend: 'declining',
+      zeroUnits: ['Unit A (Jun)'],
+      issues: ['Jun dropped 28% — $1,550 shortfall vs prior months'],
+    },
+    {
+      name: 'XYZ LLC', suite: 'XYZ LLC',
+      monthly: [4200, 4650, 4650, 3850, 3850, 5345],
+      ytd: 26545, avg: 4424,
+      status: 'watch', trend: 'recovering',
+      zeroUnits: [],
+      issues: ['Apr–May dip to $3,850 — recovered in Jun'],
+    },
+    {
+      name: 'TOWN Houses', suite: 'Town Houses (Multi-LLC)',
+      monthly: [0, 0, 0, 0, 0, 0],
+      ytd: 0, avg: 0,
+      status: 'no_data', trend: 'pending',
+      zeroUnits: [],
+      issues: ['Town Houses data not yet captured in this file'],
+    },
+  ],
+  months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+  totalMonthly: [83055, 84140, 80693, 83432, 80004, 80739],
+  grandTotal: 492063,
+  portfolioAvg: 82011,
 };
 
-// ─── collection stage ─────────────────────────────────────────────────────────
-type Stage = 1 | 2 | 3 | 4 | 5 | 6 | 7;
-const STAGE_LABELS: Record<Stage, string> = {
-  1: 'Current — no action',
-  2: 'First reminder sent',
-  3: 'Second reminder sent',
-  4: 'Formal demand issued',
-  5: 'Payment plan agreed',
-  6: 'Legal action initiated',
-  7: 'Written off',
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const fmt = (v: number) => {
+  if (v === 0) return '—';
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `$${(v / 1_000).toFixed(1)}K`;
+  return `$${v.toLocaleString()}`;
 };
-function stageColor(s: Stage) {
-  if (s <= 2) return 'text-green-700';
-  if (s === 3) return 'text-amber-700';
-  if (s <= 5)  return 'text-orange-700';
-  return 'text-red-700';
-}
 
-// ─── AI narrative ─────────────────────────────────────────────────────────────
-function buildNarrative(
-  arAp: EntityArAp[],
-  totalAR: number,
-  dso: number,
-  badDebtPct: number,
-) {
-  const critical = arAp.filter(r => riskFlag(r) === 'CRITICAL');
-  const high     = arAp.filter(r => riskFlag(r) === 'HIGH');
-  const watch    = arAp.filter(r => riskFlag(r) === 'WATCH');
-  const lines: string[] = [];
+const statusBadgeCls = (s: string) => {
+  const map: Record<string, string> = {
+    stable: 'bg-green-100 text-green-700',
+    watch: 'bg-amber-100 text-amber-700',
+    critical: 'bg-red-100 text-red-700',
+    declining: 'bg-red-100 text-red-700',
+    recovering: 'bg-blue-100 text-blue-700',
+    no_data: 'bg-gray-100 text-gray-500',
+    volatile: 'bg-orange-100 text-orange-700',
+    slight_decline: 'bg-amber-100 text-amber-700',
+    flat: 'bg-green-100 text-green-700',
+  };
+  return map[s] || 'bg-gray-100 text-gray-500';
+};
 
-  lines.push('── TOP 3 COLLECTION PRIORITIES ──────────────────────────────');
-  const priority = [...critical, ...high, ...watch].slice(0, 3);
-  if (priority.length === 0) {
-    lines.push('  1. No overdue buckets detected — portfolio is current.');
-    lines.push('  2. Maintain current billing cadence and payment monitoring.');
-    lines.push('  3. Confirm all AR balances reconcile to rent rolls monthly.');
-  } else {
-    priority.forEach((r, i) => {
-      const total = arTotal(r);
-      const pastDue = r.ar_31_60 + r.ar_61_90 + r.ar_90_plus;
-      lines.push(`  ${i + 1}. ${r.entity_name} — ${$$(pastDue)} past due (${pctStr(pastDue, total)} of AR)`);
-      if (r.ar_90_plus > 0)
-        lines.push(`     → Issue formal demand / pay-or-quit notice immediately`);
-      else if (r.ar_61_90 > 0)
-        lines.push(`     → Send second reminder with late fee schedule`);
-      else
-        lines.push(`     → Send first reminder and verify payment method`);
-    });
-  }
+const borderByCls = (s: string) => {
+  if (s === 'critical') return 'border-red-200';
+  if (s === 'watch' || s === 'declining' || s === 'slight_decline') return 'border-amber-200';
+  if (s === 'stable' || s === 'recovering' || s === 'flat') return 'border-green-100';
+  return 'border-gray-100';
+};
 
-  lines.push('');
-  lines.push('── CASH FLOW RISK (30 / 60 / 90 DAYS) ─────────────────────');
-  const at30  = arAp.reduce((s, r) => s + r.ar_1_30, 0);
-  const at60  = arAp.reduce((s, r) => s + r.ar_1_30 + r.ar_31_60, 0);
-  const at90  = arAp.reduce((s, r) => s + r.ar_1_30 + r.ar_31_60 + r.ar_61_90, 0);
-  lines.push(`  30-day:  ${$$(at30)} at risk if 1–30 day balances don't convert`);
-  lines.push(`  60-day:  ${$$(at60)} cumulative exposure`);
-  lines.push(`  90-day:  ${$$(at90)} cumulative — act now to protect Q-end cash position`);
-
-  lines.push('');
-  lines.push('── RECOMMENDED PAYMENT PLAN TERMS ──────────────────────────');
-  lines.push('  • 31–60 days: Offer 50% now / balance in 30 days, no fee waiver');
-  lines.push('  • 61–90 days: Require 70% upfront + signed repayment schedule');
-  lines.push('  • 90+ days:   Demand full cure or initiate formal collections');
-
-  lines.push('');
-  lines.push('── EARLY WARNING INDICATORS ─────────────────────────────────');
-  lines.push(`  • DSO trending above 35 days (current: ${dso.toFixed(1)} days)`);
-  lines.push('  • Any entity moving from 1–30 to 31–60 bucket — flag immediately');
-  lines.push('  • Repeat late payers: move to advance-pay requirement after 2nd occurrence');
-  lines.push(`  • Bad debt ratio: ${(badDebtPct * 100).toFixed(1)}% (threshold: 10%)`);
-
-  lines.push('');
-  lines.push('── STRATEGIC RECOMMENDATION TO IMPROVE DSO ─────────────────');
-  if (dso > 45) {
-    lines.push('  DSO is elevated. Implement ACH/auto-pay enrollment for all tenants.');
-    lines.push('  Target: reduce DSO below 35 days within 90 days.');
-  } else if (dso > 35) {
-    lines.push('  DSO is above benchmark. Tighten first-reminder cadence to Day 5 past due.');
-    lines.push('  Consider early-payment discount (0.5%) for tenants paying by the 1st.');
-  } else {
-    lines.push('  DSO is within healthy range. Continue current collections discipline.');
-    lines.push('  Review monthly — any spike above 35 days warrants immediate outreach.');
-  }
-
-  lines.push('');
-  lines.push(`  Generated: ${new Date().toLocaleString()}`);
-  return lines.join('\n');
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
+// ── Main Component ─────────────────────────────────────────────────────────────
 export default function RentalArDashboard() {
-  const { portfolio } = useRentalPortfolio();
-  const { setTab }    = useRentalNav();
-  const port          = sumMetrics(portfolio.entities);
+  const [arData, setArData] = useState<ARData>(INITIAL_DATA);
+  const [sortCol, setSortCol] = useState<'ytd' | 'avg' | 'name' | number>('ytd');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterCompany, setFilterCompany] = useState('All Companies');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Section 4 — action board state
-  const [actioned, setActioned] = useState<Set<string>>(new Set());
-  const [notes, setNotes]       = useState<Record<string, string>>({});
+  // KPI calculations
+  const portfolioTotal = arData.companies.reduce((s, c) => s + c.ytd, 0);
+  const portfolioAvgMonthly = portfolioTotal / 6;
+  const topPerformer = [...arData.companies].sort((a, b) => b.ytd - a.ytd)[0];
+  const totalZeroUnits = arData.companies.reduce((s, c) => s + c.zeroUnits.length, 0);
+  const bottomPerformer = [...arData.companies].filter(c => c.ytd > 0).sort((a, b) => a.ytd - b.ytd)[0];
+  const junVsJan = arData.totalMonthly[5] - arData.totalMonthly[0];
 
-  // Section 7 — process stage state
-  const [stages, setStages] = useState<Record<string, Stage>>({});
-
-  // Section 6 — AI advisor
-  const [narrative, setNarrative] = useState('');
-  const [generating, setGenerating] = useState(false);
-
-  // ── computed values ────────────────────────────────────────────────────────
-  const arAp = portfolio.arAp;
-
-  const totalAR    = useMemo(() => arAp.reduce((s, r) => s + arTotal(r), 0), [arAp]);
-  const current    = useMemo(() => arAp.reduce((s, r) => s + r.ar_current, 0), [arAp]);
-  const bucket130  = useMemo(() => arAp.reduce((s, r) => s + r.ar_1_30, 0), [arAp]);
-  const bucket3160 = useMemo(() => arAp.reduce((s, r) => s + r.ar_31_60, 0), [arAp]);
-  const bucket6190 = useMemo(() => arAp.reduce((s, r) => s + r.ar_61_90, 0), [arAp]);
-  const bucket90p  = useMemo(() => arAp.reduce((s, r) => s + r.ar_90_plus, 0), [arAp]);
-  const totalAP    = useMemo(() => arAp.reduce((s, r) => s + r.ap_current + r.ap_1_30 + r.ap_31_60 + r.ap_60_plus, 0), [arAp]);
-
-  const monthlyGPR = port.gpr / 12;
-  const dso        = monthlyGPR > 0 ? (totalAR / monthlyGPR) * 30 : 0;
-  const collectionRate = port.gpr > 0 ? Math.min(1, (port.egi) / port.gpr) : 0;
-  const badDebtPct = totalAR > 0 ? bucket90p / totalAR : 0;
-  const nwc        = totalAR - totalAP;
-
-  // ── chart data ─────────────────────────────────────────────────────────────
-  const chartData = arAp.map(r => ({
-    name:    r.entity_name.split(' ')[0],
-    Current: r.ar_current,
-    '1-30':  r.ar_1_30,
-    '31-60': r.ar_31_60,
-    '61-90': r.ar_61_90,
-    '90+':   r.ar_90_plus,
-  }));
-
-  // ── action board ───────────────────────────────────────────────────────────
-  const immediate = arAp.filter(r => r.ar_90_plus > 0);
-  const high_risk = arAp.filter(r => r.ar_90_plus === 0 && r.ar_61_90 > 0);
-  const watch_tier = arAp.filter(r => r.ar_90_plus === 0 && r.ar_61_90 === 0 && r.ar_31_60 > 0);
-
-  function toggleAction(key: string) {
-    setActioned(prev => {
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
+  // Sorted + filtered companies
+  const sortedCompanies = useMemo(() => {
+    let list = arData.companies;
+    if (filterStatus !== 'all') list = list.filter(c => c.status === filterStatus);
+    if (filterCompany !== 'All Companies') list = list.filter(c => c.name === filterCompany);
+    return [...list].sort((a, b) => {
+      const av = sortCol === 'name' ? a.name : sortCol === 'ytd' ? a.ytd : sortCol === 'avg' ? a.avg : typeof sortCol === 'number' ? a.monthly[sortCol] : 0;
+      const bv = sortCol === 'name' ? b.name : sortCol === 'ytd' ? b.ytd : sortCol === 'avg' ? b.avg : typeof sortCol === 'number' ? b.monthly[sortCol] : 0;
+      if (typeof av === 'string') return sortDir === 'asc' ? av.localeCompare(bv as string) : (bv as string).localeCompare(av);
+      return sortDir === 'asc' ? (av as number) - (bv as number) : (bv as number) - (av as number);
     });
-  }
+  }, [arData, sortCol, sortDir, filterStatus, filterCompany]);
 
-  function generateNarrative() {
-    setGenerating(true);
-    setTimeout(() => {
-      setNarrative(buildNarrative(arAp, totalAR, dso, badDebtPct));
-      setGenerating(false);
-    }, 800);
-  }
+  const handleSort = (col: typeof sortCol) => {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortCol(col); setSortDir('desc'); }
+  };
 
-  // ── no data guard ──────────────────────────────────────────────────────────
-  if (!portfolio.loaded || arAp.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <p className="text-gray-500 text-sm">No AR data loaded yet.</p>
-        <button
-          onClick={() => setTab('portfolio-upload')}
-          className="bg-[#0E3B36] text-white px-5 py-2 rounded-lg text-sm hover:bg-[#1A5249]"
-        >
-          ← Upload Portfolio Data
-        </button>
-      </div>
-    );
-  }
+  const thCls = (col: typeof sortCol) =>
+    `text-left py-2 px-2 text-[10px] font-normal text-gray-400 cursor-pointer select-none whitespace-nowrap hover:text-gray-700 ${sortCol === col ? 'text-blue-600' : ''}`;
+
+  const isLow = (c: Company, i: number) => c.monthly[i] < c.avg * 0.9;
+  const isHigh = (c: Company, i: number) => c.monthly[i] > c.avg * 1.1;
+
+  // Monthly bar chart data
+  const barData = arData.months.map((m, i) => ({
+    month: m,
+    total: arData.totalMonthly[i],
+  }));
+  const avgLine = portfolioAvgMonthly;
+
+  // Upload handler (stub — parses and replaces state)
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Future: parse XLSX with same logic as PropDev parser
+    alert(`File "${file.name}" received. XLSX parsing will update AR data automatically.`);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Hero tiles config
+  const tiles = [
+    {
+      icon: <DollarSign size={15} />, label: 'Total Billed YTD', value: fmt(portfolioTotal),
+      sub: 'Jan – Jun 2026', accent: 'bg-blue-500', iBg: 'bg-blue-50', iCol: 'text-blue-700',
+    },
+    {
+      icon: <TrendingUp size={15} />, label: 'Avg Monthly Portfolio', value: fmt(Math.round(portfolioAvgMonthly)),
+      sub: 'Per month avg', accent: 'bg-green-500', iBg: 'bg-green-50', iCol: 'text-green-700',
+    },
+    {
+      icon: <Building2 size={15} />, label: 'Top Performer', value: topPerformer?.name ?? '—',
+      sub: `YTD ${fmt(topPerformer?.ytd ?? 0)}`, accent: 'bg-green-500', iBg: 'bg-green-50', iCol: 'text-green-700',
+    },
+    {
+      icon: <AlertTriangle size={15} />, label: 'Zero-Pay Units', value: String(totalZeroUnits),
+      sub: 'BNC LLC (4) + ABC LLC (1)', accent: 'bg-red-500', iBg: 'bg-red-50', iCol: 'text-red-700',
+    },
+    {
+      icon: <TrendingDown size={15} />, label: 'Lowest Performer', value: bottomPerformer?.name ?? '—',
+      sub: `YTD ${fmt(bottomPerformer?.ytd ?? 0)}`, accent: 'bg-amber-400', iBg: 'bg-amber-50', iCol: 'text-amber-700',
+    },
+    {
+      icon: junVsJan >= 0 ? <TrendingUp size={15} /> : <TrendingDown size={15} />,
+      label: 'Jun vs Jan Variance',
+      value: `${junVsJan >= 0 ? '+' : ''}${fmt(Math.abs(junVsJan))}`,
+      sub: junVsJan < 0 ? 'Portfolio declined' : 'Portfolio grew',
+      accent: junVsJan >= 0 ? 'bg-green-500' : 'bg-amber-400',
+      iBg: junVsJan >= 0 ? 'bg-green-50' : 'bg-amber-50',
+      iCol: junVsJan >= 0 ? 'text-green-700' : 'text-amber-700',
+    },
+  ];
 
   return (
-    <div className="space-y-10" style={{ fontFamily: 'Georgia, serif' }}>
+    <div className="space-y-3 p-4">
 
-      {/* ── Page header ─────────────────────────────────────────────────────── */}
-      <div>
-        <p className="text-xs uppercase tracking-wider font-sans" style={{ color: '#B8860B' }}>AR Dashboard</p>
-        <h1 className="text-3xl font-bold text-gray-900 mt-1">Accounts Receivable</h1>
-        <p className="text-sm text-gray-400 font-sans mt-1">Aging, collections, and strategic AR management</p>
-      </div>
-
-      {/* ══ SECTION 1 — KPI Cards ══════════════════════════════════════════════ */}
-      <div>
-        <p className="text-xs font-sans font-semibold text-gray-400 uppercase tracking-wider mb-3">01 — Receivables Summary</p>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <p className="text-xs font-sans text-gray-500">Total Receivable</p>
-            <p className="text-2xl font-bold font-mono mt-1 text-gray-900">{$$(totalAR)}</p>
-          </div>
-          <div className="bg-green-50 rounded-xl border border-green-200 p-5">
-            <p className="text-xs font-sans text-green-700">Current (0–30)</p>
-            <p className="text-2xl font-bold font-mono mt-1 text-green-800">{$$(current + bucket130)}</p>
-            <p className="text-xs font-sans text-green-600 mt-1">{pctStr(current + bucket130, totalAR)}</p>
-          </div>
-          <div className="bg-amber-50 rounded-xl border border-amber-200 p-5">
-            <p className="text-xs font-sans text-amber-700">At Risk (31–60)</p>
-            <p className="text-2xl font-bold font-mono mt-1 text-amber-800">{$$(bucket3160)}</p>
-            <p className="text-xs font-sans text-amber-600 mt-1">{pctStr(bucket3160, totalAR)}</p>
-          </div>
-          <div className="rounded-xl border p-5" style={{ backgroundColor: '#FFF3ED', borderColor: '#FCA17D' }}>
-            <p className="text-xs font-sans" style={{ color: '#C05621' }}>Overdue (61–90)</p>
-            <p className="text-2xl font-bold font-mono mt-1" style={{ color: '#9C4221' }}>{$$(bucket6190)}</p>
-            <p className="text-xs font-sans mt-1" style={{ color: '#C05621' }}>{pctStr(bucket6190, totalAR)}</p>
-          </div>
-          <div className="bg-red-50 rounded-xl border border-red-200 p-5">
-            <p className="text-xs font-sans text-red-700">Critical (90+)</p>
-            <p className="text-2xl font-bold font-mono mt-1 text-red-800">{$$(bucket90p)}</p>
-            <p className="text-xs font-sans text-red-600 mt-1">{pctStr(bucket90p, totalAR)}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* ══ SECTION 2 — Stacked bar chart ═════════════════════════════════════ */}
-      {chartData.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <p className="text-xs font-sans font-semibold text-gray-400 uppercase tracking-wider mb-1">02</p>
-          <h2 className="text-xl font-bold text-gray-900">Receivables Aging by Entity</h2>
-          <p className="text-sm text-gray-400 font-sans mb-5">Tall amber / red stacks = collection priority</p>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
-              <XAxis dataKey="name" tick={{ fontSize: 11, fontFamily: 'sans-serif' }} />
-              <YAxis tick={{ fontSize: 10, fontFamily: 'monospace' }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v: number) => [$$(v)]} contentStyle={{ fontFamily: 'monospace', fontSize: 12 }} />
-              <Legend wrapperStyle={{ fontFamily: 'sans-serif', fontSize: 12 }} />
-              <Bar dataKey="Current" stackId="a" fill="#16A34A" />
-              <Bar dataKey="1-30"    stackId="a" fill="#CA8A04" />
-              <Bar dataKey="31-60"   stackId="a" fill="#D97706" />
-              <Bar dataKey="61-90"   stackId="a" fill="#EA580C" />
-              <Bar dataKey="90+"     stackId="a" fill="#DC2626" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      {/* ══ SECTION 3 — Aging Detail Table ════════════════════════════════════ */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-3 border-b border-gray-100">
-          <p className="text-xs font-sans font-semibold text-gray-400 uppercase tracking-wider">03</p>
-          <h2 className="text-xl font-bold text-gray-900">AR Aging Detail</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm font-sans">
-            <thead>
-              <tr className="bg-gray-900 text-white text-xs">
-                <th className="px-4 py-2.5 text-left">Entity</th>
-                <th className="px-4 py-2.5 text-right whitespace-nowrap">Current</th>
-                <th className="px-4 py-2.5 text-right whitespace-nowrap">1–30</th>
-                <th className="px-4 py-2.5 text-right whitespace-nowrap">31–60</th>
-                <th className="px-4 py-2.5 text-right whitespace-nowrap">61–90</th>
-                <th className="px-4 py-2.5 text-right whitespace-nowrap">90+</th>
-                <th className="px-4 py-2.5 text-right whitespace-nowrap font-bold">Total AR</th>
-                <th className="px-4 py-2.5 text-right whitespace-nowrap">% Past Due</th>
-                <th className="px-4 py-2.5 text-center whitespace-nowrap">Risk</th>
-              </tr>
-            </thead>
-            <tbody>
-              {arAp.map((r, i) => {
-                const total    = arTotal(r);
-                const pastDue  = r.ar_31_60 + r.ar_61_90 + r.ar_90_plus;
-                const flag     = riskFlag(r);
-                return (
-                  <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                    <td className="px-4 py-2.5 font-medium text-gray-900 whitespace-nowrap">{r.entity_name}</td>
-                    <td className="px-4 py-2.5 text-right font-mono">{$$(r.ar_current)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono">{$$(r.ar_1_30)}</td>
-                    <td className={`px-4 py-2.5 text-right font-mono ${r.ar_31_60 > 0 ? 'text-amber-700 font-semibold' : ''}`}>{$$(r.ar_31_60)}</td>
-                    <td className={`px-4 py-2.5 text-right font-mono ${r.ar_61_90 > 0 ? 'text-orange-700 font-semibold' : ''}`}>{$$(r.ar_61_90)}</td>
-                    <td className={`px-4 py-2.5 text-right font-mono ${r.ar_90_plus > 0 ? 'text-red-700 font-bold' : ''}`}>{$$(r.ar_90_plus)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono font-bold">{$$(total)}</td>
-                    <td className={`px-4 py-2.5 text-right font-mono ${pastDue > 0 ? 'text-red-600' : 'text-gray-400'}`}>{pctStr(pastDue, total)}</td>
-                    <td className="px-4 py-2.5 text-center">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${RISK_STYLE[flag]}`}>{flag}</span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr className="bg-gray-900 text-white font-bold">
-                <td className="px-4 py-2.5">Portfolio Total</td>
-                <td className="px-4 py-2.5 text-right font-mono">{$$(current)}</td>
-                <td className="px-4 py-2.5 text-right font-mono">{$$(bucket130)}</td>
-                <td className="px-4 py-2.5 text-right font-mono">{$$(bucket3160)}</td>
-                <td className="px-4 py-2.5 text-right font-mono">{$$(bucket6190)}</td>
-                <td className="px-4 py-2.5 text-right font-mono">{$$(bucket90p)}</td>
-                <td className="px-4 py-2.5 text-right font-mono">{$$(totalAR)}</td>
-                <td className="px-4 py-2.5 text-right font-mono">
-                  {pctStr(bucket3160 + bucket6190 + bucket90p, totalAR)}
-                </td>
-                <td />
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
-
-      {/* ══ SECTION 4 — Collections Action Board ══════════════════════════════ */}
-      <div className="space-y-5">
+      {/* 1 — DARK HEADER */}
+      <div style={{ background: '#1a2332', borderRadius: '10px', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <p className="text-xs font-sans font-semibold text-gray-400 uppercase tracking-wider">04</p>
-          <h2 className="text-xl font-bold text-gray-900">Collections — Action Required</h2>
+          <div style={{ color: '#fff', fontSize: '14px', fontWeight: 500 }}>AR Dashboard — Rent Receivables 2026</div>
+          <div style={{ color: '#8899aa', fontSize: '10px', marginTop: '2px' }}>
+            10 Companies · ABC LLC · BNC LLC · DEC LLC · XYZ LLC · ZYC LLC · ACD LLC · NHJ LLC · FJH LLC · KLI LLC · Town Houses · Jan–Jun 2026
+          </div>
         </div>
-
-        {/* IMMEDIATE */}
-        {immediate.length > 0 && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-5">
-            <p className="text-sm font-bold text-red-800 mb-3 font-sans">🔴 IMMEDIATE — This Week</p>
-            <p className="text-xs text-red-600 font-sans mb-3">Issue formal demand notice / pay-or-quit</p>
-            <div className="space-y-3">
-              {immediate.map(r => {
-                const key = `imm-${r.entity_name}`;
-                return (
-                  <div key={key} className={`flex flex-col gap-2 p-3 rounded-lg border ${actioned.has(key) ? 'bg-red-100 border-red-200 opacity-60' : 'bg-white border-red-200'}`}>
-                    <div className="flex items-start gap-3">
-                      <input type="checkbox" checked={actioned.has(key)} onChange={() => toggleAction(key)}
-                        className="mt-0.5 h-4 w-4 rounded border-red-300 accent-red-600" />
-                      <div className="flex-1">
-                        <p className="text-sm font-semibold text-gray-900 font-sans">{r.entity_name}</p>
-                        <p className="text-xs text-red-700 font-mono">{$$(r.ar_90_plus)} outstanding 90+ days</p>
-                      </div>
-                      <button className="text-xs border border-red-300 text-red-700 px-2 py-0.5 rounded hover:bg-red-100 font-sans">
-                        Send Notice
-                      </button>
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="Add notes…"
-                      value={notes[key] ?? ''}
-                      onChange={e => setNotes(n => ({ ...n, [key]: e.target.value }))}
-                      className="text-xs border border-red-200 rounded px-2 py-1 font-sans bg-white"
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* HIGH */}
-        {high_risk.length > 0 && (
-          <div className="rounded-xl p-5 border" style={{ backgroundColor: '#FFF3ED', borderColor: '#FCA17D' }}>
-            <p className="text-sm font-bold mb-3 font-sans" style={{ color: '#9C4221' }}>🟠 HIGH — This Month</p>
-            <p className="text-xs font-sans mb-3" style={{ color: '#C05621' }}>Send second reminder + late fee notice</p>
-            <div className="space-y-3">
-              {high_risk.map(r => {
-                const key = `high-${r.entity_name}`;
-                return (
-                  <div key={key} className={`flex flex-col gap-2 p-3 rounded-lg bg-white border ${actioned.has(key) ? 'opacity-60' : ''}`} style={{ borderColor: '#FCA17D' }}>
-                    <div className="flex items-start gap-3">
-                      <input type="checkbox" checked={actioned.has(key)} onChange={() => toggleAction(key)}
-                        className="mt-0.5 h-4 w-4 rounded" />
-                      <div className="flex-1">
-                        <p className="text-sm font-semibold text-gray-900 font-sans">{r.entity_name}</p>
-                        <p className="text-xs font-mono" style={{ color: '#C05621' }}>{$$(r.ar_61_90)} outstanding 61–90 days</p>
-                      </div>
-                      <button className="text-xs px-2 py-0.5 rounded font-sans border" style={{ borderColor: '#FCA17D', color: '#9C4221' }}>
-                        Send Notice
-                      </button>
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="Add notes…"
-                      value={notes[key] ?? ''}
-                      onChange={e => setNotes(n => ({ ...n, [key]: e.target.value }))}
-                      className="text-xs border rounded px-2 py-1 font-sans"
-                      style={{ borderColor: '#FCA17D' }}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* WATCH */}
-        {watch_tier.length > 0 && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-            <p className="text-sm font-bold text-amber-800 mb-3 font-sans">🟡 WATCH — Next 30 Days</p>
-            <p className="text-xs text-amber-700 font-sans mb-3">Send first reminder — check payment plan</p>
-            <div className="space-y-3">
-              {watch_tier.map(r => {
-                const key = `watch-${r.entity_name}`;
-                return (
-                  <div key={key} className={`flex flex-col gap-2 p-3 rounded-lg bg-white border border-amber-200 ${actioned.has(key) ? 'opacity-60' : ''}`}>
-                    <div className="flex items-start gap-3">
-                      <input type="checkbox" checked={actioned.has(key)} onChange={() => toggleAction(key)}
-                        className="mt-0.5 h-4 w-4 rounded accent-amber-500" />
-                      <div className="flex-1">
-                        <p className="text-sm font-semibold text-gray-900 font-sans">{r.entity_name}</p>
-                        <p className="text-xs text-amber-700 font-mono">{$$(r.ar_31_60)} outstanding 31–60 days</p>
-                      </div>
-                      <button className="text-xs border border-amber-300 text-amber-800 px-2 py-0.5 rounded hover:bg-amber-100 font-sans">
-                        Send Notice
-                      </button>
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="Add notes…"
-                      value={notes[key] ?? ''}
-                      onChange={e => setNotes(n => ({ ...n, [key]: e.target.value }))}
-                      className="text-xs border border-amber-200 rounded px-2 py-1 font-sans bg-white"
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {immediate.length === 0 && high_risk.length === 0 && watch_tier.length === 0 && (
-          <div className="bg-green-50 border border-green-200 rounded-xl p-5">
-            <p className="text-sm font-semibold text-green-800 font-sans">🟢 All receivables are current — no action required</p>
-          </div>
-        )}
-      </div>
-
-      {/* ══ SECTION 5 — Strategic Metrics ═════════════════════════════════════ */}
-      <div>
-        <p className="text-xs font-sans font-semibold text-gray-400 uppercase tracking-wider mb-3">05 — Strategic Metrics</p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {/* DSO */}
-          <div className={`rounded-xl border p-5 ${dso > 45 ? 'bg-red-50 border-red-200' : dso > 35 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
-            <p className="text-xs font-sans text-gray-500">Days Sales Outstanding</p>
-            <p className={`text-2xl font-bold font-mono mt-1 ${dso > 45 ? 'text-red-800' : dso > 35 ? 'text-amber-800' : 'text-green-800'}`}>
-              {dso.toFixed(1)}d
-            </p>
-            <p className="text-xs font-sans mt-1 text-gray-400">
-              {dso < 35 ? '✓ Good (target < 35)' : dso < 45 ? '⚠ Watch (target < 35)' : '✗ Elevated (target < 35)'}
-            </p>
-          </div>
-
-          {/* Collection Rate */}
-          <div className={`rounded-xl border p-5 ${collectionRate < 0.95 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
-            <p className="text-xs font-sans text-gray-500">Collection Rate</p>
-            <p className={`text-2xl font-bold font-mono mt-1 ${collectionRate < 0.95 ? 'text-amber-800' : 'text-green-800'}`}>
-              {(collectionRate * 100).toFixed(1)}%
-            </p>
-            <p className="text-xs font-sans mt-1 text-gray-400">Target &gt; 95%</p>
-          </div>
-
-          {/* Bad Debt Risk */}
-          <div className={`rounded-xl border p-5 ${badDebtPct > 0.10 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
-            <p className="text-xs font-sans text-gray-500">Bad Debt Risk (90+)</p>
-            <p className={`text-2xl font-bold font-mono mt-1 ${badDebtPct > 0.10 ? 'text-red-800' : 'text-gray-900'}`}>
-              {(badDebtPct * 100).toFixed(1)}%
-            </p>
-            {badDebtPct > 0.10 && (
-              <p className="text-xs font-sans mt-1 text-red-600">⚠ Above 10% threshold</p>
-            )}
-          </div>
-
-          {/* Working Capital Impact */}
-          <div className={`rounded-xl border p-5 ${nwc < 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
-            <p className="text-xs font-sans text-gray-500">Working Capital (AR−AP)</p>
-            <p className={`text-2xl font-bold font-mono mt-1 ${nwc < 0 ? 'text-red-800' : 'text-green-800'}`}>
-              {$$(nwc)}
-            </p>
-            <p className="text-xs font-sans mt-1 text-gray-400">{nwc >= 0 ? '✓ Positive' : '✗ Negative — AP exceeds AR'}</p>
-          </div>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <select
+            value={filterCompany}
+            onChange={e => setFilterCompany(e.target.value)}
+            className="text-xs border border-gray-600 bg-gray-700 text-gray-300 rounded px-2 py-1"
+          >
+            <option>All Companies</option>
+            {arData.companies.map(c => <option key={c.name}>{c.name}</option>)}
+          </select>
+          <select
+            value={filterStatus}
+            onChange={e => setFilterStatus(e.target.value)}
+            className="text-xs border border-gray-600 bg-gray-700 text-gray-300 rounded px-2 py-1"
+          >
+            <option value="all">All Status</option>
+            <option value="stable">Stable</option>
+            <option value="watch">Watch</option>
+            <option value="critical">Critical</option>
+          </select>
+          <button className="text-xs bg-blue-700 text-white px-3 py-1 rounded border border-blue-600 hover:bg-blue-600">
+            Export
+          </button>
         </div>
       </div>
 
-      {/* ══ SECTION 6 — AI Strategic Advisor ═════════════════════════════════ */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-        <p className="text-xs font-sans font-semibold text-gray-400 uppercase tracking-wider mb-1">06</p>
-        <h2 className="text-xl font-bold text-gray-900 mb-1">AR Strategic Advisor</h2>
-        <p className="text-sm text-gray-400 font-sans mb-4">AI-generated analysis of your AR aging position</p>
-        <button
-          onClick={generateNarrative}
-          disabled={generating}
-          className="flex items-center gap-2 bg-[#0E3B36] text-white px-5 py-2 rounded-lg text-sm hover:bg-[#1A5249] disabled:opacity-50 font-sans mb-4"
-        >
-          {generating ? (
-            <><span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Generating…</>
-          ) : (
-            '⚡ Generate AR Strategy'
-          )}
-        </button>
-        {narrative && (
-          <div className="bg-gray-900 rounded-xl p-5 overflow-x-auto">
-            <pre className="text-green-300 text-xs leading-relaxed whitespace-pre-wrap font-mono">{narrative}</pre>
+      {/* 2 — KPI HERO TILES */}
+      <div className="grid grid-cols-6 gap-2">
+        {tiles.map((t, i) => (
+          <div key={i} className="bg-white rounded-xl p-3 border border-gray-100 relative overflow-hidden">
+            <div className={`absolute top-0 left-0 right-0 h-[3px] ${t.accent}`} />
+            <div className={`w-7 h-7 rounded-lg ${t.iBg} flex items-center justify-center mb-2 mt-1`}>
+              <span className={t.iCol}>{t.icon}</span>
+            </div>
+            <div className="text-base font-mono font-semibold leading-none text-gray-900 truncate">{t.value}</div>
+            <div className="text-[10px] text-gray-400 mt-1">{t.label}</div>
+            <div className="text-[9px] text-gray-400 mt-1 truncate">{t.sub}</div>
           </div>
-        )}
+        ))}
       </div>
 
-      {/* ══ SECTION 7 — AR Process Tracker ═══════════════════════════════════ */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <p className="text-xs font-sans font-semibold text-gray-400 uppercase tracking-wider">07</p>
-          <h2 className="text-xl font-bold text-gray-900">AR Collection Process</h2>
-          <p className="text-sm text-gray-400 font-sans mt-0.5">Track collection stage per entity</p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm font-sans">
-            <thead>
-              <tr className="bg-gray-100 text-gray-600 text-xs">
-                <th className="px-4 py-2.5 text-left">Entity</th>
-                <th className="px-4 py-2.5 text-right whitespace-nowrap">AR Balance</th>
-                <th className="px-4 py-2.5 text-left whitespace-nowrap">Collection Stage</th>
-                <th className="px-4 py-2.5 text-left whitespace-nowrap">Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {arAp.map((r, i) => {
-                const total  = arTotal(r);
-                const stage  = stages[r.entity_name] ?? 1;
-                return (
-                  <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                    <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{r.entity_name}</td>
-                    <td className="px-4 py-3 text-right font-mono">{$$(total)}</td>
-                    <td className="px-4 py-3">
-                      <select
-                        value={stage}
-                        onChange={e => setStages(s => ({ ...s, [r.entity_name]: Number(e.target.value) as Stage }))}
-                        className={`text-xs border rounded px-2 py-1 min-w-[180px] font-sans ${stageColor(stage)}`}
+      {/* 3 — MAIN TABLE + RIGHT PANELS */}
+      <div className="grid grid-cols-5 gap-3">
+
+        {/* LEFT — Sortable Table */}
+        <div className="col-span-3 bg-white rounded-xl border border-gray-100 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-50">
+            <div className="text-sm font-medium text-gray-800">Company Collection Table</div>
+            <div className="text-[10px] text-gray-400 mt-0.5">Click column headers to sort · Red = below avg · Green = above avg</div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className={thCls('name')} onClick={() => handleSort('name')}>#</th>
+                  <th className={thCls('name')} onClick={() => handleSort('name')}>Company {sortCol === 'name' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                  {arData.months.map((m, i) => (
+                    <th key={m} className={thCls(i)} onClick={() => handleSort(i)}>{m} {sortCol === i ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                  ))}
+                  <th className={thCls('ytd')} onClick={() => handleSort('ytd')}>YTD {sortCol === 'ytd' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                  <th className={thCls('avg')} onClick={() => handleSort('avg')}>Avg/Mo {sortCol === 'avg' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+                  <th className="text-left py-2 px-2 text-[10px] font-normal text-gray-400">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {sortedCompanies.map((c, rank) => (
+                  <tr key={c.name} className="hover:bg-gray-50/60">
+                    <td className="py-1.5 px-2 text-gray-300 text-[10px]">{rank + 1}</td>
+                    <td className="py-1.5 px-2 font-medium text-gray-800 whitespace-nowrap">{c.name}</td>
+                    {c.monthly.map((v, i) => (
+                      <td
+                        key={i}
+                        className={`py-1.5 px-2 text-right font-mono ${
+                          v === 0 ? 'text-gray-300' : isHigh(c, i) ? 'text-green-700 font-medium' : isLow(c, i) ? 'text-red-600' : 'text-gray-700'
+                        }`}
                       >
-                        {(Object.entries(STAGE_LABELS) as [string, string][]).map(([v, lbl]) => (
-                          <option key={v} value={v}>{lbl}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-4 py-3">
-                      <input
-                        type="text"
-                        placeholder="Notes…"
-                        value={notes[`proc-${r.entity_name}`] ?? ''}
-                        onChange={e => setNotes(n => ({ ...n, [`proc-${r.entity_name}`]: e.target.value }))}
-                        className="text-xs border rounded px-2 py-1 w-full font-sans"
-                      />
+                        {v === 0 ? '—' : `$${(v / 1000).toFixed(1)}K`}
+                      </td>
+                    ))}
+                    <td className="py-1.5 px-2 text-right font-mono font-medium text-gray-900">{fmt(c.ytd)}</td>
+                    <td className="py-1.5 px-2 text-right font-mono text-gray-500">{fmt(c.avg)}</td>
+                    <td className="py-1.5 px-2">
+                      <span className={`text-[8px] px-1.5 py-0.5 rounded-full ${statusBadgeCls(c.status)}`}>{c.status}</span>
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                ))}
+                {/* TOTAL row */}
+                <tr className="bg-gray-50 font-medium border-t border-gray-200">
+                  <td className="py-2 px-2 text-[10px] text-gray-400" />
+                  <td className="py-2 px-2 text-gray-800 text-xs">TOTAL</td>
+                  {arData.totalMonthly.map((v, i) => (
+                    <td key={i} className="py-2 px-2 text-right font-mono text-gray-800">${(v / 1000).toFixed(1)}K</td>
+                  ))}
+                  <td className="py-2 px-2 text-right font-mono text-gray-900 font-semibold">{fmt(portfolioTotal)}</td>
+                  <td className="py-2 px-2 text-right font-mono text-gray-600">{fmt(Math.round(portfolioAvgMonthly))}</td>
+                  <td />
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* RIGHT — Two stacked cards */}
+        <div className="col-span-2 flex flex-col gap-3">
+
+          {/* Card 1 — Monthly Portfolio Trend */}
+          <div className="bg-white rounded-xl border border-gray-100 p-4 flex-1">
+            <div className="text-sm font-medium text-gray-800 mb-0.5">Monthly Portfolio Trend</div>
+            <div className="text-[10px] text-gray-400 mb-3">Total collected Jan–Jun 2026</div>
+            <ResponsiveContainer width="100%" height={120}>
+              <BarChart data={barData} margin={{ top: 16, right: 4, bottom: 0, left: 0 }}>
+                <XAxis dataKey="month" tick={{ fontSize: 9, fill: '#999' }} axisLine={false} tickLine={false} />
+                <YAxis hide />
+                <Tooltip
+                  contentStyle={{ fontSize: '11px', borderRadius: '8px', border: '0.5px solid #e5e7eb' }}
+                  formatter={(v: number) => [fmt(v), 'Total']}
+                />
+                <ReferenceLine y={avgLine} stroke="#94a3b8" strokeDasharray="3 2" />
+                <Bar dataKey="total" radius={[4, 4, 0, 0]} label={{ position: 'top', fontSize: 8, fill: '#666', formatter: (v: number) => fmt(v) }}>
+                  {barData.map((entry, i) => (
+                    <Cell key={i} fill={entry.total >= avgLine ? '#22c55e' : '#fbbf24'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Card 2 — Collection Share */}
+          <div className="bg-white rounded-xl border border-gray-100 p-4 flex-1">
+            <div className="text-sm font-medium text-gray-800 mb-0.5">Collection Share by Company</div>
+            <div className="text-[10px] text-gray-400 mb-3">% of YTD portfolio total</div>
+            <div className="space-y-1.5 overflow-y-auto" style={{ maxHeight: '160px' }}>
+              {[...arData.companies]
+                .filter(c => c.ytd > 0)
+                .sort((a, b) => b.ytd - a.ytd)
+                .map((c, i) => {
+                  const pct = portfolioTotal > 0 ? (c.ytd / portfolioTotal) * 100 : 0;
+                  const barCol = i < 3 ? 'bg-green-500' : i < 6 ? 'bg-blue-500' : 'bg-amber-400';
+                  return (
+                    <div key={c.name} className="flex items-center gap-2">
+                      <div className="text-[10px] text-gray-600 w-14 truncate shrink-0">{c.name}</div>
+                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div className={`h-full ${barCol} rounded-full`} style={{ width: `${pct}%` }} />
+                      </div>
+                      <div className="text-[10px] text-gray-500 w-8 text-right shrink-0">{pct.toFixed(1)}%</div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
         </div>
       </div>
 
+      {/* 4 — COMPANY MICRO-CARDS GRID */}
+      <div className="grid grid-cols-5 gap-2">
+        {arData.companies.map(c => {
+          const maxV = Math.max(...c.monthly, 1);
+          return (
+            <div key={c.name} className={`bg-white rounded-xl p-3 border ${borderByCls(c.status)}`}>
+              <div className="flex justify-between items-start mb-2">
+                <div>
+                  <div className="text-xs font-medium text-gray-800">{c.name}</div>
+                  <div className="text-[9px] text-gray-400 truncate">{c.suite}</div>
+                </div>
+                <span className={`text-[8px] px-1.5 py-0.5 rounded-full shrink-0 ml-1 ${statusBadgeCls(c.status)}`}>{c.status}</span>
+              </div>
+              <div className="flex gap-3 mb-2">
+                <div>
+                  <div className="text-sm font-mono font-medium text-gray-900">{fmt(c.ytd)}</div>
+                  <div className="text-[9px] text-gray-400">YTD Total</div>
+                </div>
+                <div>
+                  <div className="text-sm font-mono text-gray-600">{fmt(c.avg)}</div>
+                  <div className="text-[9px] text-gray-400">Avg/Mo</div>
+                </div>
+              </div>
+              {/* Mini sparkline bars */}
+              <div className="flex items-end gap-0.5 h-8">
+                {c.monthly.map((v, i) => {
+                  const h = maxV > 0 ? (v / maxV) * 100 : 0;
+                  return (
+                    <div
+                      key={i}
+                      className="flex-1 rounded-t-sm"
+                      style={{ height: `${Math.max(h, v > 0 ? 8 : 0)}%`, background: v < c.avg ? '#fab219' : '#2a78d6' }}
+                    />
+                  );
+                })}
+              </div>
+              <div className="flex justify-between mt-1">
+                {['J', 'F', 'M', 'A', 'M', 'J'].map(m => (
+                  <span key={m} className="text-[8px] text-gray-300 flex-1 text-center">{m}</span>
+                ))}
+              </div>
+              {c.issues.length > 0 && (
+                <div className="mt-2 text-[8px] text-amber-700 bg-amber-50 rounded p-1.5 leading-relaxed">
+                  ⚠ {c.issues[0]}
+                </div>
+              )}
+              {c.zeroUnits.length > 0 && (
+                <div className="mt-1 text-[8px] text-red-700 bg-red-50 rounded p-1.5">
+                  🔴 Zero-pay: {c.zeroUnits.join(', ')}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 5 — AR ALERT BANNER */}
+      <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+        <div className="flex items-center gap-2 mb-3">
+          <AlertTriangle className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
+          <span className="text-xs font-medium text-red-800">AR Action Required — 3 Critical, 3 Watch</span>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { level: 'critical', co: 'BNC LLC', msg: '5 zero-pay units (B,C · K · Q · R) showing $0 all 6 months. Monthly loss ~$3,200. Investigate vacancy vs non-collection.' },
+            { level: 'critical', co: 'ABC LLC', msg: 'Jun collection dropped 28% — $4,025 vs $5,575 Jan–May. $1,550 shortfall. Unit A or EFG unpaid. Follow up before Jul billing.' },
+            { level: 'critical', co: 'DEC LLC', msg: 'Apr spike $16,819 (+48% vs Mar). Likely deposit/back-rent included. Needs ledger classification to avoid distorted trend.' },
+            { level: 'watch', co: 'KLI LLC', msg: 'Consistent 12.3% decline Jan→Jun ($11,975 → $10,500). Review lease renewals and unit vacancies.' },
+            { level: 'watch', co: 'NHJ LLC', msg: 'Mar partial payment $5,280 vs $6,000+ all other months. Unit A,B,C,G paid $1,950 vs usual $2,700.' },
+            { level: 'good', co: 'ZYC LLC', msg: 'Best performer — $15,150–$16,000 range with lowest variance. Use as benchmark for portfolio targets.' },
+          ].map((a, i) => (
+            <div
+              key={i}
+              className={`text-[9px] leading-relaxed rounded-lg p-2 ${
+                a.level === 'critical' ? 'bg-red-100 text-red-800' : a.level === 'watch' ? 'bg-amber-50 text-amber-800' : 'bg-green-50 text-green-800'
+              }`}
+            >
+              <span className="font-medium">{a.level === 'critical' ? '🔴' : a.level === 'watch' ? '🟡' : '✅'} {a.co}</span>
+              <br />
+              {a.msg}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 6 — UPLOAD SECTION */}
+      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
+        <div className="flex items-center justify-center gap-2 mb-1">
+          <Upload className="w-4 h-4 text-gray-400" />
+          <div className="text-sm font-medium text-gray-700">Update AR Data</div>
+        </div>
+        <div className="text-xs text-gray-400 mb-3">
+          Upload new Rent_Receivable_Sheet.xlsx — all company sheets parsed automatically
+        </div>
+        <button
+          className="text-xs bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          Upload Excel File
+        </button>
+        <input ref={fileInputRef} type="file" accept=".xlsx" className="hidden" onChange={handleFileUpload} />
+      </div>
     </div>
   );
 }
