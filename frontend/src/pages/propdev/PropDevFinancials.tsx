@@ -3,9 +3,9 @@ import * as XLSX from 'xlsx';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
   LineChart, Line, PieChart, Pie, Cell, RadialBarChart, RadialBar,
-  CartesianGrid,
+  CartesianGrid, ComposedChart, Area, ReferenceLine,
 } from 'recharts';
-import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Upload, FileSpreadsheet, Building2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Upload, FileSpreadsheet, Building2, DollarSign, BarChart2, Percent, Shield } from 'lucide-react';
 
 // ── Palette ──────────────────────────────────────────────────────────────────
 const COLORS = ['#2E75B6','#70AD47','#ED7D31','#FFC000','#5A2D82','#C00000','#00B0F0','#FF0066','#00B050','#7030A0','#FF7C00','#003366'];
@@ -1114,72 +1114,371 @@ function PDBSTable({ fin }: { fin: PDFinancials }) {
 }
 
 // ── Upload: KPI Dashboard ─────────────────────────────────────────────────────
-function PDKpiCard({ label,value,sub,status }: { label:string;value:string;sub:string;status:'good'|'warn'|'bad'|'info' }) {
-  const border={good:'border-green-500 bg-green-50',warn:'border-amber-500 bg-amber-50',bad:'border-red-500 bg-red-50',info:'border-blue-500 bg-blue-50'}[status];
-  const pill={good:'bg-green-100 text-green-700',warn:'bg-amber-100 text-amber-700',bad:'bg-red-100 text-red-700',info:'bg-blue-100 text-blue-700'}[status];
-  const tx={good:'✓ Healthy',warn:'⚠ Monitor',bad:'✗ Review',info:'ℹ Info'}[status];
-  return (
-    <div className={`border-l-4 ${border} rounded-lg p-4 shadow-sm`}>
-      <p className="text-xs text-gray-500 mb-1">{label}</p>
-      <p className="text-xl font-bold font-mono text-gray-900">{value}</p>
-      <p className="text-xs text-gray-500 mt-1">{sub}</p>
-      <span className={`inline-block text-xs px-2 py-0.5 rounded-full mt-2 font-medium ${pill}`}>{tx}</span>
-    </div>
-  );
-}
-
+// ── Upload: KPI Dashboard (Power BI Executive Style) ─────────────────────────
 function PDKPIView({ fin }: { fin: PDFinancials }) {
-  const lastY=fin.years[fin.years.length-1];
-  const prevY=fin.years.length>=2?fin.years[fin.years.length-2]:null;
-  const k=pdKpis(fin,lastY);
-  const kP=prevY?pdKpis(fin,prevY):null;
-  const noiM=k.rev>0?k.noi/k.rev*100:0;
-  const netM=k.rev>0?k.netInc/k.rev*100:0;
-  const expR=k.rev>0?k.exp/k.rev*100:0;
-  const revG=kP&&kP.rev>0?(k.rev-kP.rev)/kP.rev*100:null;
-  const iCov=k.interest>0?k.noi/k.interest:0;
-  const ltv=k.buildings>0?k.loans/k.buildings*100:0;
-  const alR=k.totalLiab>0?k.totalAssets/k.totalLiab:0;
-  const dte=k.equity>0?k.totalLiab/k.equity:0;
-  const trendData=fin.years.map(y=>{const kk=pdKpis(fin,y);return{year:String(y),Revenue:kk.rev,Expenses:kk.exp,'Net Income':kk.netInc,NOI:kk.noi};});
+  const [chartType, setChartType] = useState<'Area'|'Line'|'Bar'>('Area');
+
+  const lastY = fin.years[fin.years.length - 1];
+  const prevY = fin.years.length >= 2 ? fin.years[fin.years.length - 2] : null;
+  const k  = pdKpis(fin, lastY);
+  const kP = prevY ? pdKpis(fin, prevY) : null;
+
+  const noiM    = k.rev > 0 ? k.noi / k.rev * 100 : 0;
+  const netM    = k.rev > 0 ? k.netInc / k.rev * 100 : 0;
+  const expR    = k.rev > 0 ? k.exp / k.rev * 100 : 0;
+  const revG    = kP && kP.rev > 0 ? (k.rev - kP.rev) / kP.rev * 100 : null;
+  const iCov    = k.interest > 0 ? k.noi / k.interest : 0;
+  const ltv     = k.buildings > 0 ? k.loans / k.buildings * 100 : 0;
+  const alR     = k.totalLiab > 0 ? k.totalAssets / k.totalLiab : 0;
+  const dte     = k.equity > 0 ? k.totalLiab / k.equity : 0;
+  const roa     = k.totalAssets > 0 ? k.netInc / k.totalAssets * 100 : 0;
+  const roe     = k.equity > 0 ? k.netInc / k.equity * 100 : 0;
+  const ebitdaM = k.rev > 0 ? (k.netInc + k.interest) / k.rev * 100 : 0;
+
+  const trendData = fin.years.map(y => {
+    const kk = pdKpis(fin, y);
+    return { year: String(y), revenue: kk.rev, expenses: kk.exp, netIncome: kk.netInc, noi: kk.noi };
+  });
+
+  const spark = (fn: (kk: ReturnType<typeof pdKpis>) => number) =>
+    fin.years.map(y => ({ v: fn(pdKpis(fin, y)) }));
+
+  const getExpBreak = (y: number) => {
+    const items = fin.pl.filter(i => !i.isSectionHeader && !i.isTotal && !i.isNetIncome);
+    const sum = (pat: RegExp) => items.filter(i => pat.test(i.label)).reduce((s, i) => s + Math.abs(i.values[y] ?? 0), 0);
+    const interest = sum(/interest/i);
+    const taxes    = sum(/tax/i);
+    const legal    = sum(/legal|attorney|account|book.keep/i);
+    const mgmt     = sum(/management|mgmt/i);
+    const utils    = sum(/utilit|electric|water|gas|phone|internet/i);
+    const other    = items
+      .filter(i => !/interest|tax|legal|attorney|account|book.keep|management|mgmt|utilit|electric|water|gas|phone|internet/i.test(i.label))
+      .reduce((s, i) => s + Math.abs(i.values[y] ?? 0), 0);
+    return { interest, taxes, legal, mgmt, utils, other };
+  };
+
+  const expBreakData = fin.years.map(y => ({ year: String(y), ...getExpBreak(y) }));
+  const lastBreak    = getExpBreak(lastY);
+  const interestPct  = k.rev > 0 ? k.interest / k.rev * 100 : 0;
+  const taxPct       = k.rev > 0 ? lastBreak.taxes / k.rev * 100 : 0;
+  const mgmtPct      = k.rev > 0 ? lastBreak.mgmt / k.rev * 100 : 0;
+
+  const radialData = [
+    { name: 'EBITDA Margin', value: Math.max(1, Math.min(100, ebitdaM)), fill: '#2E75B6' },
+    { name: 'NOI Margin',    value: Math.max(1, Math.min(100, noiM)),     fill: '#70AD47' },
+    { name: 'Net (adj)',     value: Math.max(1, Math.min(100, netM + 30)), fill: '#ED7D31' },
+  ];
+
+  const scoreRows: Array<{metric:string;value:string;benchmark:string;status:'good'|'watch'|'review'|'info'}> = [
+    { metric:'NOI Margin',    value:`${noiM.toFixed(1)}%`,                    benchmark:'>35%',   status: noiM>=35?'good':noiM>=20?'watch':'review' },
+    { metric:'Net Margin',    value:`${netM.toFixed(1)}%`,                    benchmark:'>0%',    status: netM>=0?'good':'review' },
+    { metric:'Asset/Liab',   value: alR>0?`${alR.toFixed(2)}x`:'N/A',        benchmark:'>1.5x',  status: alR>=1.5?'good':alR>=1?'watch':'review' },
+    { metric:'LTV',          value: ltv>0?`${ltv.toFixed(1)}%`:'N/A',        benchmark:'<80%',   status: ltv>0&&ltv<=80?'good':ltv<=90?'watch':'review' },
+    { metric:'Int. Coverage', value: iCov>0?`${iCov.toFixed(2)}x`:'N/A',    benchmark:'>1.5x',  status: iCov>=1.5?'good':iCov>=1?'watch':'review' },
+    { metric:'ROA',          value: k.totalAssets>0?`${roa.toFixed(1)}%`:'N/A', benchmark:'>4%', status: roa>=4?'good':roa>=0?'watch':'review' },
+    { metric:'ROE',          value: k.equity>0?`${roe.toFixed(1)}%`:'N/A',   benchmark:'>8%',    status: roe>=8?'good':roe>=0?'watch':'review' },
+    { metric:'DSCR (est.)',  value: iCov>0?`${iCov.toFixed(2)}x`:'N/A',      benchmark:'>1.25x', status: iCov>=1.25?'good':iCov>=1?'watch':'review' },
+    { metric:'Debt/Equity',  value: dte>0?`${dte.toFixed(2)}x`:'N/A',        benchmark:'<5x',    status: dte>0&&dte<=5?'good':dte<=10?'watch':'review' },
+    { metric:'EBITDA Margin', value:`${ebitdaM.toFixed(1)}%`,                benchmark:'>45%',   status: ebitdaM>=45?'good':ebitdaM>=25?'watch':'review' },
+    { metric:'Cash on Hand', value: k.cash>0?pdFmt(k.cash):'N/A',            benchmark:'>$30K',  status: k.cash>=30000?'good':k.cash>0?'watch':'info' },
+    { metric:'Expense Ratio', value:`${expR.toFixed(1)}%`,                   benchmark:'<80%',   status: expR<=70?'good':expR<=85?'watch':'review' },
+  ];
+
+  const alerts: string[] = [];
+  if (ltv > 0 && ltv > 80) alerts.push(`LTV at ${ltv.toFixed(1)}% — above 80% threshold. Consider accelerated principal payments.`);
+  if (iCov > 0 && iCov < 1.5) alerts.push(`Interest coverage ${iCov.toFixed(2)}x — below 1.5x safe harbor. NOI growth needed to improve coverage.`);
+  const negYrs = fin.years.filter(y => pdKpis(fin, y).netInc < 0).length;
+  if (negYrs > 0) alerts.push(`Net income negative for ${negYrs} of ${fin.years.length} years. NOI is ${k.noi>=0?'healthy':'stressed'} at ${pdFmt(k.noi)} — driven by debt service costs.`);
+
+  const uploadDate = fin.uploadedAt
+    ? new Date(fin.uploadedAt).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })
+    : '—';
+
+  const tilesData = [
+    { icon:<TrendingUp size={15}/>, label:'Total Revenue', value:pdFmt(k.rev),
+      yoy: revG!==null?`${Math.abs(revG).toFixed(1)}%`:null, yoyPos:(revG??0)>=0,
+      accent:'bg-blue-500', iBg:'bg-blue-50', iCol:'text-blue-600',
+      sLabel:k.rev>0?'Active':'No Data', sCol:'bg-blue-100 text-blue-700',
+      sp:spark(kk=>kk.rev), spCol:'#2E75B6' },
+    { icon:<DollarSign size={15}/>, label:'Net Income', value:pdFmt(k.netInc),
+      yoy: kP?pdFmt(Math.abs(k.netInc-kP.netInc)):null, yoyPos:k.netInc>=(kP?.netInc??k.netInc),
+      accent:k.netInc>=0?'bg-green-500':'bg-red-500',
+      iBg:k.netInc>=0?'bg-green-50':'bg-red-50', iCol:k.netInc>=0?'text-green-600':'text-red-600',
+      sLabel:k.netInc>=0?'Positive':'Negative', sCol:k.netInc>=0?'bg-green-100 text-green-700':'bg-red-100 text-red-700',
+      sp:spark(kk=>kk.netInc), spCol:k.netInc>=0?'#70AD47':'#C00000' },
+    { icon:<BarChart2 size={15}/>, label:'NOI', value:pdFmt(k.noi),
+      yoy: kP&&Math.abs(kP.noi)>0?`${Math.abs((k.noi-kP.noi)/Math.abs(kP.noi)*100).toFixed(1)}%`:null,
+      yoyPos:k.noi>=(kP?.noi??k.noi),
+      accent:k.noi>=0?'bg-green-500':'bg-red-500', iBg:'bg-green-50', iCol:'text-green-600',
+      sLabel:k.noi>=0?'Healthy':'Stressed', sCol:k.noi>=0?'bg-green-100 text-green-700':'bg-red-100 text-red-700',
+      sp:spark(kk=>kk.noi), spCol:'#70AD47' },
+    { icon:<Percent size={15}/>, label:'NOI Margin', value:`${noiM.toFixed(1)}%`,
+      yoy:null, yoyPos:true,
+      accent:noiM>=35?'bg-green-500':noiM>=20?'bg-amber-400':'bg-red-500',
+      iBg:'bg-amber-50', iCol:'text-amber-600',
+      sLabel:noiM>=35?'On Target':noiM>=20?'Monitor':'Review',
+      sCol:noiM>=35?'bg-green-100 text-green-700':noiM>=20?'bg-amber-100 text-amber-700':'bg-red-100 text-red-700',
+      sp:spark(kk=>kk.rev>0?kk.noi/kk.rev*100:0), spCol:'#FFC000' },
+    { icon:<Building2 size={15}/>, label:'LTV', value:ltv>0?`${ltv.toFixed(1)}%`:'N/A',
+      yoy:null, yoyPos:false,
+      accent:ltv>0&&ltv<=80?'bg-green-500':ltv<=90?'bg-orange-400':'bg-red-500',
+      iBg:'bg-orange-50', iCol:'text-orange-600',
+      sLabel:ltv>0&&ltv<=80?'Safe':ltv<=90?'Watch':'High',
+      sCol:ltv<=80?'bg-green-100 text-green-700':ltv<=90?'bg-amber-100 text-amber-700':'bg-red-100 text-red-700',
+      sp:spark(kk=>kk.buildings>0?kk.loans/kk.buildings*100:0), spCol:'#ED7D31' },
+    { icon:<Shield size={15}/>, label:'Int. Coverage', value:iCov>0?`${iCov.toFixed(2)}x`:'N/A',
+      yoy:null, yoyPos:iCov>=1.5,
+      accent:iCov>=1.5?'bg-green-500':iCov>=1?'bg-amber-400':'bg-red-500',
+      iBg:iCov>=1.5?'bg-green-50':'bg-red-50', iCol:iCov>=1.5?'text-green-600':'text-red-600',
+      sLabel:iCov>=1.5?'Safe':iCov>=1?'Watch':'Low',
+      sCol:iCov>=1.5?'bg-green-100 text-green-700':iCov>=1?'bg-amber-100 text-amber-700':'bg-red-100 text-red-700',
+      sp:spark(kk=>kk.interest>0?kk.noi/kk.interest:0), spCol:iCov>=1.5?'#70AD47':'#C00000' },
+  ];
+
+  const bottomCards = [
+    { title:'Interest Burden', value:pdFmt(k.interest), pct:interestPct, of:'of revenue',
+      bar:'bg-red-500', bg:'bg-red-50', border:'border-red-200', note:'Mortgage interest — largest expense driver' },
+    { title:'Tax Load', value:pdFmt(lastBreak.taxes), pct:taxPct, of:'of revenue',
+      bar:'bg-orange-500', bg:'bg-orange-50', border:'border-orange-200', note:'Property & income tax burden' },
+    { title:'Management Cost', value:pdFmt(lastBreak.mgmt), pct:mgmtPct, of:'of revenue',
+      bar:'bg-blue-500', bg:'bg-blue-50', border:'border-blue-200',
+      note:mgmtPct<=10?'✅ Within 8–10% market range':'⚠️ Above typical market range' },
+    { title:'Revenue Growth YoY', value:revG!==null?`${revG>=0?'+':''}${revG.toFixed(1)}%`:'N/A',
+      pct:Math.min(Math.abs(revG??0),100), of:`${lastY} vs ${prevY??'—'}`,
+      bar:(revG??0)>=0?'bg-green-500':'bg-red-500', bg:(revG??0)>=0?'bg-green-50':'bg-red-50',
+      border:(revG??0)>=0?'border-green-200':'border-red-200', note:'Year-over-year revenue change' },
+  ];
+
   return (
-    <div className="space-y-6">
-      <p className="text-xs text-gray-500">KPIs for <strong>{lastY}</strong> — {fin.companyName}</p>
-      <div>
-        <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">Profitability</p>
-        <div className="grid grid-cols-4 gap-4">
-          <PDKpiCard label="NOI Margin"         value={`${noiM.toFixed(1)}%`}       sub={`NOI: ${pdFmt(k.noi)}`}          status={noiM>=40?'good':noiM>=20?'warn':'bad'} />
-          <PDKpiCard label="Net Income Margin"  value={`${netM.toFixed(1)}%`}       sub={`Net: ${pdFmt(k.netInc)}`}       status={netM>=10?'good':netM>=0?'warn':'bad'} />
-          <PDKpiCard label="Revenue Growth YoY" value={revG!==null?`${revG>=0?'+':''}${revG.toFixed(1)}%`:'N/A'} sub={prevY?`${lastY} vs ${prevY}`:'Only 1 year'} status={revG===null?'info':revG>=3?'good':revG>=0?'warn':'bad'} />
-          <PDKpiCard label="Expense Ratio"      value={`${expR.toFixed(1)}%`}       sub={`Total exp: ${pdFmt(k.exp)}`}    status={expR<=70?'good':expR<=85?'warn':'bad'} />
+    <div className="space-y-4">
+
+      {/* HEADER STRIP */}
+      <div className="bg-gray-900 text-white px-6 py-3 flex items-center justify-between rounded-lg">
+        <div className="flex items-center gap-4">
+          <div>
+            <div className="text-base font-bold">{fin.companyName}</div>
+            <div className="text-xs text-gray-400">Financial Intelligence Dashboard</div>
+          </div>
+          <div className="h-6 w-px bg-gray-700" />
+          <div className="text-xs text-gray-400">
+            Period: {fin.years.join(' · ')} &nbsp;|&nbsp; Updated: {uploadDate}
+          </div>
         </div>
       </div>
-      <div>
-        <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">Balance Sheet</p>
-        <div className="grid grid-cols-4 gap-4">
-          <PDKpiCard label="LTV (Loans/Building)" value={ltv>0?`${ltv.toFixed(1)}%`:'N/A'}      sub={`Loans: ${pdFmt(k.loans)}`}        status={ltv>0&&ltv<=75?'good':ltv<=85?'warn':'bad'} />
-          <PDKpiCard label="Asset/Liability Ratio" value={alR>0?`${alR.toFixed(2)}x`:'N/A'}     sub={`Assets: ${pdFmt(k.totalAssets)}`}  status={alR>=1.5?'good':alR>=1?'warn':'bad'} />
-          <PDKpiCard label="Debt-to-Equity"        value={dte>0?`${dte.toFixed(2)}x`:'N/A'}     sub={`Equity: ${pdFmt(k.equity)}`}       status={dte>0&&dte<=2?'good':dte<=4?'warn':'bad'} />
-          <PDKpiCard label="Interest Coverage"     value={iCov>0?`${iCov.toFixed(2)}x`:'N/A'}   sub={`NOI ÷ Interest (${pdFmt(k.interest)})`} status={iCov>=2?'good':iCov>=1.2?'warn':'bad'} />
-        </div>
+
+      {/* 6 HERO TILES */}
+      <div className="grid grid-cols-6 gap-3">
+        {tilesData.map((t, i) => (
+          <div key={i} className="bg-white border border-gray-100 rounded-lg p-3.5 flex flex-col shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+            <div className={`absolute top-0 left-0 right-0 h-1 ${t.accent}`} />
+            <div className="flex items-start justify-between mb-2 mt-1">
+              <div className={`w-7 h-7 rounded-lg ${t.iBg} flex items-center justify-center`}>
+                <span className={t.iCol}>{t.icon}</span>
+              </div>
+              <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium leading-tight ${t.sCol}`}>{t.sLabel}</span>
+            </div>
+            <div className="text-xl font-bold font-mono text-gray-900 leading-tight">{t.value}</div>
+            <div className="text-xs text-gray-500 mt-0.5">{t.label}</div>
+            {t.yoy !== null && (
+              <div className="flex items-center gap-1 mt-1">
+                <span className={`text-xs font-medium ${t.yoyPos?'text-green-600':'text-red-500'}`}>
+                  {t.yoyPos?'▲':'▼'} {t.yoy}
+                </span>
+                <span className="text-xs text-gray-400">YoY</span>
+              </div>
+            )}
+            {t.sp.length >= 2 && (
+              <div className="mt-2 h-7">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={t.sp}>
+                    <Line type="monotone" dataKey="v" stroke={t.spCol} strokeWidth={1.5} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
-      {fin.years.length>=2 && (
-        <div>
-          <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">5-Year Financial Trend</p>
-          <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
-            <ResponsiveContainer width="100%" height={240}>
-              <LineChart data={trendData} margin={{left:20,right:20}}>
+
+      {/* MAIN CHARTS ROW */}
+      <div className="grid grid-cols-5 gap-4">
+        {/* Left — 5-Year Trend (3/5 cols) */}
+        <div className="col-span-3 bg-white rounded-lg shadow-sm border border-gray-100 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="text-sm font-semibold text-gray-800">5-Year Financial Trend</div>
+              <div className="text-xs text-gray-400">Revenue · Expenses · NOI · Net Income</div>
+            </div>
+            <div className="flex gap-0.5 bg-gray-100 rounded p-0.5">
+              {(['Area','Line','Bar'] as const).map(t => (
+                <button key={t}
+                  className={`text-xs px-2.5 py-1 rounded transition-colors ${chartType===t?'bg-white shadow text-blue-600 font-medium':'text-gray-500 hover:text-gray-700'}`}
+                  onClick={()=>setChartType(t)}>{t}
+                </button>
+              ))}
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={220}>
+            {chartType === 'Bar' ? (
+              <BarChart data={trendData} margin={{left:10,right:10}}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="year" tick={{fontSize:11}} />
-                <YAxis tickFormatter={v=>pdFmt(v as number)} tick={{fontSize:10}} />
+                <YAxis tickFormatter={v=>pdFmt(v as number)} tick={{fontSize:9}} />
                 <Tooltip formatter={(v:number)=>pdFmtFull(v)} />
-                <Legend />
-                <Line type="monotone" dataKey="Revenue"    stroke={COLORS[0]} strokeWidth={2} dot />
-                <Line type="monotone" dataKey="Expenses"   stroke={COLORS[5]} strokeWidth={2} dot />
-                <Line type="monotone" dataKey="Net Income" stroke={COLORS[1]} strokeWidth={2} dot />
-                <Line type="monotone" dataKey="NOI"        stroke={COLORS[2]} strokeWidth={2} strokeDasharray="5 5" dot />
-              </LineChart>
-            </ResponsiveContainer>
+                <Legend iconType="circle" iconSize={8} />
+                <Bar dataKey="revenue"   name="Revenue"    fill="#2E75B6" />
+                <Bar dataKey="expenses"  name="Expenses"   fill="#C00000" />
+                <Bar dataKey="noi"       name="NOI"        fill="#70AD47" />
+                <Bar dataKey="netIncome" name="Net Income" fill="#ED7D31" />
+              </BarChart>
+            ) : (
+              <ComposedChart data={trendData} margin={{left:10,right:10}}>
+                <defs>
+                  <linearGradient id="pdRevGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor="#2E75B6" stopOpacity={0.15}/>
+                    <stop offset="95%" stopColor="#2E75B6" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="pdNoiGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor="#70AD47" stopOpacity={0.15}/>
+                    <stop offset="95%" stopColor="#70AD47" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="year" tick={{fontSize:11}} />
+                <YAxis tickFormatter={v=>pdFmt(v as number)} tick={{fontSize:9}} />
+                <Tooltip formatter={(v:number)=>pdFmtFull(v)} />
+                <Legend iconType="circle" iconSize={8} />
+                <ReferenceLine y={0} stroke="#bbb" strokeDasharray="3 3" />
+                {chartType==='Area' ? (<>
+                  <Area type="monotone" dataKey="revenue"   name="Revenue"    fill="url(#pdRevGrad)" stroke="#2E75B6" strokeWidth={2}/>
+                  <Area type="monotone" dataKey="noi"       name="NOI"        fill="url(#pdNoiGrad)" stroke="#70AD47" strokeWidth={2}/>
+                  <Line type="monotone" dataKey="expenses"  name="Expenses"   stroke="#C00000" strokeWidth={2} strokeDasharray="4 2" dot={{r:3}}/>
+                  <Line type="monotone" dataKey="netIncome" name="Net Income" stroke="#ED7D31" strokeWidth={1.5} dot={{r:3}}/>
+                </>) : (<>
+                  <Line type="monotone" dataKey="revenue"   name="Revenue"    stroke="#2E75B6" strokeWidth={2} dot={{r:3}}/>
+                  <Line type="monotone" dataKey="noi"       name="NOI"        stroke="#70AD47" strokeWidth={2} dot={{r:3}}/>
+                  <Line type="monotone" dataKey="expenses"  name="Expenses"   stroke="#C00000" strokeWidth={2} strokeDasharray="4 2" dot={{r:3}}/>
+                  <Line type="monotone" dataKey="netIncome" name="Net Income" stroke="#ED7D31" strokeWidth={1.5} dot={{r:3}}/>
+                </>)}
+              </ComposedChart>
+            )}
+          </ResponsiveContainer>
+        </div>
+
+        {/* Right — Profitability Gauge (2/5 cols) */}
+        <div className="col-span-2 bg-white rounded-lg shadow-sm border border-gray-100 p-5">
+          <div className="text-sm font-semibold text-gray-800 mb-1">Profitability Score</div>
+          <div className="text-xs text-gray-400 mb-3">NOI · EBITDA · Net Margin</div>
+          <ResponsiveContainer width="100%" height={170}>
+            <RadialBarChart cx="50%" cy="55%" innerRadius="30%" outerRadius="90%"
+                            data={radialData} startAngle={180} endAngle={0}>
+              <RadialBar dataKey="value" cornerRadius={4} label={false}/>
+              <Legend iconType="circle" iconSize={8} wrapperStyle={{fontSize:10}}/>
+              <Tooltip formatter={(v:number, n:string)=>
+                [`${(n==='Net (adj)'?v-30:v).toFixed(1)}%`, n==='Net (adj)'?'Net Margin':n]}/>
+            </RadialBarChart>
+          </ResponsiveContainer>
+          <div className="grid grid-cols-3 gap-2 mt-1">
+            {[
+              {label:'NOI',    val:`${noiM.toFixed(1)}%`,    col:noiM>=35?'text-green-600':'text-amber-600'},
+              {label:'Net',    val:`${netM.toFixed(1)}%`,    col:netM>=0?'text-green-600':'text-red-500'},
+              {label:'EBITDA', val:`${ebitdaM.toFixed(1)}%`, col:ebitdaM>=45?'text-green-600':'text-amber-600'},
+            ].map(m=>(
+              <div key={m.label} className="text-center bg-gray-50 rounded-lg p-2">
+                <div className={`text-sm font-bold font-mono ${m.col}`}>{m.val}</div>
+                <div className="text-xs text-gray-400 mt-0.5">{m.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* EXPENSE BREAKDOWN + KPI SCORECARD */}
+      <div className="grid grid-cols-5 gap-4">
+        <div className="col-span-3 bg-white rounded-lg shadow-sm border border-gray-100 p-5">
+          <div className="text-sm font-semibold text-gray-800 mb-1">Expense Structure by Year</div>
+          <div className="text-xs text-gray-400 mb-3">Stacked by category — hover for details</div>
+          <ResponsiveContainer width="100%" height={Math.max(160, fin.years.length * 42)}>
+            <BarChart data={expBreakData} layout="vertical" margin={{left:10,right:20}}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0"/>
+              <XAxis type="number" tickFormatter={v=>pdFmt(v as number)} tick={{fontSize:9}}/>
+              <YAxis dataKey="year" type="category" tick={{fontSize:11}} width={38}/>
+              <Tooltip formatter={(v:number)=>pdFmtFull(v)}/>
+              <Legend iconType="square" iconSize={8} wrapperStyle={{fontSize:10}}/>
+              <Bar dataKey="interest" name="Interest"    stackId="a" fill="#C00000"/>
+              <Bar dataKey="taxes"    name="Taxes"       stackId="a" fill="#ED7D31"/>
+              <Bar dataKey="legal"    name="Legal/Acct"  stackId="a" fill="#FFC000"/>
+              <Bar dataKey="mgmt"     name="Mgmt"        stackId="a" fill="#2E75B6"/>
+              <Bar dataKey="utils"    name="Utilities"   stackId="a" fill="#5A2D82"/>
+              <Bar dataKey="other"    name="Other"       stackId="a" fill="#808080" radius={[0,3,3,0]}/>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="col-span-2 bg-white rounded-lg shadow-sm border border-gray-100 p-5">
+          <div className="text-sm font-semibold text-gray-800 mb-3">KPI Scorecard</div>
+          <div className="overflow-y-auto" style={{maxHeight: Math.max(200, fin.years.length * 42)}}>
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-white">
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="text-left py-1.5 px-2 text-gray-500 font-medium">Metric</th>
+                  <th className="text-right py-1.5 px-2 text-gray-500 font-medium">Value</th>
+                  <th className="text-right py-1.5 px-2 text-gray-500 font-medium">Target</th>
+                  <th className="text-center py-1.5 px-1 text-gray-400">●</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {scoreRows.map(row=>(
+                  <tr key={row.metric} className="hover:bg-gray-50">
+                    <td className="py-1.5 px-2 text-gray-700 font-medium">{row.metric}</td>
+                    <td className={`py-1.5 px-2 text-right font-mono font-semibold
+                      ${row.status==='review'?'text-red-600':row.status==='watch'?'text-amber-600':row.status==='info'?'text-blue-600':'text-green-600'}`}>
+                      {row.value}
+                    </td>
+                    <td className="py-1.5 px-2 text-right text-gray-400">{row.benchmark}</td>
+                    <td className="py-1.5 px-1 text-center">
+                      <span className={`inline-block w-2 h-2 rounded-full
+                        ${row.status==='review'?'bg-red-500':row.status==='watch'?'bg-amber-400':row.status==='info'?'bg-blue-400':'bg-green-500'}`}/>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* BOTTOM DETAIL CARDS */}
+      <div className="grid grid-cols-4 gap-3">
+        {bottomCards.map((card,i)=>(
+          <div key={i} className={`${card.bg} ${card.border} border rounded-lg p-4`}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-gray-700">{card.title}</span>
+              <span className="text-xs text-gray-400">{card.of}</span>
+            </div>
+            <div className="text-xl font-bold font-mono text-gray-900 mb-1">{card.value}</div>
+            <div className="h-1.5 bg-white bg-opacity-60 rounded-full mb-2">
+              <div className={`h-1.5 ${card.bar} rounded-full`}
+                   style={{width:`${Math.min(card.pct,100)}%`}}/>
+            </div>
+            <div className="text-xs text-gray-500">{card.note}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* CFO ALERT BANNER */}
+      {alerts.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0"/>
+            <span className="text-sm font-semibold text-amber-800">CFO Action Items — {fin.companyName}</span>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {alerts.map((a,i)=>(
+              <div key={i} className="flex-1 min-w-[200px] text-xs text-amber-700 bg-white bg-opacity-60 rounded-lg p-3 border border-amber-100">
+                ⚠️ {a}
+              </div>
+            ))}
           </div>
         </div>
       )}
