@@ -259,6 +259,331 @@ function StatusBadge({ status, onClick }: { status: string; onClick: () => void 
   );
 }
 
+// ── suites panel ──────────────────────────────────────────────────────────────
+
+interface Suite {
+  id: string;
+  company_id: string;
+  property_name: string;
+  address: string | null;
+  property_type: string | null;
+  unit_count: number;
+}
+
+interface RentalCo { id: string; company_name: string; }
+
+const SUITE_PROP_TYPES = ['Apartment', 'Townhome', 'SFR', 'Loft', 'Commercial'];
+
+function SuitesPanel({ canWrite, push }: { canWrite: boolean; push: (msg: string, ok?: boolean) => void }) {
+  const [rentalCos, setRentalCos] = useState<RentalCo[]>([]);
+  const [selectedCo, setSelectedCo] = useState('');
+  const [suites, setSuites] = useState<Suite[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const [suiteModal, setSuiteModal] = useState<'add' | 'edit' | 'delete' | null>(null);
+  const [suiteTarget, setSuiteTarget] = useState<Suite | null>(null);
+  const [suiteForm, setSuiteForm] = useState({ property_name: '', address: '', property_type: '' });
+  const [suiteSaving, setSuiteSaving] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+
+  useEffect(() => {
+    api.get('/api/rentals/companies').then(res => {
+      const arr = Array.isArray(res.data) ? res.data : (res.data as { companies?: RentalCo[] }).companies ?? [];
+      setRentalCos(arr as RentalCo[]);
+    }).catch(() => {});
+  }, []);
+
+  const loadSuites = useCallback(async (coId: string) => {
+    if (!coId) { setSuites([]); return; }
+    setLoading(true);
+    try {
+      const res = await api.get<Suite[]>(`/api/rentals/suites?company_id=${coId}`);
+      setSuites(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      push('Failed to load suites', false);
+    } finally {
+      setLoading(false);
+    }
+  }, [push]);
+
+  useEffect(() => { loadSuites(selectedCo); }, [selectedCo, loadSuites]);
+
+  function openSuiteAdd() {
+    setSuiteForm({ property_name: '', address: '', property_type: '' });
+    setSuiteTarget(null);
+    setDeleteError('');
+    setSuiteModal('add');
+  }
+  function openSuiteEdit(s: Suite) {
+    setSuiteForm({ property_name: s.property_name, address: s.address ?? '', property_type: s.property_type ?? '' });
+    setSuiteTarget(s);
+    setDeleteError('');
+    setSuiteModal('edit');
+  }
+  function openSuiteDelete(s: Suite) {
+    setSuiteTarget(s);
+    setDeleteError('');
+    setSuiteModal('delete');
+  }
+  function closeSuiteModal() { setSuiteModal(null); setSuiteTarget(null); setSuiteSaving(false); setDeleteError(''); }
+
+  async function handleSuiteSave() {
+    if (!suiteForm.property_name.trim()) return;
+    setSuiteSaving(true);
+    const payload: Record<string, unknown> = {
+      property_name: suiteForm.property_name.trim(),
+      address: suiteForm.address.trim() || undefined,
+      property_type: suiteForm.property_type || undefined,
+    };
+    if (!suiteTarget) payload.company_id = selectedCo;
+    try {
+      if (suiteTarget) {
+        await api.put(`/api/rentals/suites/${suiteTarget.id}`, payload);
+        push('Suite updated');
+      } else {
+        await api.post('/api/rentals/suites', payload);
+        push('Suite added');
+      }
+      closeSuiteModal();
+      loadSuites(selectedCo);
+    } catch {
+      push('Failed to save suite', false);
+      setSuiteSaving(false);
+    }
+  }
+
+  async function handleSuiteDelete() {
+    if (!suiteTarget) return;
+    try {
+      await api.delete(`/api/rentals/suites/${suiteTarget.id}`);
+      push('Suite deleted');
+      closeSuiteModal();
+      loadSuites(selectedCo);
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setDeleteError(detail ?? 'Cannot delete — suite has units assigned. Remove units first.');
+    }
+  }
+
+  async function handleSuiteRename(id: string) {
+    if (!editName.trim()) { setEditingId(null); return; }
+    try {
+      await api.put(`/api/rentals/suites/${id}`, { property_name: editName.trim() });
+      setEditingId(null);
+      push('Suite renamed');
+      loadSuites(selectedCo);
+    } catch {
+      push('Failed to rename suite', false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Company selector */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <label className="text-sm font-medium text-gray-700 shrink-0">Company</label>
+        <select
+          value={selectedCo}
+          onChange={e => setSelectedCo(e.target.value)}
+          className="text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-[220px]"
+        >
+          <option value="">— Select a company —</option>
+          {rentalCos.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
+        </select>
+        {selectedCo && canWrite && (
+          <button
+            onClick={openSuiteAdd}
+            className="flex items-center gap-2 bg-gray-900 text-white text-sm px-4 py-2 rounded-xl hover:bg-gray-800 font-medium transition-colors ml-auto"
+          >
+            <Plus size={14} /> Add Suite
+          </button>
+        )}
+      </div>
+
+      {/* Suites table */}
+      {!selectedCo ? (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm text-center py-16">
+          <Home size={36} className="text-gray-200 mx-auto mb-3" />
+          <p className="text-sm text-gray-400">Select a company above to view its suites.</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          {loading ? (
+            <div className="py-16 flex items-center justify-center">
+              <div className="w-6 h-6 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" />
+            </div>
+          ) : suites.length === 0 ? (
+            <div className="text-center py-16">
+              <Home size={36} className="text-gray-200 mx-auto mb-3" />
+              <p className="text-sm text-gray-500">No suites for this company yet.</p>
+              {canWrite && (
+                <button onClick={openSuiteAdd}
+                  className="mt-4 text-sm bg-gray-900 text-white px-4 py-2 rounded-xl hover:bg-gray-800">
+                  + Add Suite
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide w-8">#</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Suite Name</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Address</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Property Type</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Units</th>
+                    {canWrite && (
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Actions</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {suites.map((s, i) => (
+                    <tr key={s.id} className="hover:bg-gray-50/60 transition-colors">
+                      <td className="px-4 py-3 text-xs text-gray-400">{i + 1}</td>
+                      <td className="px-4 py-3 font-medium text-gray-800">
+                        {editingId === s.id ? (
+                          <div className="flex items-center gap-1">
+                            <input autoFocus value={editName}
+                              onChange={e => setEditName(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') handleSuiteRename(s.id);
+                                if (e.key === 'Escape') setEditingId(null);
+                              }}
+                              className="text-sm border border-blue-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                            <button onClick={() => handleSuiteRename(s.id)} className="text-blue-600"><Check size={13} /></button>
+                            <button onClick={() => setEditingId(null)} className="text-gray-400"><X size={13} /></button>
+                          </div>
+                        ) : (
+                          <span
+                            className="cursor-pointer hover:text-blue-600 transition-colors"
+                            title="Double-click to rename"
+                            onDoubleClick={() => { setEditingId(s.id); setEditName(s.property_name); }}
+                          >
+                            {s.property_name}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-gray-500">{s.address || '—'}</td>
+                      <td className="px-4 py-3 text-gray-500">{s.property_type || '—'}</td>
+                      <td className="px-4 py-3 text-right text-gray-700 font-mono">{s.unit_count}</td>
+                      {canWrite && (
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => openSuiteEdit(s)}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-primary hover:bg-blue-50 transition-colors" title="Edit">
+                              <Pencil size={13} />
+                            </button>
+                            <button onClick={() => openSuiteDelete(s)}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete">
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Suite Add / Edit Modal */}
+      {(suiteModal === 'add' || suiteModal === 'edit') && (
+        <Modal title={suiteTarget ? 'Edit Suite' : 'Add Suite'} onClose={closeSuiteModal}>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Suite Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                autoFocus type="text"
+                value={suiteForm.property_name}
+                onChange={e => setSuiteForm(p => ({ ...p, property_name: e.target.value }))}
+                placeholder="e.g. Suite 123"
+                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Address</label>
+              <input
+                type="text"
+                value={suiteForm.address}
+                onChange={e => setSuiteForm(p => ({ ...p, address: e.target.value }))}
+                placeholder="e.g. 123 Main St, Unit A"
+                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Property Type</label>
+              <select
+                value={suiteForm.property_type}
+                onChange={e => setSuiteForm(p => ({ ...p, property_type: e.target.value }))}
+                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="">Select…</option>
+                {SUITE_PROP_TYPES.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-3 mt-5">
+            <button onClick={closeSuiteModal}
+              className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50">
+              Cancel
+            </button>
+            <button
+              onClick={handleSuiteSave}
+              disabled={suiteSaving || !suiteForm.property_name.trim()}
+              className="flex-1 flex items-center justify-center gap-2 text-sm bg-gray-900 text-white py-2.5 rounded-xl hover:bg-gray-800 font-medium disabled:opacity-50"
+            >
+              {suiteSaving ? 'Saving…' : <><Check size={14} />{suiteTarget ? 'Save Changes' : 'Add Suite'}</>}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Suite Delete Confirm */}
+      {suiteModal === 'delete' && suiteTarget && (
+        <Modal title="Delete Suite" onClose={closeSuiteModal}>
+          <div className="text-center">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Trash2 size={20} className="text-red-500" />
+            </div>
+            <p className="text-sm text-gray-600 mb-2">
+              Delete <span className="font-semibold">"{suiteTarget.property_name}"</span>?
+            </p>
+            {deleteError ? (
+              <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4 text-left">
+                {deleteError}
+              </p>
+            ) : (
+              <p className="text-xs text-red-500 mb-5">This cannot be undone.</p>
+            )}
+            <div className="flex gap-3">
+              <button onClick={closeSuiteModal}
+                className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50">
+                {deleteError ? 'Close' : 'Cancel'}
+              </button>
+              {!deleteError && (
+                <button onClick={handleSuiteDelete}
+                  className="flex-1 text-sm bg-red-600 text-white py-2.5 rounded-xl hover:bg-red-700 font-medium">
+                  Yes, Delete
+                </button>
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 // ── main page ─────────────────────────────────────────────────────────────────
 
 interface Props { embedded?: boolean }
@@ -273,6 +598,9 @@ export default function CompanyRegistry({ embedded = false }: Props) {
     MODULES.some(m => m.id === initTab) ? initTab : 'rental'
   );
 
+  // Rental sub-view: companies or suites
+  const [rentalView, setRentalView] = useState<'companies' | 'suites'>('companies');
+
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -281,6 +609,9 @@ export default function CompanyRegistry({ embedded = false }: Props) {
   const [form, setForm] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+
+  // ref kept to avoid lint errors from original import
+  const _ref = useRef<null>(null); void _ref;
 
   const mod = MODULES.find(m => m.id === activeId)!;
 
@@ -302,6 +633,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
   function switchTab(id: ModuleId) {
     setActiveId(id);
     setSearch('');
+    setRentalView('companies');
     setSearchParams({ tab: id }, { replace: true });
   }
 
@@ -413,208 +745,234 @@ export default function CompanyRegistry({ embedded = false }: Props) {
         ))}
       </div>
 
-      {/* Search + Add */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder={`Search ${mod.label}…`}
-            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl bg-white
-                       focus:outline-none focus:ring-2 focus:ring-primary/30"
-          />
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-400">{filtered.length} companies</span>
-          {canWrite && (
+      {/* Rental sub-tabs: Companies | Suites */}
+      {activeId === 'rental' && (
+        <div className="flex gap-1 bg-gray-50 border border-gray-200 rounded-xl p-1 w-fit">
+          {(['companies', 'suites'] as const).map(v => (
             <button
-              onClick={openAdd}
-              className="flex items-center gap-2 bg-gray-900 text-white text-sm px-4 py-2
-                         rounded-xl hover:bg-gray-800 font-medium transition-colors"
+              key={v}
+              onClick={() => setRentalView(v)}
+              className={`text-sm px-5 py-1.5 rounded-lg font-medium capitalize transition-all
+                ${rentalView === v
+                  ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
+                  : 'text-gray-500 hover:text-gray-800'
+                }`}
             >
-              <Plus size={14} /> Add Company
+              {v === 'companies' ? 'Companies' : 'Suites'}
             </button>
-          )}
+          ))}
         </div>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="py-16 flex items-center justify-center">
-            <div className="w-6 h-6 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" />
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-20">
-            <Building2 size={40} className="text-gray-200 mx-auto mb-3" />
-            <p className="text-sm font-medium text-gray-500">
-              {search ? 'No companies match your search' : `No ${mod.label} companies yet`}
-            </p>
-            {!search && canWrite && (
-              <button onClick={openAdd}
-                className="mt-4 text-sm bg-gray-900 text-white px-4 py-2 rounded-xl hover:bg-gray-800">
-                + Add Company
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide w-8">#</th>
-                  {mod.tableCols.map(col => (
-                    <th key={col} className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                      {col}
-                    </th>
-                  ))}
-                  {canWrite && (
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                      Actions
-                    </th>
-                  )}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {filtered.map((c, idx) => {
-                  const cells = mod.rowCells(c);
-                  return (
-                    <tr key={c.id} className="hover:bg-gray-50/60 transition-colors">
-                      <td className="px-4 py-3 text-xs text-gray-400">{idx + 1}</td>
-                      {cells.map((cell, ci) => (
-                        <td key={ci} className={`px-4 py-3 ${ci === 0 ? 'font-medium text-gray-800' : 'text-gray-500'}`}>
-                          {cell === null
-                            ? <StatusBadge status={c.status ?? 'active'} onClick={() => canWrite && toggleStatus(c)} />
-                            : cell}
-                        </td>
-                      ))}
-                      {canWrite && (
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => openEdit(c)}
-                              className="p-1.5 rounded-lg text-gray-400 hover:text-primary hover:bg-blue-50 transition-colors"
-                              title="Edit"
-                            >
-                              <Pencil size={13} />
-                            </button>
-                            <button
-                              onClick={() => openDelete(c)}
-                              className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                              title="Delete"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* ADD / EDIT MODAL */}
-      {(modal === 'add' || modal === 'edit') && (
-        <Modal title={modal === 'add' ? `Add ${mod.label} Company` : 'Edit Company'} onClose={close}>
-          <div className="space-y-3">
-            {mod.fields.map(f => (
-              <div key={f.name}>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  {f.label}{f.required && <span className="text-red-500 ml-0.5">*</span>}
-                </label>
-                {f.type === 'select' ? (
-                  <select
-                    value={form[f.name] ?? ''}
-                    onChange={e => { setForm(p => ({ ...p, [f.name]: e.target.value })); setErrors(p => ({ ...p, [f.name]: '' })); }}
-                    className={`w-full text-sm border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white
-                      ${errors[f.name] ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}
-                  >
-                    <option value="">Select…</option>
-                    {f.options!.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                ) : (
-                  <input
-                    type={f.type}
-                    value={form[f.name] ?? ''}
-                    onChange={e => { setForm(p => ({ ...p, [f.name]: e.target.value })); setErrors(p => ({ ...p, [f.name]: '' })); }}
-                    placeholder={`Enter ${f.label.toLowerCase()}`}
-                    className={`w-full text-sm border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30
-                      ${errors[f.name] ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}
-                  />
-                )}
-                {errors[f.name] && <p className="text-xs text-red-500 mt-0.5">{errors[f.name]}</p>}
-              </div>
-            ))}
-
-            {/* Status */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
-              <div className="flex gap-2">
-                {['active', 'inactive'].map(s => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setForm(p => ({ ...p, status: s }))}
-                    className={`flex-1 text-xs py-2 rounded-xl border font-medium capitalize transition-colors
-                      ${(form.status ?? 'active') === s
-                        ? s === 'active' ? 'bg-green-600 text-white border-green-600' : 'bg-gray-700 text-white border-gray-700'
-                        : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
-                      }`}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-3 mt-5">
-            <button onClick={close}
-              className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50">
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex-1 flex items-center justify-center gap-2 text-sm bg-gray-900 text-white py-2.5 rounded-xl hover:bg-gray-800 font-medium disabled:opacity-50"
-            >
-              {saving ? 'Saving…' : <><Check size={14} />{modal === 'add' ? 'Add Company' : 'Save Changes'}</>}
-            </button>
-          </div>
-        </Modal>
       )}
 
-      {/* DELETE CONFIRM */}
-      {modal === 'delete' && target && (
-        <Modal title="Delete Company" onClose={close}>
-          <div className="text-center">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Trash2 size={20} className="text-red-500" />
+      {/* Suites panel — only when rental + suites sub-tab */}
+      {activeId === 'rental' && rentalView === 'suites' ? (
+        <SuitesPanel canWrite={canWrite} push={push} />
+      ) : (
+        <>
+          {/* Search + Add */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="relative flex-1 max-w-sm">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder={`Search ${mod.label}…`}
+                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl bg-white
+                           focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
             </div>
-            <p className="text-sm text-gray-600 mb-1">
-              Delete <span className="font-semibold text-gray-800">"{target.company_name}"</span>?
-            </p>
-            <p className="text-xs text-red-500 mb-5 leading-relaxed">
-              This will permanently delete this company and all its associated data. This cannot be undone.
-            </p>
-            <div className="flex gap-3">
-              <button onClick={close}
-                className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50">
-                Cancel
-              </button>
-              <button onClick={handleDelete}
-                className="flex-1 text-sm bg-red-600 text-white py-2.5 rounded-xl hover:bg-red-700 font-medium">
-                Yes, Delete
-              </button>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-gray-400">{filtered.length} companies</span>
+              {canWrite && (
+                <button
+                  onClick={openAdd}
+                  className="flex items-center gap-2 bg-gray-900 text-white text-sm px-4 py-2
+                             rounded-xl hover:bg-gray-800 font-medium transition-colors"
+                >
+                  <Plus size={14} /> Add Company
+                </button>
+              )}
             </div>
           </div>
-        </Modal>
+
+          {/* Table */}
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            {loading ? (
+              <div className="py-16 flex items-center justify-center">
+                <div className="w-6 h-6 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" />
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="text-center py-20">
+                <Building2 size={40} className="text-gray-200 mx-auto mb-3" />
+                <p className="text-sm font-medium text-gray-500">
+                  {search ? 'No companies match your search' : `No ${mod.label} companies yet`}
+                </p>
+                {!search && canWrite && (
+                  <button onClick={openAdd}
+                    className="mt-4 text-sm bg-gray-900 text-white px-4 py-2 rounded-xl hover:bg-gray-800">
+                    + Add Company
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100">
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide w-8">#</th>
+                      {mod.tableCols.map(col => (
+                        <th key={col} className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                          {col}
+                        </th>
+                      ))}
+                      {canWrite && (
+                        <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                          Actions
+                        </th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {filtered.map((c, idx) => {
+                      const cells = mod.rowCells(c);
+                      return (
+                        <tr key={c.id} className="hover:bg-gray-50/60 transition-colors">
+                          <td className="px-4 py-3 text-xs text-gray-400">{idx + 1}</td>
+                          {cells.map((cell, ci) => (
+                            <td key={ci} className={`px-4 py-3 ${ci === 0 ? 'font-medium text-gray-800' : 'text-gray-500'}`}>
+                              {cell === null
+                                ? <StatusBadge status={c.status ?? 'active'} onClick={() => canWrite && toggleStatus(c)} />
+                                : cell}
+                            </td>
+                          ))}
+                          {canWrite && (
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  onClick={() => openEdit(c)}
+                                  className="p-1.5 rounded-lg text-gray-400 hover:text-primary hover:bg-blue-50 transition-colors"
+                                  title="Edit"
+                                >
+                                  <Pencil size={13} />
+                                </button>
+                                <button
+                                  onClick={() => openDelete(c)}
+                                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                  title="Delete"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* ADD / EDIT MODAL */}
+          {(modal === 'add' || modal === 'edit') && (
+            <Modal title={modal === 'add' ? `Add ${mod.label} Company` : 'Edit Company'} onClose={close}>
+              <div className="space-y-3">
+                {mod.fields.map(f => (
+                  <div key={f.name}>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      {f.label}{f.required && <span className="text-red-500 ml-0.5">*</span>}
+                    </label>
+                    {f.type === 'select' ? (
+                      <select
+                        value={form[f.name] ?? ''}
+                        onChange={e => { setForm(p => ({ ...p, [f.name]: e.target.value })); setErrors(p => ({ ...p, [f.name]: '' })); }}
+                        className={`w-full text-sm border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white
+                          ${errors[f.name] ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}
+                      >
+                        <option value="">Select…</option>
+                        {f.options!.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    ) : (
+                      <input
+                        type={f.type}
+                        value={form[f.name] ?? ''}
+                        onChange={e => { setForm(p => ({ ...p, [f.name]: e.target.value })); setErrors(p => ({ ...p, [f.name]: '' })); }}
+                        placeholder={`Enter ${f.label.toLowerCase()}`}
+                        className={`w-full text-sm border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30
+                          ${errors[f.name] ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}
+                      />
+                    )}
+                    {errors[f.name] && <p className="text-xs text-red-500 mt-0.5">{errors[f.name]}</p>}
+                  </div>
+                ))}
+
+                {/* Status */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
+                  <div className="flex gap-2">
+                    {['active', 'inactive'].map(s => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setForm(p => ({ ...p, status: s }))}
+                        className={`flex-1 text-xs py-2 rounded-xl border font-medium capitalize transition-colors
+                          ${(form.status ?? 'active') === s
+                            ? s === 'active' ? 'bg-green-600 text-white border-green-600' : 'bg-gray-700 text-white border-gray-700'
+                            : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                          }`}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-5">
+                <button onClick={close}
+                  className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50">
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="flex-1 flex items-center justify-center gap-2 text-sm bg-gray-900 text-white py-2.5 rounded-xl hover:bg-gray-800 font-medium disabled:opacity-50"
+                >
+                  {saving ? 'Saving…' : <><Check size={14} />{modal === 'add' ? 'Add Company' : 'Save Changes'}</>}
+                </button>
+              </div>
+            </Modal>
+          )}
+
+          {/* DELETE CONFIRM */}
+          {modal === 'delete' && target && (
+            <Modal title="Delete Company" onClose={close}>
+              <div className="text-center">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Trash2 size={20} className="text-red-500" />
+                </div>
+                <p className="text-sm text-gray-600 mb-1">
+                  Delete <span className="font-semibold text-gray-800">"{target.company_name}"</span>?
+                </p>
+                <p className="text-xs text-red-500 mb-5 leading-relaxed">
+                  This will permanently delete this company and all its associated data. This cannot be undone.
+                </p>
+                <div className="flex gap-3">
+                  <button onClick={close}
+                    className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50">
+                    Cancel
+                  </button>
+                  <button onClick={handleDelete}
+                    className="flex-1 text-sm bg-red-600 text-white py-2.5 rounded-xl hover:bg-red-700 font-medium">
+                    Yes, Delete
+                  </button>
+                </div>
+              </div>
+            </Modal>
+          )}
+        </>
       )}
 
       {/* TOAST STACK */}

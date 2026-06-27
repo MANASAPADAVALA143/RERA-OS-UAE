@@ -401,6 +401,100 @@ def company_dashboard(
     }
 
 
+# ── suites (properties) ───────────────────────────────────────────────────────
+
+@router.get("/suites")
+def list_suites(
+    company_id: str = Query(None),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    tid = current_user.tenant_id
+    q = db.query(RentalProp).filter(RentalProp.tenant_id == tid)
+    if company_id:
+        q = q.filter(RentalProp.company_id == uuid.UUID(company_id))
+    suites = q.order_by(RentalProp.property_name).all()
+    return [
+        {
+            "id": str(s.id),
+            "company_id": str(s.company_id),
+            "property_name": s.property_name,
+            "address": s.address,
+            "property_type": s.property_type,
+            "unit_count": len(s.units),
+        }
+        for s in suites
+    ]
+
+
+@router.post("/suites", status_code=201)
+def create_suite(
+    body: dict,
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    cid = uuid.UUID(body["company_id"])
+    co = db.query(RentalCompany).filter(
+        RentalCompany.id == cid,
+        RentalCompany.tenant_id == current_user.tenant_id,
+    ).first()
+    if not co:
+        raise HTTPException(404, "Company not found")
+    s = RentalProp(
+        tenant_id=current_user.tenant_id,
+        company_id=cid,
+        property_name=body["property_name"],
+        address=body.get("address"),
+        property_type=body.get("property_type"),
+    )
+    db.add(s)
+    db.commit()
+    db.refresh(s)
+    return {"id": str(s.id), "property_name": s.property_name, "company_id": str(s.company_id)}
+
+
+@router.put("/suites/{suite_id}")
+def update_suite(
+    suite_id: uuid.UUID,
+    body: dict,
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    s = db.query(RentalProp).filter(
+        RentalProp.id == suite_id,
+        RentalProp.tenant_id == current_user.tenant_id,
+    ).first()
+    if not s:
+        raise HTTPException(404, "Suite not found")
+    if "property_name" in body:
+        s.property_name = body["property_name"]
+    if "address" in body:
+        s.address = body["address"]
+    if "property_type" in body:
+        s.property_type = body["property_type"]
+    db.commit()
+    db.refresh(s)
+    return {"id": str(s.id), "property_name": s.property_name}
+
+
+@router.delete("/suites/{suite_id}", status_code=204)
+def delete_suite(
+    suite_id: uuid.UUID,
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    s = db.query(RentalProp).filter(
+        RentalProp.id == suite_id,
+        RentalProp.tenant_id == current_user.tenant_id,
+    ).first()
+    if not s:
+        raise HTTPException(404, "Suite not found")
+    if s.units:
+        raise HTTPException(400, f"Remove all {len(s.units)} unit(s) from this suite before deleting it.")
+    db.delete(s)
+    db.commit()
+
+
 # ── units ─────────────────────────────────────────────────────────────────────
 
 @router.get("/units")
