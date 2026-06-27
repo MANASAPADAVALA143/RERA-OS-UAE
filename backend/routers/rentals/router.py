@@ -26,6 +26,8 @@ from models.rentals.models import (
     RentalTenant,
     RentalUnit,
 )
+from models.rentals.maintenance import MaintenanceRequest
+from models.rentals.unit_inspection import UnitInspection, UnitInspectionPhoto, UnitInspectionChecklistItem
 from services.rental_calculations import (
     arrears_aging,
     company_summary,
@@ -490,13 +492,22 @@ def delete_suite(
     if not s:
         raise HTTPException(404, "Suite not found")
 
-    # Cascade delete in FK dependency order:
-    # collections → invoices → leases → tenants → units → expenses → suite
     unit_ids = [u.id for u in s.units]
     if unit_ids:
-        invoices = db.query(RentalInvoice).filter(RentalInvoice.unit_id.in_(unit_ids)).all()
-        for inv in invoices:
-            db.query(RentalCollection).filter(RentalCollection.invoice_id == inv.id).delete(synchronize_session=False)
+        # maintenance requests → must go before units
+        db.query(MaintenanceRequest).filter(MaintenanceRequest.unit_id.in_(unit_ids)).delete(synchronize_session=False)
+        # unit inspections chain
+        insp_ids = [
+            i.id for i in db.query(UnitInspection).filter(UnitInspection.unit_id.in_(unit_ids)).all()
+        ]
+        if insp_ids:
+            db.query(UnitInspectionPhoto).filter(UnitInspectionPhoto.inspection_id.in_(insp_ids)).delete(synchronize_session=False)
+            db.query(UnitInspectionChecklistItem).filter(UnitInspectionChecklistItem.inspection_id.in_(insp_ids)).delete(synchronize_session=False)
+        db.query(UnitInspection).filter(UnitInspection.unit_id.in_(unit_ids)).delete(synchronize_session=False)
+        # invoice chain
+        inv_ids = [i.id for i in db.query(RentalInvoice).filter(RentalInvoice.unit_id.in_(unit_ids)).all()]
+        if inv_ids:
+            db.query(RentalCollection).filter(RentalCollection.invoice_id.in_(inv_ids)).delete(synchronize_session=False)
         db.query(RentalInvoice).filter(RentalInvoice.unit_id.in_(unit_ids)).delete(synchronize_session=False)
         db.query(RentalLease).filter(RentalLease.unit_id.in_(unit_ids)).delete(synchronize_session=False)
         db.query(RentalTenant).filter(RentalTenant.unit_id.in_(unit_ids)).delete(synchronize_session=False)
