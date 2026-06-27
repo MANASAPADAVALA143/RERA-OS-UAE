@@ -288,6 +288,26 @@ def create_company(
     return {"id": str(co.id), "company_name": co.company_name}
 
 
+@router.put("/companies/{company_id}")
+def update_company(
+    company_id: uuid.UUID,
+    body: dict,
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    co = db.query(RentalCompany).filter(
+        RentalCompany.id == company_id,
+        RentalCompany.tenant_id == current_user.tenant_id,
+    ).first()
+    if not co:
+        raise HTTPException(404, "Company not found")
+    if "company_name" in body:
+        co.company_name = body["company_name"]
+    db.commit()
+    db.refresh(co)
+    return {"id": str(co.id), "company_name": co.company_name}
+
+
 @router.delete("/companies/{company_id}", status_code=204)
 def delete_company(
     company_id: uuid.UUID,

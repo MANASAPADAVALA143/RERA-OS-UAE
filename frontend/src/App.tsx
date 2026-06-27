@@ -15,6 +15,7 @@ import PropertyDev from './pages/PropertyDev';
 import CapitalRisk from './pages/CapitalRisk';
 import PipelineMarket from './pages/PipelineMarket';
 import Settings from './pages/Settings';
+import CompanyRegistry from './pages/settings/CompanyRegistry';
 
 export default function App() {
   return (
@@ -46,6 +47,7 @@ export default function App() {
             <Route path="/capital-risk" element={<CapitalRisk />} />
             <Route path="/pipeline-market" element={<PipelineMarket />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/settings/companies" element={<CompanyRegistry />} />
           </Route>
           <Route path="/" element={<Navigate to="/executive-summary" replace />} />
           <Route path="*" element={<Navigate to="/executive-summary" replace />} />

@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, HardHat, Building2, Landmark, Home,
-  ShieldAlert, Map, Settings, LogOut, HardDriveUpload,
+  ShieldAlert, Map, Settings, LogOut, HardDriveUpload, Database,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Badge } from '../ui/Badge';
@@ -176,6 +176,9 @@ function SidebarInner() {
           </div>
           <NavLink to="/settings" className="flex items-center gap-2 text-sm text-gray-300 hover:text-white">
             <Settings size={16} /> Settings
+          </NavLink>
+          <NavLink to="/settings/companies" className="flex items-center gap-2 text-sm text-gray-300 hover:text-white">
+            <Database size={16} /> Company Registry
           </NavLink>
           <button onClick={signOut} className="flex items-center gap-2 text-sm text-gray-300 hover:text-white w-full">
             <LogOut size={16} /> Sign out
