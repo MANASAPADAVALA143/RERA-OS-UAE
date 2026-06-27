@@ -288,6 +288,22 @@ def create_company(
     return {"id": str(co.id), "company_name": co.company_name}
 
 
+@router.delete("/companies/{company_id}", status_code=204)
+def delete_company(
+    company_id: uuid.UUID,
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    co = db.query(RentalCompany).filter(
+        RentalCompany.id == company_id,
+        RentalCompany.tenant_id == current_user.tenant_id,
+    ).first()
+    if not co:
+        raise HTTPException(404, "Company not found")
+    db.delete(co)
+    db.commit()
+
+
 @router.get("/companies/{company_id}/dashboard")
 def company_dashboard(
     company_id: uuid.UUID,

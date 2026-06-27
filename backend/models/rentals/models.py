@@ -52,8 +52,8 @@ class RentalCompany(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     properties: Mapped[list["RentalProp"]] = relationship("RentalProp", back_populates="company", cascade="all, delete-orphan")
-    units: Mapped[list["RentalUnit"]] = relationship("RentalUnit", back_populates="company")
-    expenses: Mapped[list["RentalExpense"]] = relationship("RentalExpense", back_populates="company")
+    units: Mapped[list["RentalUnit"]] = relationship("RentalUnit", back_populates="company", cascade="all, delete-orphan")
+    expenses: Mapped[list["RentalExpense"]] = relationship("RentalExpense", back_populates="company", cascade="all, delete-orphan")
     ownership: Mapped[list["RentalOwnership"]] = relationship("RentalOwnership", back_populates="company", cascade="all, delete-orphan")
 
     __table_args__ = (Index("ix_r_companies_tenant", "tenant_id"),)

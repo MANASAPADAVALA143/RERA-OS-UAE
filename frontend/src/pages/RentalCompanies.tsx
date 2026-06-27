@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Building, Building2, Home, Hotel, Warehouse, House,
-  Store, Landmark, School, Factory, ArrowLeft,
+  Store, Landmark, School, Factory, ArrowLeft, Plus, Trash2,
 } from 'lucide-react';
 import api from '../services/api';
 import { Card } from '../components/ui/Card';
@@ -49,6 +49,10 @@ export default function RentalCompanies() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [prefersReduced, setPrefersReduced] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState('');
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -72,6 +76,32 @@ export default function RentalCompanies() {
   }, []);
 
   useEffect(() => { fetchCompanies(); }, [fetchCompanies]);
+
+  async function handleAdd() {
+    if (!newName.trim()) return;
+    setAdding(true);
+    setAddError('');
+    try {
+      await api.post('/api/rentals/companies', { company_name: newName.trim() });
+      setNewName('');
+      setShowAddForm(false);
+      await fetchCompanies();
+    } catch {
+      setAddError('Failed to add company.');
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function handleDelete(id: string, name: string) {
+    if (!window.confirm(`Delete "${name}" and all its data? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/api/rentals/companies/${id}`);
+      await fetchCompanies();
+    } catch {
+      setError('Failed to delete company.');
+    }
+  }
 
   if (selectedCompanyId) {
     return (
@@ -106,7 +136,46 @@ export default function RentalCompanies() {
         `}</style>
       )}
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-charcoal">Companies</h1>
+        {/* Header + Add button */}
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-charcoal">Companies</h1>
+          <button
+            onClick={() => { setShowAddForm(v => !v); setAddError(''); setNewName(''); }}
+            className="flex items-center gap-2 bg-primary text-white text-sm px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            <Plus size={15} /> Add Company
+          </button>
+        </div>
+
+        {/* Add company form */}
+        {showAddForm && (
+          <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-3 shadow-sm">
+            <input
+              type="text"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAdd()}
+              placeholder="Company name (e.g. ABC LLC)"
+              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              autoFocus
+            />
+            <button
+              onClick={handleAdd}
+              disabled={adding || !newName.trim()}
+              className="bg-primary text-white text-sm px-4 py-2 rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {adding ? 'Adding…' : 'Add'}
+            </button>
+            <button
+              onClick={() => setShowAddForm(false)}
+              className="text-sm text-gray-500 hover:text-gray-700 px-2"
+            >
+              Cancel
+            </button>
+            {addError && <span className="text-xs text-red-500">{addError}</span>}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
           {companies.map((c, index) => {
             const style = COMPANY_STYLES[index % COMPANY_STYLES.length];
@@ -138,6 +207,13 @@ export default function RentalCompanies() {
                       }`}>
                         {c.occupied_units}/{c.total_units}
                       </span>
+                      <button
+                        onClick={e => { e.stopPropagation(); handleDelete(c.id, c.company_name); }}
+                        className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-500 transition-colors flex-shrink-0"
+                        title="Delete company"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
 
                     {/* Occupancy bar */}
