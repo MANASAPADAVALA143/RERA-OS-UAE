@@ -502,7 +502,7 @@ def delete_suite(
         db.query(RentalTenant).filter(RentalTenant.unit_id.in_(unit_ids)).delete(synchronize_session=False)
     db.query(RentalExpense).filter(RentalExpense.property_id == suite_id).delete(synchronize_session=False)
     db.query(RentalUnit).filter(RentalUnit.property_id == suite_id).delete(synchronize_session=False)
-    db.delete(s)
+    db.query(RentalProp).filter(RentalProp.id == suite_id).delete(synchronize_session=False)
     db.commit()
 
 
