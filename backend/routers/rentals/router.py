@@ -522,6 +522,7 @@ def delete_suite(
 @router.get("/units")
 def list_units(
     company_id: str = Query(None),
+    property_id: str = Query(None),
     status: str = Query(None),
     fmt: str = Query(None, alias="format"),
     current_user: CurrentUser = Depends(get_current_user),
@@ -533,6 +534,11 @@ def list_units(
     if company_id:
         try:
             q = q.filter(RentalUnit.company_id == uuid.UUID(company_id))
+        except ValueError:
+            pass
+    if property_id:
+        try:
+            q = q.filter(RentalUnit.property_id == uuid.UUID(property_id))
         except ValueError:
             pass
     if status:

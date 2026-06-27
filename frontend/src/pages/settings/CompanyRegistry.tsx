@@ -26,6 +26,13 @@ interface Suite {
   unit_count: number;
 }
 
+interface UnitRow {
+  id: string;
+  unit_number: string;
+  status: string;
+  monthly_rent: number;
+}
+
 interface FieldDef {
   name: string;
   label: string;
@@ -219,6 +226,13 @@ function InlineSuites({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
 
+  // unit expand + rename state
+  const [expandedUnitsId, setExpandedUnitsId] = useState<string | null>(null);
+  const [unitsMap, setUnitsMap] = useState<Record<string, UnitRow[]>>({});
+  const [unitEditId, setUnitEditId] = useState<string | null>(null);
+  const [unitEditVal, setUnitEditVal] = useState('');
+  const [unitSaving, setUnitSaving] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -244,6 +258,41 @@ function InlineSuites({
       push('Failed to rename suite', false);
     }
   }
+
+  async function loadSuiteUnits(suiteId: string) {
+    try {
+      const res = await api.get<UnitRow[]>(`/api/rentals/units?property_id=${suiteId}`);
+      setUnitsMap(prev => ({ ...prev, [suiteId]: Array.isArray(res.data) ? res.data : [] }));
+    } catch {
+      push('Failed to load units', false);
+    }
+  }
+
+  function toggleUnits(suiteId: string) {
+    if (expandedUnitsId === suiteId) {
+      setExpandedUnitsId(null);
+    } else {
+      setExpandedUnitsId(suiteId);
+      loadSuiteUnits(suiteId);
+    }
+  }
+
+  async function saveUnitName(unitId: string, suiteId: string) {
+    if (!unitEditVal.trim()) { setUnitEditId(null); return; }
+    setUnitSaving(true);
+    try {
+      await api.put(`/api/rentals/units/${unitId}`, { unit_number: unitEditVal.trim() });
+      setUnitEditId(null);
+      push('Unit renamed');
+      await loadSuiteUnits(suiteId);
+    } catch {
+      push('Failed to rename unit', false);
+    } finally {
+      setUnitSaving(false);
+    }
+  }
+
+  const suiteCols = canWrite ? 6 : 5;
 
   return (
     <tr>
@@ -292,43 +341,159 @@ function InlineSuites({
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {suites.map((s, i) => (
-                    <tr key={s.id} className="hover:bg-blue-50/30 transition-colors">
-                      <td className="px-4 py-2.5 text-xs text-gray-400">{i + 1}</td>
-                      <td className="px-4 py-2.5 font-medium text-gray-800">
-                        {editingId === s.id ? (
-                          <div className="flex items-center gap-1">
-                            <input autoFocus value={editName}
-                              onChange={e => setEditName(e.target.value)}
-                              onKeyDown={e => { if (e.key === 'Enter') handleRename(s.id); if (e.key === 'Escape') setEditingId(null); }}
-                              className="text-sm border border-blue-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-[140px]" />
-                            <button onClick={() => handleRename(s.id)} className="text-blue-600 hover:text-blue-800"><Check size={12} /></button>
-                            <button onClick={() => setEditingId(null)} className="text-gray-400 hover:text-gray-600"><X size={12} /></button>
-                          </div>
-                        ) : (
-                          <span className="cursor-pointer hover:text-blue-600 transition-colors" title="Double-click to rename"
-                            onDoubleClick={() => { setEditingId(s.id); setEditName(s.property_name); }}>
-                            {s.property_name}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5 text-gray-500">{s.address || '—'}</td>
-                      <td className="px-4 py-2.5 text-gray-500">{s.property_type || '—'}</td>
-                      <td className="px-4 py-2.5 text-right text-gray-700 font-mono text-xs">{s.unit_count}</td>
-                      {canWrite && (
-                        <td className="px-4 py-2.5 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <button onClick={() => onEdit(s)}
-                              className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Edit">
-                              <Pencil size={12} />
-                            </button>
-                            <button onClick={() => onDelete(s)}
-                              className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete">
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
+                    <Fragment key={s.id}>
+                      <tr className={`hover:bg-blue-50/30 transition-colors${expandedUnitsId === s.id ? ' bg-blue-50/40' : ''}`}>
+                        <td className="px-4 py-2.5 text-xs text-gray-400">{i + 1}</td>
+                        <td className="px-4 py-2.5 font-medium text-gray-800">
+                          {editingId === s.id ? (
+                            <div className="flex items-center gap-1">
+                              <input autoFocus value={editName}
+                                onChange={e => setEditName(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') handleRename(s.id); if (e.key === 'Escape') setEditingId(null); }}
+                                className="text-sm border border-blue-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-[140px]" />
+                              <button onClick={() => handleRename(s.id)} className="text-blue-600 hover:text-blue-800"><Check size={12} /></button>
+                              <button onClick={() => setEditingId(null)} className="text-gray-400 hover:text-gray-600"><X size={12} /></button>
+                            </div>
+                          ) : (
+                            <span className="cursor-pointer hover:text-blue-600 transition-colors" title="Double-click to rename"
+                              onDoubleClick={() => { setEditingId(s.id); setEditName(s.property_name); }}>
+                              {s.property_name}
+                            </span>
+                          )}
                         </td>
+                        <td className="px-4 py-2.5 text-gray-500">{s.address || '—'}</td>
+                        <td className="px-4 py-2.5 text-gray-500">{s.property_type || '—'}</td>
+                        <td className="px-4 py-2.5 text-right">
+                          <button
+                            onClick={() => toggleUnits(s.id)}
+                            className="inline-flex items-center gap-1 text-xs font-mono text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-0.5 rounded transition-colors"
+                            title="Click to show/hide units"
+                          >
+                            {s.unit_count}
+                            {expandedUnitsId === s.id
+                              ? <ChevronDown size={11} />
+                              : <ChevronRight size={11} />}
+                          </button>
+                        </td>
+                        {canWrite && (
+                          <td className="px-4 py-2.5 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button onClick={() => onEdit(s)}
+                                className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Edit">
+                                <Pencil size={12} />
+                              </button>
+                              <button onClick={() => onDelete(s)}
+                                className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete">
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+
+                      {expandedUnitsId === s.id && (
+                        <tr>
+                          <td colSpan={suiteCols} className="px-0 py-0 border-t border-indigo-100">
+                            <div className="bg-indigo-50/30 px-6 py-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className="w-0.5 h-4 bg-indigo-400 rounded-full" />
+                                <span className="text-xs font-semibold text-gray-600">
+                                  Units — {s.property_name}
+                                </span>
+                                {unitsMap[s.id] && (
+                                  <span className="text-xs text-gray-400">
+                                    ({unitsMap[s.id].length} units)
+                                  </span>
+                                )}
+                              </div>
+                              {!unitsMap[s.id] ? (
+                                <div className="flex items-center gap-2 py-3">
+                                  <div className="w-4 h-4 border-2 border-gray-200 border-t-indigo-500 rounded-full animate-spin" />
+                                  <span className="text-xs text-gray-400">Loading units…</span>
+                                </div>
+                              ) : unitsMap[s.id].length === 0 ? (
+                                <p className="text-xs text-gray-400 py-2">No units found for this suite.</p>
+                              ) : (
+                                <div className="bg-white rounded-lg border border-indigo-100 overflow-hidden">
+                                  <table className="w-full text-xs">
+                                    <thead>
+                                      <tr className="bg-gray-50/80 border-b border-gray-100">
+                                        <th className="text-left px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide w-6">#</th>
+                                        <th className="text-left px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Unit Name</th>
+                                        <th className="text-left px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Status</th>
+                                        <th className="text-right px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Rent / mo</th>
+                                        {canWrite && <th className="text-right px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Rename</th>}
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50">
+                                      {unitsMap[s.id].map((u, j) => (
+                                        <tr key={u.id} className="hover:bg-indigo-50/20">
+                                          <td className="px-3 py-1.5 text-gray-400">{j + 1}</td>
+                                          <td className="px-3 py-1.5 font-medium text-gray-800">
+                                            {unitEditId === u.id ? (
+                                              <div className="flex items-center gap-1">
+                                                <input
+                                                  autoFocus
+                                                  value={unitEditVal}
+                                                  onChange={e => setUnitEditVal(e.target.value)}
+                                                  onKeyDown={e => {
+                                                    if (e.key === 'Enter') saveUnitName(u.id, s.id);
+                                                    if (e.key === 'Escape') setUnitEditId(null);
+                                                  }}
+                                                  disabled={unitSaving}
+                                                  className="text-xs border border-indigo-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 min-w-[100px]"
+                                                />
+                                                <button onClick={() => saveUnitName(u.id, s.id)} disabled={unitSaving}
+                                                  className="text-indigo-600 hover:text-indigo-800 disabled:opacity-40">
+                                                  <Check size={11} />
+                                                </button>
+                                                <button onClick={() => setUnitEditId(null)} disabled={unitSaving}
+                                                  className="text-gray-400 hover:text-gray-600">
+                                                  <X size={11} />
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              u.unit_number
+                                            )}
+                                          </td>
+                                          <td className="px-3 py-1.5">
+                                            <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                                              u.status === 'occupied'
+                                                ? 'bg-green-100 text-green-700'
+                                                : 'bg-gray-100 text-gray-500'
+                                            }`}>
+                                              {u.status}
+                                            </span>
+                                          </td>
+                                          <td className="px-3 py-1.5 text-right font-mono text-gray-700">
+                                            {u.monthly_rent > 0
+                                              ? `$${u.monthly_rent.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+                                              : '—'}
+                                          </td>
+                                          {canWrite && (
+                                            <td className="px-3 py-1.5 text-right">
+                                              {unitEditId !== u.id && (
+                                                <button
+                                                  onClick={() => { setUnitEditId(u.id); setUnitEditVal(u.unit_number); }}
+                                                  className="p-1 rounded text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                                  title="Rename unit"
+                                                >
+                                                  <Pencil size={11} />
+                                                </button>
+                                              )}
+                                            </td>
+                                          )}
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
                       )}
-                    </tr>
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
