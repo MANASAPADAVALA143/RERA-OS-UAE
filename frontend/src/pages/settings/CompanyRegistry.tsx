@@ -1,5 +1,4 @@
-import { Fragment, useCallback, useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Plus, Pencil, Trash2, X, Check, Search,
@@ -16,6 +15,15 @@ interface Company extends Record<string, unknown> {
   id: string;
   company_name: string;
   status?: string;
+}
+
+interface Suite {
+  id: string;
+  company_id: string;
+  property_name: string;
+  address: string | null;
+  property_type: string | null;
+  unit_count: number;
 }
 
 interface FieldDef {
@@ -86,29 +94,22 @@ const MODULES: ModuleDef[] = [
     icon: Home,
     endpoint: '/api/rentals/companies',
     fields: [
-      { name: 'company_name',  label: 'Company Name',   type: 'text',   required: true },
-      { name: 'property_type', label: 'Property Type',  type: 'select',
+      { name: 'company_name',  label: 'Company Name',  type: 'text',   required: true },
+      { name: 'property_type', label: 'Property Type', type: 'select',
         options: ['Apartment Complex', 'Multifamily Townhome', 'Garden Apartment', 'Single Family Rental', 'Loft Apartment', 'Commercial'] },
-      { name: 'total_units',   label: 'Total Units',    type: 'number' },
+      { name: 'total_units',   label: 'Total Units',   type: 'number' },
     ],
     tableCols: ['Company Name', 'Property Type', 'Units', 'Status'],
     rowCells: (c) => [c.company_name, (c.property_type as string) || '—', (c.total_units as number) ?? '—', null],
     normalise: (raw) => {
       const arr = Array.isArray(raw) ? raw : (raw as { companies?: unknown[] }).companies ?? [];
       return (arr as Record<string, unknown>[]).map(r => ({
-        id: r.id as string,
-        company_name: (r.company_name as string) ?? '',
-        property_type: r.property_type as string,
-        total_units: r.total_units,
+        id: r.id as string, company_name: (r.company_name as string) ?? '',
+        property_type: r.property_type as string, total_units: r.total_units,
         status: (r.status as string) ?? 'active',
       }));
     },
-    toPayload: (f) => ({
-      company_name: f.company_name,
-      property_type: f.property_type || undefined,
-      total_units: f.total_units ? Number(f.total_units) : undefined,
-      status: f.status || 'active',
-    }),
+    toPayload: (f) => ({ company_name: f.company_name, property_type: f.property_type || undefined, total_units: f.total_units ? Number(f.total_units) : undefined, status: f.status || 'active' }),
   },
   {
     id: 'propdev',
@@ -118,8 +119,7 @@ const MODULES: ModuleDef[] = [
     fields: [
       { name: 'name',          label: 'Company Name',       type: 'text', required: true },
       { name: 'property_name', label: 'Project / Property', type: 'text' },
-      { name: 'project_type',  label: 'Project Type',       type: 'select',
-        options: ['Land Development', 'Residential', 'Commercial', 'Mixed Use'] },
+      { name: 'project_type',  label: 'Project Type',       type: 'select', options: ['Land Development', 'Residential', 'Commercial', 'Mixed Use'] },
       { name: 'total_lots',    label: 'Total Lots',         type: 'number' },
     ],
     tableCols: ['Company Name', 'Project / Property', 'Type', 'Lots', 'Status'],
@@ -127,22 +127,12 @@ const MODULES: ModuleDef[] = [
     normalise: (raw) => {
       const arr = Array.isArray(raw) ? raw : (raw as { companies?: unknown[] }).companies ?? [];
       return (arr as Record<string, unknown>[]).map(r => ({
-        id: r.id as string,
-        company_name: (r.name as string) ?? '',
-        property_name: r.property_name as string,
-        project_type: r.project_type as string,
-        total_lots: r.total_lots,
-        status: (r.status as string) ?? 'active',
-        _raw_name: r.name,
+        id: r.id as string, company_name: (r.name as string) ?? '',
+        property_name: r.property_name as string, project_type: r.project_type as string,
+        total_lots: r.total_lots, status: (r.status as string) ?? 'active', _raw_name: r.name,
       }));
     },
-    toPayload: (f) => ({
-      name: f.name,
-      property_name: f.property_name || '',
-      project_type: f.project_type || undefined,
-      total_lots: f.total_lots ? Number(f.total_lots) : undefined,
-      status: f.status || 'active',
-    }),
+    toPayload: (f) => ({ name: f.name, property_name: f.property_name || '', project_type: f.project_type || undefined, total_lots: f.total_lots ? Number(f.total_lots) : undefined, status: f.status || 'active' }),
   },
   {
     id: 'reit',
@@ -152,36 +142,20 @@ const MODULES: ModuleDef[] = [
     fields: [
       { name: 'company_name', label: 'Company Name', type: 'text', required: true },
       { name: 'fund_name',    label: 'Fund Name',    type: 'text' },
-      { name: 'asset_class',  label: 'Asset Class',  type: 'select',
-        options: ['Multifamily', 'Office', 'Retail', 'Industrial', 'Mixed'] },
+      { name: 'asset_class',  label: 'Asset Class',  type: 'select', options: ['Multifamily', 'Office', 'Retail', 'Industrial', 'Mixed'] },
       { name: 'aum',          label: 'AUM ($)',      type: 'number' },
     ],
     tableCols: ['Company Name', 'Fund', 'Asset Class', 'AUM', 'Status'],
-    rowCells: (c) => [
-      c.company_name,
-      (c.fund_name as string) || '—',
-      (c.asset_class as string) || '—',
-      (c.aum as number) ? `$${Number(c.aum).toLocaleString()}` : '—',
-      null,
-    ],
+    rowCells: (c) => [c.company_name, (c.fund_name as string) || '—', (c.asset_class as string) || '—', (c.aum as number) ? `$${Number(c.aum).toLocaleString()}` : '—', null],
     normalise: (raw) => {
       const arr = Array.isArray(raw) ? raw : (raw as { companies?: unknown[] }).companies ?? [];
       return (arr as Record<string, unknown>[]).map(r => ({
-        id: r.id as string,
-        company_name: (r.company_name as string) ?? '',
-        fund_name: r.fund_name as string,
-        asset_class: r.asset_class as string,
-        aum: r.aum,
-        status: (r.status as string) ?? 'active',
+        id: r.id as string, company_name: (r.company_name as string) ?? '',
+        fund_name: r.fund_name as string, asset_class: r.asset_class as string,
+        aum: r.aum, status: (r.status as string) ?? 'active',
       }));
     },
-    toPayload: (f) => ({
-      company_name: f.company_name,
-      fund_name: f.fund_name || undefined,
-      asset_class: f.asset_class || undefined,
-      aum: f.aum ? Number(f.aum) : undefined,
-      status: f.status || 'active',
-    }),
+    toPayload: (f) => ({ company_name: f.company_name, fund_name: f.fund_name || undefined, asset_class: f.asset_class || undefined, aum: f.aum ? Number(f.aum) : undefined, status: f.status || 'active' }),
   },
   {
     id: 'construction',
@@ -191,47 +165,27 @@ const MODULES: ModuleDef[] = [
     fields: [
       { name: 'company_name',   label: 'Company Name',      type: 'text', required: true },
       { name: 'project_name',   label: 'Project Name',      type: 'text' },
-      { name: 'project_type',   label: 'Project Type',      type: 'select',
-        options: ['Residential', 'Commercial', 'Infrastructure', 'Industrial'] },
+      { name: 'project_type',   label: 'Project Type',      type: 'select', options: ['Residential', 'Commercial', 'Infrastructure', 'Industrial'] },
       { name: 'contract_value', label: 'Contract Value ($)', type: 'number' },
       { name: 'start_date',     label: 'Start Date',        type: 'date' },
       { name: 'end_date',       label: 'End Date',          type: 'date' },
     ],
     tableCols: ['Company Name', 'Project', 'Type', 'Contract Value', 'End Date', 'Status'],
-    rowCells: (c) => [
-      c.company_name,
-      (c.project_name as string) || '—',
-      (c.project_type as string) || '—',
-      (c.contract_value as number) ? `$${Number(c.contract_value).toLocaleString()}` : '—',
-      (c.end_date as string) || '—',
-      null,
-    ],
+    rowCells: (c) => [c.company_name, (c.project_name as string) || '—', (c.project_type as string) || '—', (c.contract_value as number) ? `$${Number(c.contract_value).toLocaleString()}` : '—', (c.end_date as string) || '—', null],
     normalise: (raw) => {
       const arr = Array.isArray(raw) ? raw : (raw as { companies?: unknown[] }).companies ?? [];
       return (arr as Record<string, unknown>[]).map(r => ({
-        id: r.id as string,
-        company_name: (r.company_name as string) ?? '',
-        project_name: r.project_name as string,
-        project_type: r.project_type as string,
-        contract_value: r.contract_value,
-        start_date: r.start_date as string,
-        end_date: r.end_date as string,
-        status: (r.status as string) ?? 'active',
+        id: r.id as string, company_name: (r.company_name as string) ?? '',
+        project_name: r.project_name as string, project_type: r.project_type as string,
+        contract_value: r.contract_value, start_date: r.start_date as string,
+        end_date: r.end_date as string, status: (r.status as string) ?? 'active',
       }));
     },
-    toPayload: (f) => ({
-      company_name: f.company_name,
-      project_name: f.project_name || undefined,
-      project_type: f.project_type || undefined,
-      contract_value: f.contract_value ? Number(f.contract_value) : undefined,
-      start_date: f.start_date || undefined,
-      end_date: f.end_date || undefined,
-      status: f.status || 'active',
-    }),
+    toPayload: (f) => ({ company_name: f.company_name, project_name: f.project_name || undefined, project_type: f.project_type || undefined, contract_value: f.contract_value ? Number(f.contract_value) : undefined, start_date: f.start_date || undefined, end_date: f.end_date || undefined, status: f.status || 'active' }),
   },
 ];
 
-// ── status badge ──────────────────────────────────────────────────────────────
+const SUITE_PROP_TYPES = ['Apartment', 'Townhome', 'SFR', 'Loft', 'Commercial'];
 
 function StatusBadge({ status, onClick }: { status: string; onClick: () => void }) {
   const active = !status || status === 'active';
@@ -244,41 +198,24 @@ function StatusBadge({ status, onClick }: { status: string; onClick: () => void 
   );
 }
 
-// ── inline suites section (expands under a rental company row) ────────────────
-
-interface Suite {
-  id: string;
-  company_id: string;
-  property_name: string;
-  address: string | null;
-  property_type: string | null;
-  unit_count: number;
-}
-
-const SUITE_PROP_TYPES = ['Apartment', 'Townhome', 'SFR', 'Loft', 'Commercial'];
+// ── inline suites table (no modals — modals handled by parent) ────────────────
 
 function InlineSuites({
-  companyId,
-  companyName,
-  canWrite,
-  push,
-  totalCols,
+  companyId, companyName, canWrite, push, totalCols,
+  onAdd, onEdit, onDelete, reloadKey,
 }: {
   companyId: string;
   companyName: string;
   canWrite: boolean;
   push: (msg: string, ok?: boolean) => void;
   totalCols: number;
+  onAdd: (companyId: string, companyName: string) => void;
+  onEdit: (suite: Suite) => void;
+  onDelete: (suite: Suite) => void;
+  reloadKey: number;
 }) {
   const [suites, setSuites] = useState<Suite[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const [suiteModal, setSuiteModal] = useState<'add' | 'edit' | 'delete' | null>(null);
-  const [suiteTarget, setSuiteTarget] = useState<Suite | null>(null);
-  const [suiteForm, setSuiteForm] = useState({ property_name: '', address: '', property_type: '' });
-  const [suiteSaving, setSuiteSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
 
@@ -294,61 +231,7 @@ function InlineSuites({
     }
   }, [companyId, push]);
 
-  useEffect(() => { load(); }, [load]);
-
-  function openAdd() {
-    setSuiteForm({ property_name: '', address: '', property_type: '' });
-    setSuiteTarget(null);
-    setDeleteError('');
-    setSuiteModal('add');
-  }
-  function openEdit(s: Suite) {
-    setSuiteForm({ property_name: s.property_name, address: s.address ?? '', property_type: s.property_type ?? '' });
-    setSuiteTarget(s);
-    setSuiteModal('edit');
-  }
-  function openDelete(s: Suite) { setSuiteTarget(s); setDeleting(false); setSuiteModal('delete'); }
-  function closeModal() { setSuiteModal(null); setSuiteTarget(null); setSuiteSaving(false); setDeleting(false); }
-
-  async function handleSave() {
-    if (!suiteForm.property_name.trim()) return;
-    setSuiteSaving(true);
-    // Always include all fields (null clears existing values on the backend)
-    const payload: Record<string, unknown> = {
-      property_name: suiteForm.property_name.trim(),
-      address: suiteForm.address.trim() || null,
-      property_type: suiteForm.property_type || null,
-    };
-    if (!suiteTarget) payload.company_id = companyId;
-    try {
-      if (suiteTarget) {
-        await api.put(`/api/rentals/suites/${suiteTarget.id}`, payload);
-        push('Suite updated');
-      } else {
-        await api.post('/api/rentals/suites', payload);
-        push('Suite added');
-      }
-      closeModal();
-      load();
-    } catch {
-      push('Failed to save suite', false);
-      setSuiteSaving(false);
-    }
-  }
-
-  async function handleDelete() {
-    if (!suiteTarget) return;
-    setDeleting(true);
-    try {
-      await api.delete(`/api/rentals/suites/${suiteTarget.id}`);
-      push('Suite deleted');
-      closeModal();
-      load();
-    } catch {
-      push('Failed to delete suite', false);
-      setDeleting(false);
-    }
-  }
+  useEffect(() => { load(); }, [load, reloadKey]);
 
   async function handleRename(id: string) {
     if (!editName.trim()) { setEditingId(null); return; }
@@ -363,173 +246,97 @@ function InlineSuites({
   }
 
   return (
-    <Fragment>
-      {/* Inline expanded row */}
-      <tr>
-        <td colSpan={totalCols} className="px-0 py-0">
-          <div className="bg-blue-50/60 border-y border-blue-100 px-6 py-4">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-1 h-5 bg-blue-400 rounded-full" />
-                <span className="text-sm font-semibold text-gray-700">
-                  Suites — <span className="font-normal text-gray-500">{companyName}</span>
+    <tr>
+      <td colSpan={totalCols} className="px-0 py-0 border-b border-blue-100">
+        <div className="bg-blue-50/50 px-6 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-1 h-5 bg-blue-400 rounded-full" />
+              <span className="text-sm font-semibold text-gray-700">
+                Suites — <span className="font-normal text-gray-500">{companyName}</span>
+              </span>
+              {!loading && (
+                <span className="text-xs text-gray-400 bg-white border border-gray-200 px-2 py-0.5 rounded-full">
+                  {suites.length} suite{suites.length !== 1 ? 's' : ''}
                 </span>
-                {!loading && (
-                  <span className="text-xs text-gray-400 bg-white border border-gray-200 px-2 py-0.5 rounded-full">
-                    {suites.length} suite{suites.length !== 1 ? 's' : ''}
-                  </span>
-                )}
-              </div>
-              {canWrite && (
-                <button onClick={openAdd}
-                  className="flex items-center gap-1.5 text-xs bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 font-medium transition-colors">
-                  <Plus size={12} /> Add Suite
-                </button>
               )}
             </div>
+            {canWrite && (
+              <button onClick={() => onAdd(companyId, companyName)}
+                className="flex items-center gap-1.5 text-xs bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 font-medium transition-colors">
+                <Plus size={12} /> Add Suite
+              </button>
+            )}
+          </div>
 
-            {/* Suites table */}
-            {loading ? (
-              <div className="flex items-center justify-center py-6">
-                <div className="w-5 h-5 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
-              </div>
-            ) : suites.length === 0 ? (
-              <div className="text-center py-6 text-sm text-gray-400">
-                No suites yet.{canWrite && <> Click <span className="font-medium text-gray-600">Add Suite</span> to create one.</>}
-              </div>
-            ) : (
-              <div className="bg-white rounded-xl border border-blue-100 overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-50/80 border-b border-gray-100">
-                      <th className="text-left px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide w-8">#</th>
-                      <th className="text-left px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Suite Name</th>
-                      <th className="text-left px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Address</th>
-                      <th className="text-left px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Property Type</th>
-                      <th className="text-right px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Units</th>
-                      {canWrite && <th className="text-right px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Actions</th>}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {suites.map((s, i) => (
-                      <tr key={s.id} className="hover:bg-blue-50/30 transition-colors">
-                        <td className="px-4 py-2.5 text-xs text-gray-400">{i + 1}</td>
-                        <td className="px-4 py-2.5 font-medium text-gray-800">
-                          {editingId === s.id ? (
-                            <div className="flex items-center gap-1">
-                              <input autoFocus value={editName}
-                                onChange={e => setEditName(e.target.value)}
-                                onKeyDown={e => { if (e.key === 'Enter') handleRename(s.id); if (e.key === 'Escape') setEditingId(null); }}
-                                className="text-sm border border-blue-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                              <button onClick={() => handleRename(s.id)} className="text-blue-600"><Check size={12} /></button>
-                              <button onClick={() => setEditingId(null)} className="text-gray-400"><X size={12} /></button>
-                            </div>
-                          ) : (
-                            <span className="cursor-pointer hover:text-blue-600 transition-colors" title="Double-click to rename"
-                              onDoubleClick={() => { setEditingId(s.id); setEditName(s.property_name); }}>
-                              {s.property_name}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2.5 text-gray-500">{s.address || '—'}</td>
-                        <td className="px-4 py-2.5 text-gray-500">{s.property_type || '—'}</td>
-                        <td className="px-4 py-2.5 text-right text-gray-700 font-mono text-xs">{s.unit_count}</td>
-                        {canWrite && (
-                          <td className="px-4 py-2.5 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              <button onClick={() => openEdit(s)}
-                                className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Edit">
-                                <Pencil size={12} />
-                              </button>
-                              <button onClick={() => openDelete(s)}
-                                className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete">
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
-                          </td>
+          {loading ? (
+            <div className="flex items-center justify-center py-6">
+              <div className="w-5 h-5 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
+            </div>
+          ) : suites.length === 0 ? (
+            <div className="text-center py-6 text-sm text-gray-400">
+              No suites yet.{canWrite && <> Click <span className="font-medium text-gray-600">Add Suite</span> to create one.</>}
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-blue-100 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50/80 border-b border-gray-100">
+                    <th className="text-left px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide w-8">#</th>
+                    <th className="text-left px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Suite Name</th>
+                    <th className="text-left px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Address</th>
+                    <th className="text-left px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Property Type</th>
+                    <th className="text-right px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Units</th>
+                    {canWrite && <th className="text-right px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Actions</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {suites.map((s, i) => (
+                    <tr key={s.id} className="hover:bg-blue-50/30 transition-colors">
+                      <td className="px-4 py-2.5 text-xs text-gray-400">{i + 1}</td>
+                      <td className="px-4 py-2.5 font-medium text-gray-800">
+                        {editingId === s.id ? (
+                          <div className="flex items-center gap-1">
+                            <input autoFocus value={editName}
+                              onChange={e => setEditName(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') handleRename(s.id); if (e.key === 'Escape') setEditingId(null); }}
+                              className="text-sm border border-blue-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-[140px]" />
+                            <button onClick={() => handleRename(s.id)} className="text-blue-600 hover:text-blue-800"><Check size={12} /></button>
+                            <button onClick={() => setEditingId(null)} className="text-gray-400 hover:text-gray-600"><X size={12} /></button>
+                          </div>
+                        ) : (
+                          <span className="cursor-pointer hover:text-blue-600 transition-colors" title="Double-click to rename"
+                            onDoubleClick={() => { setEditingId(s.id); setEditName(s.property_name); }}>
+                            {s.property_name}
+                          </span>
                         )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </td>
-      </tr>
-
-      {/* Suite Add / Edit Modal — portalled to body to avoid invalid tbody nesting */}
-      {(suiteModal === 'add' || suiteModal === 'edit') && createPortal(
-        <Modal title={suiteTarget ? 'Edit Suite' : `Add Suite — ${companyName}`} onClose={closeModal}>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Suite Name <span className="text-red-500">*</span></label>
-              <input autoFocus type="text" value={suiteForm.property_name}
-                onChange={e => setSuiteForm(p => ({ ...p, property_name: e.target.value }))}
-                placeholder="e.g. Suite 123"
-                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                      </td>
+                      <td className="px-4 py-2.5 text-gray-500">{s.address || '—'}</td>
+                      <td className="px-4 py-2.5 text-gray-500">{s.property_type || '—'}</td>
+                      <td className="px-4 py-2.5 text-right text-gray-700 font-mono text-xs">{s.unit_count}</td>
+                      {canWrite && (
+                        <td className="px-4 py-2.5 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => onEdit(s)}
+                              className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Edit">
+                              <Pencil size={12} />
+                            </button>
+                            <button onClick={() => onDelete(s)}
+                              className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete">
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Address</label>
-              <input type="text" value={suiteForm.address}
-                onChange={e => setSuiteForm(p => ({ ...p, address: e.target.value }))}
-                placeholder="e.g. 123 Main St"
-                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Property Type</label>
-              <select value={suiteForm.property_type}
-                onChange={e => setSuiteForm(p => ({ ...p, property_type: e.target.value }))}
-                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
-                <option value="">Select…</option>
-                {SUITE_PROP_TYPES.map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-          </div>
-          <div className="flex gap-3 mt-5">
-            <button onClick={closeModal}
-              className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50">Cancel</button>
-            <button onClick={handleSave} disabled={suiteSaving || !suiteForm.property_name.trim()}
-              className="flex-1 flex items-center justify-center gap-2 text-sm bg-gray-900 text-white py-2.5 rounded-xl hover:bg-gray-800 font-medium disabled:opacity-50">
-              {suiteSaving ? 'Saving…' : <><Check size={14} />{suiteTarget ? 'Save Changes' : 'Add Suite'}</>}
-            </button>
-          </div>
-        </Modal>,
-        document.body
-      )}
-
-      {/* Suite Delete Confirm — portalled to body */}
-      {suiteModal === 'delete' && suiteTarget && createPortal(
-        <Modal title="Delete Suite" onClose={closeModal}>
-          <div className="text-center">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Trash2 size={20} className="text-red-500" />
-            </div>
-            <p className="text-sm text-gray-700 font-medium mb-1">Delete "{suiteTarget.property_name}"?</p>
-            {suiteTarget.unit_count > 0 ? (
-              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4 text-left">
-                This suite has <strong>{suiteTarget.unit_count} unit{suiteTarget.unit_count !== 1 ? 's' : ''}</strong> with
-                all their leases, invoices, and payment records. All data will be permanently deleted.
-              </p>
-            ) : (
-              <p className="text-xs text-red-500 mb-4">This cannot be undone.</p>
-            )}
-            <div className="flex gap-3">
-              <button onClick={closeModal} disabled={deleting}
-                className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50 disabled:opacity-50">
-                Cancel
-              </button>
-              <button onClick={handleDelete} disabled={deleting}
-                className="flex-1 flex items-center justify-center gap-2 text-sm bg-red-600 text-white py-2.5 rounded-xl hover:bg-red-700 font-medium disabled:opacity-50">
-                {deleting ? 'Deleting…' : suiteTarget.unit_count > 0 ? `Delete + ${suiteTarget.unit_count} Units` : 'Yes, Delete'}
-              </button>
-            </div>
-          </div>
-        </Modal>,
-        document.body
-      )}
-    </Fragment>
+          )}
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -541,23 +348,36 @@ export default function CompanyRegistry({ embedded = false }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { canWrite } = useAuth();
   const { toasts, push } = useToast();
+  const _ref = useRef<null>(null); void _ref;
 
   const initTab = (searchParams.get('tab') as ModuleId | null) ?? 'rental';
   const [activeId, setActiveId] = useState<ModuleId>(
     MODULES.some(m => m.id === initTab) ? initTab : 'rental'
   );
 
+  // Company list state
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [expandedSuiteId, setExpandedSuiteId] = useState<string | null>(null);
+
+  // Company modal state
   const [modal, setModal] = useState<'add' | 'edit' | 'delete' | null>(null);
   const [target, setTarget] = useState<Company | null>(null);
   const [form, setForm] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
-  // Which company has its suites expanded (rental only)
-  const [expandedSuiteId, setExpandedSuiteId] = useState<string | null>(null);
+  // Suite modal state — lifted here so modals render at page level (proper focus, clipboard)
+  const [suiteModal, setSuiteModal] = useState<'add' | 'edit' | 'delete' | null>(null);
+  const [suiteTarget, setSuiteTarget] = useState<Suite | null>(null);
+  const [suiteCompany, setSuiteCompany] = useState<{ id: string; name: string } | null>(null);
+  const [suiteName, setSuiteName] = useState('');
+  const [suiteAddress, setSuiteAddress] = useState('');
+  const [suitePropType, setSuitePropType] = useState('');
+  const [suiteSaving, setSuiteSaving] = useState(false);
+  const [suiteDeleting, setSuiteDeleting] = useState(false);
+  const [suiteReloadKey, setSuiteReloadKey] = useState(0);
 
   const mod = MODULES.find(m => m.id === activeId)!;
 
@@ -584,6 +404,8 @@ export default function CompanyRegistry({ embedded = false }: Props) {
     setSearchParams({ tab: id }, { replace: true });
   }
 
+  // ── company form ────────────────────────────────────────────────────────────
+
   function initForm(co?: Company) {
     if (!co) {
       const blank: Record<string, string> = { status: 'active' };
@@ -591,10 +413,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
       setForm(blank);
     } else {
       const filled: Record<string, string> = {};
-      mod.fields.forEach(f => {
-        const v = co[f.name];
-        filled[f.name] = v != null ? String(v) : '';
-      });
+      mod.fields.forEach(f => { const v = co[f.name]; filled[f.name] = v != null ? String(v) : ''; });
       filled.status = (co.status as string) ?? 'active';
       if (activeId === 'propdev') filled.name = (co.company_name as string) ?? '';
       setForm(filled);
@@ -609,9 +428,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
 
   function validate() {
     const errs: Record<string, string> = {};
-    mod.fields.filter(f => f.required).forEach(f => {
-      if (!form[f.name]?.trim()) errs[f.name] = `${f.label} is required`;
-    });
+    mod.fields.filter(f => f.required).forEach(f => { if (!form[f.name]?.trim()) errs[f.name] = `${f.label} is required`; });
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -625,8 +442,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
     try {
       await api[method](url, mod.toPayload(form));
       push(isEdit ? 'Company updated' : 'Company added');
-      close();
-      load();
+      close(); load();
     } catch {
       push('Failed to save company', false);
       setSaving(false);
@@ -638,8 +454,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
     try {
       await api.delete(`${mod.endpoint}/${target.id}`);
       push('Company deleted');
-      close();
-      load();
+      close(); load();
     } catch {
       push('Failed to delete company', false);
       close();
@@ -656,14 +471,90 @@ export default function CompanyRegistry({ embedded = false }: Props) {
     }
   }
 
+  // ── suite handlers (run at page level, not inside tbody) ────────────────────
+
+  function openSuiteAdd(companyId: string, companyName: string) {
+    setSuiteCompany({ id: companyId, name: companyName });
+    setSuiteTarget(null);
+    setSuiteName('');
+    setSuiteAddress('');
+    setSuitePropType('');
+    setSuiteModal('add');
+  }
+
+  function openSuiteEdit(suite: Suite) {
+    const co = companies.find(c => c.id === suite.company_id);
+    setSuiteCompany({ id: suite.company_id, name: co?.company_name ?? '' });
+    setSuiteTarget(suite);
+    setSuiteName(suite.property_name);
+    setSuiteAddress(suite.address ?? '');
+    setSuitePropType(suite.property_type ?? '');
+    setSuiteModal('edit');
+  }
+
+  function openSuiteDelete(suite: Suite) {
+    setSuiteTarget(suite);
+    setSuiteModal('delete');
+  }
+
+  function closeSuiteModal() {
+    setSuiteModal(null);
+    setSuiteTarget(null);
+    setSuiteCompany(null);
+    setSuiteSaving(false);
+    setSuiteDeleting(false);
+  }
+
+  async function handleSuiteSave() {
+    if (!suiteName.trim()) return;
+    setSuiteSaving(true);
+    const payload: Record<string, unknown> = {
+      property_name: suiteName.trim(),
+      address: suiteAddress.trim() || null,
+      property_type: suitePropType || null,
+    };
+    try {
+      if (suiteTarget) {
+        await api.put(`/api/rentals/suites/${suiteTarget.id}`, payload);
+        push('Suite updated');
+      } else {
+        payload.company_id = suiteCompany!.id;
+        await api.post('/api/rentals/suites', payload);
+        push('Suite added');
+      }
+      closeSuiteModal();
+      setSuiteReloadKey(k => k + 1);
+    } catch {
+      push('Failed to save suite', false);
+      setSuiteSaving(false);
+    }
+  }
+
+  async function handleSuiteDelete() {
+    if (!suiteTarget) return;
+    setSuiteDeleting(true);
+    try {
+      await api.delete(`/api/rentals/suites/${suiteTarget.id}`);
+      push('Suite deleted');
+      closeSuiteModal();
+      setSuiteReloadKey(k => k + 1);
+    } catch {
+      push('Failed to delete suite', false);
+      setSuiteDeleting(false);
+    }
+  }
+
+  // ── filtered list ───────────────────────────────────────────────────────────
+
   const filtered = companies.filter(c => {
     const q = search.toLowerCase();
     return (c.company_name ?? '').toLowerCase().includes(q)
       || Object.values(c).some(v => typeof v === 'string' && v.toLowerCase().includes(q));
   });
 
-  // Total columns in the table (for the inline suite colspan)
   const totalCols = 1 + mod.tableCols.length + (activeId === 'rental' ? 1 : 0) + (canWrite ? 1 : 0);
+
+  // ── render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
@@ -718,9 +609,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
             </p>
             {!search && canWrite && (
               <button onClick={openAdd}
-                className="mt-4 text-sm bg-gray-900 text-white px-4 py-2 rounded-xl hover:bg-gray-800">
-                + Add Company
-              </button>
+                className="mt-4 text-sm bg-gray-900 text-white px-4 py-2 rounded-xl hover:bg-gray-800">+ Add Company</button>
             )}
           </div>
         ) : (
@@ -730,11 +619,8 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                 <tr className="bg-gray-50 border-b border-gray-100">
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide w-8">#</th>
                   {mod.tableCols.map(col => (
-                    <th key={col} className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                      {col}
-                    </th>
+                    <th key={col} className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">{col}</th>
                   ))}
-                  {/* Suites expand column — rental only */}
                   {activeId === 'rental' && (
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Suites</th>
                   )}
@@ -743,13 +629,13 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                   )}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody>
                 {filtered.map((c, idx) => {
                   const cells = mod.rowCells(c);
                   const isExpanded = expandedSuiteId === c.id;
                   return (
                     <Fragment key={c.id}>
-                      <tr className={`transition-colors ${isExpanded ? 'bg-blue-50/40' : 'hover:bg-gray-50/60'}`}>
+                      <tr className={`border-b border-gray-50 transition-colors ${isExpanded ? 'bg-blue-50/30' : 'hover:bg-gray-50/60'}`}>
                         <td className="px-4 py-3 text-xs text-gray-400">{idx + 1}</td>
                         {cells.map((cell, ci) => (
                           <td key={ci} className={`px-4 py-3 ${ci === 0 ? 'font-medium text-gray-800' : 'text-gray-500'}`}>
@@ -758,8 +644,6 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                               : cell}
                           </td>
                         ))}
-
-                        {/* Suites toggle — rental only */}
                         {activeId === 'rental' && (
                           <td className="px-4 py-3">
                             <button
@@ -767,15 +651,11 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                               className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors
                                 ${isExpanded
                                   ? 'bg-blue-600 text-white border-blue-600'
-                                  : 'text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-100'
-                                }`}
-                            >
-                              {isExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-                              Suites
+                                  : 'text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-100'}`}>
+                              {isExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />} Suites
                             </button>
                           </td>
                         )}
-
                         {canWrite && (
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end gap-1">
@@ -791,8 +671,6 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                           </td>
                         )}
                       </tr>
-
-                      {/* Inline suites expansion — rental only */}
                       {activeId === 'rental' && isExpanded && (
                         <InlineSuites
                           companyId={c.id}
@@ -800,6 +678,10 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                           canWrite={canWrite}
                           push={push}
                           totalCols={totalCols}
+                          onAdd={openSuiteAdd}
+                          onEdit={openSuiteEdit}
+                          onDelete={openSuiteDelete}
+                          reloadKey={suiteReloadKey}
                         />
                       )}
                     </Fragment>
@@ -811,7 +693,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
         )}
       </div>
 
-      {/* ADD / EDIT MODAL */}
+      {/* ── COMPANY ADD / EDIT MODAL ── */}
       {(modal === 'add' || modal === 'edit') && (
         <Modal title={modal === 'add' ? `Add ${mod.label} Company` : 'Edit Company'} onClose={close}>
           <div className="space-y-3">
@@ -821,19 +703,15 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                   {f.label}{f.required && <span className="text-red-500 ml-0.5">*</span>}
                 </label>
                 {f.type === 'select' ? (
-                  <select value={form[f.name] ?? ''}
-                    onChange={e => { setForm(p => ({ ...p, [f.name]: e.target.value })); setErrors(p => ({ ...p, [f.name]: '' })); }}
-                    className={`w-full text-sm border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white
-                      ${errors[f.name] ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}>
+                  <select value={form[f.name] ?? ''} onChange={e => { setForm(p => ({ ...p, [f.name]: e.target.value })); setErrors(p => ({ ...p, [f.name]: '' })); }}
+                    className={`w-full text-sm border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white ${errors[f.name] ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}>
                     <option value="">Select…</option>
                     {f.options!.map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 ) : (
-                  <input type={f.type} value={form[f.name] ?? ''}
-                    onChange={e => { setForm(p => ({ ...p, [f.name]: e.target.value })); setErrors(p => ({ ...p, [f.name]: '' })); }}
+                  <input type={f.type} value={form[f.name] ?? ''} onChange={e => { setForm(p => ({ ...p, [f.name]: e.target.value })); setErrors(p => ({ ...p, [f.name]: '' })); }}
                     placeholder={`Enter ${f.label.toLowerCase()}`}
-                    className={`w-full text-sm border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30
-                      ${errors[f.name] ? 'border-red-300 bg-red-50' : 'border-gray-200'}`} />
+                    className={`w-full text-sm border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 ${errors[f.name] ? 'border-red-300 bg-red-50' : 'border-gray-200'}`} />
                 )}
                 {errors[f.name] && <p className="text-xs text-red-500 mt-0.5">{errors[f.name]}</p>}
               </div>
@@ -846,8 +724,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                     className={`flex-1 text-xs py-2 rounded-xl border font-medium capitalize transition-colors
                       ${(form.status ?? 'active') === s
                         ? s === 'active' ? 'bg-green-600 text-white border-green-600' : 'bg-gray-700 text-white border-gray-700'
-                        : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
-                      }`}>
+                        : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
                     {s}
                   </button>
                 ))}
@@ -855,8 +732,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
             </div>
           </div>
           <div className="flex gap-3 mt-5">
-            <button onClick={close}
-              className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50">Cancel</button>
+            <button onClick={close} className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50">Cancel</button>
             <button onClick={handleSave} disabled={saving}
               className="flex-1 flex items-center justify-center gap-2 text-sm bg-gray-900 text-white py-2.5 rounded-xl hover:bg-gray-800 font-medium disabled:opacity-50">
               {saving ? 'Saving…' : <><Check size={14} />{modal === 'add' ? 'Add Company' : 'Save Changes'}</>}
@@ -865,24 +741,91 @@ export default function CompanyRegistry({ embedded = false }: Props) {
         </Modal>
       )}
 
-      {/* DELETE CONFIRM */}
+      {/* ── COMPANY DELETE CONFIRM ── */}
       {modal === 'delete' && target && (
         <Modal title="Delete Company" onClose={close}>
           <div className="text-center">
             <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
               <Trash2 size={20} className="text-red-500" />
             </div>
-            <p className="text-sm text-gray-600 mb-1">
-              Delete <span className="font-semibold text-gray-800">"{target.company_name}"</span>?
-            </p>
-            <p className="text-xs text-red-500 mb-5 leading-relaxed">
-              This will permanently delete this company and all its data. This cannot be undone.
-            </p>
+            <p className="text-sm text-gray-600 mb-1">Delete <span className="font-semibold text-gray-800">"{target.company_name}"</span>?</p>
+            <p className="text-xs text-red-500 mb-5 leading-relaxed">This will permanently delete this company and all its data.</p>
             <div className="flex gap-3">
-              <button onClick={close}
-                className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50">Cancel</button>
-              <button onClick={handleDelete}
-                className="flex-1 text-sm bg-red-600 text-white py-2.5 rounded-xl hover:bg-red-700 font-medium">Yes, Delete</button>
+              <button onClick={close} className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50">Cancel</button>
+              <button onClick={handleDelete} className="flex-1 text-sm bg-red-600 text-white py-2.5 rounded-xl hover:bg-red-700 font-medium">Yes, Delete</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── SUITE ADD / EDIT MODAL ── rendered at page level for proper focus & clipboard */}
+      {(suiteModal === 'add' || suiteModal === 'edit') && (
+        <Modal title={suiteTarget ? `Edit Suite` : `Add Suite — ${suiteCompany?.name}`} onClose={closeSuiteModal}>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Suite Name <span className="text-red-500">*</span></label>
+              <input
+                autoFocus
+                type="text"
+                value={suiteName}
+                onChange={e => setSuiteName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && suiteName.trim()) handleSuiteSave(); }}
+                placeholder="e.g. Suite 123"
+                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Address</label>
+              <input
+                type="text"
+                value={suiteAddress}
+                onChange={e => setSuiteAddress(e.target.value)}
+                placeholder="e.g. 123 Main St"
+                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Property Type</label>
+              <select value={suitePropType} onChange={e => setSuitePropType(e.target.value)}
+                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
+                <option value="">Select…</option>
+                {SUITE_PROP_TYPES.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-3 mt-5">
+            <button onClick={closeSuiteModal} className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50">Cancel</button>
+            <button onClick={handleSuiteSave} disabled={suiteSaving || !suiteName.trim()}
+              className="flex-1 flex items-center justify-center gap-2 text-sm bg-gray-900 text-white py-2.5 rounded-xl hover:bg-gray-800 font-medium disabled:opacity-50">
+              {suiteSaving ? 'Saving…' : <><Check size={14} />{suiteTarget ? 'Save Changes' : 'Add Suite'}</>}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── SUITE DELETE CONFIRM ── */}
+      {suiteModal === 'delete' && suiteTarget && (
+        <Modal title="Delete Suite" onClose={closeSuiteModal}>
+          <div className="text-center">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Trash2 size={20} className="text-red-500" />
+            </div>
+            <p className="text-sm text-gray-700 font-medium mb-1">Delete "{suiteTarget.property_name}"?</p>
+            {suiteTarget.unit_count > 0 ? (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4 text-left">
+                This suite has <strong>{suiteTarget.unit_count} unit{suiteTarget.unit_count !== 1 ? 's' : ''}</strong> with
+                all their leases, invoices, and payment records — all will be permanently deleted.
+              </p>
+            ) : (
+              <p className="text-xs text-red-500 mb-4">This cannot be undone.</p>
+            )}
+            <div className="flex gap-3">
+              <button onClick={closeSuiteModal} disabled={suiteDeleting}
+                className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50 disabled:opacity-50">Cancel</button>
+              <button onClick={handleSuiteDelete} disabled={suiteDeleting}
+                className="flex-1 flex items-center justify-center gap-2 text-sm bg-red-600 text-white py-2.5 rounded-xl hover:bg-red-700 font-medium disabled:opacity-50">
+                {suiteDeleting ? 'Deleting…' : suiteTarget.unit_count > 0 ? `Delete + ${suiteTarget.unit_count} Units` : 'Yes, Delete'}
+              </button>
             </div>
           </div>
         </Modal>
