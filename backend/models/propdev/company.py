@@ -49,10 +49,10 @@ class PropDevCompany(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    lots: Mapped[list["PropDevLot"]] = relationship("PropDevLot", back_populates="company")
-    partners: Mapped[list["PropDevPartner"]] = relationship("PropDevPartner", back_populates="company")
-    loans: Mapped[list["PropDevLoan"]] = relationship("PropDevLoan", back_populates="company")
-    capital_calls: Mapped[list["PropDevCapitalCall"]] = relationship("PropDevCapitalCall", back_populates="company")
-    expenses: Mapped[list["PropDevExpense"]] = relationship("PropDevExpense", back_populates="company")
+    lots: Mapped[list["PropDevLot"]] = relationship("PropDevLot", back_populates="company", cascade="all, delete-orphan")
+    partners: Mapped[list["PropDevPartner"]] = relationship("PropDevPartner", back_populates="company", cascade="all, delete-orphan")
+    loans: Mapped[list["PropDevLoan"]] = relationship("PropDevLoan", back_populates="company", cascade="all, delete-orphan")
+    capital_calls: Mapped[list["PropDevCapitalCall"]] = relationship("PropDevCapitalCall", back_populates="company", cascade="all, delete-orphan")
+    expenses: Mapped[list["PropDevExpense"]] = relationship("PropDevExpense", back_populates="company", cascade="all, delete-orphan")
 
     __table_args__ = (Index("ix_propdev_companies_tenant", "tenant_id"),)
