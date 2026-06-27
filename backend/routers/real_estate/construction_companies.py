@@ -34,6 +34,15 @@ class ConstructionCompanyBody(BaseModel):
     status: str | None = "active"
 
 
+@router.get("/companies/count")
+def count_companies(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    n = db.query(ConstructionCompany).filter(ConstructionCompany.tenant_id == current_user.tenant_id).count()
+    return {"count": n}
+
+
 @router.get("/companies")
 def list_companies(
     current_user: CurrentUser = Depends(get_current_user),

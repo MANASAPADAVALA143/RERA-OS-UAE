@@ -16,6 +16,8 @@ import CapitalRisk from './pages/CapitalRisk';
 import PipelineMarket from './pages/PipelineMarket';
 import Settings from './pages/Settings';
 import CompanyRegistry from './pages/settings/CompanyRegistry';
+import REITCompanies from './pages/reit/REITCompanies';
+import ConstructionCompanies from './pages/construction/ConstructionCompanies';
 
 export default function App() {
   return (
@@ -48,6 +50,8 @@ export default function App() {
             <Route path="/pipeline-market" element={<PipelineMarket />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/settings/companies" element={<CompanyRegistry />} />
+            <Route path="/reit/companies" element={<REITCompanies />} />
+            <Route path="/construction/companies" element={<ConstructionCompanies />} />
           </Route>
           <Route path="/" element={<Navigate to="/executive-summary" replace />} />
           <Route path="*" element={<Navigate to="/executive-summary" replace />} />

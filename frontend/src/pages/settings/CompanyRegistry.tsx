@@ -261,7 +261,9 @@ function StatusBadge({ status, onClick }: { status: string; onClick: () => void 
 
 // ── main page ─────────────────────────────────────────────────────────────────
 
-export default function CompanyRegistry() {
+interface Props { embedded?: boolean }
+
+export default function CompanyRegistry({ embedded = false }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { canWrite } = useAuth();
   const { toasts, push } = useToast();
@@ -389,11 +391,13 @@ export default function CompanyRegistry() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-charcoal">Company Registry</h1>
-        <p className="text-sm text-gray-500 mt-1">Add, edit, and manage companies across all modules.</p>
-      </div>
+      {/* Header — hidden when embedded inside Settings */}
+      {!embedded && (
+        <div>
+          <h1 className="text-2xl font-bold text-charcoal">Company Registry</h1>
+          <p className="text-sm text-gray-500 mt-1">Add, edit, and manage companies across all modules.</p>
+        </div>
+      )}
 
       {/* Module tabs */}
       <div className="flex gap-1 bg-white border border-gray-100 shadow-sm rounded-xl p-1 w-fit">

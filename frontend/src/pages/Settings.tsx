@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import api from '../services/api';
+import CompanyRegistry from './settings/CompanyRegistry';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Table, LoadingSkeleton, type Column } from '../components/ui/Table';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { useAuth } from '../contexts/AuthContext';
 
-type Tab = 'team' | 'ai' | 'company' | 'audit';
+type Tab = 'team' | 'ai' | 'company' | 'audit' | 'registry';
 
 interface TeamMember extends Record<string, unknown> {
   id: string;
@@ -31,10 +32,11 @@ interface AuditEntry extends Record<string, unknown> {
 }
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'team', label: 'Team' },
-  { id: 'ai', label: 'AI' },
-  { id: 'company', label: 'Company' },
-  { id: 'audit', label: 'AI Usage Log' },
+  { id: 'team',     label: 'Team'             },
+  { id: 'ai',       label: 'AI'               },
+  { id: 'company',  label: 'Company'          },
+  { id: 'audit',    label: 'AI Usage Log'     },
+  { id: 'registry', label: 'Company Registry' },
 ];
 
 const ROLES = ['owner', 'admin', 'cfo', 'controller', 'analyst', 'viewer'];
@@ -271,6 +273,12 @@ export default function Settings() {
             <p className="text-sm text-gray-500 mb-4">Last 50 AI feature calls for your tenant.</p>
             <Table columns={auditColumns} data={auditLog} emptyMessage="No AI usage recorded yet" />
           </Card>
+        </ErrorBoundary>
+      )}
+
+      {tab === 'registry' && (
+        <ErrorBoundary>
+          <CompanyRegistry embedded={true} />
         </ErrorBoundary>
       )}
     </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Building2, Plus, Trash2, Check, X, AlertCircle, Upload } from 'lucide-react';
+import { Building2, Plus, Trash2, Check, X, AlertCircle, Upload, Pencil } from 'lucide-react';
 import { usePropDevNav } from '../../contexts/PropDevNavContext';
 import api from '../../services/api';
 
@@ -21,6 +21,9 @@ export default function PDCompanySetup() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [renaming, setRenaming] = useState(false);
 
   async function loadCompanies() {
     try {
@@ -58,6 +61,22 @@ export default function PDCompanySetup() {
       setError('Failed to add company');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleRename(id: string) {
+    if (!editName.trim()) { setEditingId(null); return; }
+    setRenaming(true);
+    try {
+      await api.put(`/api/propdev/companies/${id}`, { name: editName.trim() });
+      setEditingId(null);
+      setSuccess('Company renamed');
+      setTimeout(() => setSuccess(''), 2000);
+      await loadCompanies();
+    } catch {
+      setError('Failed to rename company');
+    } finally {
+      setRenaming(false);
     }
   }
 
@@ -148,7 +167,7 @@ export default function PDCompanySetup() {
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Property</th>
               <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Lots</th>
               <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Data Status</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide w-20">Del</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide w-28">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -172,7 +191,32 @@ export default function PDCompanySetup() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <Building2 size={14} className="text-gray-400 shrink-0" />
-                      <span className="font-medium text-gray-900 text-sm">{c.name}</span>
+                      {editingId === c.id ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            autoFocus
+                            value={editName}
+                            onChange={e => setEditName(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleRename(c.id);
+                              if (e.key === 'Escape') setEditingId(null);
+                            }}
+                            className="text-sm border border-blue-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                          <button onClick={() => handleRename(c.id)} disabled={renaming}
+                            className="text-blue-600 hover:text-blue-800"><Check size={13} /></button>
+                          <button onClick={() => setEditingId(null)}
+                            className="text-gray-400 hover:text-gray-600"><X size={13} /></button>
+                        </div>
+                      ) : (
+                        <span
+                          className="font-medium text-gray-900 text-sm cursor-pointer hover:text-blue-600 transition-colors"
+                          title="Double-click to rename"
+                          onDoubleClick={() => { setEditingId(c.id); setEditName(c.name); }}
+                        >
+                          {c.name}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-500">{c.propertyName || <span className="text-gray-300">—</span>}</td>
@@ -191,13 +235,22 @@ export default function PDCompanySetup() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => handleDelete(c.id, c.name)}
-                      className="p-1.5 text-red-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Delete company"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => { setEditingId(c.id); setEditName(c.name); }}
+                        className="p-1.5 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Rename company"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(c.id, c.name)}
+                        className="p-1.5 text-red-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete company"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))

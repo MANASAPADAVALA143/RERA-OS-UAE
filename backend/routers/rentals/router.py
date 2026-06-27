@@ -232,6 +232,15 @@ def get_portfolio_summary(
 
 # ── companies ─────────────────────────────────────────────────────────────────
 
+@router.get("/companies/count")
+def count_companies(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    n = db.query(RentalCompany).filter(RentalCompany.tenant_id == current_user.tenant_id).count()
+    return {"count": n}
+
+
 @router.get("/companies")
 def list_companies(
     fmt: str = Query(None, alias="format"),

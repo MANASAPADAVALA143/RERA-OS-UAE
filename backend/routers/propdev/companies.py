@@ -285,6 +285,15 @@ def update_company(
     return {'id': str(company.id), 'name': company.name, 'property_name': company.property_name}
 
 
+@router.get("/companies/count")
+def count_companies(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    n = db.query(PropDevCompany).filter(PropDevCompany.tenant_id == current_user.tenant_id).count()
+    return {"count": n}
+
+
 @router.get("/companies/{company_id}")
 def get_company(
     company_id: str,

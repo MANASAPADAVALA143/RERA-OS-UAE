@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Building, Building2, Home, Hotel, Warehouse, House,
-  Store, Landmark, School, Factory, ArrowLeft, Plus, Trash2,
+  Store, Landmark, School, Factory, ArrowLeft, Plus, Trash2, Pencil, Check, X,
 } from 'lucide-react';
 import api from '../services/api';
 import { Card } from '../components/ui/Card';
@@ -53,6 +53,9 @@ export default function RentalCompanies() {
   const [newName, setNewName] = useState('');
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [renaming, setRenaming] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -100,6 +103,20 @@ export default function RentalCompanies() {
       await fetchCompanies();
     } catch {
       setError('Failed to delete company.');
+    }
+  }
+
+  async function handleRename(id: string) {
+    if (!editName.trim()) { setEditingId(null); return; }
+    setRenaming(true);
+    try {
+      await api.put(`/api/rentals/companies/${id}`, { company_name: editName.trim() });
+      setEditingId(null);
+      await fetchCompanies();
+    } catch {
+      setError('Failed to rename company.');
+    } finally {
+      setRenaming(false);
     }
   }
 
@@ -197,7 +214,36 @@ export default function RentalCompanies() {
                         <Icon size={22} className={style.text} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-primary truncate">{c.company_name}</h3>
+                        {editingId === c.id ? (
+                          <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                            <input
+                              autoFocus
+                              value={editName}
+                              onChange={e => setEditName(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') handleRename(c.id);
+                                if (e.key === 'Escape') setEditingId(null);
+                              }}
+                              className="text-sm font-bold border border-blue-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+                            />
+                            <button onClick={() => handleRename(c.id)} disabled={renaming}
+                              className="text-blue-600 hover:text-blue-800 flex-shrink-0">
+                              <Check size={13} />
+                            </button>
+                            <button onClick={() => setEditingId(null)}
+                              className="text-gray-400 hover:text-gray-600 flex-shrink-0">
+                              <X size={13} />
+                            </button>
+                          </div>
+                        ) : (
+                          <h3
+                            className="font-bold text-primary truncate cursor-pointer hover:text-blue-600 transition-colors"
+                            title="Double-click to rename"
+                            onDoubleClick={e => { e.stopPropagation(); setEditingId(c.id); setEditName(c.company_name); }}
+                          >
+                            {c.company_name}
+                          </h3>
+                        )}
                         <p className="text-xs text-gray-400 truncate">{c.property_name}</p>
                       </div>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${
@@ -207,6 +253,13 @@ export default function RentalCompanies() {
                       }`}>
                         {c.occupied_units}/{c.total_units}
                       </span>
+                      <button
+                        onClick={e => { e.stopPropagation(); setEditingId(c.id); setEditName(c.company_name); }}
+                        className="p-1 rounded hover:bg-blue-50 text-gray-300 hover:text-blue-500 transition-colors flex-shrink-0"
+                        title="Rename company"
+                      >
+                        <Pencil size={14} />
+                      </button>
                       <button
                         onClick={e => { e.stopPropagation(); handleDelete(c.id, c.company_name); }}
                         className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-500 transition-colors flex-shrink-0"
