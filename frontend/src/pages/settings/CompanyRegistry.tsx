@@ -277,7 +277,7 @@ function InlineSuites({
   const [suiteTarget, setSuiteTarget] = useState<Suite | null>(null);
   const [suiteForm, setSuiteForm] = useState({ property_name: '', address: '', property_type: '' });
   const [suiteSaving, setSuiteSaving] = useState(false);
-  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -307,16 +307,17 @@ function InlineSuites({
     setSuiteTarget(s);
     setSuiteModal('edit');
   }
-  function openDelete(s: Suite) { setSuiteTarget(s); setDeleteError(''); setSuiteModal('delete'); }
-  function closeModal() { setSuiteModal(null); setSuiteTarget(null); setSuiteSaving(false); setDeleteError(''); }
+  function openDelete(s: Suite) { setSuiteTarget(s); setDeleting(false); setSuiteModal('delete'); }
+  function closeModal() { setSuiteModal(null); setSuiteTarget(null); setSuiteSaving(false); setDeleting(false); }
 
   async function handleSave() {
     if (!suiteForm.property_name.trim()) return;
     setSuiteSaving(true);
+    // Always include all fields (null clears existing values on the backend)
     const payload: Record<string, unknown> = {
       property_name: suiteForm.property_name.trim(),
-      address: suiteForm.address.trim() || undefined,
-      property_type: suiteForm.property_type || undefined,
+      address: suiteForm.address.trim() || null,
+      property_type: suiteForm.property_type || null,
     };
     if (!suiteTarget) payload.company_id = companyId;
     try {
@@ -337,14 +338,15 @@ function InlineSuites({
 
   async function handleDelete() {
     if (!suiteTarget) return;
+    setDeleting(true);
     try {
       await api.delete(`/api/rentals/suites/${suiteTarget.id}`);
       push('Suite deleted');
       closeModal();
       load();
-    } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setDeleteError(detail ?? 'Cannot delete — suite has units assigned. Remove units first.');
+    } catch {
+      push('Failed to delete suite', false);
+      setDeleting(false);
     }
   }
 
@@ -504,23 +506,24 @@ function InlineSuites({
             <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
               <Trash2 size={20} className="text-red-500" />
             </div>
-            <p className="text-sm text-gray-600 mb-2">Delete <span className="font-semibold">"{suiteTarget.property_name}"</span>?</p>
-            {deleteError ? (
-              <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4 text-left">{deleteError}</p>
+            <p className="text-sm text-gray-700 font-medium mb-1">Delete "{suiteTarget.property_name}"?</p>
+            {suiteTarget.unit_count > 0 ? (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4 text-left">
+                This suite has <strong>{suiteTarget.unit_count} unit{suiteTarget.unit_count !== 1 ? 's' : ''}</strong> with
+                all their leases, invoices, and payment records. All data will be permanently deleted.
+              </p>
             ) : (
-              <p className="text-xs text-red-500 mb-5">This cannot be undone.</p>
+              <p className="text-xs text-red-500 mb-4">This cannot be undone.</p>
             )}
             <div className="flex gap-3">
-              <button onClick={closeModal}
-                className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50">
-                {deleteError ? 'Close' : 'Cancel'}
+              <button onClick={closeModal} disabled={deleting}
+                className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50 disabled:opacity-50">
+                Cancel
               </button>
-              {!deleteError && (
-                <button onClick={handleDelete}
-                  className="flex-1 text-sm bg-red-600 text-white py-2.5 rounded-xl hover:bg-red-700 font-medium">
-                  Yes, Delete
-                </button>
-              )}
+              <button onClick={handleDelete} disabled={deleting}
+                className="flex-1 flex items-center justify-center gap-2 text-sm bg-red-600 text-white py-2.5 rounded-xl hover:bg-red-700 font-medium disabled:opacity-50">
+                {deleting ? 'Deleting…' : suiteTarget.unit_count > 0 ? `Delete + ${suiteTarget.unit_count} Units` : 'Yes, Delete'}
+              </button>
             </div>
           </div>
         </Modal>,

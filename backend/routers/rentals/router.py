@@ -466,12 +466,12 @@ def update_suite(
     ).first()
     if not s:
         raise HTTPException(404, "Suite not found")
-    if "property_name" in body:
+    if "property_name" in body and body["property_name"]:
         s.property_name = body["property_name"]
     if "address" in body:
-        s.address = body["address"]
+        s.address = body["address"] or None
     if "property_type" in body:
-        s.property_type = body["property_type"]
+        s.property_type = body["property_type"] or None
     db.commit()
     db.refresh(s)
     return {"id": str(s.id), "property_name": s.property_name}
@@ -489,8 +489,19 @@ def delete_suite(
     ).first()
     if not s:
         raise HTTPException(404, "Suite not found")
-    if s.units:
-        raise HTTPException(400, f"Remove all {len(s.units)} unit(s) from this suite before deleting it.")
+
+    # Cascade delete in FK dependency order:
+    # collections → invoices → leases → tenants → units → expenses → suite
+    unit_ids = [u.id for u in s.units]
+    if unit_ids:
+        invoices = db.query(RentalInvoice).filter(RentalInvoice.unit_id.in_(unit_ids)).all()
+        for inv in invoices:
+            db.query(RentalCollection).filter(RentalCollection.invoice_id == inv.id).delete(synchronize_session=False)
+        db.query(RentalInvoice).filter(RentalInvoice.unit_id.in_(unit_ids)).delete(synchronize_session=False)
+        db.query(RentalLease).filter(RentalLease.unit_id.in_(unit_ids)).delete(synchronize_session=False)
+        db.query(RentalTenant).filter(RentalTenant.unit_id.in_(unit_ids)).delete(synchronize_session=False)
+    db.query(RentalExpense).filter(RentalExpense.property_id == suite_id).delete(synchronize_session=False)
+    db.query(RentalUnit).filter(RentalUnit.property_id == suite_id).delete(synchronize_session=False)
     db.delete(s)
     db.commit()
 
