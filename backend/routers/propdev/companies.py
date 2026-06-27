@@ -243,6 +243,25 @@ def delete_company(
     return {'status': 'deleted'}
 
 
+@router.patch("/companies/{company_id}/status")
+def toggle_company_status(
+    company_id: str,
+    body: dict,
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    cid = uuid.UUID(company_id)
+    company = db.query(PropDevCompany).filter(
+        PropDevCompany.id == cid,
+        PropDevCompany.tenant_id == current_user.tenant_id,
+    ).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    company.status = body.get("status", "active")
+    db.commit()
+    return {'id': str(company.id), 'status': company.status}
+
+
 @router.put("/companies/{company_id}")
 def update_company(
     company_id: str,

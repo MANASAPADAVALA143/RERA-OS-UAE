@@ -44,6 +44,8 @@ class PropDevCompany(Base):
     # Cash position
     cash_available: Mapped[float] = mapped_column(Numeric(16, 2), default=0, nullable=False)
 
+    status: Mapped[str | None] = mapped_column(String(20), nullable=True, server_default="active")
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False

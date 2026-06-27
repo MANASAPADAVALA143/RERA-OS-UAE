@@ -288,6 +288,24 @@ def create_company(
     return {"id": str(co.id), "company_name": co.company_name}
 
 
+@router.patch("/companies/{company_id}/status")
+def toggle_company_status(
+    company_id: uuid.UUID,
+    body: dict,
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    co = db.query(RentalCompany).filter(
+        RentalCompany.id == company_id,
+        RentalCompany.tenant_id == current_user.tenant_id,
+    ).first()
+    if not co:
+        raise HTTPException(404, "Company not found")
+    co.status = body.get("status", "active")
+    db.commit()
+    return {"id": str(co.id), "status": co.status}
+
+
 @router.put("/companies/{company_id}")
 def update_company(
     company_id: uuid.UUID,

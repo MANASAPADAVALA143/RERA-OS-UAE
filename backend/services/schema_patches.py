@@ -64,11 +64,17 @@ LOAN_COLUMNS = {
 }
 
 
+COMPANY_STATUS_COLUMNS = {
+    "status": "VARCHAR(20) DEFAULT 'active'",
+}
+
+
 def apply_schema_patches(engine) -> None:
     _add_missing_columns(engine, "projects", PROJECT_COLUMNS)
     _add_missing_columns(engine, "cost_trades", COST_TRADE_COLUMNS)
     _add_missing_columns(engine, "change_orders", CHANGE_ORDER_COLUMNS)
     _add_missing_columns(engine, "schedule_tasks", SCHEDULE_TASK_COLUMNS)
     _add_missing_columns(engine, "loans", LOAN_COLUMNS)
-    # New tables (r_vendors, r_receivables, r_payables, pay_applications, …)
-    # created by Base.metadata.create_all() in main.py startup — no ALTER TABLE needed
+    # Add status column to existing company tables (safe idempotent patch)
+    _add_missing_columns(engine, "r_companies", COMPANY_STATUS_COLUMNS)
+    _add_missing_columns(engine, "propdev_companies", COMPANY_STATUS_COLUMNS)
