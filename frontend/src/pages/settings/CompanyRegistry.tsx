@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Plus, Pencil, Trash2, X, Check, Search,
-  Building2, Home, Landmark, HardHat,
+  Building2, Home, Landmark, HardHat, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -37,7 +37,7 @@ interface ModuleDef {
   toPayload: (form: Record<string, string>) => Record<string, unknown>;
 }
 
-// ── small toast ───────────────────────────────────────────────────────────────
+// ── toast ─────────────────────────────────────────────────────────────────────
 
 interface Toast { id: number; msg: string; ok: boolean }
 let _tid = 0;
@@ -91,12 +91,7 @@ const MODULES: ModuleDef[] = [
       { name: 'total_units',   label: 'Total Units',    type: 'number' },
     ],
     tableCols: ['Company Name', 'Property Type', 'Units', 'Status'],
-    rowCells: (c) => [
-      c.company_name,
-      (c.property_type as string) || '—',
-      (c.total_units as number) ?? '—',
-      null,
-    ],
+    rowCells: (c) => [c.company_name, (c.property_type as string) || '—', (c.total_units as number) ?? '—', null],
     normalise: (raw) => {
       const arr = Array.isArray(raw) ? raw : (raw as { companies?: unknown[] }).companies ?? [];
       return (arr as Record<string, unknown>[]).map(r => ({
@@ -120,20 +115,14 @@ const MODULES: ModuleDef[] = [
     icon: Building2,
     endpoint: '/api/propdev/companies',
     fields: [
-      { name: 'name',          label: 'Company Name',  type: 'text',   required: true },
+      { name: 'name',          label: 'Company Name',       type: 'text', required: true },
       { name: 'property_name', label: 'Project / Property', type: 'text' },
-      { name: 'project_type',  label: 'Project Type',  type: 'select',
+      { name: 'project_type',  label: 'Project Type',       type: 'select',
         options: ['Land Development', 'Residential', 'Commercial', 'Mixed Use'] },
-      { name: 'total_lots',    label: 'Total Lots',    type: 'number' },
+      { name: 'total_lots',    label: 'Total Lots',         type: 'number' },
     ],
     tableCols: ['Company Name', 'Project / Property', 'Type', 'Lots', 'Status'],
-    rowCells: (c) => [
-      c.company_name,
-      (c.property_name as string) || '—',
-      (c.project_type as string) || '—',
-      (c.total_lots as number) ?? '—',
-      null,
-    ],
+    rowCells: (c) => [c.company_name, (c.property_name as string) || '—', (c.project_type as string) || '—', (c.total_lots as number) ?? '—', null],
     normalise: (raw) => {
       const arr = Array.isArray(raw) ? raw : (raw as { companies?: unknown[] }).companies ?? [];
       return (arr as Record<string, unknown>[]).map(r => ({
@@ -199,7 +188,7 @@ const MODULES: ModuleDef[] = [
     icon: HardHat,
     endpoint: '/api/real-estate/construction/companies',
     fields: [
-      { name: 'company_name',   label: 'Company Name',      type: 'text',   required: true },
+      { name: 'company_name',   label: 'Company Name',      type: 'text', required: true },
       { name: 'project_name',   label: 'Project Name',      type: 'text' },
       { name: 'project_type',   label: 'Project Type',      type: 'select',
         options: ['Residential', 'Commercial', 'Infrastructure', 'Industrial'] },
@@ -246,20 +235,15 @@ const MODULES: ModuleDef[] = [
 function StatusBadge({ status, onClick }: { status: string; onClick: () => void }) {
   const active = !status || status === 'active';
   return (
-    <button
-      onClick={onClick}
+    <button onClick={onClick}
       className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors cursor-pointer
-        ${active
-          ? 'bg-green-100 text-green-700 hover:bg-green-200'
-          : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-        }`}
-    >
+        ${active ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
       {active ? 'Active' : 'Inactive'}
     </button>
   );
 }
 
-// ── suites panel ──────────────────────────────────────────────────────────────
+// ── inline suites section (expands under a rental company row) ────────────────
 
 interface Suite {
   id: string;
@@ -270,15 +254,23 @@ interface Suite {
   unit_count: number;
 }
 
-interface RentalCo { id: string; company_name: string; }
-
 const SUITE_PROP_TYPES = ['Apartment', 'Townhome', 'SFR', 'Loft', 'Commercial'];
 
-function SuitesPanel({ canWrite, push }: { canWrite: boolean; push: (msg: string, ok?: boolean) => void }) {
-  const [rentalCos, setRentalCos] = useState<RentalCo[]>([]);
-  const [selectedCo, setSelectedCo] = useState('');
+function InlineSuites({
+  companyId,
+  companyName,
+  canWrite,
+  push,
+  totalCols,
+}: {
+  companyId: string;
+  companyName: string;
+  canWrite: boolean;
+  push: (msg: string, ok?: boolean) => void;
+  totalCols: number;
+}) {
   const [suites, setSuites] = useState<Suite[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const [suiteModal, setSuiteModal] = useState<'add' | 'edit' | 'delete' | null>(null);
   const [suiteTarget, setSuiteTarget] = useState<Suite | null>(null);
@@ -289,48 +281,35 @@ function SuitesPanel({ canWrite, push }: { canWrite: boolean; push: (msg: string
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
 
-  useEffect(() => {
-    api.get('/api/rentals/companies').then(res => {
-      const arr = Array.isArray(res.data) ? res.data : (res.data as { companies?: RentalCo[] }).companies ?? [];
-      setRentalCos(arr as RentalCo[]);
-    }).catch(() => {});
-  }, []);
-
-  const loadSuites = useCallback(async (coId: string) => {
-    if (!coId) { setSuites([]); return; }
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get<Suite[]>(`/api/rentals/suites?company_id=${coId}`);
+      const res = await api.get<Suite[]>(`/api/rentals/suites?company_id=${companyId}`);
       setSuites(Array.isArray(res.data) ? res.data : []);
     } catch {
       push('Failed to load suites', false);
     } finally {
       setLoading(false);
     }
-  }, [push]);
+  }, [companyId, push]);
 
-  useEffect(() => { loadSuites(selectedCo); }, [selectedCo, loadSuites]);
+  useEffect(() => { load(); }, [load]);
 
-  function openSuiteAdd() {
+  function openAdd() {
     setSuiteForm({ property_name: '', address: '', property_type: '' });
     setSuiteTarget(null);
     setDeleteError('');
     setSuiteModal('add');
   }
-  function openSuiteEdit(s: Suite) {
+  function openEdit(s: Suite) {
     setSuiteForm({ property_name: s.property_name, address: s.address ?? '', property_type: s.property_type ?? '' });
     setSuiteTarget(s);
-    setDeleteError('');
     setSuiteModal('edit');
   }
-  function openSuiteDelete(s: Suite) {
-    setSuiteTarget(s);
-    setDeleteError('');
-    setSuiteModal('delete');
-  }
-  function closeSuiteModal() { setSuiteModal(null); setSuiteTarget(null); setSuiteSaving(false); setDeleteError(''); }
+  function openDelete(s: Suite) { setSuiteTarget(s); setDeleteError(''); setSuiteModal('delete'); }
+  function closeModal() { setSuiteModal(null); setSuiteTarget(null); setSuiteSaving(false); setDeleteError(''); }
 
-  async function handleSuiteSave() {
+  async function handleSave() {
     if (!suiteForm.property_name.trim()) return;
     setSuiteSaving(true);
     const payload: Record<string, unknown> = {
@@ -338,7 +317,7 @@ function SuitesPanel({ canWrite, push }: { canWrite: boolean; push: (msg: string
       address: suiteForm.address.trim() || undefined,
       property_type: suiteForm.property_type || undefined,
     };
-    if (!suiteTarget) payload.company_id = selectedCo;
+    if (!suiteTarget) payload.company_id = companyId;
     try {
       if (suiteTarget) {
         await api.put(`/api/rentals/suites/${suiteTarget.id}`, payload);
@@ -347,201 +326,169 @@ function SuitesPanel({ canWrite, push }: { canWrite: boolean; push: (msg: string
         await api.post('/api/rentals/suites', payload);
         push('Suite added');
       }
-      closeSuiteModal();
-      loadSuites(selectedCo);
+      closeModal();
+      load();
     } catch {
       push('Failed to save suite', false);
       setSuiteSaving(false);
     }
   }
 
-  async function handleSuiteDelete() {
+  async function handleDelete() {
     if (!suiteTarget) return;
     try {
       await api.delete(`/api/rentals/suites/${suiteTarget.id}`);
       push('Suite deleted');
-      closeSuiteModal();
-      loadSuites(selectedCo);
+      closeModal();
+      load();
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
       setDeleteError(detail ?? 'Cannot delete — suite has units assigned. Remove units first.');
     }
   }
 
-  async function handleSuiteRename(id: string) {
+  async function handleRename(id: string) {
     if (!editName.trim()) { setEditingId(null); return; }
     try {
       await api.put(`/api/rentals/suites/${id}`, { property_name: editName.trim() });
       setEditingId(null);
       push('Suite renamed');
-      loadSuites(selectedCo);
+      load();
     } catch {
       push('Failed to rename suite', false);
     }
   }
 
   return (
-    <div className="space-y-4">
-      {/* Company selector */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <label className="text-sm font-medium text-gray-700 shrink-0">Company</label>
-        <select
-          value={selectedCo}
-          onChange={e => setSelectedCo(e.target.value)}
-          className="text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-[220px]"
-        >
-          <option value="">— Select a company —</option>
-          {rentalCos.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
-        </select>
-        {selectedCo && canWrite && (
-          <button
-            onClick={openSuiteAdd}
-            className="flex items-center gap-2 bg-gray-900 text-white text-sm px-4 py-2 rounded-xl hover:bg-gray-800 font-medium transition-colors ml-auto"
-          >
-            <Plus size={14} /> Add Suite
-          </button>
-        )}
-      </div>
-
-      {/* Suites table */}
-      {!selectedCo ? (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm text-center py-16">
-          <Home size={36} className="text-gray-200 mx-auto mb-3" />
-          <p className="text-sm text-gray-400">Select a company above to view its suites.</p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-          {loading ? (
-            <div className="py-16 flex items-center justify-center">
-              <div className="w-6 h-6 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" />
-            </div>
-          ) : suites.length === 0 ? (
-            <div className="text-center py-16">
-              <Home size={36} className="text-gray-200 mx-auto mb-3" />
-              <p className="text-sm text-gray-500">No suites for this company yet.</p>
+    <>
+      {/* Inline expanded row */}
+      <tr>
+        <td colSpan={totalCols} className="px-0 py-0">
+          <div className="bg-blue-50/60 border-y border-blue-100 px-6 py-4">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-1 h-5 bg-blue-400 rounded-full" />
+                <span className="text-sm font-semibold text-gray-700">
+                  Suites — <span className="font-normal text-gray-500">{companyName}</span>
+                </span>
+                {!loading && (
+                  <span className="text-xs text-gray-400 bg-white border border-gray-200 px-2 py-0.5 rounded-full">
+                    {suites.length} suite{suites.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
               {canWrite && (
-                <button onClick={openSuiteAdd}
-                  className="mt-4 text-sm bg-gray-900 text-white px-4 py-2 rounded-xl hover:bg-gray-800">
-                  + Add Suite
+                <button onClick={openAdd}
+                  className="flex items-center gap-1.5 text-xs bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 font-medium transition-colors">
+                  <Plus size={12} /> Add Suite
                 </button>
               )}
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-100">
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide w-8">#</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Suite Name</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Address</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Property Type</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Units</th>
-                    {canWrite && (
-                      <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Actions</th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {suites.map((s, i) => (
-                    <tr key={s.id} className="hover:bg-gray-50/60 transition-colors">
-                      <td className="px-4 py-3 text-xs text-gray-400">{i + 1}</td>
-                      <td className="px-4 py-3 font-medium text-gray-800">
-                        {editingId === s.id ? (
-                          <div className="flex items-center gap-1">
-                            <input autoFocus value={editName}
-                              onChange={e => setEditName(e.target.value)}
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') handleSuiteRename(s.id);
-                                if (e.key === 'Escape') setEditingId(null);
-                              }}
-                              className="text-sm border border-blue-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                            <button onClick={() => handleSuiteRename(s.id)} className="text-blue-600"><Check size={13} /></button>
-                            <button onClick={() => setEditingId(null)} className="text-gray-400"><X size={13} /></button>
-                          </div>
-                        ) : (
-                          <span
-                            className="cursor-pointer hover:text-blue-600 transition-colors"
-                            title="Double-click to rename"
-                            onDoubleClick={() => { setEditingId(s.id); setEditName(s.property_name); }}
-                          >
-                            {s.property_name}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-gray-500">{s.address || '—'}</td>
-                      <td className="px-4 py-3 text-gray-500">{s.property_type || '—'}</td>
-                      <td className="px-4 py-3 text-right text-gray-700 font-mono">{s.unit_count}</td>
-                      {canWrite && (
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <button onClick={() => openSuiteEdit(s)}
-                              className="p-1.5 rounded-lg text-gray-400 hover:text-primary hover:bg-blue-50 transition-colors" title="Edit">
-                              <Pencil size={13} />
-                            </button>
-                            <button onClick={() => openSuiteDelete(s)}
-                              className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete">
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </td>
-                      )}
+
+            {/* Suites table */}
+            {loading ? (
+              <div className="flex items-center justify-center py-6">
+                <div className="w-5 h-5 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
+              </div>
+            ) : suites.length === 0 ? (
+              <div className="text-center py-6 text-sm text-gray-400">
+                No suites yet.{canWrite && <> Click <span className="font-medium text-gray-600">Add Suite</span> to create one.</>}
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl border border-blue-100 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50/80 border-b border-gray-100">
+                      <th className="text-left px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide w-8">#</th>
+                      <th className="text-left px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Suite Name</th>
+                      <th className="text-left px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Address</th>
+                      <th className="text-left px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Property Type</th>
+                      <th className="text-right px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Units</th>
+                      {canWrite && <th className="text-right px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Actions</th>}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {suites.map((s, i) => (
+                      <tr key={s.id} className="hover:bg-blue-50/30 transition-colors">
+                        <td className="px-4 py-2.5 text-xs text-gray-400">{i + 1}</td>
+                        <td className="px-4 py-2.5 font-medium text-gray-800">
+                          {editingId === s.id ? (
+                            <div className="flex items-center gap-1">
+                              <input autoFocus value={editName}
+                                onChange={e => setEditName(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') handleRename(s.id); if (e.key === 'Escape') setEditingId(null); }}
+                                className="text-sm border border-blue-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                              <button onClick={() => handleRename(s.id)} className="text-blue-600"><Check size={12} /></button>
+                              <button onClick={() => setEditingId(null)} className="text-gray-400"><X size={12} /></button>
+                            </div>
+                          ) : (
+                            <span className="cursor-pointer hover:text-blue-600 transition-colors" title="Double-click to rename"
+                              onDoubleClick={() => { setEditingId(s.id); setEditName(s.property_name); }}>
+                              {s.property_name}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 text-gray-500">{s.address || '—'}</td>
+                        <td className="px-4 py-2.5 text-gray-500">{s.property_type || '—'}</td>
+                        <td className="px-4 py-2.5 text-right text-gray-700 font-mono text-xs">{s.unit_count}</td>
+                        {canWrite && (
+                          <td className="px-4 py-2.5 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button onClick={() => openEdit(s)}
+                                className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Edit">
+                                <Pencil size={12} />
+                              </button>
+                              <button onClick={() => openDelete(s)}
+                                className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete">
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </td>
+      </tr>
 
       {/* Suite Add / Edit Modal */}
       {(suiteModal === 'add' || suiteModal === 'edit') && (
-        <Modal title={suiteTarget ? 'Edit Suite' : 'Add Suite'} onClose={closeSuiteModal}>
+        <Modal title={suiteTarget ? 'Edit Suite' : `Add Suite — ${companyName}`} onClose={closeModal}>
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Suite Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                autoFocus type="text"
-                value={suiteForm.property_name}
+              <label className="block text-xs font-medium text-gray-700 mb-1">Suite Name <span className="text-red-500">*</span></label>
+              <input autoFocus type="text" value={suiteForm.property_name}
                 onChange={e => setSuiteForm(p => ({ ...p, property_name: e.target.value }))}
                 placeholder="e.g. Suite 123"
-                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
+                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Address</label>
-              <input
-                type="text"
-                value={suiteForm.address}
+              <input type="text" value={suiteForm.address}
                 onChange={e => setSuiteForm(p => ({ ...p, address: e.target.value }))}
-                placeholder="e.g. 123 Main St, Unit A"
-                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
+                placeholder="e.g. 123 Main St"
+                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Property Type</label>
-              <select
-                value={suiteForm.property_type}
+              <select value={suiteForm.property_type}
                 onChange={e => setSuiteForm(p => ({ ...p, property_type: e.target.value }))}
-                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
-              >
+                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
                 <option value="">Select…</option>
                 {SUITE_PROP_TYPES.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
           </div>
           <div className="flex gap-3 mt-5">
-            <button onClick={closeSuiteModal}
-              className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50">
-              Cancel
-            </button>
-            <button
-              onClick={handleSuiteSave}
-              disabled={suiteSaving || !suiteForm.property_name.trim()}
-              className="flex-1 flex items-center justify-center gap-2 text-sm bg-gray-900 text-white py-2.5 rounded-xl hover:bg-gray-800 font-medium disabled:opacity-50"
-            >
+            <button onClick={closeModal}
+              className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50">Cancel</button>
+            <button onClick={handleSave} disabled={suiteSaving || !suiteForm.property_name.trim()}
+              className="flex-1 flex items-center justify-center gap-2 text-sm bg-gray-900 text-white py-2.5 rounded-xl hover:bg-gray-800 font-medium disabled:opacity-50">
               {suiteSaving ? 'Saving…' : <><Check size={14} />{suiteTarget ? 'Save Changes' : 'Add Suite'}</>}
             </button>
           </div>
@@ -550,28 +497,24 @@ function SuitesPanel({ canWrite, push }: { canWrite: boolean; push: (msg: string
 
       {/* Suite Delete Confirm */}
       {suiteModal === 'delete' && suiteTarget && (
-        <Modal title="Delete Suite" onClose={closeSuiteModal}>
+        <Modal title="Delete Suite" onClose={closeModal}>
           <div className="text-center">
             <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
               <Trash2 size={20} className="text-red-500" />
             </div>
-            <p className="text-sm text-gray-600 mb-2">
-              Delete <span className="font-semibold">"{suiteTarget.property_name}"</span>?
-            </p>
+            <p className="text-sm text-gray-600 mb-2">Delete <span className="font-semibold">"{suiteTarget.property_name}"</span>?</p>
             {deleteError ? (
-              <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4 text-left">
-                {deleteError}
-              </p>
+              <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4 text-left">{deleteError}</p>
             ) : (
               <p className="text-xs text-red-500 mb-5">This cannot be undone.</p>
             )}
             <div className="flex gap-3">
-              <button onClick={closeSuiteModal}
+              <button onClick={closeModal}
                 className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50">
                 {deleteError ? 'Close' : 'Cancel'}
               </button>
               {!deleteError && (
-                <button onClick={handleSuiteDelete}
+                <button onClick={handleDelete}
                   className="flex-1 text-sm bg-red-600 text-white py-2.5 rounded-xl hover:bg-red-700 font-medium">
                   Yes, Delete
                 </button>
@@ -580,7 +523,7 @@ function SuitesPanel({ canWrite, push }: { canWrite: boolean; push: (msg: string
           </div>
         </Modal>
       )}
-    </div>
+    </>
   );
 }
 
@@ -598,9 +541,6 @@ export default function CompanyRegistry({ embedded = false }: Props) {
     MODULES.some(m => m.id === initTab) ? initTab : 'rental'
   );
 
-  // Rental sub-view: companies or suites
-  const [rentalView, setRentalView] = useState<'companies' | 'suites'>('companies');
-
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -610,14 +550,15 @@ export default function CompanyRegistry({ embedded = false }: Props) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
-  // ref kept to avoid lint errors from original import
-  const _ref = useRef<null>(null); void _ref;
+  // Which company has its suites expanded (rental only)
+  const [expandedSuiteId, setExpandedSuiteId] = useState<string | null>(null);
 
   const mod = MODULES.find(m => m.id === activeId)!;
 
   const load = useCallback(async () => {
     setLoading(true);
     setCompanies([]);
+    setExpandedSuiteId(null);
     try {
       const res = await api.get(mod.endpoint);
       setCompanies(mod.normalise(res.data));
@@ -633,11 +574,9 @@ export default function CompanyRegistry({ embedded = false }: Props) {
   function switchTab(id: ModuleId) {
     setActiveId(id);
     setSearch('');
-    setRentalView('companies');
+    setExpandedSuiteId(null);
     setSearchParams({ tab: id }, { replace: true });
   }
-
-  // ── form helpers ────────────────────────────────────────────────────────────
 
   function initForm(co?: Company) {
     if (!co) {
@@ -711,19 +650,17 @@ export default function CompanyRegistry({ embedded = false }: Props) {
     }
   }
 
-  // ── filtered list ───────────────────────────────────────────────────────────
-
   const filtered = companies.filter(c => {
     const q = search.toLowerCase();
     return (c.company_name ?? '').toLowerCase().includes(q)
       || Object.values(c).some(v => typeof v === 'string' && v.toLowerCase().includes(q));
   });
 
-  // ── render ──────────────────────────────────────────────────────────────────
+  // Total columns in the table (for the inline suite colspan)
+  const totalCols = 1 + mod.tableCols.length + (activeId === 'rental' ? 1 : 0) + (canWrite ? 1 : 0);
 
   return (
     <div className="space-y-6">
-      {/* Header — hidden when embedded inside Settings */}
       {!embedded && (
         <div>
           <h1 className="text-2xl font-bold text-charcoal">Company Registry</h1>
@@ -734,245 +671,216 @@ export default function CompanyRegistry({ embedded = false }: Props) {
       {/* Module tabs */}
       <div className="flex gap-1 bg-white border border-gray-100 shadow-sm rounded-xl p-1 w-fit">
         {MODULES.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => switchTab(id)}
+          <button key={id} onClick={() => switchTab(id)}
             className={`flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg font-medium transition-all
-              ${activeId === id ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'}`}
-          >
+              ${activeId === id ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'}`}>
             <Icon size={14} /> {label}
           </button>
         ))}
       </div>
 
-      {/* Rental sub-tabs: Companies | Suites */}
-      {activeId === 'rental' && (
-        <div className="flex gap-1 bg-gray-50 border border-gray-200 rounded-xl p-1 w-fit">
-          {(['companies', 'suites'] as const).map(v => (
-            <button
-              key={v}
-              onClick={() => setRentalView(v)}
-              className={`text-sm px-5 py-1.5 rounded-lg font-medium capitalize transition-all
-                ${rentalView === v
-                  ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
-                  : 'text-gray-500 hover:text-gray-800'
-                }`}
-            >
-              {v === 'companies' ? 'Companies' : 'Suites'}
-            </button>
-          ))}
+      {/* Search + Add */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder={`Search ${mod.label}…`}
+            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary/30" />
         </div>
-      )}
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-400">{filtered.length} companies</span>
+          {canWrite && (
+            <button onClick={openAdd}
+              className="flex items-center gap-2 bg-gray-900 text-white text-sm px-4 py-2 rounded-xl hover:bg-gray-800 font-medium transition-colors">
+              <Plus size={14} /> Add Company
+            </button>
+          )}
+        </div>
+      </div>
 
-      {/* Suites panel — only when rental + suites sub-tab */}
-      {activeId === 'rental' && rentalView === 'suites' ? (
-        <SuitesPanel canWrite={canWrite} push={push} />
-      ) : (
-        <>
-          {/* Search + Add */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="relative flex-1 max-w-sm">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder={`Search ${mod.label}…`}
-                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl bg-white
-                           focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-gray-400">{filtered.length} companies</span>
-              {canWrite && (
-                <button
-                  onClick={openAdd}
-                  className="flex items-center gap-2 bg-gray-900 text-white text-sm px-4 py-2
-                             rounded-xl hover:bg-gray-800 font-medium transition-colors"
-                >
-                  <Plus size={14} /> Add Company
-                </button>
-              )}
-            </div>
+      {/* Table */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        {loading ? (
+          <div className="py-16 flex items-center justify-center">
+            <div className="w-6 h-6 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" />
           </div>
-
-          {/* Table */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-            {loading ? (
-              <div className="py-16 flex items-center justify-center">
-                <div className="w-6 h-6 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin" />
-              </div>
-            ) : filtered.length === 0 ? (
-              <div className="text-center py-20">
-                <Building2 size={40} className="text-gray-200 mx-auto mb-3" />
-                <p className="text-sm font-medium text-gray-500">
-                  {search ? 'No companies match your search' : `No ${mod.label} companies yet`}
-                </p>
-                {!search && canWrite && (
-                  <button onClick={openAdd}
-                    className="mt-4 text-sm bg-gray-900 text-white px-4 py-2 rounded-xl hover:bg-gray-800">
-                    + Add Company
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-100">
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide w-8">#</th>
-                      {mod.tableCols.map(col => (
-                        <th key={col} className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                          {col}
-                        </th>
-                      ))}
-                      {canWrite && (
-                        <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                          Actions
-                        </th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {filtered.map((c, idx) => {
-                      const cells = mod.rowCells(c);
-                      return (
-                        <tr key={c.id} className="hover:bg-gray-50/60 transition-colors">
-                          <td className="px-4 py-3 text-xs text-gray-400">{idx + 1}</td>
-                          {cells.map((cell, ci) => (
-                            <td key={ci} className={`px-4 py-3 ${ci === 0 ? 'font-medium text-gray-800' : 'text-gray-500'}`}>
-                              {cell === null
-                                ? <StatusBadge status={c.status ?? 'active'} onClick={() => canWrite && toggleStatus(c)} />
-                                : cell}
-                            </td>
-                          ))}
-                          {canWrite && (
-                            <td className="px-4 py-3 text-right">
-                              <div className="flex items-center justify-end gap-1">
-                                <button
-                                  onClick={() => openEdit(c)}
-                                  className="p-1.5 rounded-lg text-gray-400 hover:text-primary hover:bg-blue-50 transition-colors"
-                                  title="Edit"
-                                >
-                                  <Pencil size={13} />
-                                </button>
-                                <button
-                                  onClick={() => openDelete(c)}
-                                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                                  title="Delete"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              </div>
-                            </td>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-20">
+            <Building2 size={40} className="text-gray-200 mx-auto mb-3" />
+            <p className="text-sm font-medium text-gray-500">
+              {search ? 'No companies match your search' : `No ${mod.label} companies yet`}
+            </p>
+            {!search && canWrite && (
+              <button onClick={openAdd}
+                className="mt-4 text-sm bg-gray-900 text-white px-4 py-2 rounded-xl hover:bg-gray-800">
+                + Add Company
+              </button>
             )}
           </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide w-8">#</th>
+                  {mod.tableCols.map(col => (
+                    <th key={col} className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                      {col}
+                    </th>
+                  ))}
+                  {/* Suites expand column — rental only */}
+                  {activeId === 'rental' && (
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Suites</th>
+                  )}
+                  {canWrite && (
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Actions</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filtered.map((c, idx) => {
+                  const cells = mod.rowCells(c);
+                  const isExpanded = expandedSuiteId === c.id;
+                  return (
+                    <>
+                      <tr key={c.id} className={`transition-colors ${isExpanded ? 'bg-blue-50/40' : 'hover:bg-gray-50/60'}`}>
+                        <td className="px-4 py-3 text-xs text-gray-400">{idx + 1}</td>
+                        {cells.map((cell, ci) => (
+                          <td key={ci} className={`px-4 py-3 ${ci === 0 ? 'font-medium text-gray-800' : 'text-gray-500'}`}>
+                            {cell === null
+                              ? <StatusBadge status={c.status ?? 'active'} onClick={() => canWrite && toggleStatus(c)} />
+                              : cell}
+                          </td>
+                        ))}
 
-          {/* ADD / EDIT MODAL */}
-          {(modal === 'add' || modal === 'edit') && (
-            <Modal title={modal === 'add' ? `Add ${mod.label} Company` : 'Edit Company'} onClose={close}>
-              <div className="space-y-3">
-                {mod.fields.map(f => (
-                  <div key={f.name}>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      {f.label}{f.required && <span className="text-red-500 ml-0.5">*</span>}
-                    </label>
-                    {f.type === 'select' ? (
-                      <select
-                        value={form[f.name] ?? ''}
-                        onChange={e => { setForm(p => ({ ...p, [f.name]: e.target.value })); setErrors(p => ({ ...p, [f.name]: '' })); }}
-                        className={`w-full text-sm border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white
-                          ${errors[f.name] ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}
-                      >
-                        <option value="">Select…</option>
-                        {f.options!.map(o => <option key={o} value={o}>{o}</option>)}
-                      </select>
-                    ) : (
-                      <input
-                        type={f.type}
-                        value={form[f.name] ?? ''}
-                        onChange={e => { setForm(p => ({ ...p, [f.name]: e.target.value })); setErrors(p => ({ ...p, [f.name]: '' })); }}
-                        placeholder={`Enter ${f.label.toLowerCase()}`}
-                        className={`w-full text-sm border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30
-                          ${errors[f.name] ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}
-                      />
-                    )}
-                    {errors[f.name] && <p className="text-xs text-red-500 mt-0.5">{errors[f.name]}</p>}
-                  </div>
+                        {/* Suites toggle — rental only */}
+                        {activeId === 'rental' && (
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => setExpandedSuiteId(isExpanded ? null : c.id)}
+                              className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors
+                                ${isExpanded
+                                  ? 'bg-blue-600 text-white border-blue-600'
+                                  : 'text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-100'
+                                }`}
+                            >
+                              {isExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                              Suites
+                            </button>
+                          </td>
+                        )}
+
+                        {canWrite && (
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button onClick={() => openEdit(c)}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-primary hover:bg-blue-50 transition-colors" title="Edit">
+                                <Pencil size={13} />
+                              </button>
+                              <button onClick={() => openDelete(c)}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete">
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+
+                      {/* Inline suites expansion — rental only */}
+                      {activeId === 'rental' && isExpanded && (
+                        <InlineSuites
+                          key={`suites-${c.id}`}
+                          companyId={c.id}
+                          companyName={c.company_name}
+                          canWrite={canWrite}
+                          push={push}
+                          totalCols={totalCols}
+                        />
+                      )}
+                    </>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ADD / EDIT MODAL */}
+      {(modal === 'add' || modal === 'edit') && (
+        <Modal title={modal === 'add' ? `Add ${mod.label} Company` : 'Edit Company'} onClose={close}>
+          <div className="space-y-3">
+            {mod.fields.map(f => (
+              <div key={f.name}>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  {f.label}{f.required && <span className="text-red-500 ml-0.5">*</span>}
+                </label>
+                {f.type === 'select' ? (
+                  <select value={form[f.name] ?? ''}
+                    onChange={e => { setForm(p => ({ ...p, [f.name]: e.target.value })); setErrors(p => ({ ...p, [f.name]: '' })); }}
+                    className={`w-full text-sm border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white
+                      ${errors[f.name] ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}>
+                    <option value="">Select…</option>
+                    {f.options!.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                ) : (
+                  <input type={f.type} value={form[f.name] ?? ''}
+                    onChange={e => { setForm(p => ({ ...p, [f.name]: e.target.value })); setErrors(p => ({ ...p, [f.name]: '' })); }}
+                    placeholder={`Enter ${f.label.toLowerCase()}`}
+                    className={`w-full text-sm border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30
+                      ${errors[f.name] ? 'border-red-300 bg-red-50' : 'border-gray-200'}`} />
+                )}
+                {errors[f.name] && <p className="text-xs text-red-500 mt-0.5">{errors[f.name]}</p>}
+              </div>
+            ))}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
+              <div className="flex gap-2">
+                {['active', 'inactive'].map(s => (
+                  <button key={s} type="button" onClick={() => setForm(p => ({ ...p, status: s }))}
+                    className={`flex-1 text-xs py-2 rounded-xl border font-medium capitalize transition-colors
+                      ${(form.status ?? 'active') === s
+                        ? s === 'active' ? 'bg-green-600 text-white border-green-600' : 'bg-gray-700 text-white border-gray-700'
+                        : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                      }`}>
+                    {s}
+                  </button>
                 ))}
-
-                {/* Status */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
-                  <div className="flex gap-2">
-                    {['active', 'inactive'].map(s => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => setForm(p => ({ ...p, status: s }))}
-                        className={`flex-1 text-xs py-2 rounded-xl border font-medium capitalize transition-colors
-                          ${(form.status ?? 'active') === s
-                            ? s === 'active' ? 'bg-green-600 text-white border-green-600' : 'bg-gray-700 text-white border-gray-700'
-                            : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
-                          }`}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </div>
+            </div>
+          </div>
+          <div className="flex gap-3 mt-5">
+            <button onClick={close}
+              className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50">Cancel</button>
+            <button onClick={handleSave} disabled={saving}
+              className="flex-1 flex items-center justify-center gap-2 text-sm bg-gray-900 text-white py-2.5 rounded-xl hover:bg-gray-800 font-medium disabled:opacity-50">
+              {saving ? 'Saving…' : <><Check size={14} />{modal === 'add' ? 'Add Company' : 'Save Changes'}</>}
+            </button>
+          </div>
+        </Modal>
+      )}
 
-              <div className="flex gap-3 mt-5">
-                <button onClick={close}
-                  className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50">
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="flex-1 flex items-center justify-center gap-2 text-sm bg-gray-900 text-white py-2.5 rounded-xl hover:bg-gray-800 font-medium disabled:opacity-50"
-                >
-                  {saving ? 'Saving…' : <><Check size={14} />{modal === 'add' ? 'Add Company' : 'Save Changes'}</>}
-                </button>
-              </div>
-            </Modal>
-          )}
-
-          {/* DELETE CONFIRM */}
-          {modal === 'delete' && target && (
-            <Modal title="Delete Company" onClose={close}>
-              <div className="text-center">
-                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <Trash2 size={20} className="text-red-500" />
-                </div>
-                <p className="text-sm text-gray-600 mb-1">
-                  Delete <span className="font-semibold text-gray-800">"{target.company_name}"</span>?
-                </p>
-                <p className="text-xs text-red-500 mb-5 leading-relaxed">
-                  This will permanently delete this company and all its associated data. This cannot be undone.
-                </p>
-                <div className="flex gap-3">
-                  <button onClick={close}
-                    className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50">
-                    Cancel
-                  </button>
-                  <button onClick={handleDelete}
-                    className="flex-1 text-sm bg-red-600 text-white py-2.5 rounded-xl hover:bg-red-700 font-medium">
-                    Yes, Delete
-                  </button>
-                </div>
-              </div>
-            </Modal>
-          )}
-        </>
+      {/* DELETE CONFIRM */}
+      {modal === 'delete' && target && (
+        <Modal title="Delete Company" onClose={close}>
+          <div className="text-center">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Trash2 size={20} className="text-red-500" />
+            </div>
+            <p className="text-sm text-gray-600 mb-1">
+              Delete <span className="font-semibold text-gray-800">"{target.company_name}"</span>?
+            </p>
+            <p className="text-xs text-red-500 mb-5 leading-relaxed">
+              This will permanently delete this company and all its data. This cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={close}
+                className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50">Cancel</button>
+              <button onClick={handleDelete}
+                className="flex-1 text-sm bg-red-600 text-white py-2.5 rounded-xl hover:bg-red-700 font-medium">Yes, Delete</button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {/* TOAST STACK */}
