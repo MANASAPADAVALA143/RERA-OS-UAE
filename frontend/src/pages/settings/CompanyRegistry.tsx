@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import {
   Plus, Pencil, Trash2, X, Check, Search,
@@ -360,7 +361,7 @@ function InlineSuites({
   }
 
   return (
-    <>
+    <Fragment>
       {/* Inline expanded row */}
       <tr>
         <td colSpan={totalCols} className="px-0 py-0">
@@ -456,8 +457,8 @@ function InlineSuites({
         </td>
       </tr>
 
-      {/* Suite Add / Edit Modal */}
-      {(suiteModal === 'add' || suiteModal === 'edit') && (
+      {/* Suite Add / Edit Modal — portalled to body to avoid invalid tbody nesting */}
+      {(suiteModal === 'add' || suiteModal === 'edit') && createPortal(
         <Modal title={suiteTarget ? 'Edit Suite' : `Add Suite — ${companyName}`} onClose={closeModal}>
           <div className="space-y-3">
             <div>
@@ -492,11 +493,12 @@ function InlineSuites({
               {suiteSaving ? 'Saving…' : <><Check size={14} />{suiteTarget ? 'Save Changes' : 'Add Suite'}</>}
             </button>
           </div>
-        </Modal>
+        </Modal>,
+        document.body
       )}
 
-      {/* Suite Delete Confirm */}
-      {suiteModal === 'delete' && suiteTarget && (
+      {/* Suite Delete Confirm — portalled to body */}
+      {suiteModal === 'delete' && suiteTarget && createPortal(
         <Modal title="Delete Suite" onClose={closeModal}>
           <div className="text-center">
             <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -521,9 +523,10 @@ function InlineSuites({
               )}
             </div>
           </div>
-        </Modal>
+        </Modal>,
+        document.body
       )}
-    </>
+    </Fragment>
   );
 }
 
@@ -742,8 +745,8 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                   const cells = mod.rowCells(c);
                   const isExpanded = expandedSuiteId === c.id;
                   return (
-                    <>
-                      <tr key={c.id} className={`transition-colors ${isExpanded ? 'bg-blue-50/40' : 'hover:bg-gray-50/60'}`}>
+                    <Fragment key={c.id}>
+                      <tr className={`transition-colors ${isExpanded ? 'bg-blue-50/40' : 'hover:bg-gray-50/60'}`}>
                         <td className="px-4 py-3 text-xs text-gray-400">{idx + 1}</td>
                         {cells.map((cell, ci) => (
                           <td key={ci} className={`px-4 py-3 ${ci === 0 ? 'font-medium text-gray-800' : 'text-gray-500'}`}>
@@ -789,7 +792,6 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                       {/* Inline suites expansion — rental only */}
                       {activeId === 'rental' && isExpanded && (
                         <InlineSuites
-                          key={`suites-${c.id}`}
                           companyId={c.id}
                           companyName={c.company_name}
                           canWrite={canWrite}
@@ -797,7 +799,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                           totalCols={totalCols}
                         />
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </tbody>
