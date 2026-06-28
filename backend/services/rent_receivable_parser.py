@@ -191,37 +191,88 @@ def parse_sheet(ws, sheet_name: str, target_month: Optional[str] = None) -> Dict
             })
 
     # ── Col-A Sl.No format (BNC LLC, XYZ LLC) ────────────────────────────────
+    # BNC LLC has TWO property blocks in one sheet. Only use the block whose
+    # header row contains the target month column.
     elif fmt == 'col_a_slno':
-        block_start = 0
+        # Step 1: find every header row that contains the target month date
+        candidate_blocks: List[Dict] = []
         for i, row in enumerate(rows):
-            for val in row:
-                if isinstance(val, datetime) and val.year == 2026:
-                    block_start = i
+            for j, val in enumerate(row):
+                if isinstance(val, datetime) and val.strftime('%Y-%m') == (target_month or current_month):
+                    candidate_blocks.append({'row': i, 'target_col': j})
                     break
-            if block_start > 0:
-                break
 
-        for row in rows[block_start:]:
-            if not is_unit_row_col_a(row):
-                continue
-            unit_name = str(row[1]).strip()
-            current_amt = get_amount(row, target_col)
-            is_vacant = current_amt == 0
+        # Fallback: if target month not found in any header, use the first
+        # header row that has any 2026 date (original behaviour)
+        if not candidate_blocks:
+            for i, row in enumerate(rows):
+                for j, val in enumerate(row):
+                    if isinstance(val, datetime) and val.year == 2026:
+                        candidate_blocks.append({'row': i, 'target_col': j})
+                        break
+                if candidate_blocks:
+                    break
 
-            vac_loss = 0.0
-            if is_vacant:
-                vac_loss = _vacancy_loss_lookback(row, prev_months, month_cols)
+        if not candidate_blocks:
+            # No usable block found — return empty
+            pass
+        else:
+            best = candidate_blocks[0]
+            block_header_row: int = best['row']
+            block_target_col: int = best['target_col']
 
-            history = {m: get_amount(row, col) for m, col in month_cols.items()}
+            # Build month_cols from THIS block's header row only
+            block_month_cols: Dict[str, int] = {}
+            for j, val in enumerate(rows[block_header_row]):
+                if isinstance(val, datetime):
+                    block_month_cols[val.strftime('%Y-%m')] = j
 
-            units.append({
-                'name': unit_name,
-                'physical_units': count_physical_units(unit_name),
-                'current_amount': current_amt,
-                'is_vacant': is_vacant,
-                'vacancy_loss': vac_loss,
-                'history': history,
-            })
+            # Previous months within this block for vacancy-loss lookback
+            bm_sorted = sorted(block_month_cols.keys())
+            t_key = target_month or current_month
+            b_target_idx = bm_sorted.index(t_key) if t_key in bm_sorted else -1
+            block_prev_months = bm_sorted[:b_target_idx] if b_target_idx > 0 else []
+
+            # Find end of this block: stop at TOTAL/RENT summary or next block header
+            block_end = len(rows)
+            for i in range(block_header_row + 1, len(rows)):
+                row = rows[i]
+                # Row has a datetime in it → next block header
+                if any(isinstance(v, datetime) for v in row if v is not None):
+                    block_end = i
+                    break
+                # Non-unit row with a non-numeric label in col B → property name row
+                b = row[1] if len(row) > 1 else None
+                if (b is not None and not isinstance(b, (int, float)) and
+                        str(b).strip() and
+                        'unit' not in str(b).strip().lower() and
+                        str(b).strip().lower() not in ('sl.no', 'slno', 'sl no') and
+                        i > block_header_row + 8):
+                    block_end = i
+                    break
+
+            # Parse unit rows in this block only
+            for row in rows[block_header_row + 1: block_end]:
+                if not is_unit_row_col_a(row):
+                    continue
+                unit_name = str(row[1]).strip()
+                current_amt = get_amount(row, block_target_col)
+                is_vacant = current_amt == 0
+
+                vac_loss = 0.0
+                if is_vacant:
+                    vac_loss = _vacancy_loss_lookback(row, block_prev_months, block_month_cols)
+
+                history = {m: get_amount(row, col) for m, col in block_month_cols.items()}
+
+                units.append({
+                    'name': unit_name,
+                    'physical_units': count_physical_units(unit_name),
+                    'current_amount': current_amt,
+                    'is_vacant': is_vacant,
+                    'vacancy_loss': vac_loss,
+                    'history': history,
+                })
 
     # ── Standard format (ABC LLC, DEC LLC, ZYC LLC, etc.) ────────────────────
     else:
