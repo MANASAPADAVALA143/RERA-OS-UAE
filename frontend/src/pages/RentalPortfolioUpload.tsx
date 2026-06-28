@@ -93,6 +93,33 @@ function parseArAp(rows: unknown[][]): EntityArAp[] {
   return results;
 }
 
+const MONTHS = [
+  { value: '2026-06', label: 'June 2026' },
+  { value: '2026-07', label: 'July 2026' },
+  { value: '2026-08', label: 'August 2026' },
+  { value: '2026-09', label: 'September 2026' },
+  { value: '2026-10', label: 'October 2026' },
+  { value: '2026-11', label: 'November 2026' },
+  { value: '2026-12', label: 'December 2026' },
+  { value: '2026-05', label: 'May 2026' },
+  { value: '2026-04', label: 'April 2026' },
+  { value: '2026-03', label: 'March 2026' },
+  { value: '2026-02', label: 'February 2026' },
+  { value: '2026-01', label: 'January 2026' },
+  { value: '2025-12', label: 'December 2025' },
+  { value: '2025-11', label: 'November 2025' },
+  { value: '2025-10', label: 'October 2025' },
+  { value: '2025-09', label: 'September 2025' },
+  { value: '2025-08', label: 'August 2025' },
+  { value: '2025-07', label: 'July 2025' },
+  { value: '2025-06', label: 'June 2025' },
+  { value: '2025-05', label: 'May 2025' },
+  { value: '2025-04', label: 'April 2025' },
+  { value: '2025-03', label: 'March 2025' },
+  { value: '2025-02', label: 'February 2025' },
+  { value: '2025-01', label: 'January 2025' },
+];
+
 interface RentPreviewCompany {
   company: string;
   total_units: number;
@@ -106,6 +133,7 @@ interface RentPreviewCompany {
 }
 
 interface RentPreview {
+  target_month: string;
   portfolio: {
     total_units: number;
     occupied: number;
@@ -121,6 +149,7 @@ interface RentPreview {
 
 function RentReceivableUpload() {
   const rrRef = useRef<HTMLInputElement>(null);
+  const [selectedMonth, setSelectedMonth] = useState<string>('2026-06');
   const [rrUploading, setRrUploading] = useState(false);
   const [rrPreview, setRrPreview] = useState<RentPreview | null>(null);
   const [rrConfirming, setRrConfirming] = useState(false);
@@ -133,10 +162,11 @@ function RentReceivableUpload() {
 
   async function handleRrUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !selectedMonth) return;
     setRrUploading(true);
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('target_month', selectedMonth);
     try {
       const res = await api.post<RentPreview>('/api/rentals/upload-rent-receivable/preview', formData);
       setRrPreview(res.data);
@@ -165,32 +195,63 @@ function RentReceivableUpload() {
   }
 
   const fmtUSD = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 0 })}`;
+  const monthLabel = MONTHS.find(m => m.value === selectedMonth)?.label ?? selectedMonth;
 
   return (
-    <div className="mb-8">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-800">Rent Receivable Sync</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Upload monthly Rent Receivable Excel — unit status and rents update instantly</p>
-        </div>
-        <div>
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mb-6">
+      <h3 className="text-sm font-semibold text-gray-800 mb-1">📊 Rent Receivable Sync</h3>
+      <p className="text-xs text-gray-400 mb-5">Upload monthly Excel to update all rental financials</p>
+
+      {/* Step 1 — month selector */}
+      <div className="mb-5">
+        <label className="block text-xs font-medium text-gray-700 mb-1.5">
+          Step 1 — Select the month you are uploading data for:
+        </label>
+        <select
+          value={selectedMonth}
+          onChange={e => setSelectedMonth(e.target.value)}
+          className="text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white w-52"
+        >
+          <option value="">-- Select Month --</option>
+          {MONTHS.map(m => (
+            <option key={m.value} value={m.value}>{m.label}</option>
+          ))}
+        </select>
+        <p className="text-xs text-gray-400 mt-1">
+          The app reads this month's column for status. Prior months determine vacancy loss.
+        </p>
+      </div>
+
+      {/* Step 2 — upload (disabled until month selected) */}
+      <div className={selectedMonth ? '' : 'opacity-40 pointer-events-none'}>
+        <label className="block text-xs font-medium text-gray-700 mb-1.5">
+          Step 2 — Upload the Rent Receivable Excel file:
+        </label>
+        <div className="flex items-center gap-3">
           <input ref={rrRef} type="file" accept=".xlsx" onChange={handleRrUpload} className="hidden" />
           <button
-            onClick={() => rrRef.current?.click()}
-            disabled={rrUploading}
-            className="flex items-center gap-2 text-sm bg-green-700 text-white px-4 py-2 rounded-xl hover:bg-green-600 disabled:opacity-50 font-medium transition-colors"
+            onClick={() => selectedMonth && rrRef.current?.click()}
+            disabled={!selectedMonth || rrUploading}
+            className="flex items-center gap-2 text-sm bg-green-700 text-white px-4 py-2 rounded-xl hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
           >
             {rrUploading ? (
-              <><div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />Parsing...</>
+              <><div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />Parsing {monthLabel}...</>
             ) : (
               <>📊 Upload Rent Receivable Excel</>
             )}
           </button>
+          {!selectedMonth && (
+            <span className="text-xs text-amber-600">← Select a month first</span>
+          )}
         </div>
       </div>
 
       {rrToast && (
-        <div className={`text-sm px-4 py-2 rounded-lg mb-3 ${rrToast.includes('success') || rrToast.includes('updated') ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+        <div className={`text-sm px-4 py-2 rounded-lg mt-4 ${
+          rrToast.includes('success') || rrToast.includes('updated')
+            ? 'bg-green-50 text-green-700 border border-green-200'
+            : 'bg-red-50 text-red-700 border border-red-200'
+        }`}>
           {rrToast}
         </div>
       )}
@@ -201,27 +262,35 @@ function RentReceivableUpload() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Preview — Confirm Update</h2>
-                <p className="text-xs text-gray-400 mt-0.5">Review the parsed data before saving to database</p>
+                <h2 className="text-base font-semibold text-gray-900">Preview — {monthLabel}</h2>
+                <p className="text-xs text-gray-400 mt-0.5">Review parsed data before saving to database</p>
               </div>
               <button onClick={() => setRrPreview(null)} className="text-gray-400 hover:text-gray-600">
                 <X size={18} />
               </button>
             </div>
 
-            {/* Portfolio summary tiles */}
+            {/* Portfolio KPI tiles */}
             <div className="grid grid-cols-4 gap-3 mb-4">
-              {[
-                { label: 'Total Units', value: rrPreview.portfolio.total_units, color: 'blue' },
-                { label: 'Occupied', value: rrPreview.portfolio.occupied, color: 'green' },
-                { label: 'Vacant', value: rrPreview.portfolio.vacant, color: 'red' },
-                { label: 'Collected', value: fmtUSD(rrPreview.portfolio.total_collected), color: 'green' },
-              ].map(tile => (
+              {([
+                { label: 'Total Units',  value: rrPreview.portfolio.total_units,                        color: 'blue'  },
+                { label: 'Occupied',     value: rrPreview.portfolio.occupied,                           color: 'green' },
+                { label: 'Vacant',       value: rrPreview.portfolio.vacant,                             color: 'red'   },
+                { label: 'Collected',    value: fmtUSD(rrPreview.portfolio.total_collected),            color: 'green' },
+              ] as { label: string; value: string | number; color: string }[]).map(tile => (
                 <div key={tile.label} className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
                   <div className={`text-xl font-mono font-semibold text-${tile.color}-600`}>{tile.value}</div>
                   <div className="text-xs text-gray-400 mt-0.5">{tile.label}</div>
                 </div>
               ))}
+            </div>
+
+            {/* Vacancy loss summary tile */}
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 text-center">
+              <div className="text-sm font-mono font-semibold text-amber-700">
+                {fmtUSD(rrPreview.portfolio.total_vacancy_loss)}
+              </div>
+              <div className="text-xs text-amber-600 mt-0.5">Total Vacancy Loss (prior month rents)</div>
             </div>
 
             {/* Per-company table */}

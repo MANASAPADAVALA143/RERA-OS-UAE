@@ -8,7 +8,7 @@ import uuid
 from collections import defaultdict
 from datetime import date
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
@@ -1047,11 +1047,19 @@ def vacancy_summary(
 @router.post("/upload-rent-receivable/preview")
 async def preview_rent_receivable(
     file: UploadFile = File(...),
+    target_month: str = Form(...),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    """Step 1: Parse file and return preview WITHOUT saving to DB."""
+    """Step 1: Parse file for the given target_month and return preview WITHOUT saving."""
     import tempfile
     from services.rent_receivable_parser import parse_rent_receivable_file
+
+    # Validate YYYY-MM
+    try:
+        y, m = target_month.split('-')
+        assert 2020 <= int(y) <= 2030 and 1 <= int(m) <= 12
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid month format — use YYYY-MM")
 
     contents = await file.read()
     with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
@@ -1059,8 +1067,9 @@ async def preview_rent_receivable(
         tmp_path = tmp.name
 
     try:
-        parsed = parse_rent_receivable_file(tmp_path)
+        parsed = parse_rent_receivable_file(tmp_path, target_month=target_month)
         preview = {
+            'target_month': target_month,
             'portfolio': parsed['portfolio'],
             'companies': {
                 co: {
