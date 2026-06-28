@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react';
-import { Upload, CheckCircle, ArrowRight, AlertCircle } from 'lucide-react';
+import { Upload, CheckCircle, ArrowRight, AlertCircle, X } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { useRentalPortfolio } from '../contexts/RentalPortfolioContext';
 import type { EntityOps, EntityArAp, PortfolioState } from '../contexts/RentalPortfolioContext';
 import { useRentalNav } from '../contexts/RentalNavContext';
+import api from '../services/api';
 
 function numCell(v: unknown): number {
   const n = parseFloat(String(v ?? '0').replace(/[$,\s]/g, ''));
@@ -92,6 +93,196 @@ function parseArAp(rows: unknown[][]): EntityArAp[] {
   return results;
 }
 
+interface RentPreviewCompany {
+  company: string;
+  total_units: number;
+  occupied: number;
+  vacant: number;
+  occupancy_rate: number;
+  collected: number;
+  vacancy_loss: number;
+  current_month: string | null;
+  vacant_units: string[];
+}
+
+interface RentPreview {
+  portfolio: {
+    total_units: number;
+    occupied: number;
+    vacant: number;
+    total_collected: number;
+    total_vacancy_loss: number;
+    occupancy_rate: number;
+    skipped: string[];
+  };
+  companies: Record<string, RentPreviewCompany>;
+  temp_file_id: string;
+}
+
+function RentReceivableUpload() {
+  const rrRef = useRef<HTMLInputElement>(null);
+  const [rrUploading, setRrUploading] = useState(false);
+  const [rrPreview, setRrPreview] = useState<RentPreview | null>(null);
+  const [rrConfirming, setRrConfirming] = useState(false);
+  const [rrToast, setRrToast] = useState('');
+
+  function showToast(msg: string) {
+    setRrToast(msg);
+    setTimeout(() => setRrToast(''), 3500);
+  }
+
+  async function handleRrUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setRrUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const res = await api.post<RentPreview>('/api/rentals/upload-rent-receivable/preview', formData);
+      setRrPreview(res.data);
+    } catch {
+      showToast('Could not read file — check format');
+    } finally {
+      setRrUploading(false);
+      if (rrRef.current) rrRef.current.value = '';
+    }
+  }
+
+  async function handleRrConfirm() {
+    if (!rrPreview) return;
+    setRrConfirming(true);
+    try {
+      await api.post('/api/rentals/upload-rent-receivable/confirm', {
+        temp_file_id: rrPreview.temp_file_id,
+      });
+      setRrPreview(null);
+      showToast('All rental data updated successfully');
+    } catch {
+      showToast('Save failed — please try again');
+    } finally {
+      setRrConfirming(false);
+    }
+  }
+
+  const fmtUSD = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 0 })}`;
+
+  return (
+    <div className="mb-8">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-800">Rent Receivable Sync</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Upload monthly Rent Receivable Excel — unit status and rents update instantly</p>
+        </div>
+        <div>
+          <input ref={rrRef} type="file" accept=".xlsx" onChange={handleRrUpload} className="hidden" />
+          <button
+            onClick={() => rrRef.current?.click()}
+            disabled={rrUploading}
+            className="flex items-center gap-2 text-sm bg-green-700 text-white px-4 py-2 rounded-xl hover:bg-green-600 disabled:opacity-50 font-medium transition-colors"
+          >
+            {rrUploading ? (
+              <><div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />Parsing...</>
+            ) : (
+              <>📊 Upload Rent Receivable Excel</>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {rrToast && (
+        <div className={`text-sm px-4 py-2 rounded-lg mb-3 ${rrToast.includes('success') || rrToast.includes('updated') ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+          {rrToast}
+        </div>
+      )}
+
+      {/* Preview modal */}
+      {rrPreview && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Preview — Confirm Update</h2>
+                <p className="text-xs text-gray-400 mt-0.5">Review the parsed data before saving to database</p>
+              </div>
+              <button onClick={() => setRrPreview(null)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Portfolio summary tiles */}
+            <div className="grid grid-cols-4 gap-3 mb-4">
+              {[
+                { label: 'Total Units', value: rrPreview.portfolio.total_units, color: 'blue' },
+                { label: 'Occupied', value: rrPreview.portfolio.occupied, color: 'green' },
+                { label: 'Vacant', value: rrPreview.portfolio.vacant, color: 'red' },
+                { label: 'Collected', value: fmtUSD(rrPreview.portfolio.total_collected), color: 'green' },
+              ].map(tile => (
+                <div key={tile.label} className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
+                  <div className={`text-xl font-mono font-semibold text-${tile.color}-600`}>{tile.value}</div>
+                  <div className="text-xs text-gray-400 mt-0.5">{tile.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Per-company table */}
+            <table className="w-full text-xs mb-5">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="text-left py-2 px-3 text-gray-400 font-normal">Company</th>
+                  <th className="text-right py-2 px-3 text-gray-400 font-normal">Units</th>
+                  <th className="text-right py-2 px-3 text-gray-400 font-normal">Occ%</th>
+                  <th className="text-right py-2 px-3 text-gray-400 font-normal">Collected</th>
+                  <th className="text-right py-2 px-3 text-gray-400 font-normal">Vac Loss</th>
+                  <th className="text-left py-2 px-3 text-gray-400 font-normal">Vacant Units</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {Object.entries(rrPreview.companies).map(([co, data]) => (
+                  <tr key={co} className="hover:bg-gray-50">
+                    <td className="py-2 px-3 font-medium text-gray-800">{co}</td>
+                    <td className="py-2 px-3 text-right font-mono">{data.total_units}</td>
+                    <td className={`py-2 px-3 text-right font-mono font-medium ${
+                      data.occupancy_rate >= 90 ? 'text-green-600' :
+                      data.occupancy_rate >= 75 ? 'text-amber-600' : 'text-red-500'
+                    }`}>{data.occupancy_rate}%</td>
+                    <td className="py-2 px-3 text-right font-mono text-green-700">{fmtUSD(data.collected)}</td>
+                    <td className="py-2 px-3 text-right font-mono text-amber-600">{fmtUSD(data.vacancy_loss)}</td>
+                    <td className="py-2 px-3 text-gray-400 text-[10px]">
+                      {data.vacant_units.length > 0 ? data.vacant_units.join(', ') : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {rrPreview.portfolio.skipped.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-xs text-amber-700">
+                Skipped sheets: {rrPreview.portfolio.skipped.join(', ')}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setRrPreview(null)}
+                className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRrConfirm}
+                disabled={rrConfirming}
+                className="flex-1 text-sm bg-green-700 text-white py-2.5 rounded-xl hover:bg-green-600 font-medium disabled:opacity-50"
+              >
+                {rrConfirming ? 'Saving...' : 'Confirm & Update Database'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function RentalPortfolioUpload() {
   const { setPortfolio } = useRentalPortfolio();
   const { setTab } = useRentalNav();
@@ -159,6 +350,9 @@ export default function RentalPortfolioUpload() {
         <h1 className="text-2xl font-bold text-gray-900">Upload Portfolio Data</h1>
         <p className="text-sm text-gray-500 mt-1">Upload your Excel intake file — all tabs parsed automatically</p>
       </div>
+
+      {/* Rent Receivable sync — server-side parser */}
+      <RentReceivableUpload />
 
       {/* Drop zone */}
       <div

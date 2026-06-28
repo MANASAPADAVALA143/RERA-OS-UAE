@@ -69,6 +69,17 @@ COMPANY_STATUS_COLUMNS = {
 }
 
 
+RENTAL_COMPANY_COLUMNS = {
+    "collected_this_month": "NUMERIC(14, 2)",
+    "vacancy_loss":         "NUMERIC(14, 2)",
+    "monthly_rent_data":    "JSONB",
+}
+
+RENTAL_UNIT_COLUMNS = {
+    "rent_history": "JSONB",
+}
+
+
 def apply_schema_patches(engine) -> None:
     _add_missing_columns(engine, "projects", PROJECT_COLUMNS)
     _add_missing_columns(engine, "cost_trades", COST_TRADE_COLUMNS)
@@ -78,3 +89,6 @@ def apply_schema_patches(engine) -> None:
     # Add status column to existing company tables (safe idempotent patch)
     _add_missing_columns(engine, "r_companies", COMPANY_STATUS_COLUMNS)
     _add_missing_columns(engine, "propdev_companies", COMPANY_STATUS_COLUMNS)
+    # Rent Receivable upload sync columns
+    _add_missing_columns(engine, "r_companies", RENTAL_COMPANY_COLUMNS)
+    _add_missing_columns(engine, "r_units", RENTAL_UNIT_COLUMNS)

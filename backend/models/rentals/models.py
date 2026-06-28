@@ -4,7 +4,7 @@ from datetime import date, datetime
 
 from sqlalchemy import (
     Boolean, Date, DateTime, Enum, ForeignKey, Index,
-    Integer, Numeric, String, Text, Uuid, func,
+    Integer, JSON, Numeric, String, Text, Uuid, func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -51,6 +51,9 @@ class RentalCompany(Base):
     status: Mapped[str | None] = mapped_column(String(20), nullable=True, server_default="active")
     created_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    collected_this_month: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+    vacancy_loss: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+    monthly_rent_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     properties: Mapped[list["RentalProp"]] = relationship("RentalProp", back_populates="company", cascade="all, delete-orphan")
     units: Mapped[list["RentalUnit"]] = relationship("RentalUnit", back_populates="company", cascade="all, delete-orphan")
@@ -86,6 +89,7 @@ class RentalUnit(Base):
     status: Mapped[RentalUnitStatus] = mapped_column(Enum(RentalUnitStatus, name="rental_unit_status"), nullable=False)
     monthly_rent: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     status_changed_at: Mapped[date | None] = mapped_column(Date, nullable=True)
+    rent_history: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

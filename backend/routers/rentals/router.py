@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import csv
 import io
+import os
 import uuid
 from collections import defaultdict
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from database import SessionLocal
@@ -1038,3 +1040,131 @@ def vacancy_summary(
         },
         "loss_by_company": [{"company_name": k, "vacancy_loss": round(v, 2)} for k, v in by_company.items()],
     }
+
+
+# ── rent receivable upload ────────────────────────────────────────────────────
+
+@router.post("/upload-rent-receivable/preview")
+async def preview_rent_receivable(
+    file: UploadFile = File(...),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Step 1: Parse file and return preview WITHOUT saving to DB."""
+    import tempfile
+    from services.rent_receivable_parser import parse_rent_receivable_file
+
+    contents = await file.read()
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+        tmp.write(contents)
+        tmp_path = tmp.name
+
+    try:
+        parsed = parse_rent_receivable_file(tmp_path)
+        preview = {
+            'portfolio': parsed['portfolio'],
+            'companies': {
+                co: {
+                    'company': data['company'],
+                    'total_units': data['total_physical_units'],
+                    'occupied': data['occupied_count'],
+                    'vacant': data['vacant_count'],
+                    'occupancy_rate': data['occupancy_rate'],
+                    'collected': data['collected'],
+                    'vacancy_loss': data['vacancy_loss'],
+                    'current_month': data['current_month'],
+                    'vacant_units': [u['name'] for u in data['units'] if u['is_vacant']],
+                }
+                for co, data in parsed['companies'].items()
+            },
+            'temp_file_id': tmp_path,
+        }
+        return preview
+    except Exception as e:
+        os.unlink(tmp_path)
+        raise HTTPException(status_code=400, detail=f"Parse error: {str(e)}")
+
+
+@router.post("/upload-rent-receivable/confirm")
+async def confirm_rent_receivable(
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Step 2: Client confirmed preview — save parsed data to DB."""
+    from services.rent_receivable_parser import parse_rent_receivable_file
+
+    tmp_path = payload.get('temp_file_id')
+    if not tmp_path or not os.path.exists(tmp_path):
+        raise HTTPException(status_code=400, detail="Session expired — please upload again")
+
+    tid = current_user.tenant_id
+
+    try:
+        parsed = parse_rent_receivable_file(tmp_path)
+        updated = []
+
+        for co_name, data in parsed['companies'].items():
+            company = db.query(RentalCompany).filter(
+                RentalCompany.tenant_id == tid,
+                or_(
+                    RentalCompany.company_name.ilike(f'%{co_name}%'),
+                    func.trim(RentalCompany.company_name).ilike(f'%{co_name.strip()}%'),
+                )
+            ).first()
+
+            if not company:
+                continue
+
+            company.collected_this_month = data['collected']
+            company.vacancy_loss = data['vacancy_loss']
+            company.monthly_rent_data = data['monthly_totals']
+
+            for unit_data in data['units']:
+                raw_name = unit_data['name'].strip()
+                is_vacant = unit_data['is_vacant']
+                current_amount = unit_data['current_amount']
+                history = unit_data['history']
+
+                # Split combined names like "Unit E, F, G" or "Unit E & F"
+                parts = [p.strip() for p in raw_name.replace('&', ',').split(',')]
+                n_parts = len([p for p in parts if p])
+                per_unit_rent = current_amount / n_parts if n_parts > 0 else current_amount
+
+                for part in parts:
+                    part = part.strip()
+                    if not part:
+                        continue
+
+                    # Try exact match first
+                    unit = db.query(RentalUnit).filter(
+                        RentalUnit.company_id == company.id,
+                        func.lower(func.trim(RentalUnit.unit_number)) == part.lower(),
+                    ).first()
+
+                    # If no match and part is just a letter/number (e.g. "F" from "Unit E, F"),
+                    # try prefixing with "Unit "
+                    if not unit and not part.lower().startswith('unit'):
+                        prefixed = f'Unit {part}'
+                        unit = db.query(RentalUnit).filter(
+                            RentalUnit.company_id == company.id,
+                            func.lower(func.trim(RentalUnit.unit_number)) == prefixed.lower(),
+                        ).first()
+
+                    if unit:
+                        unit.status = 'vacant' if is_vacant else 'occupied'
+                        unit.monthly_rent = per_unit_rent
+                        unit.rent_history = history
+
+            db.commit()
+            updated.append(co_name)
+
+        return {
+            'status': 'success',
+            'updated': updated,
+            'portfolio': parsed['portfolio'],
+            'message': f"Updated {len(updated)} companies successfully",
+        }
+
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
