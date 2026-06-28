@@ -54,6 +54,11 @@ class RentalCompany(Base):
     collected_this_month: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     vacancy_loss: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     monthly_rent_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    gross_potential_rent: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+    last_sync_month: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    last_sync_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    occupied_units: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_units: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     properties: Mapped[list["RentalProp"]] = relationship("RentalProp", back_populates="company", cascade="all, delete-orphan")
     units: Mapped[list["RentalUnit"]] = relationship("RentalUnit", back_populates="company", cascade="all, delete-orphan")
@@ -90,6 +95,7 @@ class RentalUnit(Base):
     monthly_rent: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     status_changed_at: Mapped[date | None] = mapped_column(Date, nullable=True)
     rent_history: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    vacancy_loss: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

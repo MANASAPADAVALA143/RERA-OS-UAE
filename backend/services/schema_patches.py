@@ -70,13 +70,19 @@ COMPANY_STATUS_COLUMNS = {
 
 
 RENTAL_COMPANY_COLUMNS = {
-    "collected_this_month": "NUMERIC(14, 2)",
-    "vacancy_loss":         "NUMERIC(14, 2)",
-    "monthly_rent_data":    "JSONB",
+    "collected_this_month":  "NUMERIC(14, 2)",
+    "vacancy_loss":          "NUMERIC(14, 2)",
+    "monthly_rent_data":     "JSONB",
+    "gross_potential_rent":  "NUMERIC(14, 2) DEFAULT 0",
+    "last_sync_month":       "VARCHAR(20)",
+    "last_sync_date":        "TIMESTAMP",
+    "occupied_units":        "INTEGER DEFAULT 0",
+    "total_units":           "INTEGER DEFAULT 0",
 }
 
 RENTAL_UNIT_COLUMNS = {
     "rent_history": "JSONB",
+    "vacancy_loss": "NUMERIC(14, 2) DEFAULT 0",
 }
 
 

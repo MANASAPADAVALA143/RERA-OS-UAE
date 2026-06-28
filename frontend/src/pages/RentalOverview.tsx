@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, Legend,
@@ -8,6 +8,11 @@ import { Card, KpiCard } from '../components/ui/Card';
 import { LoadingSkeleton } from '../components/ui/Table';
 import { fmtUSD, fmtPct } from '../components/ProtectedRoute';
 import { useRentalNav } from '../contexts/RentalNavContext';
+
+const MONTHS_ORDER = [
+  'Jan-2026','Feb-2026','Mar-2026','Apr-2026','May-2026','Jun-2026',
+  'Jul-2026','Aug-2026','Sep-2026','Oct-2026','Nov-2026','Dec-2026',
+];
 
 interface PortfolioSummary {
   total_units: number;
@@ -68,18 +73,35 @@ interface AttentionItem {
   severity: 'warning' | 'attention';
 }
 
+interface RentalCompanyWithSync {
+  id: string;
+  company_name: string;
+  sync_collected: number | null;
+  sync_vacancy_loss: number | null;
+  sync_gross_potential: number | null;
+  sync_occupied_units: number | null;
+  sync_total_units: number | null;
+  last_sync_month: string | null;
+  monthly_rent_data: Record<string, number> | null;
+}
+
 export default function RentalOverview() {
   const { setTab } = useRentalNav();
   const [data, setData] = useState<PortfolioSummary | null>(null);
+  const [syncCompanies, setSyncCompanies] = useState<RentalCompanyWithSync[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const fetch = useCallback(async () => {
+  const fetchAll = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await api.get<PortfolioSummary>('/api/rentals/portfolio-summary');
-      setData(res.data);
+      const [summaryRes, companiesRes] = await Promise.all([
+        api.get<PortfolioSummary>('/api/rentals/portfolio-summary'),
+        api.get<RentalCompanyWithSync[]>('/api/rentals/companies'),
+      ]);
+      setData(summaryRes.data);
+      setSyncCompanies(Array.isArray(companiesRes.data) ? companiesRes.data : []);
     } catch {
       setError('Failed to load portfolio summary.');
     } finally {
@@ -87,11 +109,49 @@ export default function RentalOverview() {
     }
   }, []);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // Synced data derived from Excel upload
+  const hasSyncedData = useMemo(
+    () => syncCompanies.some(c => c.last_sync_month),
+    [syncCompanies],
+  );
+
+  const lastSyncMonth = useMemo(
+    () => syncCompanies.find(c => c.last_sync_month)?.last_sync_month ?? '',
+    [syncCompanies],
+  );
+
+  const syncedTotals = useMemo(() => {
+    if (!hasSyncedData) return null;
+    const synced = syncCompanies.filter(c => c.last_sync_month);
+    const total_units = synced.reduce((a, c) => a + (c.sync_total_units ?? 0), 0);
+    const occupied   = synced.reduce((a, c) => a + (c.sync_occupied_units ?? 0), 0);
+    const collected  = synced.reduce((a, c) => a + (c.sync_collected ?? 0), 0);
+    const gross      = synced.reduce((a, c) => a + (c.sync_gross_potential ?? 0), 0);
+    const vac_loss   = synced.reduce((a, c) => a + (c.sync_vacancy_loss ?? 0), 0);
+    const occ_rate   = total_units > 0 ? ((occupied / total_units) * 100).toFixed(1) : '0';
+    return { total_units, occupied, vacant: total_units - occupied, collected, gross, vac_loss, occ_rate };
+  }, [hasSyncedData, syncCompanies]);
+
+  const syncedChartData = useMemo<TrendPoint[] | null>(() => {
+    if (!hasSyncedData) return null;
+    const monthMap = new Map<string, number>();
+    for (const co of syncCompanies) {
+      if (!co.monthly_rent_data) continue;
+      for (const [m, amt] of Object.entries(co.monthly_rent_data)) {
+        monthMap.set(m, (monthMap.get(m) ?? 0) + (amt as number));
+      }
+    }
+    return MONTHS_ORDER
+      .filter(m => (monthMap.get(m) ?? 0) > 0)
+      .slice(-6)
+      .map(m => ({ month: m, collected: monthMap.get(m) ?? 0, billed: 0, expense: 0, noi: 0 }));
+  }, [hasSyncedData, syncCompanies]);
 
   if (loading) return <LoadingSkeleton rows={10} />;
   if (error || !data) return (
-    <div className="text-red-600 p-4">{error || 'No data'}<button className="ml-4 underline" onClick={fetch}>Retry</button></div>
+    <div className="text-red-600 p-4">{error || 'No data'}<button className="ml-4 underline" onClick={fetchAll}>Retry</button></div>
   );
 
   const now = new Date();
@@ -114,6 +174,10 @@ export default function RentalOverview() {
     noi: c.noi_this_month,
   }));
 
+  const chartData = (hasSyncedData && syncedChartData && syncedChartData.length > 0)
+    ? syncedChartData
+    : data.income_trend;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -129,13 +193,44 @@ export default function RentalOverview() {
         </div>
       </div>
 
+      {/* Synced data banner */}
+      {hasSyncedData && syncedTotals && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs font-semibold text-emerald-800">
+              ✅ Synced from Excel — {lastSyncMonth}
+            </div>
+            <div className="text-[10px] text-emerald-600">
+              Live data from Rent Receivable upload
+            </div>
+          </div>
+          <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
+            {([
+              { label: 'Total Units',  value: String(syncedTotals.total_units)        },
+              { label: 'Occupied',     value: String(syncedTotals.occupied)            },
+              { label: 'Vacant',       value: String(syncedTotals.vacant)              },
+              { label: 'Collected',    value: fmtUSD(syncedTotals.collected)           },
+              { label: 'Occupancy',    value: `${syncedTotals.occ_rate}%`             },
+              { label: 'Vac Loss',     value: fmtUSD(syncedTotals.vac_loss)           },
+            ]).map(t => (
+              <div key={t.label} className="bg-white rounded-lg p-2.5 text-center border border-emerald-100">
+                <div className="text-sm font-mono font-semibold text-emerald-700">{t.value}</div>
+                <div className="text-[10px] text-gray-400 mt-0.5">{t.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 8-tile KPI strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div>
           <KpiCard label="Occupancy Rate" value={fmtPct(data.occupancy_pct)} sub={`${data.occupied_units} / ${data.total_units} units`} accent />
-          <div className="text-[10px] text-amber-600 mt-1 px-1">
-            ⚠ Upload Rent Receivable Excel to sync latest data
-          </div>
+          {!hasSyncedData && (
+            <div className="text-[10px] text-amber-600 mt-1 px-1">
+              ⚠ Upload Rent Receivable Excel to sync latest data
+            </div>
+          )}
         </div>
         <KpiCard label="Occupied / Vacant" value={`${data.occupied_units} / ${data.vacant_units}`} sub={`${data.total_units} total units`} />
         <KpiCard label="Collected This Month" value={fmtUSD(data.collected_this_month)} sub={`of ${fmtUSD(data.billed_this_month)} billed`} accent />
@@ -177,15 +272,17 @@ export default function RentalOverview() {
           </ResponsiveContainer>
         </Card>
 
-        <Card title="Income vs Expense — 6 Months">
+        <Card title={`Income vs Expense — 6 Months${hasSyncedData ? ` (${lastSyncMonth} Sync)` : ''}`}>
           <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={data.income_trend}>
+            <LineChart data={chartData}>
               <XAxis dataKey="month" tick={{ fontSize: 11 }} />
               <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
               <Tooltip formatter={(v: number) => fmtUSD(v)} />
               <Legend />
               <Line type="monotone" dataKey="collected" stroke="#2F8F7A" name="Collected" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="expense" stroke="#ef4444" name="Expense" strokeWidth={2} dot={false} />
+              {!hasSyncedData && (
+                <Line type="monotone" dataKey="expense" stroke="#ef4444" name="Expense" strokeWidth={2} dot={false} />
+              )}
             </LineChart>
           </ResponsiveContainer>
         </Card>

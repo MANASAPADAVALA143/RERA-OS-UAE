@@ -6,7 +6,7 @@ import io
 import os
 import uuid
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
@@ -41,6 +41,11 @@ from services.rental_calculations import (
 )
 
 router = APIRouter(prefix="/api/rentals", tags=["rentals"])
+
+MONTH_OPTIONS = [
+    'Jan-2026', 'Feb-2026', 'Mar-2026', 'Apr-2026', 'May-2026', 'Jun-2026',
+    'Jul-2026', 'Aug-2026', 'Sep-2026', 'Oct-2026', 'Nov-2026', 'Dec-2026',
+]
 
 
 def get_db():
@@ -269,6 +274,14 @@ def list_companies(
             "property_name": props[0].property_name if props else "",
             "property_count": len(props),
             **summ,
+            # Upload-synced values (set by Rent Receivable Excel upload)
+            "sync_collected": float(co.collected_this_month) if co.collected_this_month is not None else None,
+            "sync_vacancy_loss": float(co.vacancy_loss) if co.vacancy_loss is not None else None,
+            "sync_gross_potential": float(co.gross_potential_rent) if co.gross_potential_rent is not None else None,
+            "sync_occupied_units": co.occupied_units,
+            "sync_total_units": co.total_units,
+            "last_sync_month": co.last_sync_month,
+            "monthly_rent_data": co.monthly_rent_data,
         })
     if fmt == "csv":
         output = io.StringIO()
@@ -1047,19 +1060,15 @@ def vacancy_summary(
 @router.post("/upload-rent-receivable/preview")
 async def preview_rent_receivable(
     file: UploadFile = File(...),
-    target_month: str = Form(...),
+    target_month: str = Form(default='Jun-2026'),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    """Step 1: Parse file for the given target_month and return preview WITHOUT saving."""
+    """Step 1: Parse EstateCFO_Rent_Template_ByCompany.xlsx and return preview WITHOUT saving."""
     import tempfile
     from services.rent_receivable_parser import parse_rent_receivable_file
 
-    # Validate YYYY-MM
-    try:
-        y, m = target_month.split('-')
-        assert 2020 <= int(y) <= 2030 and 1 <= int(m) <= 12
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid month format — use YYYY-MM")
+    if target_month not in MONTH_OPTIONS:
+        raise HTTPException(status_code=400, detail=f"Invalid month. Choose from: {MONTH_OPTIONS}")
 
     contents = await file.read()
     with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
@@ -1068,7 +1077,7 @@ async def preview_rent_receivable(
 
     try:
         parsed = parse_rent_receivable_file(tmp_path, target_month=target_month)
-        preview = {
+        return {
             'target_month': target_month,
             'portfolio': parsed['portfolio'],
             'companies': {
@@ -1079,17 +1088,18 @@ async def preview_rent_receivable(
                     'vacant': data['vacant_count'],
                     'occupancy_rate': data['occupancy_rate'],
                     'collected': data['collected'],
+                    'gross_potential': data['gross_potential'],
                     'vacancy_loss': data['vacancy_loss'],
-                    'current_month': data['current_month'],
-                    'vacant_units': [u['name'] for u in data['units'] if u['is_vacant']],
+                    'vacant_units': data['vacant_units'],
+                    'monthly_totals': data['monthly_totals'],
                 }
                 for co, data in parsed['companies'].items()
             },
             'temp_file_id': tmp_path,
         }
-        return preview
     except Exception as e:
-        os.unlink(tmp_path)
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
         raise HTTPException(status_code=400, detail=f"Parse error: {str(e)}")
 
 
@@ -1099,79 +1109,87 @@ async def confirm_rent_receivable(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    """Step 2: Client confirmed preview — save parsed data to DB."""
+    """Step 2: Client confirmed preview — save parsed data to all DB tables."""
     from services.rent_receivable_parser import parse_rent_receivable_file
 
     tmp_path = payload.get('temp_file_id')
+    target_month = payload.get('target_month', 'Jun-2026')
+
     if not tmp_path or not os.path.exists(tmp_path):
         raise HTTPException(status_code=400, detail="Session expired — please upload again")
 
     tid = current_user.tenant_id
 
     try:
-        parsed = parse_rent_receivable_file(tmp_path)
+        parsed = parse_rent_receivable_file(tmp_path, target_month=target_month)
         updated = []
 
         for co_name, data in parsed['companies'].items():
             company = db.query(RentalCompany).filter(
                 RentalCompany.tenant_id == tid,
                 or_(
-                    RentalCompany.company_name.ilike(f'%{co_name}%'),
-                    func.trim(RentalCompany.company_name).ilike(f'%{co_name.strip()}%'),
+                    func.trim(func.lower(RentalCompany.company_name)) == co_name.lower().strip(),
+                    RentalCompany.company_name.ilike(f'%{co_name.strip()}%'),
                 )
             ).first()
 
             if not company:
                 continue
 
+            # ── Update company sync fields ──────────────────────────────────
             company.collected_this_month = data['collected']
             company.vacancy_loss = data['vacancy_loss']
+            company.gross_potential_rent = data['gross_potential']
             company.monthly_rent_data = data['monthly_totals']
+            company.occupied_units = data['occupied_count']
+            company.total_units = data['total_physical_units']
+            company.last_sync_month = target_month
+            company.last_sync_date = datetime.utcnow()
 
+            # ── Update each unit status and rent ───────────────────────────
             for unit_data in data['units']:
                 raw_name = unit_data['name'].strip()
                 is_vacant = unit_data['is_vacant']
                 current_amount = unit_data['current_amount']
+                unit_vac_loss = unit_data['vacancy_loss']
                 history = unit_data['history']
 
                 # Split combined names like "Unit E, F, G" or "Unit E & F"
-                parts = [p.strip() for p in raw_name.replace('&', ',').split(',')]
-                n_parts = len([p for p in parts if p])
-                per_unit_rent = current_amount / n_parts if n_parts > 0 else current_amount
+                parts = [p.strip() for p in raw_name.replace('&', ',').split(',') if p.strip()]
+                n_parts = len(parts) or 1
+                per_unit_rent = current_amount / n_parts if current_amount > 0 else 0.0
+                per_unit_vac_loss = unit_vac_loss / n_parts
 
                 for part in parts:
-                    part = part.strip()
-                    if not part:
-                        continue
-
-                    # Try exact match first
+                    # Try exact match
                     unit = db.query(RentalUnit).filter(
                         RentalUnit.company_id == company.id,
                         func.lower(func.trim(RentalUnit.unit_number)) == part.lower(),
                     ).first()
 
-                    # If no match and part is just a letter/number (e.g. "F" from "Unit E, F"),
-                    # try prefixing with "Unit "
+                    # Try with "Unit " prefix for short labels like "E", "F"
                     if not unit and not part.lower().startswith('unit'):
-                        prefixed = f'Unit {part}'
                         unit = db.query(RentalUnit).filter(
                             RentalUnit.company_id == company.id,
-                            func.lower(func.trim(RentalUnit.unit_number)) == prefixed.lower(),
+                            func.lower(func.trim(RentalUnit.unit_number)) == f'unit {part.lower()}',
                         ).first()
 
                     if unit:
                         unit.status = 'vacant' if is_vacant else 'occupied'
-                        unit.monthly_rent = per_unit_rent
+                        # For vacant units, keep the expected rent (vacancy_loss), not 0
+                        unit.monthly_rent = per_unit_rent if not is_vacant else (per_unit_vac_loss or unit.monthly_rent)
                         unit.rent_history = history
+                        unit.vacancy_loss = per_unit_vac_loss
 
             db.commit()
             updated.append(co_name)
 
         return {
             'status': 'success',
-            'updated': updated,
+            'target_month': target_month,
+            'updated_companies': updated,
             'portfolio': parsed['portfolio'],
-            'message': f"Updated {len(updated)} companies successfully",
+            'message': f"Updated {len(updated)} companies for {target_month}",
         }
 
     finally:
