@@ -4,8 +4,8 @@ import { RefreshCw, Building2 } from 'lucide-react';
 // ── Static Data ───────────────────────────────────────────────────────────────
 const MAINTENANCE_DATA = [
   {
-    company: 'Sunstone Rentals LLC', property: 'Desert Vista Townhomes',
-    city: 'Phoenix', state: 'AZ', units: 6,
+    company: 'ABC LLC', property: 'ABC LLC Suite 123',
+    city: 'Phoenix', state: 'AZ', units: 7,
     workOrders: [
       { id: 'WO-RP001-234', category: 'Landscaping',      status: 'completed',   vendor: 'AZ Maintenance Pro',       cost: 420, date: '2026-06-10', priority: 'medium' },
       { id: 'WO-RP001-235', category: 'Pool Maintenance', status: 'open',        vendor: 'Desert Pool Service',      cost: 380, date: '2026-06-21', priority: 'low'    },
@@ -13,8 +13,8 @@ const MAINTENANCE_DATA = [
     ],
   },
   {
-    company: 'Meridian Residential LLC', property: 'Crestline Apartments',
-    city: 'Scottsdale', state: 'AZ', units: 6,
+    company: 'BNC LLC', property: 'BNC LLC SUITE 123',
+    city: 'Scottsdale', state: 'AZ', units: 13,
     workOrders: [
       { id: 'WO-RP002-112', category: 'Landscaping',      status: 'completed',   vendor: 'Desert Landscaping Co',    cost: 380, date: '2026-06-17', priority: 'high'   },
       { id: 'WO-RP002-113', category: 'Pool Maintenance', status: 'in_progress', vendor: 'Desert Pool Service',      cost: 290, date: '2026-06-16', priority: 'medium' },
@@ -22,15 +22,15 @@ const MAINTENANCE_DATA = [
     ],
   },
   {
-    company: 'Cornerstone Housing LLC', property: 'Oakwood Commons',
-    city: 'Tempe', state: 'AZ', units: 6,
+    company: 'DEC LLC', property: 'DEC LLC SUITE 123',
+    city: 'Tempe', state: 'AZ', units: 19,
     workOrders: [
       { id: 'WO-RP003-089', category: 'General',          status: 'completed',   vendor: 'Metro Property Mgmt',      cost: 310, date: '2026-06-15', priority: 'medium' },
       { id: 'WO-RP003-090', category: 'Landscaping',      status: 'open',        vendor: 'Desert Landscaping Co',    cost: 480, date: '2026-06-12', priority: 'low'    },
     ],
   },
   {
-    company: 'Pinnacle Rentals I LLC', property: 'Pinnacle Ridge Homes',
+    company: 'XYZ LLC', property: 'XYZ LLC SUITE 123',
     city: 'Gilbert', state: 'AZ', units: 6,
     workOrders: [
       { id: 'WO-RP004-201', category: 'Landscaping',      status: 'completed',   vendor: 'Desert Landscaping Co',    cost: 560, date: '2026-06-20', priority: 'high'   },
@@ -39,8 +39,8 @@ const MAINTENANCE_DATA = [
     ],
   },
   {
-    company: 'Summit Living LLC', property: 'Summit Park Flats',
-    city: 'Chandler', state: 'AZ', units: 6,
+    company: 'ZYC LLC', property: 'ZYC LLC',
+    city: 'Chandler', state: 'AZ', units: 20,
     workOrders: [
       { id: 'WO-RP005-044', category: 'Pool Maintenance', status: 'open',        vendor: 'Desert Pool Service',      cost: 420, date: '2026-06-21', priority: 'low'    },
       { id: 'WO-RP005-045', category: 'HVAC',             status: 'in_progress', vendor: 'Valley HVAC Services',     cost: 680, date: '2026-06-19', priority: 'high'   },
@@ -48,16 +48,16 @@ const MAINTENANCE_DATA = [
     ],
   },
   {
-    company: 'Heritage Residential LLC', property: 'Heritage Glen Suites',
-    city: 'Mesa', state: 'AZ', units: 6,
+    company: 'ACD LLC', property: 'ACD LLC',
+    city: 'Mesa', state: 'AZ', units: 14,
     workOrders: [
       { id: 'WO-RP006-178', category: 'General',          status: 'open',        vendor: 'AZ Maintenance Pro',       cost: 350, date: '2026-06-13', priority: 'medium' },
       { id: 'WO-RP006-179', category: 'Plumbing',         status: 'completed',   vendor: 'Sunstate Plumbing',        cost: 490, date: '2026-06-09', priority: 'medium' },
     ],
   },
   {
-    company: 'Riverview Rentals LLC', property: 'Riverview Lofts',
-    city: 'Peoria', state: 'AZ', units: 6,
+    company: 'NHJ LLC', property: 'NHJ LLC',
+    city: 'Peoria', state: 'AZ', units: 8,
     workOrders: [
       { id: 'WO-RP007-056', category: 'Landscaping',      status: 'in_progress', vendor: 'Desert Landscaping Co',    cost: 410, date: '2026-06-18', priority: 'high'   },
       { id: 'WO-RP007-057', category: 'Pool Maintenance', status: 'open',        vendor: 'Desert Pool Service',      cost: 380, date: '2026-06-18', priority: 'low'    },
@@ -65,8 +65,8 @@ const MAINTENANCE_DATA = [
     ],
   },
   {
-    company: 'Landmark Housing LLC', property: 'Landmark Heights',
-    city: 'Glendale', state: 'AZ', units: 6,
+    company: 'FJH LLC', property: 'FJH LLC',
+    city: 'Glendale', state: 'AZ', units: 8,
     workOrders: [
       { id: 'WO-RP008-321', category: 'General',          status: 'open',        vendor: 'Valley HVAC Services',     cost: 460, date: '2026-06-15', priority: 'high'   },
       { id: 'WO-RP008-322', category: 'Landscaping',      status: 'in_progress', vendor: 'Desert Landscaping Co',    cost: 390, date: '2026-06-10', priority: 'medium' },
@@ -74,16 +74,16 @@ const MAINTENANCE_DATA = [
     ],
   },
   {
-    company: 'Horizon Rentals LLC', property: 'Horizon Court',
-    city: 'Surprise', state: 'AZ', units: 6,
+    company: 'KLI LLC', property: 'KLI LLC',
+    city: 'Surprise', state: 'AZ', units: 15,
     workOrders: [
       { id: 'WO-RP009-099', category: 'HVAC',             status: 'completed',   vendor: 'Valley HVAC Services',     cost: 720, date: '2026-06-13', priority: 'high'   },
       { id: 'WO-RP009-100', category: 'Pest Control',     status: 'open',        vendor: 'AZ Pest Control',          cost: 160, date: '2026-06-11', priority: 'low'    },
     ],
   },
   {
-    company: 'Crestview Living LLC', property: 'Crestview Terrace',
-    city: 'Avondale', state: 'AZ', units: 6,
+    company: 'TOWN Houses', property: 'TOWN HOMES',
+    city: 'Avondale', state: 'AZ', units: 12,
     workOrders: [
       { id: 'WO-RP010-067', category: 'Landscaping',      status: 'open',        vendor: 'Desert Landscaping Co',    cost: 440, date: '2026-06-19', priority: 'medium' },
       { id: 'WO-RP010-068', category: 'Electrical',       status: 'in_progress', vendor: 'Southwest Electric',       cost: 580, date: '2026-06-17', priority: 'high'   },

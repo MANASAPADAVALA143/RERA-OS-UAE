@@ -7,6 +7,7 @@ import api from '../services/api';
 import { Card, KpiCard } from '../components/ui/Card';
 import { LoadingSkeleton } from '../components/ui/Table';
 import { fmtUSD, fmtPct } from '../components/ProtectedRoute';
+import { useRentalNav } from '../contexts/RentalNavContext';
 
 interface PortfolioSummary {
   total_units: number;
@@ -68,6 +69,7 @@ interface AttentionItem {
 }
 
 export default function RentalOverview() {
+  const { setTab } = useRentalNav();
   const [data, setData] = useState<PortfolioSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -114,14 +116,27 @@ export default function RentalOverview() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold text-charcoal">Rental Portfolio — Overview</h1>
-        <span className="text-sm text-gray-500">{periodLabel}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-500">{periodLabel}</span>
+          <button
+            onClick={() => setTab('portfolio-upload')}
+            className="flex items-center gap-2 text-xs bg-green-700 text-white px-3 py-1.5 rounded-lg hover:bg-green-600 font-medium transition-colors"
+          >
+            📊 Sync Rent Data
+          </button>
+        </div>
       </div>
 
       {/* 8-tile KPI strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard label="Occupancy Rate" value={fmtPct(data.occupancy_pct)} sub={`${data.occupied_units} / ${data.total_units} units`} accent />
+        <div>
+          <KpiCard label="Occupancy Rate" value={fmtPct(data.occupancy_pct)} sub={`${data.occupied_units} / ${data.total_units} units`} accent />
+          <div className="text-[10px] text-amber-600 mt-1 px-1">
+            ⚠ Upload Rent Receivable Excel to sync latest data
+          </div>
+        </div>
         <KpiCard label="Occupied / Vacant" value={`${data.occupied_units} / ${data.vacant_units}`} sub={`${data.total_units} total units`} />
         <KpiCard label="Collected This Month" value={fmtUSD(data.collected_this_month)} sub={`of ${fmtUSD(data.billed_this_month)} billed`} accent />
         <KpiCard label="NOI This Month" value={fmtUSD(data.noi_this_month)} sub={`Expenses: ${fmtUSD(data.total_expense_this_month)}`} />

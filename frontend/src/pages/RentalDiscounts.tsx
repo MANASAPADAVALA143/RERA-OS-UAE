@@ -13,20 +13,7 @@ interface Discount {
 }
 
 // ── Static data ───────────────────────────────────────────────────────────────
-const SEED_DISCOUNTS: Discount[] = [
-  { id:'d1', unit:'01-02', building:'Desert Vista Townhomes',  company:'Sunstone Rentals LLC',
-    type:'promotional', value:'First month free', startDate:'2025-07-01', endDate:'2025-07-31',
-    reason:'Long vacancy', status:'active', monthlyImpact:2100 },
-  { id:'d2', unit:'03-01', building:'Oakwood Commons',         company:'Cornerstone Housing LLC',
-    type:'percentage',  value:'10%',             startDate:'2025-05-01', endDate:'2025-10-31',
-    reason:'Tenant loyalty', status:'active', monthlyImpact:180 },
-  { id:'d3', unit:'05-01', building:'Summit Park Flats',       company:'Summit Living LLC',
-    type:'fixed',       value:'$100/month',      startDate:'2025-03-01', endDate:'2025-08-31',
-    reason:'Move-in incentive', status:'active', monthlyImpact:100 },
-  { id:'d4', unit:'02-03', building:'Crestline Apartments',    company:'Meridian Residential LLC',
-    type:'promotional', value:'2 weeks free',    startDate:'2025-06-01', endDate:'2025-06-30',
-    reason:'Long vacancy', status:'expired', monthlyImpact:950 },
-];
+const SEED_DISCOUNTS: Discount[] = [];
 
 const UNIT_OPTIONS = [
   { id:'U02', label:'Unit 01-02 — Desert Vista Townhomes',  rent:2100, vacant:true  },
@@ -39,10 +26,7 @@ const UNIT_OPTIONS = [
   { id:'U08', label:'Unit 06-03 — Heritage Glen Suites',    rent:1850, vacant:false },
 ];
 
-const VACANT_RECS = [
-  { unit:'01-02', building:'Desert Vista Townhomes', company:'Sunstone Rentals LLC',       marketRent:2100, vacantMonths:4, lost:8400  },
-  { unit:'02-03', building:'Crestline Apartments',   company:'Meridian Residential LLC',   marketRent:2050, vacantMonths:7, lost:14350 },
-];
+const VACANT_RECS: { unit:string; building:string; company:string; marketRent:number; vacantMonths:number; lost:number }[] = [];
 
 const PROMOTIONS: string[] = ['First month free','2 weeks free','Refer a friend — $200 off first month','Custom promotion'];
 const REASONS: DiscountReason[] = ['Long vacancy','Tenant loyalty','Maintenance issue','Market adjustment','Early renewal','Move-in incentive'];
@@ -110,7 +94,7 @@ export default function RentalDiscounts() {
   const [calcPct,    setCalcPct]    = useState('10');
   const [calcMonths, setCalcMonths] = useState('3');
 
-  const companies = [...new Set(SEED_DISCOUNTS.map(d => d.company))];
+  const companies = [...new Set(discounts.map(d => d.company).filter(Boolean))];
 
   const filtered = useMemo(() => discounts.filter(d => {
     if (fCo     && d.company !== fCo)     return false;
@@ -240,7 +224,11 @@ export default function RentalDiscounts() {
             </thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={11} className="text-center py-10 text-gray-400">No discounts match the filters.</td></tr>
+                <tr><td colSpan={11} className="text-center py-10 text-gray-400">
+                  {discounts.length === 0
+                    ? 'No discounts added yet. Click + Add Discount to create one.'
+                    : 'No discounts match the filters.'}
+                </td></tr>
               )}
               {filtered.map(d=>(
                 <tr key={d.id} className="border-t border-gray-100 hover:bg-gray-50">
@@ -270,8 +258,8 @@ export default function RentalDiscounts() {
         </div>
       </div>
 
-      {/* Strategic recommendations */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+      {/* Strategic recommendations — only shown when there are vacant units with data */}
+      {VACANT_RECS.length > 0 && <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
         <div className="flex items-center gap-2 mb-4">
           <Lightbulb size={16} className="text-amber-500"/>
           <p className="font-semibold text-gray-900 text-sm">💡 Recommended Discounts</p>
@@ -311,7 +299,7 @@ export default function RentalDiscounts() {
             </div>
           ))}
         </div>
-      </div>
+      </div>}
 
       {/* AI result */}
       {(aiLoading || aiResult) && (

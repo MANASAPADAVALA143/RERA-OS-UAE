@@ -35,6 +35,7 @@ const CAT_LABELS: Record<string, string> = {
 };
 
 function pct(n: number) {
+  if (!isFinite(n) || isNaN(n) || n === 0) return '—';
   return `${(n * 100).toFixed(1)}%`;
 }
 
