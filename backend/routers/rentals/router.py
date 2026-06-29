@@ -1,4 +1,4 @@
-﻿"""Rentals module router — all endpoints under /api/rentals/"""
+"""Rentals module router — all endpoints under /api/rentals/"""
 from __future__ import annotations
 
 import csv
