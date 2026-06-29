@@ -9,8 +9,6 @@ services:
     plan: starter
     region: oregon
     envVars:
-      - key: AUTH_MODE
-        value: local
       - key: LOCAL_JWT_SECRET
         generateValue: true
       - key: DATABASE_URL
