@@ -1228,3 +1228,174 @@ async def confirm_rent_receivable(
     finally:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
+
+
+# ── portfolio import from Excel template ──────────────────────────────────────
+
+@router.post("/import-portfolio")
+async def import_portfolio(
+    file: UploadFile = File(...),
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    """
+    Import companies, suites, and units from the EstateCFO Rent Template Excel.
+    Each sheet (except SUMMARY) is treated as one company.
+    Units with '(SXXX)' in the name are grouped under a suite named SXXX.
+    Existing companies by name are skipped (idempotent).
+    """
+    import re
+    import tempfile
+    import openpyxl
+
+    contents = await file.read()
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".xlsx")
+    try:
+        with os.fdopen(tmp_fd, "wb") as f:
+            f.write(contents)
+
+        wb = openpyxl.load_workbook(tmp_path, data_only=True)
+        tid = current_user.tenant_id
+
+        # Load existing company names to skip duplicates
+        existing_companies = {
+            co.company_name.strip().lower(): co
+            for co in db.query(RentalCompany).filter(RentalCompany.tenant_id == tid).all()
+        }
+
+        created_companies = 0
+        created_suites = 0
+        created_units = 0
+        skipped_companies: list[str] = []
+
+        for sheet_name in wb.sheetnames:
+            if sheet_name.strip().upper() == "SUMMARY":
+                continue
+
+            ws = wb[sheet_name]
+            company_name = sheet_name.strip()
+
+            # Get or create company
+            if company_name.lower() in existing_companies:
+                co = existing_companies[company_name.lower()]
+                skipped_companies.append(company_name)
+            else:
+                co = RentalCompany(
+                    tenant_id=tid,
+                    company_name=company_name,
+                    created_by=current_user.email,
+                )
+                db.add(co)
+                db.flush()
+                existing_companies[company_name.lower()] = co
+                created_companies += 1
+
+            # Read sheet rows — row 3 (1-indexed) is the header, data starts row 4
+            # Col A = Unit Name, Cols B-M = Jan-Dec 2026
+            rows = list(ws.iter_rows(values_only=True))
+            if len(rows) < 4:
+                continue
+
+            # Determine which row is the header (contains 'Unit Name')
+            header_row_idx = 2  # default index 2 (3rd row, 1-indexed row 3)
+            for i, row in enumerate(rows[:5]):
+                if row and str(row[0] or "").strip().lower() == "unit name":
+                    header_row_idx = i
+                    break
+
+            data_rows = rows[header_row_idx + 1:]
+
+            # Group units by suite
+            suites: dict[str, list[dict]] = {}   # suite_name → [unit_info]
+            no_suite: list[dict] = []
+
+            for row in data_rows:
+                if not row or not row[0]:
+                    continue
+                unit_name = str(row[0]).strip()
+                if not unit_name or unit_name.upper().startswith("TOTAL"):
+                    continue
+
+                # Monthly payment values (cols 1-12)
+                monthly = []
+                for v in row[1:13]:
+                    try:
+                        monthly.append(float(v) if v is not None else 0.0)
+                    except (TypeError, ValueError):
+                        monthly.append(0.0)
+
+                non_zero = [v for v in monthly if v > 0]
+                monthly_rent = max(non_zero) if non_zero else 0.0
+
+                # Determine status: occupied if recent months (Apr=idx3, May=idx4) have payment
+                recent = monthly[3:6]  # Apr, May, Jun
+                status = "occupied" if any(v > 0 for v in recent) else "vacant"
+
+                # Detect suite tag like (S789)
+                suite_match = re.search(r'\(S(\d+)\)', unit_name)
+                unit_info = {
+                    "unit_number": unit_name,
+                    "monthly_rent": monthly_rent,
+                    "status": status,
+                }
+                if suite_match:
+                    suite_key = f"Suite {suite_match.group(1)}"
+                    suites.setdefault(suite_key, []).append(unit_info)
+                else:
+                    no_suite.append(unit_info)
+
+            # Create suites and their units
+            def _make_suite(suite_name: str) -> RentalProp:
+                prop = RentalProp(
+                    tenant_id=tid,
+                    company_id=co.id,
+                    property_name=suite_name,
+                )
+                db.add(prop)
+                db.flush()
+                return prop
+
+            def _make_unit(prop: RentalProp, info: dict):
+                unit = RentalUnit(
+                    tenant_id=tid,
+                    property_id=prop.id,
+                    company_id=co.id,
+                    unit_number=info["unit_number"],
+                    status=info["status"],
+                    monthly_rent=info["monthly_rent"],
+                )
+                db.add(unit)
+
+            # Named suites (e.g. Suite 789)
+            for suite_name, units_list in suites.items():
+                prop = _make_suite(suite_name)
+                created_suites += 1
+                for info in units_list:
+                    _make_unit(prop, info)
+                    created_units += 1
+
+            # Units without a suite go under a default suite named after the company
+            if no_suite:
+                prop = _make_suite(company_name)
+                created_suites += 1
+                for info in no_suite:
+                    _make_unit(prop, info)
+                    created_units += 1
+
+        db.commit()
+        return {
+            "status": "success",
+            "created_companies": created_companies,
+            "created_suites": created_suites,
+            "created_units": created_units,
+            "skipped_companies": skipped_companies,
+            "message": (
+                f"Imported {created_companies} companies, "
+                f"{created_suites} suites, {created_units} units. "
+                f"Skipped {len(skipped_companies)} existing."
+            ),
+        }
+
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)

@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Plus, Pencil, Trash2, X, Check, Search,
-  Building2, Home, Landmark, HardHat, ChevronDown, ChevronRight,
+  Building2, Home, Landmark, HardHat, ChevronDown, ChevronRight, Upload,
 } from 'lucide-react';
 import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -514,6 +514,8 @@ export default function CompanyRegistry({ embedded = false }: Props) {
   const { canWrite } = useAuth();
   const { toasts, push } = useToast();
   const _ref = useRef<null>(null); void _ref;
+  const importRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
 
   const initTab = (searchParams.get('tab') as ModuleId | null) ?? 'rental';
   const [activeId, setActiveId] = useState<ModuleId>(
@@ -567,6 +569,27 @@ export default function CompanyRegistry({ embedded = false }: Props) {
   }, [mod, push]);
 
   useEffect(() => { load(); }, [load]);
+
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setImporting(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await api.post('/api/rentals/import-portfolio', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      push(res.data.message ?? 'Import complete', true);
+      load();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      push(msg ?? 'Import failed', false);
+    } finally {
+      setImporting(false);
+    }
+  }
 
   function switchTab(id: ModuleId) {
     setActiveId(id);
@@ -757,6 +780,24 @@ export default function CompanyRegistry({ embedded = false }: Props) {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-gray-400">{filtered.length} companies</span>
+          {canWrite && activeId === 'rental' && (
+            <>
+              <input
+                ref={importRef}
+                type="file"
+                accept=".xlsx"
+                className="hidden"
+                onChange={handleImport}
+              />
+              <button
+                onClick={() => importRef.current?.click()}
+                disabled={importing}
+                title="Import companies, suites & units from EstateCFO Excel template"
+                className="flex items-center gap-2 bg-emerald-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-emerald-700 font-medium transition-colors disabled:opacity-60">
+                <Upload size={14} /> {importing ? 'Importing…' : 'Import Excel'}
+              </button>
+            </>
+          )}
           {canWrite && (
             <button onClick={openAdd}
               className="flex items-center gap-2 bg-gray-900 text-white text-sm px-4 py-2 rounded-xl hover:bg-gray-800 font-medium transition-colors">
