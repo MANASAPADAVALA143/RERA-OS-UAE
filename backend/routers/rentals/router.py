@@ -1399,3 +1399,215 @@ async def import_portfolio(
     finally:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
+
+# â”€â”€ hardcoded portfolio seed (no file upload needed) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+PORTFOLIO_DATA = [
+    {"company": "ABC LLC", "suites": [
+        {"name": "Suite 789", "units": [
+            {"unit_number": "Unit A,B,C (S789)", "monthly_rent": 2050, "status": "occupied"},
+            {"unit_number": "Unit D,E,F (S789)", "monthly_rent": 1725, "status": "occupied"},
+            {"unit_number": "Unit G (S789)",     "monthly_rent": 775,  "status": "occupied"},
+            {"unit_number": "Unit H (S789)",     "monthly_rent": 830,  "status": "occupied"},
+            {"unit_number": "Unit I (S789)",     "monthly_rent": 800,  "status": "occupied"},
+            {"unit_number": "Unit J,K,L (S789)", "monthly_rent": 1675, "status": "occupied"},
+            {"unit_number": "Unit M (S789)",     "monthly_rent": 1750, "status": "occupied"},
+            {"unit_number": "Unit N (S789)",     "monthly_rent": 0,    "status": "vacant"},
+            {"unit_number": "Unit O (S789)",     "monthly_rent": 0,    "status": "vacant"},
+            {"unit_number": "Unit P (S789)",     "monthly_rent": 800,  "status": "occupied"},
+            {"unit_number": "Unit Q (S789)",     "monthly_rent": 730,  "status": "occupied"},
+            {"unit_number": "Unit R & S (S789)", "monthly_rent": 1800, "status": "occupied"},
+            {"unit_number": "Unit T (S789)",     "monthly_rent": 830,  "status": "occupied"},
+            {"unit_number": "Unit U (S789)",     "monthly_rent": 700,  "status": "occupied"},
+            {"unit_number": "Unit V (S789)",     "monthly_rent": 800,  "status": "occupied"},
+            {"unit_number": "Unit W (S789)",     "monthly_rent": 800,  "status": "occupied"},
+        ]},
+        {"name": "ABC LLC", "units": [
+            {"unit_number": "Unit A",     "monthly_rent": 850,  "status": "occupied"},
+            {"unit_number": "Unit B",     "monthly_rent": 700,  "status": "occupied"},
+            {"unit_number": "Unit C",     "monthly_rent": 925,  "status": "occupied"},
+            {"unit_number": "Unit D",     "monthly_rent": 3100, "status": "vacant"},
+            {"unit_number": "Unit E,F,G", "monthly_rent": 3100, "status": "occupied"},
+            {"unit_number": "Unit 401",   "monthly_rent": 4158, "status": "occupied"},
+            {"unit_number": "Unit 402",   "monthly_rent": 2000, "status": "occupied"},
+        ]},
+    ]},
+    {"company": "TOWN Houses", "suites": [{"name": "TOWN Houses", "units": [
+        {"unit_number": "NHJ LLC - Unit A", "monthly_rent": 0,    "status": "vacant"},
+        {"unit_number": "LOP LLC - Unit B", "monthly_rent": 2401, "status": "occupied"},
+        {"unit_number": "NHJ LLC - Unit C", "monthly_rent": 2000, "status": "occupied"},
+        {"unit_number": "JKL LLC - Unit D", "monthly_rent": 6500, "status": "occupied"},
+        {"unit_number": "LOP LLC - Unit E", "monthly_rent": 2791, "status": "occupied"},
+        {"unit_number": "LOP LLC - Unit F", "monthly_rent": 1750, "status": "occupied"},
+        {"unit_number": "LOP LLC - Unit G", "monthly_rent": 1875, "status": "occupied"},
+        {"unit_number": "LOP LLC - Unit H", "monthly_rent": 4000, "status": "occupied"},
+        {"unit_number": "LPO LLC - Unit I", "monthly_rent": 7242, "status": "occupied"},
+        {"unit_number": "LPO LLC - Unit J", "monthly_rent": 3500, "status": "occupied"},
+        {"unit_number": "PPP LLC - Unit K", "monthly_rent": 3200, "status": "occupied"},
+        {"unit_number": "ABC LLC - Unit L", "monthly_rent": 0,    "status": "vacant"},
+    ]}]},
+    {"company": "BNC LLC", "suites": [{"name": "BNC LLC", "units": [
+        {"unit_number": "Unit A",     "monthly_rent": 800,  "status": "occupied"},
+        {"unit_number": "Unit B,C",   "monthly_rent": 0,    "status": "vacant"},
+        {"unit_number": "Unit D",     "monthly_rent": 730,  "status": "occupied"},
+        {"unit_number": "Unit E & F", "monthly_rent": 1575, "status": "occupied"},
+        {"unit_number": "Unit G",     "monthly_rent": 875,  "status": "occupied"},
+        {"unit_number": "Unit H",     "monthly_rent": 800,  "status": "occupied"},
+        {"unit_number": "Unit I",     "monthly_rent": 830,  "status": "occupied"},
+        {"unit_number": "Unit J",     "monthly_rent": 825,  "status": "occupied"},
+        {"unit_number": "Unit K&L",   "monthly_rent": 1150, "status": "vacant"},
+        {"unit_number": "Unit M",     "monthly_rent": 950,  "status": "occupied"},
+    ]}]},
+    {"company": "DEC LLC", "suites": [{"name": "DEC LLC", "units": [
+        {"unit_number": "Unit A", "monthly_rent": 800,  "status": "occupied"},
+        {"unit_number": "Unit B", "monthly_rent": 0,    "status": "vacant"},
+        {"unit_number": "Unit C", "monthly_rent": 900,  "status": "occupied"},
+        {"unit_number": "Unit D", "monthly_rent": 830,  "status": "occupied"},
+        {"unit_number": "Unit E", "monthly_rent": 850,  "status": "occupied"},
+        {"unit_number": "Unit F", "monthly_rent": 850,  "status": "occupied"},
+        {"unit_number": "Unit G", "monthly_rent": 800,  "status": "occupied"},
+        {"unit_number": "Unit H", "monthly_rent": 900,  "status": "occupied"},
+        {"unit_number": "Unit I", "monthly_rent": 800,  "status": "occupied"},
+        {"unit_number": "Unit J", "monthly_rent": 1254, "status": "vacant"},
+        {"unit_number": "Unit K", "monthly_rent": 1950, "status": "occupied"},
+        {"unit_number": "Unit L", "monthly_rent": 0,    "status": "vacant"},
+        {"unit_number": "Unit M", "monthly_rent": 2129, "status": "vacant"},
+        {"unit_number": "Unit N", "monthly_rent": 0,    "status": "vacant"},
+        {"unit_number": "Unit O", "monthly_rent": 2150, "status": "occupied"},
+        {"unit_number": "Unit P", "monthly_rent": 0,    "status": "vacant"},
+        {"unit_number": "Unit Q", "monthly_rent": 1860, "status": "occupied"},
+        {"unit_number": "Unit R", "monthly_rent": 0,    "status": "vacant"},
+        {"unit_number": "Unit S", "monthly_rent": 950,  "status": "occupied"},
+    ]}]},
+    {"company": "XYZ LLC", "suites": [{"name": "XYZ LLC", "units": [
+        {"unit_number": "Unit A", "monthly_rent": 600, "status": "occupied"},
+        {"unit_number": "Unit B", "monthly_rent": 800, "status": "occupied"},
+        {"unit_number": "Unit C", "monthly_rent": 900, "status": "occupied"},
+        {"unit_number": "Unit D", "monthly_rent": 800, "status": "occupied"},
+        {"unit_number": "Unit E", "monthly_rent": 800, "status": "occupied"},
+        {"unit_number": "Unit F", "monthly_rent": 800, "status": "occupied"},
+    ]}]},
+    {"company": "ZYC LLC", "suites": [{"name": "ZYC LLC", "units": [
+        {"unit_number": "Unit A", "monthly_rent": 900, "status": "occupied"},
+        {"unit_number": "Unit B", "monthly_rent": 875, "status": "occupied"},
+        {"unit_number": "Unit C", "monthly_rent": 825, "status": "occupied"},
+        {"unit_number": "Unit D", "monthly_rent": 950, "status": "occupied"},
+        {"unit_number": "Unit E", "monthly_rent": 825, "status": "occupied"},
+        {"unit_number": "Unit F", "monthly_rent": 750, "status": "occupied"},
+        {"unit_number": "Unit G", "monthly_rent": 900, "status": "occupied"},
+        {"unit_number": "Unit H", "monthly_rent": 925, "status": "occupied"},
+        {"unit_number": "Unit I", "monthly_rent": 800, "status": "occupied"},
+        {"unit_number": "Unit J", "monthly_rent": 800, "status": "occupied"},
+        {"unit_number": "Unit K", "monthly_rent": 750, "status": "occupied"},
+        {"unit_number": "Unit L", "monthly_rent": 825, "status": "occupied"},
+        {"unit_number": "Unit M", "monthly_rent": 900, "status": "occupied"},
+        {"unit_number": "Unit N", "monthly_rent": 850, "status": "occupied"},
+        {"unit_number": "Unit O", "monthly_rent": 0,   "status": "vacant"},
+        {"unit_number": "Unit P", "monthly_rent": 800, "status": "occupied"},
+        {"unit_number": "Unit Q", "monthly_rent": 850, "status": "occupied"},
+        {"unit_number": "Unit R", "monthly_rent": 850, "status": "occupied"},
+        {"unit_number": "Unit S", "monthly_rent": 800, "status": "occupied"},
+        {"unit_number": "Unit T", "monthly_rent": 825, "status": "occupied"},
+    ]}]},
+    {"company": "ACD LLC", "suites": [{"name": "ACD LLC", "units": [
+        {"unit_number": "Unit A", "monthly_rent": 1100, "status": "occupied"},
+        {"unit_number": "Unit B", "monthly_rent": 830,  "status": "occupied"},
+        {"unit_number": "Unit C", "monthly_rent": 800,  "status": "vacant"},
+        {"unit_number": "Unit D", "monthly_rent": 900,  "status": "occupied"},
+        {"unit_number": "Unit E", "monthly_rent": 775,  "status": "occupied"},
+        {"unit_number": "Unit F", "monthly_rent": 650,  "status": "occupied"},
+        {"unit_number": "Unit G", "monthly_rent": 800,  "status": "occupied"},
+        {"unit_number": "Unit H", "monthly_rent": 775,  "status": "occupied"},
+        {"unit_number": "Unit I", "monthly_rent": 800,  "status": "occupied"},
+        {"unit_number": "Unit J", "monthly_rent": 650,  "status": "vacant"},
+        {"unit_number": "Unit K", "monthly_rent": 850,  "status": "occupied"},
+        {"unit_number": "Unit L", "monthly_rent": 1400, "status": "occupied"},
+        {"unit_number": "Unit M", "monthly_rent": 0,    "status": "vacant"},
+        {"unit_number": "Unit N", "monthly_rent": 900,  "status": "occupied"},
+    ]}]},
+    {"company": "NHJ LLC", "suites": [{"name": "NHJ LLC", "units": [
+        {"unit_number": "Unit A,B,C,G", "monthly_rent": 2700, "status": "occupied"},
+        {"unit_number": "Unit D",       "monthly_rent": 850,  "status": "occupied"},
+        {"unit_number": "Unit E",       "monthly_rent": 800,  "status": "occupied"},
+        {"unit_number": "Unit F",       "monthly_rent": 880,  "status": "occupied"},
+        {"unit_number": "Unit H",       "monthly_rent": 800,  "status": "occupied"},
+    ]}]},
+    {"company": "FJH LLC", "suites": [{"name": "FJH LLC", "units": [
+        {"unit_number": "REAR unit", "monthly_rent": 2850, "status": "occupied"},
+        {"unit_number": "Unit A",    "monthly_rent": 400,  "status": "vacant"},
+        {"unit_number": "Unit B",    "monthly_rent": 1400, "status": "occupied"},
+        {"unit_number": "Unit C",    "monthly_rent": 0,    "status": "vacant"},
+        {"unit_number": "Unit D",    "monthly_rent": 825,  "status": "occupied"},
+        {"unit_number": "Unit E",    "monthly_rent": 1630, "status": "occupied"},
+        {"unit_number": "Unit F",    "monthly_rent": 0,    "status": "vacant"},
+        {"unit_number": "Unit G",    "monthly_rent": 800,  "status": "occupied"},
+    ]}]},
+    {"company": "KLI LLC", "suites": [{"name": "KLI LLC", "units": [
+        {"unit_number": "Unit A", "monthly_rent": 800,  "status": "occupied"},
+        {"unit_number": "Unit B", "monthly_rent": 800,  "status": "occupied"},
+        {"unit_number": "Unit C", "monthly_rent": 1000, "status": "occupied"},
+        {"unit_number": "Unit D", "monthly_rent": 850,  "status": "occupied"},
+        {"unit_number": "Unit E", "monthly_rent": 800,  "status": "occupied"},
+        {"unit_number": "Unit F", "monthly_rent": 725,  "status": "occupied"},
+        {"unit_number": "Unit G", "monthly_rent": 0,    "status": "vacant"},
+        {"unit_number": "Unit H", "monthly_rent": 825,  "status": "occupied"},
+        {"unit_number": "Unit I", "monthly_rent": 900,  "status": "occupied"},
+        {"unit_number": "Unit J", "monthly_rent": 775,  "status": "occupied"},
+        {"unit_number": "Unit K", "monthly_rent": 800,  "status": "occupied"},
+        {"unit_number": "Unit L", "monthly_rent": 850,  "status": "occupied"},
+        {"unit_number": "Unit M", "monthly_rent": 0,    "status": "vacant"},
+        {"unit_number": "Unit N", "monthly_rent": 1800, "status": "occupied"},
+        {"unit_number": "Unit O", "monthly_rent": 2100, "status": "occupied"},
+    ]}]},
+]
+
+
+@router.post("/seed-portfolio")
+def seed_portfolio(
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    """One-click seed: insert all 10 portfolio companies/suites/units for current tenant."""
+    tid = current_user.tenant_id
+    existing = {
+        co.company_name.strip().lower()
+        for co in db.query(RentalCompany).filter(RentalCompany.tenant_id == tid).all()
+    }
+    created_co = created_su = created_un = 0
+    skipped: list[str] = []
+
+    for entry in PORTFOLIO_DATA:
+        co_name = entry["company"]
+        if co_name.lower() in existing:
+            skipped.append(co_name)
+            continue
+        co = RentalCompany(tenant_id=tid, company_name=co_name, created_by=current_user.email)
+        db.add(co)
+        db.flush()
+        created_co += 1
+        for suite_def in entry["suites"]:
+            prop = RentalProp(tenant_id=tid, company_id=co.id, property_name=suite_def["name"])
+            db.add(prop)
+            db.flush()
+            created_su += 1
+            for u in suite_def["units"]:
+                db.add(RentalUnit(
+                    tenant_id=tid, property_id=prop.id, company_id=co.id,
+                    unit_number=u["unit_number"], status=u["status"],
+                    monthly_rent=float(u["monthly_rent"]),
+                ))
+                created_un += 1
+
+    db.commit()
+    return {
+        "status": "success",
+        "created_companies": created_co,
+        "created_suites": created_su,
+        "created_units": created_un,
+        "skipped": skipped,
+        "message": (
+            f"Seeded {created_co} companies, {created_su} suites, "
+            f"{created_un} units. Skipped {len(skipped)} existing."
+        ),
+    }
+

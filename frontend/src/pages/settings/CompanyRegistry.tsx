@@ -514,7 +514,6 @@ export default function CompanyRegistry({ embedded = false }: Props) {
   const { canWrite } = useAuth();
   const { toasts, push } = useToast();
   const _ref = useRef<null>(null); void _ref;
-  const importRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
 
   const initTab = (searchParams.get('tab') as ModuleId | null) ?? 'rental';
@@ -570,21 +569,15 @@ export default function CompanyRegistry({ embedded = false }: Props) {
 
   useEffect(() => { load(); }, [load]);
 
-  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = '';
+  async function handleImport() {
     setImporting(true);
     try {
-      const form = new FormData();
-      form.append('file', file);
-      // Do NOT set Content-Type manually — axios auto-adds multipart boundary
-      const res = await api.post('/api/rentals/import-portfolio', form);
-      push(res.data.message ?? 'Import complete', true);
+      const res = await api.post('/api/rentals/seed-portfolio');
+      push(res.data.message ?? 'Portfolio loaded!', true);
       load();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      push(msg ?? 'Import failed', false);
+      push(msg ?? 'Seed failed — check backend logs', false);
     } finally {
       setImporting(false);
     }
@@ -780,22 +773,13 @@ export default function CompanyRegistry({ embedded = false }: Props) {
         <div className="flex items-center gap-3">
           <span className="text-xs text-gray-400">{filtered.length} companies</span>
           {canWrite && activeId === 'rental' && (
-            <>
-              <input
-                ref={importRef}
-                type="file"
-                accept=".xlsx"
-                className="hidden"
-                onChange={handleImport}
-              />
-              <button
-                onClick={() => importRef.current?.click()}
-                disabled={importing}
-                title="Import companies, suites & units from EstateCFO Excel template"
-                className="flex items-center gap-2 bg-emerald-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-emerald-700 font-medium transition-colors disabled:opacity-60">
-                <Upload size={14} /> {importing ? 'Importing…' : 'Import Excel'}
-              </button>
-            </>
+            <button
+              onClick={handleImport}
+              disabled={importing}
+              title="Load all 10 portfolio companies with suites and units"
+              className="flex items-center gap-2 bg-emerald-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-emerald-700 font-medium transition-colors disabled:opacity-60">
+              <Upload size={14} /> {importing ? 'Loading…' : 'Load Portfolio'}
+            </button>
           )}
           {canWrite && (
             <button onClick={openAdd}
