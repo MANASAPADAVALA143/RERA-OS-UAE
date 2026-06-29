@@ -169,9 +169,24 @@ def get_portfolio_summary(
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    import logging
+    from database import engine as _engine
+    _log = logging.getLogger(__name__)
+
     tid = current_user.tenant_id
     today = date.today()
-    companies = db.query(RentalCompany).filter(RentalCompany.tenant_id == tid).all()
+
+    try:
+        companies = db.query(RentalCompany).filter(RentalCompany.tenant_id == tid).all()
+    except Exception as exc:
+        _log.warning("portfolio-summary query failed (%s) — applying patches and retrying", exc)
+        try:
+            from services.schema_patches import apply_schema_patches
+            apply_schema_patches(_engine)
+            db.expire_all()
+            companies = db.query(RentalCompany).filter(RentalCompany.tenant_id == tid).all()
+        except Exception:
+            companies = []
 
     all_units_dicts: list[dict] = []
     all_inv_dicts: list[dict] = []
@@ -256,9 +271,27 @@ def list_companies(
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    import logging
+    from database import engine as _engine
+    _log = logging.getLogger(__name__)
+
     tid = current_user.tenant_id
     today = date.today()
-    companies = db.query(RentalCompany).filter(RentalCompany.tenant_id == tid).all()
+
+    # Self-healing: if the query fails (missing columns), apply schema patches
+    # and retry once before giving up.
+    try:
+        companies = db.query(RentalCompany).filter(RentalCompany.tenant_id == tid).all()
+    except Exception as exc:
+        _log.warning("list_companies initial query failed (%s) — applying schema patches and retrying", exc)
+        try:
+            from services.schema_patches import apply_schema_patches
+            apply_schema_patches(_engine)
+            db.expire_all()
+            companies = db.query(RentalCompany).filter(RentalCompany.tenant_id == tid).all()
+        except Exception as exc2:
+            _log.error("list_companies retry also failed: %s", exc2)
+            return []
     result = []
     for co in companies:
         units, inv_dicts, exp_dicts = _load_company_data(co.id, tid, db)
