@@ -1,5 +1,8 @@
 """Apply lightweight schema patches for columns added after initial deploy."""
+import logging
 from sqlalchemy import inspect, text
+
+log = logging.getLogger(__name__)
 
 
 PROJECT_COLUMNS = {
@@ -31,11 +34,19 @@ def _add_missing_columns(engine, table: str, columns: dict[str, str]) -> None:
     insp = inspect(engine)
     if table not in insp.get_table_names():
         return
-    existing = {c["name"] for c in insp.get_columns(table)}
-    with engine.begin() as conn:
-        for name, col_type in columns.items():
-            if name not in existing:
-                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {col_type}"))
+    existing = {c["name"].lower() for c in insp.get_columns(table)}
+    for name, col_type in columns.items():
+        if name.lower() not in existing:
+            # Each column gets its own transaction — one failure won't block others.
+            # IF NOT EXISTS is belt-and-suspenders against race conditions.
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text(
+                        f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {name} {col_type}"
+                    ))
+                log.info("schema patch: added %s.%s (%s)", table, name, col_type)
+            except Exception as exc:
+                log.warning("schema patch failed %s.%s: %s", table, name, exc)
 
 
 CHANGE_ORDER_COLUMNS = {
