@@ -93,15 +93,15 @@ def _decode_token(token: str) -> dict:
     alg = header.get("alg", "HS256")
 
     try:
-        if alg == "RS256":
-            # Newer Supabase projects sign with RS256. Verify using the
-            # project's public JWKS endpoint instead of the shared secret.
+        if alg in ("RS256", "ES256"):
+            # Newer Supabase projects sign with RS256 or ES256 (EC P-256).
+            # Verify using the project's public JWKS endpoint.
             kid = header.get("kid")
             key_dict = _find_jwks_key(kid)
             return jose_jwt.decode(
                 token,
                 key_dict,
-                algorithms=["RS256"],
+                algorithms=["RS256", "ES256"],
                 audience="authenticated",
             )
         else:
