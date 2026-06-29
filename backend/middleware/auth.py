@@ -2,6 +2,7 @@ import uuid as _uuid
 from datetime import datetime, timezone
 from typing import Annotated
 
+import httpx
 import jwt
 from fastapi import Depends, HTTPException, Request, status
 from jose import jwt as jose_jwt
@@ -14,6 +15,44 @@ from models.tenancy import Tenant, TenantUser, UserRole, UserStatus
 from services.local_auth import decode_local_token
 
 WRITE_ROLES = {UserRole.owner, UserRole.admin, UserRole.cfo, UserRole.controller}
+
+# In-process JWKS cache — populated on first RS256 token decode.
+_supabase_jwks: list[dict] | None = None
+
+
+def _load_supabase_jwks() -> list[dict]:
+    global _supabase_jwks
+    if _supabase_jwks is None:
+        try:
+            resp = httpx.get(
+                f"{settings.supabase_url}/auth/v1/.well-known/jwks.json",
+                timeout=10,
+            )
+            _supabase_jwks = resp.json().get("keys", [])
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Could not fetch Supabase public keys: {exc}",
+            )
+    return _supabase_jwks
+
+
+def _find_jwks_key(kid: str | None) -> dict:
+    keys = _load_supabase_jwks()
+    for k in keys:
+        if kid is None or k.get("kid") == kid:
+            return k
+    # kid not found — keys may have rotated; bust cache and retry once
+    global _supabase_jwks
+    _supabase_jwks = None
+    keys = _load_supabase_jwks()
+    for k in keys:
+        if kid is None or k.get("kid") == kid:
+            return k
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="No matching public key found in Supabase JWKS",
+    )
 
 
 class CurrentUser:
@@ -42,15 +81,37 @@ def _decode_token(token: str) -> dict:
                 detail=f"Invalid or expired token: {exc}",
             ) from exc
 
-    # python-jose is more permissive than PyJWT 2.8+ for Supabase JWTs
-    # and correctly handles the audience claim as a list or string.
+    # Peek at the header (unverified) to choose HS256 vs RS256 path.
     try:
-        return jose_jwt.decode(
-            token,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
-            audience="authenticated",
+        header = jose_jwt.get_unverified_header(token)
+    except JoseJWTError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Malformed token header: {exc}",
         )
+
+    alg = header.get("alg", "HS256")
+
+    try:
+        if alg == "RS256":
+            # Newer Supabase projects sign with RS256. Verify using the
+            # project's public JWKS endpoint instead of the shared secret.
+            kid = header.get("kid")
+            key_dict = _find_jwks_key(kid)
+            return jose_jwt.decode(
+                token,
+                key_dict,
+                algorithms=["RS256"],
+                audience="authenticated",
+            )
+        else:
+            # HS256 — verify with the shared JWT secret.
+            return jose_jwt.decode(
+                token,
+                settings.supabase_jwt_secret,
+                algorithms=["HS256"],
+                audience="authenticated",
+            )
     except JoseJWTError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
