@@ -4,6 +4,8 @@ from typing import Annotated
 
 import jwt
 from fastapi import Depends, HTTPException, Request, status
+from jose import jwt as jose_jwt
+from jose.exceptions import JWTError as JoseJWTError
 from sqlalchemy.orm import Session
 
 from config import settings
@@ -40,14 +42,16 @@ def _decode_token(token: str) -> dict:
                 detail=f"Invalid or expired token: {exc}",
             ) from exc
 
+    # python-jose is more permissive than PyJWT 2.8+ for Supabase JWTs
+    # and correctly handles the audience claim as a list or string.
     try:
-        return jwt.decode(
+        return jose_jwt.decode(
             token,
             settings.supabase_jwt_secret,
             algorithms=["HS256"],
             audience="authenticated",
         )
-    except jwt.PyJWTError as exc:
+    except JoseJWTError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid or expired token: {exc}",
