@@ -1,3 +1,4 @@
+import uuid as _uuid
 from datetime import datetime, timezone
 from typing import Annotated
 
@@ -94,7 +95,7 @@ async def get_current_user(
                 detail="User has no tenant membership",
             )
         company_label = email.split("@")[0].replace(".", " ").replace("_", " ").title()
-        tenant = Tenant(company_name=f"{company_label} Co.")
+        tenant = Tenant(id=_uuid.UUID(user_id), company_name=f"{company_label} Co.")
         db.add(tenant)
         db.flush()
         tenant_user = TenantUser(

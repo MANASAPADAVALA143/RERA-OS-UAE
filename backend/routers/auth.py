@@ -160,7 +160,10 @@ def _register_supabase(body: RegisterTenantRequest, db: Session):
             raise HTTPException(status_code=400, detail=resp.text)
         user_id = resp.json()["id"]
 
-    tenant = Tenant(company_name=body.company_name)
+    # Use Supabase UUID as tenants.id so that tenant_id is the same value
+    # everywhere — r_companies.tenant_id FK is satisfied, and SQL INSERTs
+    # using the Supabase UUID just work without a separate lookup.
+    tenant = Tenant(id=uuid.UUID(user_id), company_name=body.company_name)
     db.add(tenant)
     db.flush()
 
