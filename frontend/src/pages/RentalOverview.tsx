@@ -96,16 +96,20 @@ export default function RentalOverview() {
     setLoading(true);
     setError('');
     try {
-      const [summaryRes, companiesRes] = await Promise.all([
-        api.get<PortfolioSummary>('/api/rentals/portfolio-summary'),
-        api.get<RentalCompanyWithSync[]>('/api/rentals/companies'),
-      ]);
+      const summaryRes = await api.get<PortfolioSummary>('/api/rentals/portfolio-summary');
       setData(summaryRes.data);
-      setSyncCompanies(Array.isArray(companiesRes.data) ? companiesRes.data : []);
     } catch {
       setError('Failed to load portfolio summary.');
-    } finally {
       setLoading(false);
+      return;
+    }
+    setLoading(false);
+    // Companies fetch is non-critical — sync banner won't show if this fails
+    try {
+      const companiesRes = await api.get<RentalCompanyWithSync[]>('/api/rentals/companies');
+      setSyncCompanies(Array.isArray(companiesRes.data) ? companiesRes.data : []);
+    } catch {
+      // silently skip — overview still shows without sync banner
     }
   }, []);
 
