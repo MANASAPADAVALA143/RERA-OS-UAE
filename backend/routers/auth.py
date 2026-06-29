@@ -277,6 +277,72 @@ def get_me(
     )
 
 
+class ProvisionClientRequest(BaseModel):
+    company_name: str = Field(min_length=1, max_length=255)
+    email: EmailStr
+    password: str = Field(min_length=8)
+    initial_companies: list[str] = []
+
+
+@router.post("/admin/provision-client")
+def provision_client(
+    body: ProvisionClientRequest,
+    current_user: CurrentUser = Depends(require_role("owner", "admin")),
+    db: Session = Depends(get_db),
+):
+    """Admin endpoint: create a new client tenant + optionally seed companies.
+    Returns tenant_id so you can run the SQL INSERT for r_companies."""
+    if settings.effective_auth_mode == "local":
+        result = _register_local(
+            RegisterTenantRequest(
+                company_name=body.company_name,
+                full_name=body.email.split("@")[0].title(),
+                email=body.email,
+                password=body.password,
+            ),
+            db,
+        )
+    else:
+        if not settings.supabase_url or not settings.supabase_service_role_key:
+            raise HTTPException(status_code=503, detail="Supabase not configured")
+        result = _register_supabase(
+            RegisterTenantRequest(
+                company_name=body.company_name,
+                full_name=body.email.split("@")[0].title(),
+                email=body.email,
+                password=body.password,
+            ),
+            db,
+        )
+
+    tenant_id = result["tenant_id"]
+
+    # Seed initial companies if provided
+    if body.initial_companies:
+        from models.rentals.models import RentalCompany
+        for name in body.initial_companies:
+            if name.strip():
+                db.add(RentalCompany(
+                    tenant_id=uuid.UUID(tenant_id),
+                    company_name=name.strip(),
+                    created_by=current_user.email,
+                ))
+        db.commit()
+
+    return {
+        **result,
+        "companies_created": len(body.initial_companies),
+        "sql_insert_example": (
+            f"INSERT INTO r_companies (company_name, status, tenant_id, created_by) VALUES\n"
+            + ",\n".join(
+                f"  ('Company Name', 'active', '{tenant_id}', 'admin')"
+                for _ in range(1)
+            )
+            + ";"
+        ),
+    }
+
+
 @router.get("/team")
 def list_team(
     current_user: CurrentUser = Depends(get_current_user),

@@ -1,6 +1,14 @@
+import { createClient } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import api, { fetchAuthConfig, getStoredToken, setStoredToken, type AuthConfig } from '../services/api';
+
+// Supabase client — only created when env vars are present (production).
+// In local dev VITE_SUPABASE_URL is not set, so supabase stays null and
+// the backend /api/auth/login endpoint is used instead.
+const _sbUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const _sbKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+const supabase = (_sbUrl && _sbKey) ? createClient(_sbUrl, _sbKey) : null;
 
 export interface AuthProfile {
   user_id: string;
@@ -46,6 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Bootstrap: load auth config + restore session from stored token
   useEffect(() => {
     (async () => {
       try {
@@ -63,13 +72,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
+  // Supabase token refresh listener — keeps the stored JWT up to date
+  // without requiring the user to re-login when the 1-hour token expires.
+  useEffect(() => {
+    if (!supabase) return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.access_token) {
+        setStoredToken(session.access_token);
+      }
+      if (event === 'SIGNED_OUT') {
+        setStoredToken(null);
+        setProfile(null);
+        setIsAuthenticated(false);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
   const signIn = async (email: string, password: string) => {
-    const { data } = await api.post<{ access_token: string }>('/api/auth/login', { email, password });
-    setStoredToken(data.access_token);
+    if (supabase) {
+      // Production — Supabase handles auth; backend validates the JWT
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw new Error(error.message);
+      const token = data.session?.access_token;
+      if (token) setStoredToken(token);
+    } else {
+      // Local dev — backend issues its own JWT
+      const { data } = await api.post<{ access_token: string }>('/api/auth/login', { email, password });
+      setStoredToken(data.access_token);
+    }
     await refreshProfile();
   };
 
   const signOut = async () => {
+    if (supabase) await supabase.auth.signOut();
     setStoredToken(null);
     setProfile(null);
     setIsAuthenticated(false);

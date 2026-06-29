@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Annotated
 
 import jwt
@@ -6,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from config import settings
 from database import get_db, set_rls_tenant
-from models.tenancy import TenantUser, UserRole, UserStatus
+from models.tenancy import Tenant, TenantUser, UserRole, UserStatus
 from services.local_auth import decode_local_token
 
 WRITE_ROLES = {UserRole.owner, UserRole.admin, UserRole.cfo, UserRole.controller}
@@ -84,10 +85,29 @@ async def get_current_user(
     )
 
     if not tenant_user:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User has no tenant membership",
+        # Auto-provision: new Supabase user logging in for the first time.
+        # Create a private tenant so they can start adding companies immediately.
+        # Only do this in Supabase mode — local mode requires explicit registration.
+        if settings.effective_auth_mode != "supabase":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User has no tenant membership",
+            )
+        company_label = email.split("@")[0].replace(".", " ").replace("_", " ").title()
+        tenant = Tenant(company_name=f"{company_label} Co.")
+        db.add(tenant)
+        db.flush()
+        tenant_user = TenantUser(
+            tenant_id=tenant.id,
+            supabase_user_id=user_id,
+            email=email,
+            role=UserRole.owner,
+            status=UserStatus.active,
+            joined_at=datetime.now(timezone.utc),
         )
+        db.add(tenant_user)
+        db.commit()
+        db.refresh(tenant_user)
 
     if tenant_user.status == UserStatus.disabled:
         raise HTTPException(
