@@ -578,9 +578,8 @@ export default function CompanyRegistry({ embedded = false }: Props) {
     try {
       const form = new FormData();
       form.append('file', file);
-      const res = await api.post('/api/rentals/import-portfolio', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      // Do NOT set Content-Type manually — axios auto-adds multipart boundary
+      const res = await api.post('/api/rentals/import-portfolio', form);
       push(res.data.message ?? 'Import complete', true);
       load();
     } catch (err: unknown) {
