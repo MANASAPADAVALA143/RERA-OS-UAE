@@ -45,7 +45,7 @@ interface KpiData {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const TABS = ['P&L Statement', 'Balance Sheet', 'Cash Flow', 'KPI Dashboard', 'CFO Dashboard'] as const;
+const TABS = ['P&L Statement', 'Balance Sheet', 'Cash Flow', 'KPI Dashboard', 'CFO Dashboard', 'Financial Metrics'] as const;
 type FinTab = typeof TABS[number];
 
 const CC = ['#2E75B6','#70AD47','#ED7D31','#FFC000','#5A2D82','#C00000','#00B0F0','#FF0066'];
@@ -641,6 +641,139 @@ function AllCompaniesSummary({ all }: { all: Record<string, ParsedFinancials> })
   );
 }
 
+function FinancialMetricsTab({ companyName }: { companyName: string }) {
+  const [metrics, setMetrics] = useState({
+    month: new Date().toISOString().split('T')[0].slice(0, 7),
+    revenue: '',
+    expenses: '',
+    noi: '',
+    cashFlow: '',
+    loanPayments: '',
+    notes: '',
+  });
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setMetrics(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log('Submit financial metrics for', companyName, metrics);
+    alert('Financial metrics saved (demo mode). In production, this would update your dashboard.');
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-bold text-gray-900 mb-4">Manual Financial Entry — {companyName}</h3>
+        <p className="text-sm text-gray-500 mb-6">Enter monthly financial figures. These will flow through to your portfolio KPIs and dashboard.</p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl">
+        {/* Month */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Period (Month)</label>
+          <input
+            type="month"
+            name="month"
+            value={metrics.month}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+
+        {/* Financial Figures Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Total Revenue</label>
+            <input
+              type="number"
+              name="revenue"
+              placeholder="0.00"
+              value={metrics.revenue}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Total Expenses</label>
+            <input
+              type="number"
+              name="expenses"
+              placeholder="0.00"
+              value={metrics.expenses}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Net Operating Income (NOI)</label>
+            <input
+              type="number"
+              name="noi"
+              placeholder="0.00"
+              value={metrics.noi}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Cash Flow</label>
+            <input
+              type="number"
+              name="cashFlow"
+              placeholder="0.00"
+              value={metrics.cashFlow}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+        </div>
+
+        {/* Loan Payments */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Loan Payments (if any)</label>
+          <input
+            type="number"
+            name="loanPayments"
+            placeholder="0.00"
+            value={metrics.loanPayments}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+
+        {/* Notes */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Notes / Comments</label>
+          <textarea
+            name="notes"
+            placeholder="Any notes about this period..."
+            value={metrics.notes}
+            onChange={handleChange}
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+
+        {/* Submit */}
+        <div className="flex gap-3 pt-4">
+          <button
+            type="submit"
+            className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            Save Metrics
+          </button>
+          <p className="text-xs text-gray-500 flex items-center">
+            💡 Tip: Use the Expenses page to record individual expense transactions. Revenue is typically captured from rent collections.
+          </p>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function RentalFinancials() {
@@ -828,6 +961,7 @@ export default function RentalFinancials() {
             {activeTab === 'Cash Flow'      && <CFTable fin={currentFin} />}
             {activeTab === 'KPI Dashboard'  && <KPITab  fin={currentFin} />}
             {activeTab === 'CFO Dashboard'  && <CFOTab  fin={currentFin} />}
+            {activeTab === 'Financial Metrics' && <FinancialMetricsTab companyName={currentFin.companyName} />}
           </div>
         </div>
       ) : (
