@@ -46,12 +46,12 @@ function SidebarInner() {
   const { tab: propDevTab, setTab: setPropDevTab } = usePropDevNav();
 
   return (
-    <div className="dark-app flex h-screen overflow-hidden" style={{ background: 'linear-gradient(135deg, #0B1437 0%, #1A2456 100%)' }}>
-      <aside className="w-64 bg-primary text-white flex flex-col shrink-0 h-screen overflow-hidden" style={{ background: '#0A0F2C', borderRight: '1px solid #2A3158' }}>
+    <div className="dark-app flex h-screen overflow-hidden" style={{ background: '#1C1917' }}>
+      <aside className="w-64 bg-primary text-white flex flex-col shrink-0 h-screen overflow-hidden" style={{ background: '#1C1917', borderRight: '1px solid #44403C' }}>
         {/* Brand */}
         <div className="p-5 border-b border-white/10">
           <h1 className="text-xl font-bold tracking-tight text-white">All in one MIS</h1>
-          <p className="text-xs mt-1 truncate" style={{ color: '#60A5FA' }}>{profile?.company_name}</p>
+          <p className="text-xs mt-1 truncate" style={{ color: '#F59E0B' }}>{profile?.company_name}</p>
         </div>
 
         {/* Main nav */}
@@ -186,8 +186,8 @@ function SidebarInner() {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-4 lg:p-6 flex flex-col" style={{ background: 'transparent' }}>
-        <div className="flex-1" style={{ background: '#151B3D', border: '1px solid #2A3158', borderRadius: '1rem', padding: '1.5rem' }}>
+      <main className="flex-1 overflow-y-auto p-4 lg:p-6 flex flex-col" style={{ background: '#1C1917' }}>
+        <div className="flex-1" style={{ background: '#292524', border: '1px solid #44403C', borderRadius: '1rem', padding: '1.5rem' }}>
           <Outlet />
         </div>
       </main>
