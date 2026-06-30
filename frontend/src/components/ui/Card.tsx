@@ -54,7 +54,7 @@ export function KpiCard({
           : { background: '#151B3D', border: '1px solid #2A3158', color: '#F1F5F9' }
       }
     >
-      <p className="text-sm" style={{ color: accent ? 'rgba(255,255,255,0.75)' : '#94A3B8' }}>{label}</p>
+      <p className="text-sm" style={{ color: accent ? 'rgba(255,255,255,0.75)' : '#CBD5E1' }}>{label}</p>
       <p className="text-2xl font-bold mt-1">{value}</p>
       {sub && <p className="text-xs mt-1" style={{ color: accent ? 'rgba(255,255,255,0.6)' : '#64748B' }}>{sub}</p>}
     </div>
