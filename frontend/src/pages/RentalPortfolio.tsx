@@ -56,8 +56,10 @@ export default function RentalPortfolio() {
 
   const filteredCompanies = selectedCompany === 'all' ? data.by_company : data.by_company.filter(c => c.company_id === selectedCompany);
   const collectionRate = data.billed_this_month > 0 ? (data.collected_this_month / data.billed_this_month) * 100 : 0;
-  const noiMargin = data.gross_potential_rent > 0 ? (data.noi_this_month / data.gross_potential_rent) * 100 : 0;
-  const dso = data.arrears_total > 0 ? (data.arrears_total / data.collected_this_month) * 30 : 0;
+  // NOI margin: cap at 100% since NOI should never exceed gross potential rent for a healthy property
+  const noiMargin = Math.min(100, data.gross_potential_rent > 0 ? (data.noi_this_month / data.gross_potential_rent) * 100 : 0);
+  // DSO: handle zero collected amount
+  const dso = data.collected_this_month > 0 && data.arrears_total > 0 ? (data.arrears_total / data.collected_this_month) * 30 : 0;
 
   return (
     <div className="space-y-6 p-6" style={{ background: 'transparent' }}>
@@ -84,7 +86,7 @@ export default function RentalPortfolio() {
       {/* ─────── ROW 1: KPI CARDS ─────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <KpiCard label="Occupancy Rate" value={fmtPct(data.occupancy_pct)} sub={`${data.total_units - data.vacant_units} / ${data.total_units} units`} accent />
-        <KpiCard label="Rent Collected This Month" value={fmtUSD(data.collected_this_month)} sub={`${collectionRate.toFixed(1)}% of ${fmtUSD(data.billed_this_month)} billed`} gradient="teal" />
+        <KpiCard label="Rent Collected" value={fmtUSD(data.collected_this_month)} sub={`${collectionRate.toFixed(1)}% collection rate (${fmtUSD(data.billed_this_month)} billed)`} gradient="teal" />
         <KpiCard label="NOI This Month" value={fmtUSD(data.noi_this_month)} sub={`${noiMargin.toFixed(1)}% margin`} gradient="blue" />
         <KpiCard label="Vacancy Loss" value={fmtUSD(data.vacancy_loss)} sub={`${data.vacant_units} vacant units`} />
         <KpiCard label="Arrears Outstanding" value={fmtUSD(data.arrears_total)} sub={`${dso.toFixed(0)} days overdue`} />
@@ -94,17 +96,23 @@ export default function RentalPortfolio() {
       {/* ─────── ROW 2: INCOME TREND + NOI BY COMPANY ─────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card title="Income Trend (Last 6 Months)">
-          <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={data.income_trend.slice(-6)}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2A3158" />
-              <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94A3B8' }} />
-              <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v: number) => fmtUSD(v)} {...TOOLTIP_STYLE} />
-              <Legend />
-              <Line type="monotone" dataKey="collected" stroke="#10B981" name="Collected" strokeWidth={2} />
-              <Line type="monotone" dataKey="billed" stroke="#60A5FA" name="Billed" strokeWidth={2} strokeDasharray="5 5" />
-            </LineChart>
-          </ResponsiveContainer>
+          {data.income_trend && data.income_trend.length > 0 ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <LineChart data={data.income_trend.slice(-6)}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2A3158" />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94A3B8' }} />
+                <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+                <Tooltip formatter={(v: number) => fmtUSD(v)} {...TOOLTIP_STYLE} />
+                <Legend />
+                <Line type="monotone" dataKey="collected" stroke="#10B981" name="Collected" strokeWidth={2} />
+                <Line type="monotone" dataKey="billed" stroke="#60A5FA" name="Billed" strokeWidth={2} strokeDasharray="5 5" />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8' }}>
+              No historical data available
+            </div>
+          )}
         </Card>
 
         <Card title="NOI by Company">
