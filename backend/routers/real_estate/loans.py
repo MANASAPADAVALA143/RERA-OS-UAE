@@ -294,7 +294,8 @@ async def import_loans_excel(
     db: Session = Depends(get_db),
 ):
     """
-    Parse an Excel file with loan data and bulk-insert rows.
+    Parse an Excel file and REPLACE existing rental loans for companies in the file.
+    Re-uploading the same file always produces a clean result with no duplicates.
 
     Expected columns (by position, 0-indexed):
       0  Sl No.
@@ -323,11 +324,32 @@ async def import_loans_excel(
         "property name", "loan bank", "lender", "loan amount",
     }
 
+    all_rows = list(ws.iter_rows(values_only=True))
+
+    # ── Pass 1: collect company names present in the file ─────────────────────
+    companies_in_file: set[str] = set()
+    for row in all_rows:
+        col1 = str(row[1] if len(row) > 1 else "").strip().lower()
+        if not col1 or col1 in SKIP_KEYWORDS:
+            continue
+        company = str(row[1] or "").strip()
+        if company:
+            companies_in_file.add(company)
+
+    # ── Delete all existing rental loans for those companies ──────────────────
+    if companies_in_file:
+        db.query(Loan).filter(
+            Loan.tenant_id == current_user.tenant_id,
+            Loan.company_name.in_(companies_in_file),
+            Loan.context_type == "rental",
+        ).delete(synchronize_session=False)
+        db.flush()
+
+    # ── Pass 2: insert rows from file ─────────────────────────────────────────
     created = 0
     skipped_rows: list[int] = []
 
-    for row_idx, row in enumerate(ws.iter_rows(values_only=True), start=1):
-        # Normalize first few cells to detect header / empty rows
+    for row_idx, row in enumerate(all_rows, start=1):
         col1 = str(row[1] if len(row) > 1 else "").strip().lower()
         if not col1 or col1 in SKIP_KEYWORDS:
             continue
@@ -344,7 +366,6 @@ async def import_loans_excel(
             skipped_rows.append(row_idx)
             continue
 
-        # Interest rate: handle both "4.25%" and "4.25" (as %), and "0.0425" (as decimal)
         rate_raw = _parse_num(row[6]) if len(row) > 6 else None
         if rate_raw is not None:
             loan_interest_rate = rate_raw / 100 if rate_raw > 1 else rate_raw
