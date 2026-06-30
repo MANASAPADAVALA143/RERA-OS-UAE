@@ -336,13 +336,14 @@ async def import_loans_excel(
         if company:
             companies_in_file.add(company)
 
-    # ── Delete all existing rental loans for those companies ──────────────────
+    # ── Delete all existing loans for those companies (any context_type) ────────
     if companies_in_file:
-        db.query(Loan).filter(
+        existing = db.query(Loan).filter(
             Loan.tenant_id == current_user.tenant_id,
-            Loan.company_name.in_(companies_in_file),
-            Loan.context_type == "rental",
-        ).delete(synchronize_session=False)
+            Loan.company_name.in_(list(companies_in_file)),
+        ).all()
+        for old_loan in existing:
+            db.delete(old_loan)
         db.flush()
 
     # ── Pass 2: insert rows from file ─────────────────────────────────────────
