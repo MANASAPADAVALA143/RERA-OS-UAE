@@ -54,9 +54,9 @@ export const RENTAL_TABS: RentalNavItem[] = [
   { id: "reports",           label: "Reports",           Icon: BarChart2        },
   // ── CFO VIEW ──────────────────────────────────────────────────────────────
   { id: "cfo-dashboard",     label: "CFO Dashboard",     Icon: TrendingUp,      groupLabel: "CFO VIEW" },
-  { id: "income-bridge",     label: "Income Bridge",     Icon: ArrowDownUp      },
-  { id: "entity-rollup",     label: "Entity Roll-up",    Icon: Table2           },
-  { id: "compliance",        label: "Compliance",        Icon: CalendarCheck    },
+  // { id: "income-bridge",     label: "Income Bridge",     Icon: ArrowDownUp      },  // hidden
+  // { id: "entity-rollup",     label: "Entity Roll-up",    Icon: Table2           },  // hidden
+  // { id: "compliance",        label: "Compliance",        Icon: CalendarCheck    },  // hidden
   { id: "13-week-cf",        label: "13-Week Cash Flow", Icon: CalendarRange    },
 ];
 
