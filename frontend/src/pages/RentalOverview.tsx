@@ -1,18 +1,60 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, Legend,
 } from 'recharts';
+import { X } from 'lucide-react';
 import api from '../services/api';
 import { Card, KpiCard } from '../components/ui/Card';
-import { LoadingSkeleton } from '../components/ui/Table';
 import { fmtUSD, fmtPct } from '../components/ProtectedRoute';
 import { useRentalNav } from '../contexts/RentalNavContext';
+
+// ── constants ─────────────────────────────────────────────────────────────────
+
+const MONTH_OPTIONS = [
+  { value: '2026-01', label: 'January 2026' },
+  { value: '2026-02', label: 'February 2026' },
+  { value: '2026-03', label: 'March 2026' },
+  { value: '2026-04', label: 'April 2026' },
+  { value: '2026-05', label: 'May 2026' },
+  { value: '2026-06', label: 'June 2026' },
+  { value: '2026-07', label: 'July 2026' },
+  { value: '2026-08', label: 'August 2026' },
+  { value: '2026-09', label: 'September 2026' },
+  { value: '2026-10', label: 'October 2026' },
+  { value: '2026-11', label: 'November 2026' },
+  { value: '2026-12', label: 'December 2026' },
+];
 
 const MONTHS_ORDER = [
   'Jan-2026','Feb-2026','Mar-2026','Apr-2026','May-2026','Jun-2026',
   'Jul-2026','Aug-2026','Sep-2026','Oct-2026','Nov-2026','Dec-2026',
 ];
+
+function serverMonth(): string {
+  // Default to the real current month based on server date
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// ── types ─────────────────────────────────────────────────────────────────────
+
+interface CompanySummary {
+  company_id: string;
+  company_name: string;
+  occupancy_pct: number;
+  noi_this_month: number;
+  occupied_units: number;
+  total_units: number;
+  vacant_units: number;
+  collected_this_month: number;
+  billed_this_month: number;
+  gross_potential_rent: number;
+  vacancy_loss: number;
+  arrears_total: number;
+  total_expense_this_month: number;
+}
 
 interface PortfolioSummary {
   total_units: number;
@@ -28,138 +70,241 @@ interface PortfolioSummary {
   total_expense_this_month: number;
   partner_share_payable: number;
   by_company: CompanySummary[];
-  arrears_aging: ArrearsAging;
-  income_trend: TrendPoint[];
-  lease_expiry_pipeline: LeaseExpiry[];
-  attention_now: AttentionItem[];
+  arrears_aging: { '0_30': number; '31_60': number; '61_90': number; '90_plus': number };
+  income_trend: { month: string; billed: number; collected: number; expense: number; noi: number }[];
+  lease_expiry_pipeline: { lease_end: string; days_until_expiry: number; unit_number: string | null; company_name: string | null; tenant_name: string | null }[];
+  attention_now: { type: string; message: string; severity: 'warning' | 'attention' }[];
 }
 
-interface CompanySummary {
-  company_id: string;
-  company_name: string;
-  occupancy_pct: number;
-  noi_this_month: number;
-  occupied_units: number;
-  total_units: number;
-  collected_this_month: number;
-}
-
-interface ArrearsAging {
-  '0_30': number;
-  '31_60': number;
-  '61_90': number;
-  '90_plus': number;
-}
-
-interface TrendPoint {
-  month: string;
-  billed: number;
-  collected: number;
-  expense: number;
-  noi: number;
-}
-
-interface LeaseExpiry {
-  lease_end: string;
-  days_until_expiry: number;
-  unit_number: string | null;
-  company_name: string | null;
-  tenant_name: string | null;
-}
-
-interface AttentionItem {
-  type: string;
-  message: string;
-  severity: 'warning' | 'attention';
-}
-
-interface RentalCompanyWithSync {
+interface SyncCompany {
   id: string;
   company_name: string;
-  sync_collected: number | null;
-  sync_vacancy_loss: number | null;
-  sync_gross_potential: number | null;
-  sync_occupied_units: number | null;
-  sync_total_units: number | null;
   last_sync_month: string | null;
   monthly_rent_data: Record<string, number> | null;
+  sync_collected: number | null;
+  sync_gross_potential: number | null;
+  sync_vacancy_loss: number | null;
+  sync_occupied_units: number | null;
+  sync_total_units: number | null;
 }
+
+// ── skeleton loaders ──────────────────────────────────────────────────────────
+
+function SkeletonKpi() {
+  return (
+    <div className="rounded-xl p-5 animate-pulse" style={{ background: '#1E2A4A', border: '1px solid #2A3158' }}>
+      <div className="h-3 rounded w-2/3 mb-3" style={{ background: '#2A3158' }} />
+      <div className="h-7 rounded w-1/2" style={{ background: '#2A3158' }} />
+    </div>
+  );
+}
+
+function SkeletonChart() {
+  return (
+    <div className="rounded-xl p-5 animate-pulse" style={{ background: '#1E2A4A', border: '1px solid #2A3158' }}>
+      <div className="h-4 rounded w-1/3 mb-4" style={{ background: '#2A3158' }} />
+      <div className="h-52 rounded" style={{ background: '#2A3158' }} />
+    </div>
+  );
+}
+
+// ── tooltip style shared ──────────────────────────────────────────────────────
+
+const TOOLTIP_STYLE = {
+  contentStyle: { background: '#1E2A4A', border: '1px solid #3A4170', color: '#F1F5F9', borderRadius: 8 },
+  labelStyle: { color: '#94A3B8' },
+};
+
+const TICK_STYLE = { fill: '#94A3B8', fontSize: 11 };
+const SELECT_STYLE: React.CSSProperties = {
+  background: '#1E2A4A', border: '1px solid #3A4170', color: '#F1F5F9',
+  borderRadius: '0.5rem', padding: '0.375rem 0.75rem', fontSize: '0.875rem',
+};
+
+// ── main component ────────────────────────────────────────────────────────────
 
 export default function RentalOverview() {
   const { setTab } = useRentalNav();
-  const [data, setData] = useState<PortfolioSummary | null>(null);
-  const [syncCompanies, setSyncCompanies] = useState<RentalCompanyWithSync[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
+  const selectedMonth   = searchParams.get('month')   || serverMonth();
+  const selectedCoId    = searchParams.get('company')  || '';
+
+  const [data, setData]                   = useState<PortfolioSummary | null>(null);
+  const [syncCompanies, setSyncCompanies] = useState<SyncCompany[]>([]);
+  const [loading, setLoading]             = useState(true);
+  const [fetching, setFetching]           = useState(false);
+  const [error, setError]                 = useState('');
+  const isFirstLoad = useRef(true);
+
+  // ── data fetching ──────────────────────────────────────────────────────────
+
+  const fetchData = useCallback(async (month: string) => {
+    setFetching(true);
     setError('');
     try {
-      const summaryRes = await api.get<PortfolioSummary>('/api/rentals/portfolio-summary');
-      setData(summaryRes.data);
+      const res = await api.get<PortfolioSummary>(`/api/rentals/portfolio-summary?month=${month}`);
+      setData(res.data);
     } catch {
       setError('Failed to load portfolio summary.');
+    } finally {
       setLoading(false);
-      return;
+      setFetching(false);
     }
-    setLoading(false);
-    // Companies fetch is non-critical — sync banner won't show if this fails
     try {
-      const companiesRes = await api.get<RentalCompanyWithSync[]>('/api/rentals/companies');
-      setSyncCompanies(Array.isArray(companiesRes.data) ? companiesRes.data : []);
-    } catch {
-      // silently skip — overview still shows without sync banner
-    }
+      const coRes = await api.get<SyncCompany[]>('/api/rentals/companies');
+      setSyncCompanies(Array.isArray(coRes.data) ? coRes.data : []);
+    } catch { /* non-critical */ }
   }, []);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
-
-  // Synced data derived from Excel upload
-  const hasSyncedData = useMemo(
-    () => syncCompanies.some(c => c.last_sync_month),
-    [syncCompanies],
-  );
-
-  const lastSyncMonth = useMemo(
-    () => syncCompanies.find(c => c.last_sync_month)?.last_sync_month ?? '',
-    [syncCompanies],
-  );
-
-  const syncedTotals = useMemo(() => {
-    if (!hasSyncedData) return null;
-    const synced = syncCompanies.filter(c => c.last_sync_month);
-    const total_units = synced.reduce((a, c) => a + (c.sync_total_units ?? 0), 0);
-    const occupied   = synced.reduce((a, c) => a + (c.sync_occupied_units ?? 0), 0);
-    const collected  = synced.reduce((a, c) => a + (c.sync_collected ?? 0), 0);
-    const gross      = synced.reduce((a, c) => a + (c.sync_gross_potential ?? 0), 0);
-    const vac_loss   = synced.reduce((a, c) => a + (c.sync_vacancy_loss ?? 0), 0);
-    const occ_rate   = total_units > 0 ? ((occupied / total_units) * 100).toFixed(1) : '0';
-    return { total_units, occupied, vacant: total_units - occupied, collected, gross, vac_loss, occ_rate };
-  }, [hasSyncedData, syncCompanies]);
-
-  const syncedChartData = useMemo<TrendPoint[] | null>(() => {
-    if (!hasSyncedData) return null;
-    const monthMap = new Map<string, number>();
-    for (const co of syncCompanies) {
-      if (!co.monthly_rent_data) continue;
-      for (const [m, amt] of Object.entries(co.monthly_rent_data)) {
-        monthMap.set(m, (monthMap.get(m) ?? 0) + (amt as number));
-      }
+  useEffect(() => {
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false;
+      setLoading(true);
     }
-    return MONTHS_ORDER
-      .filter(m => (monthMap.get(m) ?? 0) > 0)
-      .slice(-6)
-      .map(m => ({ month: m, collected: monthMap.get(m) ?? 0, billed: 0, expense: 0, noi: 0 }));
-  }, [hasSyncedData, syncCompanies]);
+    fetchData(selectedMonth);
+  }, [fetchData, selectedMonth]);
 
-  if (loading) return <LoadingSkeleton rows={10} />;
-  if (error || !data) return (
-    <div className="text-red-600 p-4">{error || 'No data'}<button className="ml-4 underline" onClick={fetchAll}>Retry</button></div>
+  // ── URL param setters ──────────────────────────────────────────────────────
+
+  const setMonth = (m: string) =>
+    setSearchParams(prev => { prev.set('month', m); prev.delete('company'); return new URLSearchParams(prev); });
+
+  const setCompany = (id: string) =>
+    setSearchParams(prev => { id ? prev.set('company', id) : prev.delete('company'); return new URLSearchParams(prev); });
+
+  const clearCompany = () => setCompany('');
+
+  // ── derived data ───────────────────────────────────────────────────────────
+
+  const selectedCo = useMemo(
+    () => (!selectedCoId || !data) ? null : data.by_company.find(c => c.company_id === selectedCoId) ?? null,
+    [data, selectedCoId],
   );
 
-  const now = new Date();
-  const periodLabel = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+  const selectedCoName = selectedCo?.company_name ?? '';
+
+  // KPIs: company-filtered or portfolio-level
+  const kpis = useMemo(() => {
+    if (!data) return null;
+    if (selectedCo) {
+      return {
+        total_units:             selectedCo.total_units,
+        occupied_units:          selectedCo.occupied_units,
+        vacant_units:            selectedCo.vacant_units ?? (selectedCo.total_units - selectedCo.occupied_units),
+        occupancy_pct:           selectedCo.occupancy_pct,
+        collected_this_month:    selectedCo.collected_this_month,
+        billed_this_month:       selectedCo.billed_this_month ?? 0,
+        noi_this_month:          selectedCo.noi_this_month,
+        gross_potential_rent:    selectedCo.gross_potential_rent ?? 0,
+        vacancy_loss:            selectedCo.vacancy_loss ?? 0,
+        arrears_total:           selectedCo.arrears_total ?? 0,
+        total_expense_this_month: selectedCo.total_expense_this_month ?? 0,
+        partner_share_payable:   data.partner_share_payable ?? 0,
+      };
+    }
+    return {
+      total_units:             data.total_units,
+      occupied_units:          data.occupied_units,
+      vacant_units:            data.vacant_units,
+      occupancy_pct:           data.occupancy_pct,
+      collected_this_month:    data.collected_this_month,
+      billed_this_month:       data.billed_this_month,
+      noi_this_month:          data.noi_this_month,
+      gross_potential_rent:    data.gross_potential_rent,
+      vacancy_loss:            data.vacancy_loss,
+      arrears_total:           data.arrears_total,
+      total_expense_this_month: data.total_expense_this_month,
+      partner_share_payable:   data.partner_share_payable ?? 0,
+    };
+  }, [data, selectedCo]);
+
+  // Occupancy bar chart data — highlight selected company
+  const occupancyChartData = useMemo(() => {
+    if (!data) return [];
+    return data.by_company.map(c => ({
+      name: c.company_name.length > 13 ? c.company_name.slice(0, 11) + '…' : c.company_name,
+      company_id: c.company_id,
+      occupancy_pct: parseFloat((c.occupancy_pct * 100).toFixed(1)),
+    }));
+  }, [data]);
+
+  // NOI bar chart data
+  const noiChartData = useMemo(() => {
+    if (!data) return [];
+    return data.by_company.map(c => ({
+      name: c.company_name.length > 13 ? c.company_name.slice(0, 11) + '…' : c.company_name,
+      company_id: c.company_id,
+      noi: c.noi_this_month,
+    }));
+  }, [data]);
+
+  // Income trend — company-specific (from monthly_rent_data) or portfolio
+  const trendData = useMemo(() => {
+    if (!data) return [];
+    const syncTarget = selectedCoId
+      ? syncCompanies.filter(c => c.id === selectedCoId)
+      : syncCompanies;
+
+    if (syncTarget.some(c => c.monthly_rent_data)) {
+      const map = new Map<string, number>();
+      for (const co of syncTarget) {
+        if (!co.monthly_rent_data) continue;
+        for (const [m, amt] of Object.entries(co.monthly_rent_data)) {
+          map.set(m, (map.get(m) ?? 0) + (amt as number));
+        }
+      }
+      const points = MONTHS_ORDER
+        .filter(m => (map.get(m) ?? 0) > 0)
+        .slice(-6)
+        .map(m => ({ month: m, collected: map.get(m) ?? 0, billed: 0, expense: 0, noi: 0 }));
+      if (points.length > 0) return points;
+    }
+    return data.income_trend;
+  }, [data, selectedCoId, syncCompanies]);
+
+  // Sync banner info
+  const lastSyncMonth = useMemo(() => {
+    if (selectedCoId) return syncCompanies.find(c => c.id === selectedCoId)?.last_sync_month ?? '';
+    return syncCompanies.find(c => c.last_sync_month)?.last_sync_month ?? '';
+  }, [syncCompanies, selectedCoId]);
+
+  const monthLabel = MONTH_OPTIONS.find(o => o.value === selectedMonth)?.label ?? selectedMonth;
+
+  // ── chart click handler ────────────────────────────────────────────────────
+
+  function handleBarClick(payload: { company_id?: string } | undefined) {
+    if (!payload?.company_id) return;
+    if (selectedCoId === payload.company_id) clearCompany();
+    else setCompany(payload.company_id);
+  }
+
+  // ── loading / error states ────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="h-8 rounded w-64 animate-pulse" style={{ background: '#1E2A4A' }} />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => <SkeletonKpi key={i} />)}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {Array.from({ length: 4 }).map((_, i) => <SkeletonChart key={i} />)}
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !data || !kpis) {
+    return (
+      <div className="p-4" style={{ color: '#F87171' }}>
+        {error || 'No data'}
+        <button className="ml-4 underline" style={{ color: '#60A5FA' }} onClick={() => fetchData(selectedMonth)}>
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   const agingData = [
     { bucket: '0–30d',  amount: data.arrears_aging['0_30'] },
@@ -168,94 +313,163 @@ export default function RentalOverview() {
     { bucket: '90+d',   amount: data.arrears_aging['90_plus'] },
   ];
 
-  const companyOccupancy = data.by_company.map(c => ({
-    name: c.company_name.length > 14 ? c.company_name.slice(0, 12) + '…' : c.company_name,
-    occupancy_pct: parseFloat((c.occupancy_pct * 100).toFixed(1)),
-  }));
-
-  const companyNOI = data.by_company.map(c => ({
-    name: c.company_name.length > 14 ? c.company_name.slice(0, 12) + '…' : c.company_name,
-    noi: c.noi_this_month,
-  }));
-
-  const chartData = (hasSyncedData && syncedChartData && syncedChartData.length > 0)
-    ? syncedChartData
-    : data.income_trend;
-
   return (
     <div className="space-y-6">
+
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold text-charcoal">Rental Portfolio — Overview</h1>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-500">{periodLabel}</span>
-          <button
-            onClick={() => setTab('portfolio-upload')}
-            className="flex items-center gap-2 text-xs bg-green-700 text-white px-3 py-1.5 rounded-lg hover:bg-green-600 font-medium transition-colors"
-          >
-            📊 Sync Rent Data
-          </button>
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: '#F1F5F9' }}>Rental Portfolio — Overview</h1>
+          <p className="text-sm mt-0.5" style={{ color: '#64748B' }}>
+            Power BI drill-down · {monthLabel}
+          </p>
+        </div>
+        <button
+          onClick={() => setTab('portfolio-upload')}
+          style={{ background: 'linear-gradient(135deg,#3B82F6,#1D4ED8)', color: 'white' }}
+          className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg font-medium"
+        >
+          📊 Sync Rent Data
+        </button>
+      </div>
+
+      {/* ── Filter bar ──────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl" style={{ background: '#0F1830', border: '1px solid #2A3158' }}>
+        {/* Month */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold" style={{ color: '#64748B' }}>PERIOD</span>
+          <select value={selectedMonth} onChange={e => setMonth(e.target.value)} style={SELECT_STYLE}>
+            {MONTH_OPTIONS.map(o => (
+              <option key={o.value} value={o.value} style={{ background: '#1E2A4A' }}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Company */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold" style={{ color: '#64748B' }}>COMPANY</span>
+          <select value={selectedCoId} onChange={e => setCompany(e.target.value)} style={SELECT_STYLE}>
+            <option value="" style={{ background: '#1E2A4A' }}>All Companies</option>
+            {data.by_company.map(c => (
+              <option key={c.company_id} value={c.company_id} style={{ background: '#1E2A4A' }}>{c.company_name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Active filter badge / entity count */}
+        <div className="flex items-center gap-2 ml-auto">
+          {selectedCoId && selectedCoName ? (
+            <>
+              <span
+                className="text-xs font-semibold px-3 py-1 rounded-full"
+                style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid #3B82F6', color: '#60A5FA' }}
+              >
+                Viewing: {selectedCoName}
+              </span>
+              <button
+                onClick={clearCompany}
+                className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full"
+                style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#F87171' }}
+              >
+                <X size={11} /> Reset
+              </button>
+            </>
+          ) : (
+            <span className="text-xs" style={{ color: '#475569' }}>
+              All Companies · {data.by_company.length} entities
+            </span>
+          )}
+          {fetching && (
+            <span className="text-xs animate-pulse" style={{ color: '#60A5FA' }}>Loading…</span>
+          )}
         </div>
       </div>
 
-      {/* Synced data banner */}
-      {hasSyncedData && syncedTotals && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-xs font-semibold text-emerald-800">
-              ✅ Synced from Excel — {lastSyncMonth}
-            </div>
-            <div className="text-[10px] text-emerald-600">
-              Live data from Rent Receivable upload
-            </div>
-          </div>
-          <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
-            {([
-              { label: 'Total Units',  value: String(syncedTotals.total_units)        },
-              { label: 'Occupied',     value: String(syncedTotals.occupied)            },
-              { label: 'Vacant',       value: String(syncedTotals.vacant)              },
-              { label: 'Collected',    value: fmtUSD(syncedTotals.collected)           },
-              { label: 'Occupancy',    value: `${syncedTotals.occ_rate}%`             },
-              { label: 'Vac Loss',     value: fmtUSD(syncedTotals.vac_loss)           },
-            ]).map(t => (
-              <div key={t.label} className="bg-white rounded-lg p-2.5 text-center border border-emerald-100">
-                <div className="text-sm font-mono font-semibold text-emerald-700">{t.value}</div>
-                <div className="text-[10px] text-gray-400 mt-0.5">{t.label}</div>
-              </div>
-            ))}
-          </div>
+      {/* ── Sync banner ─────────────────────────────────────────────────────── */}
+      {lastSyncMonth && (
+        <div className="rounded-xl px-4 py-2.5 flex items-center gap-3"
+          style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)' }}>
+          <span className="text-xs font-semibold" style={{ color: '#34D399' }}>
+            ✅ Excel synced — {lastSyncMonth}
+          </span>
+          <span className="text-xs" style={{ color: '#6EE7B7' }}>
+            Collected figures auto-loaded from rent receivable upload
+          </span>
         </div>
       )}
 
-      {/* 8-tile KPI strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div>
-          <KpiCard label="Occupancy Rate" value={fmtPct(data.occupancy_pct)} sub={`${data.occupied_units} / ${data.total_units} units`} accent />
-          {!hasSyncedData && (
-            <div className="text-[10px] text-amber-600 mt-1 px-1">
-              ⚠ Upload Rent Receivable Excel to sync latest data
-            </div>
-          )}
+      {/* ── 8 KPI tiles ─────────────────────────────────────────────────────── */}
+      {fetching ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => <SkeletonKpi key={i} />)}
         </div>
-        <KpiCard label="Occupied / Vacant" value={`${data.occupied_units} / ${data.vacant_units}`} sub={`${data.total_units} total units`} />
-        <KpiCard label="Collected This Month" value={fmtUSD(data.collected_this_month)} sub={`of ${fmtUSD(data.billed_this_month)} billed`} accent />
-        <KpiCard label="NOI This Month" value={fmtUSD(data.noi_this_month)} sub={`Expenses: ${fmtUSD(data.total_expense_this_month)}`} />
-        <KpiCard label="Gross Potential Rent" value={fmtUSD(data.gross_potential_rent)} />
-        <KpiCard label="Vacancy Loss" value={fmtUSD(data.vacancy_loss)} sub={`${data.vacant_units} vacant units`} />
-        <KpiCard label="Arrears Outstanding" value={fmtUSD(data.arrears_total)} />
-        <KpiCard label="Partner Share Payable" value={fmtUSD(data.partner_share_payable)} />
-      </div>
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <KpiCard
+            label="Occupancy Rate"
+            value={fmtPct(kpis.occupancy_pct)}
+            sub={`${kpis.occupied_units} / ${kpis.total_units} units`}
+            accent
+          />
+          <KpiCard
+            label="Occupied / Vacant"
+            value={`${kpis.occupied_units} / ${kpis.vacant_units}`}
+            sub={`${kpis.total_units} total units`}
+          />
+          <KpiCard
+            label="Collected This Month"
+            value={fmtUSD(kpis.collected_this_month)}
+            sub={kpis.billed_this_month > 0 ? `of ${fmtUSD(kpis.billed_this_month)} billed` : monthLabel}
+            gradient="teal"
+          />
+          <KpiCard
+            label="NOI This Month"
+            value={fmtUSD(kpis.noi_this_month)}
+            sub={`Expenses: ${fmtUSD(kpis.total_expense_this_month)}`}
+            gradient="blue"
+          />
+          <KpiCard
+            label="Gross Potential Rent"
+            value={fmtUSD(kpis.gross_potential_rent)}
+          />
+          <KpiCard
+            label="Vacancy Loss"
+            value={fmtUSD(kpis.vacancy_loss)}
+            sub={`${kpis.vacant_units} vacant units`}
+          />
+          <KpiCard
+            label="Arrears Outstanding"
+            value={fmtUSD(kpis.arrears_total)}
+          />
+          <KpiCard
+            label="Partner Share Payable"
+            value={fmtUSD(kpis.partner_share_payable)}
+          />
+        </div>
+      )}
 
-      {/* Attention Now */}
+      {/* ── Attention Now ────────────────────────────────────────────────────── */}
       {data.attention_now.length > 0 && (
         <Card title="Attention Now">
           <div className="space-y-2">
             {data.attention_now.map((item, i) => (
-              <div key={i} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm ${
-                item.severity === 'warning' ? 'bg-red-50 text-red-800 border border-red-200' : 'bg-amber-50 text-amber-800 border border-amber-200'
-              }`}>
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                  item.severity === 'warning' ? 'bg-red-200 text-red-900' : 'bg-amber-200 text-amber-900'
-                }`}>{item.severity === 'warning' ? 'WARNING' : 'ATTENTION'}</span>
+              <div
+                key={i}
+                className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm"
+                style={item.severity === 'warning'
+                  ? { background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#FCA5A5' }
+                  : { background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', color: '#FCD34D' }
+                }
+              >
+                <span
+                  className="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0"
+                  style={item.severity === 'warning'
+                    ? { background: 'rgba(239,68,68,0.25)', color: '#FCA5A5' }
+                    : { background: 'rgba(245,158,11,0.25)', color: '#FCD34D' }
+                  }
+                >
+                  {item.severity === 'warning' ? 'WARNING' : 'ATTENTION'}
+                </span>
                 {item.message}
               </div>
             ))}
@@ -263,81 +477,131 @@ export default function RentalOverview() {
         </Card>
       )}
 
-      {/* Charts 2×2 grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card title="Occupancy by Company">
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={companyOccupancy}>
-              <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={60} />
-              <YAxis domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} />
-              <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} />
-              <Bar dataKey="occupancy_pct" fill="#1E3A8A" name="Occupancy %" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
+      {/* ── Charts 2×2 ──────────────────────────────────────────────────────── */}
+      {fetching ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {Array.from({ length: 4 }).map((_, i) => <SkeletonChart key={i} />)}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-        <Card title={`Income vs Expense — 6 Months${hasSyncedData ? ` (${lastSyncMonth} Sync)` : ''}`}>
-          <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={chartData}>
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-              <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v: number) => fmtUSD(v)} />
-              <Legend />
-              <Line type="monotone" dataKey="collected" stroke="#3B82F6" name="Collected" strokeWidth={2} dot={false} />
-              {!hasSyncedData && (
-                <Line type="monotone" dataKey="expense" stroke="#ef4444" name="Expense" strokeWidth={2} dot={false} />
-              )}
-            </LineChart>
-          </ResponsiveContainer>
-        </Card>
+          {/* Occupancy by Company */}
+          <Card title={selectedCoName ? `Occupancy — ${selectedCoName}` : 'Occupancy by Company'}>
+            {!selectedCoId && (
+              <p className="text-xs mb-1" style={{ color: '#475569' }}>
+                Click a bar to drill into that company
+              </p>
+            )}
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart
+                data={occupancyChartData}
+                onClick={d => handleBarClick(d?.activePayload?.[0]?.payload)}
+                style={{ cursor: 'pointer' }}
+              >
+                <XAxis dataKey="name" tick={{ ...TICK_STYLE, fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={60} />
+                <YAxis domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} tick={TICK_STYLE} />
+                <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} {...TOOLTIP_STYLE} />
+                <Bar dataKey="occupancy_pct" name="Occupancy %" radius={[4, 4, 0, 0]}>
+                  {occupancyChartData.map((entry, idx) => (
+                    <Cell
+                      key={idx}
+                      fill={selectedCoId === entry.company_id ? '#60A5FA' : '#3B82F6'}
+                      opacity={selectedCoId && selectedCoId !== entry.company_id ? 0.45 : 1}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
 
-        <Card title="Arrears Aging">
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={agingData}>
-              <XAxis dataKey="bucket" tick={{ fontSize: 12 }} />
-              <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v: number) => fmtUSD(v)} />
-              <Bar dataKey="amount" fill="#ef4444" name="Arrears" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
+          {/* Income trend */}
+          <Card title={selectedCoName ? `Income Trend — ${selectedCoName}` : 'Income — 6 Months'}>
+            <ResponsiveContainer width="100%" height={260}>
+              <LineChart data={trendData}>
+                <XAxis dataKey="month" tick={{ ...TICK_STYLE, fontSize: 10 }} />
+                <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} tick={TICK_STYLE} />
+                <Tooltip formatter={(v: number) => fmtUSD(v)} {...TOOLTIP_STYLE} />
+                <Legend wrapperStyle={{ color: '#94A3B8', fontSize: 12 }} />
+                <Line type="monotone" dataKey="collected" stroke="#3B82F6" name="Collected" strokeWidth={2} dot={false} />
+                {trendData.some(d => d.expense > 0) && (
+                  <Line type="monotone" dataKey="expense" stroke="#EF4444" name="Expense" strokeWidth={2} dot={false} />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          </Card>
 
-        <Card title="NOI by Company">
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={companyNOI}>
-              <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={60} />
-              <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v: number) => fmtUSD(v)} />
-              <Bar dataKey="noi" fill="#3B82F6" name="NOI" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-      </div>
+          {/* Arrears aging */}
+          <Card title="Arrears Aging">
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={agingData}>
+                <XAxis dataKey="bucket" tick={TICK_STYLE} />
+                <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} tick={TICK_STYLE} />
+                <Tooltip formatter={(v: number) => fmtUSD(v)} {...TOOLTIP_STYLE} />
+                <Bar dataKey="amount" fill="#EF4444" name="Arrears" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
 
-      {/* Lease expiry pipeline */}
+          {/* NOI by Company */}
+          <Card title={selectedCoName ? `NOI Trend — ${selectedCoName}` : 'NOI by Company'}>
+            {!selectedCoId && (
+              <p className="text-xs mb-1" style={{ color: '#475569' }}>
+                Click a bar to drill into that company
+              </p>
+            )}
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart
+                data={noiChartData}
+                onClick={d => handleBarClick(d?.activePayload?.[0]?.payload)}
+                style={{ cursor: 'pointer' }}
+              >
+                <XAxis dataKey="name" tick={{ ...TICK_STYLE, fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={60} />
+                <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} tick={TICK_STYLE} />
+                <Tooltip formatter={(v: number) => fmtUSD(v)} {...TOOLTIP_STYLE} />
+                <Bar dataKey="noi" name="NOI" radius={[4, 4, 0, 0]}>
+                  {noiChartData.map((entry, idx) => (
+                    <Cell
+                      key={idx}
+                      fill={selectedCoId === entry.company_id ? '#60A5FA' : '#3B82F6'}
+                      opacity={selectedCoId && selectedCoId !== entry.company_id ? 0.45 : 1}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+        </div>
+      )}
+
+      {/* ── Lease expiry pipeline ────────────────────────────────────────────── */}
       {data.lease_expiry_pipeline.length > 0 && (
         <Card title="Upcoming Lease Expirations (next 90 days)">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-200 text-left text-gray-500">
-                  <th className="py-2 px-2 font-medium">Unit</th>
-                  <th className="py-2 px-2 font-medium">Company</th>
-                  <th className="py-2 px-2 font-medium">Tenant</th>
-                  <th className="py-2 px-2 font-medium">Lease End</th>
-                  <th className="py-2 px-2 font-medium">Days Left</th>
+                <tr className="border-b text-left" style={{ borderColor: '#2A3158' }}>
+                  {['Unit', 'Company', 'Tenant', 'Lease End', 'Days Left'].map(h => (
+                    <th key={h} className="py-2 px-2 font-medium" style={{ color: '#64748B' }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {data.lease_expiry_pipeline.map((l, i) => (
-                  <tr key={i} className={`border-b border-gray-50 ${l.days_until_expiry <= 30 ? 'bg-red-50' : l.days_until_expiry <= 60 ? 'bg-amber-50' : ''}`}>
-                    <td className="py-2 px-2">{l.unit_number || '—'}</td>
-                    <td className="py-2 px-2">{l.company_name || '—'}</td>
-                    <td className="py-2 px-2">{l.tenant_name || '—'}</td>
-                    <td className="py-2 px-2">{l.lease_end}</td>
-                    <td className="py-2 px-2 font-medium">{l.days_until_expiry}d</td>
-                  </tr>
-                ))}
+                {data.lease_expiry_pipeline
+                  .filter(l => !selectedCoName || l.company_name === selectedCoName)
+                  .map((l, i) => (
+                    <tr key={i} className="border-b" style={{ borderColor: '#1E2A4A' }}>
+                      <td className="py-2 px-2" style={{ color: '#F1F5F9' }}>{l.unit_number || '—'}</td>
+                      <td className="py-2 px-2" style={{ color: '#94A3B8' }}>{l.company_name || '—'}</td>
+                      <td className="py-2 px-2" style={{ color: '#94A3B8' }}>{l.tenant_name || '—'}</td>
+                      <td className="py-2 px-2" style={{ color: '#94A3B8' }}>{l.lease_end}</td>
+                      <td
+                        className="py-2 px-2 font-medium"
+                        style={{ color: l.days_until_expiry <= 30 ? '#F87171' : l.days_until_expiry <= 60 ? '#FCD34D' : '#94A3B8' }}
+                      >
+                        {l.days_until_expiry}d
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>

@@ -166,6 +166,7 @@ def _load_company_data(company_id: uuid.UUID, tid: uuid.UUID, db: Session) -> tu
 
 @router.get("/portfolio-summary")
 def get_portfolio_summary(
+    month: str = Query(None),  # YYYY-MM or Mon-YYYY (e.g. "2026-06" or "Jun-2026")
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -175,6 +176,24 @@ def get_portfolio_summary(
 
     tid = current_user.tenant_id
     today = date.today()
+
+    # Resolve selected month to YYYY-MM
+    selected_month = today.strftime("%Y-%m")
+    if month:
+        m = month.strip()
+        if len(m) == 7 and m[4] == "-" and m[:4].isdigit():
+            selected_month = m
+        else:
+            try:
+                selected_month = datetime.strptime(m, "%b-%Y").strftime("%Y-%m")
+            except ValueError:
+                pass
+
+    # Mon-YYYY form used as key in monthly_rent_data JSON
+    try:
+        month_abbrev = datetime.strptime(selected_month, "%Y-%m").strftime("%b-%Y")
+    except ValueError:
+        month_abbrev = ""
 
     try:
         companies = db.query(RentalCompany).filter(RentalCompany.tenant_id == tid).all()
@@ -202,7 +221,32 @@ def get_portfolio_summary(
             inv_by_unit[inv["unit_id"]].append(inv)
 
         unit_dicts = [_unit_dict(u, inv_by_unit.get(str(u.id), []), today) for u in units]
-        summ = company_summary(unit_dicts, inv_dicts, exp_dicts, today)
+        summ = company_summary(unit_dicts, inv_dicts, exp_dicts, today, cur_month=selected_month)
+
+        # ── Synced-data fallback ──────────────────────────────────────────────
+        # When there are no RentalCollection records the dynamic calc returns $0.
+        # Fall back to the Excel-synced monthly_rent_data for the requested month.
+        if summ["collected_this_month"] == 0.0:
+            monthly_data: dict = co.monthly_rent_data or {}
+            synced = float(monthly_data.get(month_abbrev, 0.0))
+            # Secondary fallback: use collected_this_month if last_sync_month matches
+            if synced == 0.0 and co.last_sync_month and co.collected_this_month:
+                try:
+                    if datetime.strptime(co.last_sync_month, "%b-%Y").strftime("%Y-%m") == selected_month:
+                        synced = float(co.collected_this_month)
+                except ValueError:
+                    pass
+            if synced > 0.0:
+                summ["collected_this_month"] = synced
+                summ["noi_this_month"] = round(synced - summ["total_expense_this_month"], 2)
+
+        # Gross potential rent — use synced value when unit rents are all 0
+        if summ["gross_potential_rent"] == 0.0 and co.gross_potential_rent:
+            summ["gross_potential_rent"] = float(co.gross_potential_rent)
+        # Vacancy loss — same fallback
+        if summ["vacancy_loss"] == 0.0 and co.vacancy_loss:
+            summ["vacancy_loss"] = float(co.vacancy_loss)
+        # ─────────────────────────────────────────────────────────────────────
 
         all_units_dicts.extend(unit_dicts)
         all_inv_dicts.extend(inv_dicts)
@@ -220,10 +264,31 @@ def get_portfolio_summary(
             **summ,
         })
 
-    portfolio = company_summary(all_units_dicts, all_inv_dicts, all_exp_dicts, today)
+    portfolio = company_summary(all_units_dicts, all_inv_dicts, all_exp_dicts, today, cur_month=selected_month)
+
+    # Roll up corrected per-company values into portfolio totals
+    if portfolio["collected_this_month"] == 0.0:
+        total_col = sum(c["collected_this_month"] for c in by_company)
+        if total_col > 0:
+            portfolio["collected_this_month"] = total_col
+            portfolio["noi_this_month"] = round(total_col - portfolio["total_expense_this_month"], 2)
+    if portfolio["gross_potential_rent"] == 0.0:
+        portfolio["gross_potential_rent"] = round(sum(c["gross_potential_rent"] for c in by_company), 2)
+    if portfolio["vacancy_loss"] == 0.0:
+        portfolio["vacancy_loss"] = round(sum(c["vacancy_loss"] for c in by_company), 2)
+
     aging = arrears_aging(all_inv_dicts, today)
     trend = income_trend(all_inv_dicts, all_exp_dicts, months=6)
     expiry = lease_expiry_pipeline([_lease_dict(l) for l in all_leases_raw], today, window_days=90)
+
+    # Partner share payable (limited/silent partners' cut of NOI)
+    ownership_rows = db.query(RentalOwnership).filter(RentalOwnership.tenant_id == tid).all()
+    noi_val = portfolio["noi_this_month"]
+    partner_share_payable = round(sum(
+        noi_val * float(o.ownership_pct)
+        for o in ownership_rows
+        if o.role.value in ("limited_partner", "silent_partner")
+    ), 2) if noi_val > 0 else 0.0
 
     # attention_now
     attention: list[dict] = []
@@ -246,6 +311,7 @@ def get_portfolio_summary(
 
     return {
         **portfolio,
+        "partner_share_payable": partner_share_payable,
         "by_company": by_company,
         "arrears_aging": aging,
         "income_trend": trend,

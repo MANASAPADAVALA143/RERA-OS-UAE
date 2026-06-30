@@ -33,9 +33,10 @@ def company_summary(
     invoices_with_collections: list[dict],
     expenses: list[dict],
     today: date | None = None,
+    cur_month: str | None = None,
 ) -> dict:
     today = today or date.today()
-    cur_month = today.strftime("%Y-%m")
+    cur_month = cur_month or today.strftime("%Y-%m")
 
     total = len(units)
     occupied = sum(1 for u in units if u["status"] == "occupied")
