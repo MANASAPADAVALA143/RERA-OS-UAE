@@ -31,20 +31,20 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #0B1437 0%, #1A2456 100%)' }}>
-      <div className="w-full max-w-sm p-8 rounded-2xl" style={{ background: '#151B3D', border: '1px solid #2A3158', boxShadow: '0 25px 80px rgba(0,0,0,0.7)' }}>
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: '#F8F9FB' }}>
+      <div className="w-full max-w-sm p-8 rounded-2xl" style={{ background: '#FFFFFF', border: '1px solid #E5E7EB', boxShadow: '0 8px 32px rgba(0,0,0,0.08)' }}>
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #3B82F6, #1D4ED8)' }}>
             <span className="text-white font-bold text-lg">E</span>
           </div>
-          <h1 className="text-xl font-bold text-white">EstateCFO</h1>
-          <p className="text-sm mt-1" style={{ color: '#94A3B8' }}>Real estate financial intelligence</p>
+          <h1 className="text-xl font-bold" style={{ color: '#111827' }}>EstateCFO</h1>
+          <p className="text-sm mt-1" style={{ color: '#6B7280' }}>Real estate financial intelligence</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ color: '#CBD5E1' }}>
+            <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>
               Email address
             </label>
             <input
@@ -55,12 +55,12 @@ export default function Login() {
               required
               autoComplete="email"
               className="w-full text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={{ background: '#1E2A4A', border: '1px solid #3A4170', color: '#F1F5F9' }}
+              style={{ background: '#F9FAFB', border: '1px solid #D1D5DB', color: '#111827' }}
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ color: '#CBD5E1' }}>
+            <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>
               Password
             </label>
             <input
@@ -71,12 +71,12 @@ export default function Login() {
               required
               autoComplete="current-password"
               className="w-full text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={{ background: '#1E2A4A', border: '1px solid #3A4170', color: '#F1F5F9' }}
+              style={{ background: '#F9FAFB', border: '1px solid #D1D5DB', color: '#111827' }}
             />
           </div>
 
           {error && (
-            <div className="text-xs rounded-lg px-3 py-2" style={{ color: '#FCA5A5', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)' }}>
+            <div className="text-xs rounded-lg px-3 py-2" style={{ color: '#B91C1C', background: '#FEF2F2', border: '1px solid #FECACA' }}>
               {error}
             </div>
           )}
@@ -91,7 +91,7 @@ export default function Login() {
           </button>
         </form>
 
-        <p className="text-center text-xs mt-6" style={{ color: '#475569' }}>
+        <p className="text-center text-xs mt-6" style={{ color: '#6B7280' }}>
           Contact your administrator to get access
         </p>
       </div>
