@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, Cell,
@@ -123,12 +123,12 @@ function computeUnitLtm(unit: UnitRow, months: string[]): UnitLtm {
 
 // Dark-theme tooltip style shared across charts
 const TOOLTIP_STYLE = {
-  contentStyle: { background: '#1E2A4A', border: '1px solid #3A4170', color: '#F1F5F9', borderRadius: 8 },
-  labelStyle: { color: '#94A3B8' },
+  contentStyle: { background: '#F7F5F0', border: '1px solid #DDD8CC', color: '#1C1917', borderRadius: 8 },
+  labelStyle: { color: '#92400E' },
 };
-const TICK = { fill: '#94A3B8', fontSize: 11 };
+const TICK = { fill: '#92400E', fontSize: 11 };
 const SEL_STYLE: React.CSSProperties = {
-  background: '#1E2A4A', border: '1px solid #3A4170', color: '#F1F5F9',
+  background: '#F7F5F0', border: '1px solid #DDD8CC', color: '#1C1917',
   borderRadius: '0.5rem', padding: '0.375rem 0.75rem', fontSize: '0.875rem',
 };
 
@@ -161,8 +161,8 @@ function StatusHistoryTab() {
   if (units.length === 0) {
     return (
       <div className="rounded-xl p-6 text-center" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)' }}>
-        <p className="font-medium mb-1" style={{ color: '#60A5FA' }}>No rent history available yet</p>
-        <p className="text-sm" style={{ color: '#64748B' }}>
+        <p className="font-medium mb-1" style={{ color: '#D4AF37' }}>No rent history available yet</p>
+        <p className="text-sm" style={{ color: '#A8A29E' }}>
           Upload your Rent Receivable Excel file via <strong>Sync Rent Data</strong> to populate month-by-month status history for each unit.
         </p>
       </div>
@@ -177,21 +177,21 @@ function StatusHistoryTab() {
     <div className="space-y-5">
       {/* Unit selector */}
       <div className="flex flex-wrap items-center gap-3">
-        <label className="text-sm font-medium" style={{ color: '#94A3B8' }}>Select Unit:</label>
+        <label className="text-sm font-medium" style={{ color: '#92400E' }}>Select Unit:</label>
         <select value={selId} onChange={e => setSelId(e.target.value)} style={SEL_STYLE}>
           {units.map(u => (
-            <option key={u.id} value={u.id} style={{ background: '#1E2A4A' }}>
+            <option key={u.id} value={u.id} style={{ background: '#F7F5F0' }}>
               {u.unit_number} — {u.company_name}
             </option>
           ))}
         </select>
         {unit && (
-          <span className="text-sm" style={{ color: '#64748B' }}>
+          <span className="text-sm" style={{ color: '#A8A29E' }}>
             {unit.property_name} · Market: {fmtN(ltm?.marketRent ?? 0)}/mo
             {unit.tenant_name ? ` · ${unit.tenant_name}` : ' · VACANT'}
           </span>
         )}
-        <span className="ml-auto text-xs" style={{ color: '#475569' }}>
+        <span className="ml-auto text-xs" style={{ color: '#A8A29E' }}>
           {availableMonths.length} months available ({periodLabel})
         </span>
       </div>
@@ -230,25 +230,25 @@ function StatusHistoryTab() {
 
       {/* Timeline table */}
       {unit && ltm && (
-        <div className="rounded-xl overflow-hidden" style={{ background: '#151B3D', border: '1px solid #2A3158' }}>
-          <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid #2A3158' }}>
-            <p className="font-semibold text-sm" style={{ color: '#F1F5F9' }}>
+        <div className="rounded-xl overflow-hidden" style={{ background: '#F7F5F0', border: '1px solid #DDD8CC' }}>
+          <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid #DDD8CC' }}>
+            <p className="font-semibold text-sm" style={{ color: '#1C1917' }}>
               {unit.unit_number} — {unit.company_name} · Status Timeline
             </p>
-            <p className="text-xs" style={{ color: '#475569' }}>{periodLabel}</p>
+            <p className="text-xs" style={{ color: '#A8A29E' }}>{periodLabel}</p>
           </div>
           <table className="w-full text-sm">
             <thead>
-              <tr style={{ background: '#0F1830' }}>
+              <tr style={{ background: '#F0EDE5' }}>
                 {['Month', 'Status', 'Rent Collected', 'Revenue Lost'].map(h => (
-                  <th key={h} className={`px-4 py-2 text-xs font-medium uppercase ${h !== 'Month' && h !== 'Status' ? 'text-right' : 'text-left'}`} style={{ color: '#64748B' }}>{h}</th>
+                  <th key={h} className={`px-4 py-2 text-xs font-medium uppercase ${h !== 'Month' && h !== 'Status' ? 'text-right' : 'text-left'}`} style={{ color: '#A8A29E' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {ltm.monthData.map((m, i) => (
                 <tr key={i} style={{ borderTop: '1px solid #1E2A4A' }}>
-                  <td className="px-4 py-2.5 font-medium" style={{ color: '#F1F5F9' }}>{m.month}</td>
+                  <td className="px-4 py-2.5 font-medium" style={{ color: '#1C1917' }}>{m.month}</td>
                   <td className="px-4 py-2.5">
                     <span className="flex items-center gap-2">
                       <span>{m.status === 'occupied' ? '🟢' : '🔴'}</span>
@@ -256,7 +256,7 @@ function StatusHistoryTab() {
                         {m.status === 'occupied' ? 'Occupied' : 'Vacant'}
                       </span>
                       {m.status === 'vacant' && i > 0 && ltm.monthData[i - 1].status !== 'vacant' && (
-                        <span className="text-xs italic" style={{ color: '#64748B' }}>← tenant left</span>
+                        <span className="text-xs italic" style={{ color: '#A8A29E' }}>← tenant left</span>
                       )}
                       {m.status === 'occupied' && m.rent > 0 && m.rent < ltm.marketRent && (
                         <span className="text-xs italic" style={{ color: '#FCD34D' }}>← below market</span>
@@ -266,20 +266,20 @@ function StatusHistoryTab() {
                   <td className="px-4 py-2.5 text-right font-mono">
                     {m.rent > 0
                       ? <span style={{ color: '#86EFAC' }}>{fmtN(m.rent)}</span>
-                      : <span style={{ color: '#475569' }}>$0</span>}
+                      : <span style={{ color: '#A8A29E' }}>$0</span>}
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono">
                     {m.status === 'vacant'
                       ? <span style={{ color: '#F87171' }}>{fmtN(ltm.marketRent)}</span>
-                      : <span style={{ color: '#2A3158' }}>—</span>}
+                      : <span style={{ color: '#DDD8CC' }}>—</span>}
                   </td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
-              <tr style={{ background: '#0A0F2C' }}>
-                <td className="px-4 py-3 font-semibold text-sm" style={{ color: '#F1F5F9' }}>Summary</td>
-                <td className="px-4 py-3 text-xs" style={{ color: '#94A3B8' }}>
+              <tr style={{ background: '#F0EDE5' }}>
+                <td className="px-4 py-3 font-semibold text-sm" style={{ color: '#1C1917' }}>Summary</td>
+                <td className="px-4 py-3 text-xs" style={{ color: '#92400E' }}>
                   Vacant: {ltm.vacMonths} mo · Occupied: {ltm.occMonths} mo · {ltm.totalMonths} total
                 </td>
                 <td className="px-4 py-3 text-right font-mono font-semibold" style={{ color: '#86EFAC' }}>
@@ -295,7 +295,7 @@ function StatusHistoryTab() {
       )}
 
       {/* Legend */}
-      <div className="flex flex-wrap gap-4 text-xs" style={{ color: '#64748B' }}>
+      <div className="flex flex-wrap gap-4 text-xs" style={{ color: '#A8A29E' }}>
         <span className="flex items-center gap-1">🟢 Occupied</span>
         <span className="flex items-center gap-1">🔴 Vacant</span>
       </div>
@@ -388,25 +388,25 @@ function LTMPerformanceTab() {
       {/* Controls */}
       <div className="flex flex-wrap gap-2 items-center">
         <select value={filterCo} onChange={e => { setFilterCo(e.target.value); setSelId('all'); }} style={SEL_STYLE}>
-          <option value="" style={{ background: '#1E2A4A' }}>All Companies</option>
-          {companies.map(c => <option key={c} value={c} style={{ background: '#1E2A4A' }}>{c}</option>)}
+          <option value="" style={{ background: '#F7F5F0' }}>All Companies</option>
+          {companies.map(c => <option key={c} value={c} style={{ background: '#F7F5F0' }}>{c}</option>)}
         </select>
         <select value={selId} onChange={e => setSelId(e.target.value)} style={SEL_STYLE}>
-          <option value="all" style={{ background: '#1E2A4A' }}>All Units</option>
+          <option value="all" style={{ background: '#F7F5F0' }}>All Units</option>
           {filteredUnits.map(u => (
-            <option key={u.id} value={u.id} style={{ background: '#1E2A4A' }}>
+            <option key={u.id} value={u.id} style={{ background: '#F7F5F0' }}>
               {u.unit_number} — {u.property_name || u.company_name}
             </option>
           ))}
         </select>
-        <span className="text-xs ml-2" style={{ color: '#475569' }}>{periodLabel}</span>
-        <div className="flex gap-1 ml-auto p-1 rounded-lg" style={{ background: '#0F1830' }}>
+        <span className="text-xs ml-2" style={{ color: '#A8A29E' }}>{periodLabel}</span>
+        <div className="flex gap-1 ml-auto p-1 rounded-lg" style={{ background: '#F0EDE5' }}>
           {(['chart', 'table'] as const).map(v => (
             <button key={v} onClick={() => setViewMode(v)}
               className="px-3 py-1 rounded text-xs font-medium capitalize transition-colors"
               style={viewMode === v
-                ? { background: '#1E2A4A', color: '#F1F5F9' }
-                : { color: '#64748B' }
+                ? { background: '#F7F5F0', color: '#1C1917' }
+                : { color: '#A8A29E' }
               }>{v}</button>
           ))}
         </div>
@@ -415,8 +415,8 @@ function LTMPerformanceTab() {
       {/* No history notice */}
       {availableMonths.length === 0 && (
         <div className="rounded-xl p-5 text-center" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)' }}>
-          <p className="font-medium mb-1" style={{ color: '#60A5FA' }}>No rent history data yet</p>
-          <p className="text-sm" style={{ color: '#64748B' }}>
+          <p className="font-medium mb-1" style={{ color: '#D4AF37' }}>No rent history data yet</p>
+          <p className="text-sm" style={{ color: '#A8A29E' }}>
             Use <strong>Sync Rent Data</strong> to upload the Rent Receivable Excel — that populates month-by-month history for LTM analysis.
           </p>
         </div>
@@ -424,16 +424,16 @@ function LTMPerformanceTab() {
 
       {/* Dual-axis chart — single unit */}
       {viewMode === 'chart' && displayUnit && displayLtm && chartData.length > 0 && (
-        <div className="rounded-xl p-5" style={{ background: '#151B3D', border: '1px solid #2A3158' }}>
-          <p className="text-sm font-semibold mb-0.5" style={{ color: '#F1F5F9' }}>
+        <div className="rounded-xl p-5" style={{ background: '#F7F5F0', border: '1px solid #DDD8CC' }}>
+          <p className="text-sm font-semibold mb-0.5" style={{ color: '#1C1917' }}>
             {displayUnit.unit_number} ({displayUnit.company_name}) — Rent &amp; Occupancy
           </p>
-          <p className="text-xs mb-4" style={{ color: '#64748B' }}>
+          <p className="text-xs mb-4" style={{ color: '#A8A29E' }}>
             {periodLabel} · Market rent: {fmtN(displayLtm.marketRent)}/mo
           </p>
           <ResponsiveContainer width="100%" height={260}>
             <ComposedChart data={chartData} margin={{ left: 0, right: 30 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1E2A4A" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#F7F5F0" />
               <XAxis dataKey="month" tick={TICK} />
               <YAxis yAxisId="left" tickFormatter={v => `$${(v / 1000).toFixed(1)}K`} tick={TICK} domain={[0, displayLtm.marketRent * 1.2]} />
               <YAxis yAxisId="right" orientation="right" tickFormatter={v => `${v}%`} tick={TICK} domain={[0, 130]} />
@@ -442,8 +442,8 @@ function LTMPerformanceTab() {
                   if (!active || !payload?.length) return null;
                   const d = payload[0]?.payload;
                   return (
-                    <div style={{ background: '#1E2A4A', border: '1px solid #3A4170', borderRadius: 8, padding: '0.75rem', fontSize: '0.75rem', color: '#F1F5F9' }}>
-                      <p style={{ fontWeight: 600, marginBottom: 4, color: '#94A3B8' }}>{d.fullMonth || label}</p>
+                    <div style={{ background: '#F7F5F0', border: '1px solid #DDD8CC', borderRadius: 8, padding: '0.75rem', fontSize: '0.75rem', color: '#1C1917' }}>
+                      <p style={{ fontWeight: 600, marginBottom: 4, color: '#92400E' }}>{d.fullMonth || label}</p>
                       <p>Status: <span style={{ fontWeight: 600 }}>{d.status === 'occupied' ? 'Occupied' : 'Vacant'}</span></p>
                       <p>Rent: <span style={{ fontFamily: 'monospace' }}>{fmtN(d.rent)}</span></p>
                       {d.lost > 0 && <p style={{ color: '#F87171' }}>Lost: <span style={{ fontFamily: 'monospace' }}>{fmtN(d.lost)}</span></p>}
@@ -457,7 +457,7 @@ function LTMPerformanceTab() {
               <Line yAxisId="right" type="stepAfter" dataKey="occupancy" stroke="#F59E0B" strokeWidth={2} dot={false} name="Occupancy %" />
             </ComposedChart>
           </ResponsiveContainer>
-          <div className="flex gap-4 mt-2 text-xs" style={{ color: '#64748B' }}>
+          <div className="flex gap-4 mt-2 text-xs" style={{ color: '#A8A29E' }}>
             <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#22C55E' }} /> Rent Collected</span>
             <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#EF4444' }} /> Vacant Month</span>
             <span className="flex items-center gap-1"><span className="inline-block w-6 h-0.5" style={{ background: '#F59E0B' }} /> Occupancy %</span>
@@ -466,25 +466,25 @@ function LTMPerformanceTab() {
       )}
 
       {viewMode === 'chart' && !displayUnit && availableMonths.length > 0 && (
-        <div className="rounded-lg p-4 text-sm" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', color: '#60A5FA' }}>
+        <div className="rounded-lg p-4 text-sm" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', color: '#D4AF37' }}>
           Select a specific unit above to view its dual-axis chart.
         </div>
       )}
 
       {/* LTM Summary table — always visible */}
       {availableMonths.length > 0 && (
-        <div className="rounded-xl overflow-hidden" style={{ background: '#151B3D', border: '1px solid #2A3158' }}>
-          <div className="px-4 py-3" style={{ borderBottom: '1px solid #2A3158' }}>
-            <p className="font-semibold text-sm" style={{ color: '#F1F5F9' }}>
+        <div className="rounded-xl overflow-hidden" style={{ background: '#F7F5F0', border: '1px solid #DDD8CC' }}>
+          <div className="px-4 py-3" style={{ borderBottom: '1px solid #DDD8CC' }}>
+            <p className="font-semibold text-sm" style={{ color: '#1C1917' }}>
               LTM Summary — {filterCo || 'All Companies'} · {filteredUnits.length} units
             </p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr style={{ background: '#0A0F2C' }}>
+                <tr style={{ background: '#F0EDE5' }}>
                   {['Unit', 'Building', 'Company', 'Occ Mo', 'Vac Mo', 'Collected', 'Expected', 'Lost', 'Occ %', 'Avg Rent', 'Trend', 'Action'].map(h => (
-                    <th key={h} className="px-3 py-2.5 text-left whitespace-nowrap font-medium" style={{ color: '#64748B' }}>{h}</th>
+                    <th key={h} className="px-3 py-2.5 text-left whitespace-nowrap font-medium" style={{ color: '#A8A29E' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -496,25 +496,25 @@ function LTMPerformanceTab() {
                     'Offer discount': { bg: 'rgba(239,68,68,0.15)', color: '#FCA5A5' },
                     'Review rent':    { bg: 'rgba(245,158,11,0.15)', color: '#FDE68A' },
                     'Retain tenant':  { bg: 'rgba(34,197,94,0.15)',  color: '#86EFAC' },
-                    'Monitor':        { bg: 'rgba(100,116,139,0.15)', color: '#94A3B8' },
-                  }[ltm.action] ?? { bg: 'rgba(100,116,139,0.15)', color: '#94A3B8' };
+                    'Monitor':        { bg: 'rgba(100,116,139,0.15)', color: '#92400E' },
+                  }[ltm.action] ?? { bg: 'rgba(100,116,139,0.15)', color: '#92400E' };
 
                   return (
                     <tr key={u.id} style={{ borderTop: '1px solid #1E2A4A' }}>
-                      <td className="px-3 py-2 font-mono font-medium" style={{ color: '#F1F5F9' }}>{u.unit_number}</td>
-                      <td className="px-3 py-2 max-w-[120px] truncate" style={{ color: '#94A3B8' }}>{u.property_name || '—'}</td>
-                      <td className="px-3 py-2 max-w-[120px] truncate" style={{ color: '#94A3B8' }}>{u.company_name || '—'}</td>
+                      <td className="px-3 py-2 font-mono font-medium" style={{ color: '#1C1917' }}>{u.unit_number}</td>
+                      <td className="px-3 py-2 max-w-[120px] truncate" style={{ color: '#92400E' }}>{u.property_name || '—'}</td>
+                      <td className="px-3 py-2 max-w-[120px] truncate" style={{ color: '#92400E' }}>{u.company_name || '—'}</td>
                       {noHistory ? (
-                        <td colSpan={9} className="px-3 py-2 text-xs italic" style={{ color: '#3A4170' }}>
+                        <td colSpan={9} className="px-3 py-2 text-xs italic" style={{ color: '#DDD8CC' }}>
                           No history — upload rent receivable to see LTM data
                         </td>
                       ) : (
                         <>
                           <td className="px-3 py-2 text-center font-medium" style={{ color: '#86EFAC' }}>{ltm.occMonths}</td>
-                          <td className="px-3 py-2 text-center font-medium" style={{ color: ltm.vacMonths > 0 ? '#F87171' : '#64748B' }}>{ltm.vacMonths}</td>
-                          <td className="px-3 py-2 font-mono text-right" style={{ color: '#F1F5F9' }}>{fmtN(ltm.collected)}</td>
-                          <td className="px-3 py-2 font-mono text-right" style={{ color: '#64748B' }}>{fmtN(ltm.expected)}</td>
-                          <td className="px-3 py-2 font-mono text-right" style={{ color: ltm.lost > 0 ? '#F87171' : '#64748B' }}>{ltm.lost > 0 ? fmtN(ltm.lost) : '—'}</td>
+                          <td className="px-3 py-2 text-center font-medium" style={{ color: ltm.vacMonths > 0 ? '#F87171' : '#A8A29E' }}>{ltm.vacMonths}</td>
+                          <td className="px-3 py-2 font-mono text-right" style={{ color: '#1C1917' }}>{fmtN(ltm.collected)}</td>
+                          <td className="px-3 py-2 font-mono text-right" style={{ color: '#A8A29E' }}>{fmtN(ltm.expected)}</td>
+                          <td className="px-3 py-2 font-mono text-right" style={{ color: ltm.lost > 0 ? '#F87171' : '#A8A29E' }}>{ltm.lost > 0 ? fmtN(ltm.lost) : '—'}</td>
                           <td className="px-3 py-2 text-center">
                             <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={
                               ltm.occPct === 100
@@ -524,13 +524,13 @@ function LTMPerformanceTab() {
                                   : { background: 'rgba(239,68,68,0.15)', color: '#FCA5A5' }
                             }>{ltm.occPct}%</span>
                           </td>
-                          <td className="px-3 py-2 font-mono text-right" style={{ color: '#F1F5F9' }}>{ltm.avgRent > 0 ? fmtN(ltm.avgRent) : '—'}</td>
+                          <td className="px-3 py-2 font-mono text-right" style={{ color: '#1C1917' }}>{ltm.avgRent > 0 ? fmtN(ltm.avgRent) : '—'}</td>
                           <td className="px-3 py-2 text-center text-base font-bold">
                             {ltm.trend === 'up'
                               ? <span style={{ color: '#86EFAC' }}>↑</span>
                               : ltm.trend === 'down'
                                 ? <span style={{ color: '#F87171' }}>↓</span>
-                                : <span style={{ color: '#64748B' }}>→</span>}
+                                : <span style={{ color: '#A8A29E' }}>→</span>}
                           </td>
                           <td className="px-3 py-2">
                             <span className="px-2 py-0.5 rounded text-xs font-medium" style={{ background: actionColor.bg, color: actionColor.color }}>
@@ -550,8 +550,8 @@ function LTMPerformanceTab() {
 
       {/* Strategic Insights */}
       {insights.length > 0 && (
-        <div className="rounded-xl p-5" style={{ background: '#151B3D', border: '1px solid #2A3158' }}>
-          <p className="text-sm font-semibold mb-3" style={{ color: '#F1F5F9' }}>Strategic Insights</p>
+        <div className="rounded-xl p-5" style={{ background: '#F7F5F0', border: '1px solid #DDD8CC' }}>
+          <p className="text-sm font-semibold mb-3" style={{ color: '#1C1917' }}>Strategic Insights</p>
           <div className="space-y-2">
             {insights.map((ins, i) => (
               <div
@@ -654,13 +654,13 @@ export default function RentalUnits() {
       <h1 className="text-2xl font-bold text-charcoal">Units</h1>
 
       {/* Tab switcher */}
-      <div className="flex gap-1 p-1 rounded-lg w-fit" style={{ background: '#0F1830' }}>
+      <div className="flex gap-1 p-1 rounded-lg w-fit" style={{ background: '#F0EDE5' }}>
         {TABS.map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id)}
             className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors"
             style={activeTab === t.id
-              ? { background: '#1E2A4A', color: '#F1F5F9' }
-              : { color: '#64748B' }
+              ? { background: '#F7F5F0', color: '#1C1917' }
+              : { color: '#A8A29E' }
             }
           >{t.label}</button>
         ))}
@@ -671,16 +671,16 @@ export default function RentalUnits() {
         <>
           <div className="flex flex-wrap gap-3">
             <select value={filterCompany} onChange={e => setFilterCompany(e.target.value)} style={SEL_STYLE}>
-              <option value="" style={{ background: '#1E2A4A' }}>All Companies</option>
-              {companies.map(c => <option key={c.id} value={c.id} style={{ background: '#1E2A4A' }}>{c.company_name}</option>)}
+              <option value="" style={{ background: '#F7F5F0' }}>All Companies</option>
+              {companies.map(c => <option key={c.id} value={c.id} style={{ background: '#F7F5F0' }}>{c.company_name}</option>)}
             </select>
             <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={SEL_STYLE}>
-              <option value="" style={{ background: '#1E2A4A' }}>All Statuses</option>
-              <option value="occupied"         style={{ background: '#1E2A4A' }}>Occupied</option>
-              <option value="vacant"           style={{ background: '#1E2A4A' }}>Vacant</option>
-              <option value="notice"           style={{ background: '#1E2A4A' }}>Notice</option>
-              <option value="reserved"         style={{ background: '#1E2A4A' }}>Reserved</option>
-              <option value="maintenance_hold" style={{ background: '#1E2A4A' }}>Maintenance Hold</option>
+              <option value="" style={{ background: '#F7F5F0' }}>All Statuses</option>
+              <option value="occupied"         style={{ background: '#F7F5F0' }}>Occupied</option>
+              <option value="vacant"           style={{ background: '#F7F5F0' }}>Vacant</option>
+              <option value="notice"           style={{ background: '#F7F5F0' }}>Notice</option>
+              <option value="reserved"         style={{ background: '#F7F5F0' }}>Reserved</option>
+              <option value="maintenance_hold" style={{ background: '#F7F5F0' }}>Maintenance Hold</option>
             </select>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

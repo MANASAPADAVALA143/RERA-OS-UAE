@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useMemo } from 'react';
+﻿import { useCallback, useEffect, useState, useMemo } from 'react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import api from '../services/api';
 import { Card, KpiCard } from '../components/ui/Card';
@@ -37,12 +37,12 @@ const EXPENSE_CATEGORIES = [
 ];
 
 const CAT_COLORS: Record<string, string> = {
-  repairs: '#3B82F6', utilities: '#8B5CF6', management: '#EC4899',
+  repairs: '#D4AF37', utilities: '#8B5CF6', management: '#EC4899',
   insurance: '#F59E0B', taxes: '#10B981', maintenance: '#06B6D4',
-  cam: '#F97316', other: '#64748B',
+  cam: '#F97316', other: '#A8A29E',
 };
 
-const TOOLTIP_STYLE = { contentStyle: { background: '#1E2A4A', border: '1px solid #2A3158', borderRadius: '0.5rem' } };
+const TOOLTIP_STYLE = { contentStyle: { background: '#F7F5F0', border: '1px solid #DDD8CC', borderRadius: '0.5rem' } };
 
 export default function RentalExpenses() {
   const [data, setData] = useState<ExpenseResponse | null>(null);
@@ -118,8 +118,8 @@ export default function RentalExpenses() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#F1F5F9' }}>Expenses</h1>
-          <p className="text-sm mt-0.5" style={{ color: '#64748B' }}>Track and analyze all property expenses</p>
+          <h1 className="text-2xl font-bold" style={{ color: '#1C1917' }}>Expenses</h1>
+          <p className="text-sm mt-0.5" style={{ color: '#A8A29E' }}>Track and analyze all property expenses</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -130,7 +130,7 @@ export default function RentalExpenses() {
             <Plus size={14} /> Add Expense
           </button>
           <button
-            style={{ background: '#1E2A4A', border: '1px solid #2A3158', color: '#60A5FA' }}
+            style={{ background: '#F7F5F0', border: '1px solid #DDD8CC', color: '#D4AF37' }}
             className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg font-medium hover:bg-white/5"
           >
             <Upload size={14} /> Import Excel
@@ -140,13 +140,13 @@ export default function RentalExpenses() {
 
       {/* Add Expense Form */}
       {showForm && (
-        <div className="p-4 rounded-lg" style={{ background: '#0F1830', border: '1px solid #2A3158' }}>
+        <div className="p-4 rounded-lg" style={{ background: '#F0EDE5', border: '1px solid #DDD8CC' }}>
           <form onSubmit={handleAddExpense} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <select
                 value={formData.company_id}
                 onChange={(e) => setFormData({ ...formData, company_id: e.target.value })}
-                style={{ background: '#1E2A4A', color: '#F1F5F9', borderColor: '#2A3158' }}
+                style={{ background: '#F7F5F0', color: '#1C1917', borderColor: '#DDD8CC' }}
                 className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <option value="">Select Company</option>
@@ -155,7 +155,7 @@ export default function RentalExpenses() {
               <select
                 value={formData.category}
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                style={{ background: '#1E2A4A', color: '#F1F5F9', borderColor: '#2A3158' }}
+                style={{ background: '#F7F5F0', color: '#1C1917', borderColor: '#DDD8CC' }}
                 className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <option value="">Select Category</option>
@@ -167,7 +167,7 @@ export default function RentalExpenses() {
                 type="date"
                 value={formData.date}
                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                style={{ background: '#1E2A4A', color: '#F1F5F9', borderColor: '#2A3158' }}
+                style={{ background: '#F7F5F0', color: '#1C1917', borderColor: '#DDD8CC' }}
                 className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
               <input
@@ -175,7 +175,7 @@ export default function RentalExpenses() {
                 placeholder="Amount"
                 value={formData.amount}
                 onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                style={{ background: '#1E2A4A', color: '#F1F5F9', borderColor: '#2A3158' }}
+                style={{ background: '#F7F5F0', color: '#1C1917', borderColor: '#DDD8CC' }}
                 className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
               <input
@@ -183,7 +183,7 @@ export default function RentalExpenses() {
                 placeholder="Description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                style={{ background: '#1E2A4A', color: '#F1F5F9', borderColor: '#2A3158' }}
+                style={{ background: '#F7F5F0', color: '#1C1917', borderColor: '#DDD8CC' }}
                 className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
@@ -191,7 +191,7 @@ export default function RentalExpenses() {
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                style={{ color: '#64748B', borderColor: '#2A3158' }}
+                style={{ color: '#A8A29E', borderColor: '#DDD8CC' }}
                 className="px-3 py-2 border rounded-lg text-sm font-medium hover:bg-white/5"
               >
                 Cancel
@@ -209,12 +209,12 @@ export default function RentalExpenses() {
       )}
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-lg" style={{ background: '#0F1830', border: '1px solid #2A3158' }}>
-        <span className="text-xs font-semibold" style={{ color: '#64748B' }}>COMPANY</span>
+      <div className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-lg" style={{ background: '#F0EDE5', border: '1px solid #DDD8CC' }}>
+        <span className="text-xs font-semibold" style={{ color: '#A8A29E' }}>COMPANY</span>
         <select
           value={filterCompany}
           onChange={(e) => setFilterCompany(e.target.value)}
-          style={{ background: '#1E2A4A', color: '#F1F5F9', borderColor: '#2A3158' }}
+          style={{ background: '#F7F5F0', color: '#1C1917', borderColor: '#DDD8CC' }}
           className="px-3 py-1.5 border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
         >
           <option value="">All Companies</option>
@@ -255,14 +255,14 @@ export default function RentalExpenses() {
                       dataKey="amount"
                     >
                       {data.by_category.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={CAT_COLORS[entry.category] || '#64748B'} />
+                        <Cell key={`cell-${index}`} fill={CAT_COLORS[entry.category] || '#A8A29E'} />
                       ))}
                     </Pie>
                     <Tooltip formatter={(value: number) => fmtUSD(value)} {...TOOLTIP_STYLE} />
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-60 flex items-center justify-center" style={{ color: '#64748B' }}>No data</div>
+                <div className="h-60 flex items-center justify-center" style={{ color: '#A8A29E' }}>No data</div>
               )}
             </Card>
 
@@ -280,14 +280,14 @@ export default function RentalExpenses() {
                       ).entries()
                     ).map(([name, total]) => ({ name, amount: total }))}
                   >
-                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94A3B8' }} />
-                    <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#92400E' }} />
+                    <YAxis tick={{ fontSize: 11, fill: '#92400E' }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                     <Tooltip formatter={(value: number) => fmtUSD(value)} {...TOOLTIP_STYLE} />
-                    <Bar dataKey="amount" fill="#3B82F6" />
+                    <Bar dataKey="amount" fill="#D4AF37" />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-60 flex items-center justify-center" style={{ color: '#64748B' }}>No data</div>
+                <div className="h-60 flex items-center justify-center" style={{ color: '#A8A29E' }}>No data</div>
               )}
             </Card>
 
@@ -296,14 +296,14 @@ export default function RentalExpenses() {
               {trendData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={240}>
                   <LineChart data={trendData}>
-                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94A3B8' }} />
-                    <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#92400E' }} />
+                    <YAxis tick={{ fontSize: 11, fill: '#92400E' }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                     <Tooltip formatter={(value: number) => fmtUSD(value)} {...TOOLTIP_STYLE} />
                     <Line type="monotone" dataKey="amount" stroke="#10B981" strokeWidth={2} dot={{ fill: '#10B981', r: 4 }} />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-60 flex items-center justify-center" style={{ color: '#64748B' }}>No trend data</div>
+                <div className="h-60 flex items-center justify-center" style={{ color: '#A8A29E' }}>No trend data</div>
               )}
             </Card>
           </div>
@@ -313,24 +313,24 @@ export default function RentalExpenses() {
             <div className="overflow-x-auto max-h-96 overflow-y-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b" style={{ borderColor: '#2A3158' }}>
+                  <tr className="border-b" style={{ borderColor: '#DDD8CC' }}>
                     {['Date', 'Company', 'Category', 'Amount', 'Description'].map(h => (
-                      <th key={h} className="py-2 px-3 font-medium text-left" style={{ color: '#64748B' }}>{h}</th>
+                      <th key={h} className="py-2 px-3 font-medium text-left" style={{ color: '#A8A29E' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {data.items.map((r) => (
-                    <tr key={r.id} className="border-b" style={{ borderColor: '#1E2A4A' }}>
-                      <td className="py-2 px-3" style={{ color: '#F1F5F9' }}>{r.expense_date}</td>
-                      <td className="py-2 px-3" style={{ color: '#94A3B8' }}>{r.company_name || '—'}</td>
+                    <tr key={r.id} className="border-b" style={{ borderColor: '#F7F5F0' }}>
+                      <td className="py-2 px-3" style={{ color: '#1C1917' }}>{r.expense_date}</td>
+                      <td className="py-2 px-3" style={{ color: '#92400E' }}>{r.company_name || '—'}</td>
                       <td className="py-2 px-3">
-                        <span className="text-xs px-2 py-1 rounded-full font-medium" style={{ background: CAT_COLORS[r.category] || '#64748B', color: 'white', opacity: 0.8 }}>
+                        <span className="text-xs px-2 py-1 rounded-full font-medium" style={{ background: CAT_COLORS[r.category] || '#A8A29E', color: 'white', opacity: 0.8 }}>
                           {r.category}
                         </span>
                       </td>
                       <td className="py-2 px-3 font-medium" style={{ color: '#10B981' }}>{fmtUSD(r.amount)}</td>
-                      <td className="py-2 px-3" style={{ color: '#64748B' }}>{r.description || '—'}</td>
+                      <td className="py-2 px-3" style={{ color: '#A8A29E' }}>{r.description || '—'}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { usePropDev } from '../../contexts/PropertyDevContext';
 import CompanyComparisonPanel from '../../components/propdev/CompanyComparisonPanel';
 import {
@@ -241,7 +241,7 @@ export default function PD01Dashboard() {
               <XAxis dataKey="month" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${(v/1000).toFixed(0)}K`} />
               <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, 'Revenue']} />
-              <Bar dataKey="revenue" fill="#2563EB" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="revenue" fill="#D4AF37" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -344,7 +344,7 @@ export default function PD01Dashboard() {
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${v}K`} />
                 <Tooltip content={<CustomEmiTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="outstanding" name="Outstanding ($K)" fill="#2563EB" radius={[3,3,0,0]} maxBarSize={18} />
+                <Bar dataKey="outstanding" name="Outstanding ($K)" fill="#D4AF37" radius={[3,3,0,0]} maxBarSize={18} />
                 <Bar dataKey="emi"         name="Monthly EMI ($K)"  fill="#F97316" radius={[3,3,0,0]} maxBarSize={18} />
                 <Bar dataKey="overdue"     name="Overdue EMI ($K)"  fill="#DC2626" radius={[3,3,0,0]} maxBarSize={18} />
               </BarChart>

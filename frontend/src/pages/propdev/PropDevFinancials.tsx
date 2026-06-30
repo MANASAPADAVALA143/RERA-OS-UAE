@@ -1293,7 +1293,7 @@ function PDKPIView({ fin }: { fin: PDFinancials }) {
                 <XAxis dataKey="year" tick={{fontSize:9,fill:'#999'}} axisLine={false} tickLine={false}/>
                 <YAxis tick={{fontSize:9,fill:'#999'}} tickFormatter={v=>fmtShort(v as number)} axisLine={false} tickLine={false} width={46}/>
                 <Tooltip contentStyle={{fontSize:'11px',border:'0.5px solid #e5e7eb',borderRadius:'8px'}} formatter={(v:number,n:string)=>[fmtShort(v),n]}/>
-                <Bar dataKey="revenue"   name="Revenue"    fill="#2a78d6" opacity={0.85} radius={[3,3,0,0]}/>
+                <Bar dataKey="revenue"   name="Revenue"    fill="#D4AF37" opacity={0.85} radius={[3,3,0,0]}/>
                 <Bar dataKey="noi"       name="NOI"        fill="#0ca30c" opacity={0.85} radius={[3,3,0,0]}/>
                 <Bar dataKey="expenses"  name="Expenses"   fill="#fab219" opacity={0.85} radius={[3,3,0,0]}/>
                 <Bar dataKey="netIncome" name="Net Income" fill="#d03b3b" opacity={0.85} radius={[3,3,0,0]}/>
@@ -1344,7 +1344,7 @@ function PDKPIView({ fin }: { fin: PDFinancials }) {
             <RadarChart data={radarData} margin={{top:8,right:16,bottom:0,left:16}}>
               <PolarGrid stroke="#f0f0f0"/>
               <PolarAngleAxis dataKey="subject" tick={{fontSize:8,fill:'#999'}}/>
-              <Radar dataKey="actual"    name="Actual"     stroke="#2a78d6" fill="#2a78d6" fillOpacity={0.1} strokeWidth={1.5}/>
+              <Radar dataKey="actual"    name="Actual"     stroke="#2a78d6" fill="#D4AF37" fillOpacity={0.1} strokeWidth={1.5}/>
               <Radar dataKey="benchmark" name="Benchmark"  stroke="#fab219" fill="#fab219" fillOpacity={0.05} strokeWidth={1} strokeDasharray="3 2"/>
             </RadarChart>
           </ResponsiveContainer>
@@ -1377,7 +1377,7 @@ function PDKPIView({ fin }: { fin: PDFinancials }) {
               <Bar dataKey="interest" name="Interest"    stackId="a" fill="#d03b3b"/>
               <Bar dataKey="propTax"  name="Prop Tax"   stackId="a" fill="#eb6834"/>
               <Bar dataKey="legal"    name="Legal/Acct" stackId="a" fill="#eda100"/>
-              <Bar dataKey="hoa"      name="HOA"        stackId="a" fill="#2a78d6"/>
+              <Bar dataKey="hoa"      name="HOA"        stackId="a" fill="#D4AF37"/>
               <Bar dataKey="mgmt"     name="Mgmt"       stackId="a" fill="#1baf7a"/>
               <Bar dataKey="other"    name="Other"      stackId="a" fill="#73726c" radius={[0,4,4,0]}/>
             </BarChart>

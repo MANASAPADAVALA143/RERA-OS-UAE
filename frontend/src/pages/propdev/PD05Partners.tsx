@@ -163,7 +163,7 @@ interface TreemapNode {
 }
 
 function TreemapContent(props: Partial<TreemapNode> & { onSelect?: (name: string) => void; depth?: number }) {
-  const { x = 0, y = 0, width = 0, height = 0, name, size = 0, roi = 0, fill = '#94A3B8', avgEquity = 0, onSelect } = props;
+  const { x = 0, y = 0, width = 0, height = 0, name, size = 0, roi = 0, fill = '#92400E', avgEquity = 0, onSelect } = props;
   if (!name || width < 50 || height < 40) return null;
   const short = name.length > 14 ? `${name.slice(0, 12)}…` : name;
   return (
@@ -340,7 +340,7 @@ function CenterAllView({
             <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10 }} />
             <Tooltip formatter={(v: number) => fmt(v)} labelFormatter={(_l, payload) => (payload?.[0]?.payload as { fullName?: string })?.fullName ?? _l} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Bar dataKey="contributed" name="Contributed" fill="#2563EB" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="contributed" name="Contributed" fill="#D4AF37" radius={[3, 3, 0, 0]} />
             <Bar dataKey="distributed" name="Distributed" fill="#16A34A" radius={[3, 3, 0, 0]} />
             <Bar dataKey="pending" name="Pending" fill="#D97706" radius={[3, 3, 0, 0]} />
           </BarChart>
@@ -439,7 +439,7 @@ function CenterPartnerView({
             <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10 }} />
             <Tooltip formatter={(v: number) => fmt(v)} />
             <Legend wrapperStyle={{ fontSize: 10 }} />
-            <Bar dataKey="capitalIn" name="Capital In" fill="#2563EB" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="capitalIn" name="Capital In" fill="#D4AF37" radius={[3, 3, 0, 0]} />
             <Bar dataKey="distributed" name="Distributed" fill="#16A34A" radius={[3, 3, 0, 0]} />
             <Line type="monotone" dataKey="balance" name="Balance" stroke="#7C3AED" strokeWidth={2} dot={false} />
           </ComposedChart>

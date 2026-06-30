@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -92,18 +92,18 @@ interface SyncCompany {
 
 function SkeletonKpi() {
   return (
-    <div className="rounded-xl p-5 animate-pulse" style={{ background: '#1E2A4A', border: '1px solid #2A3158' }}>
-      <div className="h-3 rounded w-2/3 mb-3" style={{ background: '#2A3158' }} />
-      <div className="h-7 rounded w-1/2" style={{ background: '#2A3158' }} />
+    <div className="rounded-xl p-5 animate-pulse" style={{ background: '#F7F5F0', border: '1px solid #DDD8CC' }}>
+      <div className="h-3 rounded w-2/3 mb-3" style={{ background: '#DDD8CC' }} />
+      <div className="h-7 rounded w-1/2" style={{ background: '#DDD8CC' }} />
     </div>
   );
 }
 
 function SkeletonChart() {
   return (
-    <div className="rounded-xl p-5 animate-pulse" style={{ background: '#1E2A4A', border: '1px solid #2A3158' }}>
-      <div className="h-4 rounded w-1/3 mb-4" style={{ background: '#2A3158' }} />
-      <div className="h-52 rounded" style={{ background: '#2A3158' }} />
+    <div className="rounded-xl p-5 animate-pulse" style={{ background: '#F7F5F0', border: '1px solid #DDD8CC' }}>
+      <div className="h-4 rounded w-1/3 mb-4" style={{ background: '#DDD8CC' }} />
+      <div className="h-52 rounded" style={{ background: '#DDD8CC' }} />
     </div>
   );
 }
@@ -111,13 +111,13 @@ function SkeletonChart() {
 // ── tooltip style shared ──────────────────────────────────────────────────────
 
 const TOOLTIP_STYLE = {
-  contentStyle: { background: '#1E2A4A', border: '1px solid #3A4170', color: '#F1F5F9', borderRadius: 8 },
-  labelStyle: { color: '#94A3B8' },
+  contentStyle: { background: '#F7F5F0', border: '1px solid #DDD8CC', color: '#1C1917', borderRadius: 8 },
+  labelStyle: { color: '#92400E' },
 };
 
-const TICK_STYLE = { fill: '#94A3B8', fontSize: 11 };
+const TICK_STYLE = { fill: '#92400E', fontSize: 11 };
 const SELECT_STYLE: React.CSSProperties = {
-  background: '#1E2A4A', border: '1px solid #3A4170', color: '#F1F5F9',
+  background: '#F7F5F0', border: '1px solid #DDD8CC', color: '#1C1917',
   borderRadius: '0.5rem', padding: '0.375rem 0.75rem', fontSize: '0.875rem',
 };
 
@@ -315,7 +315,7 @@ export default function RentalOverview() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="h-8 rounded w-64 animate-pulse" style={{ background: '#1E2A4A' }} />
+        <div className="h-8 rounded w-64 animate-pulse" style={{ background: '#F7F5F0' }} />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {Array.from({ length: 8 }).map((_, i) => <SkeletonKpi key={i} />)}
         </div>
@@ -330,7 +330,7 @@ export default function RentalOverview() {
     return (
       <div className="p-4" style={{ color: '#F87171' }}>
         {error || 'No data'}
-        <button className="ml-4 underline" style={{ color: '#60A5FA' }} onClick={() => fetchData(selectedMonth)}>
+        <button className="ml-4 underline" style={{ color: '#D4AF37' }} onClick={() => fetchData(selectedMonth)}>
           Retry
         </button>
       </div>
@@ -351,8 +351,8 @@ export default function RentalOverview() {
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#F1F5F9' }}>Rental Portfolio — Overview</h1>
-          <p className="text-sm mt-0.5" style={{ color: '#64748B' }}>
+          <h1 className="text-2xl font-bold" style={{ color: '#1C1917' }}>Rental Portfolio — Overview</h1>
+          <p className="text-sm mt-0.5" style={{ color: '#A8A29E' }}>
             Power BI drill-down · {monthLabel}
           </p>
         </div>
@@ -366,24 +366,24 @@ export default function RentalOverview() {
       </div>
 
       {/* ── Filter bar ──────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl" style={{ background: '#0F1830', border: '1px solid #2A3158' }}>
+      <div className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl" style={{ background: '#F0EDE5', border: '1px solid #DDD8CC' }}>
         {/* Month */}
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold" style={{ color: '#64748B' }}>PERIOD</span>
+          <span className="text-xs font-semibold" style={{ color: '#A8A29E' }}>PERIOD</span>
           <select value={selectedMonth} onChange={e => setMonth(e.target.value)} style={SELECT_STYLE}>
             {MONTH_OPTIONS.map(o => (
-              <option key={o.value} value={o.value} style={{ background: '#1E2A4A' }}>{o.label}</option>
+              <option key={o.value} value={o.value} style={{ background: '#F7F5F0' }}>{o.label}</option>
             ))}
           </select>
         </div>
 
         {/* Company */}
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold" style={{ color: '#64748B' }}>COMPANY</span>
+          <span className="text-xs font-semibold" style={{ color: '#A8A29E' }}>COMPANY</span>
           <select value={selectedCoId} onChange={e => setCompany(e.target.value)} style={SELECT_STYLE}>
-            <option value="" style={{ background: '#1E2A4A' }}>All Companies</option>
+            <option value="" style={{ background: '#F7F5F0' }}>All Companies</option>
             {data.by_company.map(c => (
-              <option key={c.company_id} value={c.company_id} style={{ background: '#1E2A4A' }}>{c.company_name}</option>
+              <option key={c.company_id} value={c.company_id} style={{ background: '#F7F5F0' }}>{c.company_name}</option>
             ))}
           </select>
         </div>
@@ -394,7 +394,7 @@ export default function RentalOverview() {
             <>
               <span
                 className="text-xs font-semibold px-3 py-1 rounded-full"
-                style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid #3B82F6', color: '#60A5FA' }}
+                style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid #3B82F6', color: '#D4AF37' }}
               >
                 Viewing: {selectedCoName}
               </span>
@@ -407,12 +407,12 @@ export default function RentalOverview() {
               </button>
             </>
           ) : (
-            <span className="text-xs" style={{ color: '#475569' }}>
+            <span className="text-xs" style={{ color: '#A8A29E' }}>
               All Companies · {data.by_company.length} entities
             </span>
           )}
           {fetching && (
-            <span className="text-xs animate-pulse" style={{ color: '#60A5FA' }}>Loading…</span>
+            <span className="text-xs animate-pulse" style={{ color: '#D4AF37' }}>Loading…</span>
           )}
         </div>
       </div>
@@ -520,7 +520,7 @@ export default function RentalOverview() {
           {/* Occupancy by Company */}
           <Card title={selectedCoName ? `Occupancy — ${selectedCoName}` : 'Occupancy by Company'}>
             {!selectedCoId && (
-              <p className="text-xs mb-1" style={{ color: '#475569' }}>
+              <p className="text-xs mb-1" style={{ color: '#A8A29E' }}>
                 Click a bar to drill into that company
               </p>
             )}
@@ -537,7 +537,7 @@ export default function RentalOverview() {
                   {occupancyChartData.map((entry, idx) => (
                     <Cell
                       key={idx}
-                      fill={selectedCoId === entry.company_id ? '#60A5FA' : '#3B82F6'}
+                      fill={selectedCoId === entry.company_id ? '#D4AF37' : '#D4AF37'}
                       opacity={selectedCoId && selectedCoId !== entry.company_id ? 0.45 : 1}
                     />
                   ))}
@@ -553,8 +553,8 @@ export default function RentalOverview() {
                 <XAxis dataKey="month" tick={{ ...TICK_STYLE, fontSize: 10 }} />
                 <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} tick={TICK_STYLE} />
                 <Tooltip formatter={(v: number) => fmtUSD(v)} {...TOOLTIP_STYLE} />
-                <Legend wrapperStyle={{ color: '#94A3B8', fontSize: 12 }} />
-                <Line type="monotone" dataKey="collected" stroke="#3B82F6" name="Collected" strokeWidth={2} dot={false} />
+                <Legend wrapperStyle={{ color: '#92400E', fontSize: 12 }} />
+                <Line type="monotone" dataKey="collected" stroke="#D4AF37" name="Collected" strokeWidth={2} dot={false} />
                 {trendData.some(d => d.expense > 0) && (
                   <Line type="monotone" dataKey="expense" stroke="#EF4444" name="Expense" strokeWidth={2} dot={false} />
                 )}
@@ -577,7 +577,7 @@ export default function RentalOverview() {
           {/* NOI by Company */}
           <Card title={selectedCoName ? `NOI Trend — ${selectedCoName}` : 'NOI by Company'}>
             {!selectedCoId && (
-              <p className="text-xs mb-1" style={{ color: '#475569' }}>
+              <p className="text-xs mb-1" style={{ color: '#A8A29E' }}>
                 Click a bar to drill into that company
               </p>
             )}
@@ -594,7 +594,7 @@ export default function RentalOverview() {
                   {noiChartData.map((entry, idx) => (
                     <Cell
                       key={idx}
-                      fill={selectedCoId === entry.company_id ? '#60A5FA' : '#3B82F6'}
+                      fill={selectedCoId === entry.company_id ? '#D4AF37' : '#D4AF37'}
                       opacity={selectedCoId && selectedCoId !== entry.company_id ? 0.45 : 1}
                     />
                   ))}
@@ -627,14 +627,14 @@ export default function RentalOverview() {
                   dataKey="value"
                 >
                   <Cell fill={kpis.occupancy_pct >= 0.8 ? '#10B981' : kpis.occupancy_pct >= 0.6 ? '#F59E0B' : '#EF4444'} />
-                  <Cell fill="#1E2A4A" />
+                  <Cell fill="#F7F5F0" />
                 </Pie>
               </PieChart>
               <div className="text-center mt-4">
-                <div className="text-3xl font-bold" style={{ color: '#F1F5F9' }}>
+                <div className="text-3xl font-bold" style={{ color: '#1C1917' }}>
                   {(kpis.occupancy_pct * 100).toFixed(1)}%
                 </div>
-                <div className="text-xs" style={{ color: '#94A3B8' }}>
+                <div className="text-xs" style={{ color: '#92400E' }}>
                   {kpis.occupied_units} of {kpis.total_units} units
                 </div>
               </div>
@@ -687,14 +687,14 @@ export default function RentalOverview() {
                       dataKey="value"
                     >
                       {rentCompositionData.map((entry, index) => {
-                        const colors = ['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#06B6D4', '#EF4444'];
+                        const colors = ['#D4AF37', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#06B6D4', '#EF4444'];
                         return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
                       })}
                     </Pie>
                     <Tooltip formatter={(value: number) => fmtUSD(value)} {...TOOLTIP_STYLE} />
                   </PieChart>
                 </ResponsiveContainer>
-                <div className="text-center mt-2 text-xs space-y-1" style={{ color: '#94A3B8' }}>
+                <div className="text-center mt-2 text-xs space-y-1" style={{ color: '#92400E' }}>
                   {rentCompositionData.slice(0, 3).map((item, i) => (
                     <div key={i}>{item.name}: {fmtUSD(item.value)}</div>
                   ))}
@@ -704,7 +704,7 @@ export default function RentalOverview() {
                 </div>
               </>
             ) : (
-              <p style={{ color: '#94A3B8' }} className="text-center py-12">No data available</p>
+              <p style={{ color: '#92400E' }} className="text-center py-12">No data available</p>
             )}
           </Card>
         </div>
@@ -716,9 +716,9 @@ export default function RentalOverview() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left" style={{ borderColor: '#2A3158' }}>
+                <tr className="border-b text-left" style={{ borderColor: '#DDD8CC' }}>
                   {['Unit', 'Company', 'Tenant', 'Lease End', 'Days Left'].map(h => (
-                    <th key={h} className="py-2 px-2 font-medium" style={{ color: '#64748B' }}>{h}</th>
+                    <th key={h} className="py-2 px-2 font-medium" style={{ color: '#A8A29E' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -726,14 +726,14 @@ export default function RentalOverview() {
                 {data.lease_expiry_pipeline
                   .filter(l => !selectedCoName || l.company_name === selectedCoName)
                   .map((l, i) => (
-                    <tr key={i} className="border-b" style={{ borderColor: '#1E2A4A' }}>
-                      <td className="py-2 px-2" style={{ color: '#F1F5F9' }}>{l.unit_number || '—'}</td>
-                      <td className="py-2 px-2" style={{ color: '#94A3B8' }}>{l.company_name || '—'}</td>
-                      <td className="py-2 px-2" style={{ color: '#94A3B8' }}>{l.tenant_name || '—'}</td>
-                      <td className="py-2 px-2" style={{ color: '#94A3B8' }}>{l.lease_end}</td>
+                    <tr key={i} className="border-b" style={{ borderColor: '#F7F5F0' }}>
+                      <td className="py-2 px-2" style={{ color: '#1C1917' }}>{l.unit_number || '—'}</td>
+                      <td className="py-2 px-2" style={{ color: '#92400E' }}>{l.company_name || '—'}</td>
+                      <td className="py-2 px-2" style={{ color: '#92400E' }}>{l.tenant_name || '—'}</td>
+                      <td className="py-2 px-2" style={{ color: '#92400E' }}>{l.lease_end}</td>
                       <td
                         className="py-2 px-2 font-medium"
-                        style={{ color: l.days_until_expiry <= 30 ? '#F87171' : l.days_until_expiry <= 60 ? '#FCD34D' : '#94A3B8' }}
+                        style={{ color: l.days_until_expiry <= 30 ? '#F87171' : l.days_until_expiry <= 60 ? '#FCD34D' : '#92400E' }}
                       >
                         {l.days_until_expiry}d
                       </td>

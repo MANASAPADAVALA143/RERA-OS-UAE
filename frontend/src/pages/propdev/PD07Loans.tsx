@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { usePropDev } from '../../contexts/PropertyDevContext';
 import type { Loan, CompanyData } from '../../contexts/PropertyDevContext';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
@@ -925,7 +925,7 @@ function CashFlowForecast({ companies }: { companies: CompanyData[] }) {
             <Legend />
             <Bar dataKey="cash"        fill="#16A34A" name="Closing Cash"  radius={[4,4,0,0]} />
             <Bar dataKey="emi"         fill="#DC2626" name="EMI Due"       radius={[4,4,0,0]} />
-            <Bar dataKey="collections" fill="#2563EB" name="Collections"   radius={[4,4,0,0]} />
+            <Bar dataKey="collections" fill="#D4AF37" name="Collections"   radius={[4,4,0,0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -1081,7 +1081,7 @@ export default function PD07Loans() {
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${(v/1000).toFixed(0)}K`} />
                     <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, '']} />
-                    <Line type="monotone" dataKey="balance" stroke="#2563EB" strokeWidth={2} dot={false} name="Balance" />
+                    <Line type="monotone" dataKey="balance" stroke="#D4AF37" strokeWidth={2} dot={false} name="Balance" />
                     <Line type="monotone" dataKey="interest" stroke="#DC2626" strokeWidth={1.5} dot={false} name="Interest" />
                   </LineChart>
                 </ResponsiveContainer>

@@ -456,7 +456,7 @@ function CostExposureChart({ trades }: { trades: CostTrade[] }) {
   const statusColor = (status: string) => {
     if (status === 'over_budget') return '#DC2626';
     if (status === 'watch') return '#F59E0B';
-    return '#3B82F6';
+    return '#D4AF37';
   };
 
   return (
@@ -470,7 +470,7 @@ function CostExposureChart({ trades }: { trades: CostTrade[] }) {
         <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={160} />
         <Tooltip formatter={(v: number) => fmtUSD(v)} />
         <Legend wrapperStyle={{ fontSize: 11 }} />
-        <Bar dataKey="budgeted" name="Budgeted" fill="#1E3A8A" radius={[0, 3, 3, 0]} maxBarSize={12} />
+        <Bar dataKey="budgeted" name="Budgeted" fill="#B8962E" radius={[0, 3, 3, 0]} maxBarSize={12} />
         <Bar dataKey="exposure" name="Actual + Committed" radius={[0, 3, 3, 0]} maxBarSize={12}>
           {chartData.map((entry, i) => (
             <Cell key={i} fill={statusColor(entry.status)} />

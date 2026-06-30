@@ -9,10 +9,15 @@ interface CardProps {
 
 export function Card({ children, className = '', title, action }: CardProps) {
   return (
-    <div className={`rounded-xl border shadow-sm ${className}`} style={{ background: '#151B3D', borderColor: '#2A3158' }}>
+    <div className={`rounded-xl border shadow-sm ${className}`}
+      style={{ background: '#F7F5F0', borderColor: '#DDD8CC' }}>
       {(title || action) && (
-        <div className="px-5 py-3 border-b flex items-center justify-between gap-3" style={{ borderColor: '#2A3158' }}>
-          {title && <span className="font-semibold" style={{ color: '#60A5FA' }}>{title}</span>}
+        <div className="px-5 py-3 border-b flex items-center justify-between gap-3"
+          style={{ borderColor: '#DDD8CC' }}>
+          {title && (
+            <span className="font-semibold text-sm"
+              style={{ color: '#92400E' }}>{title}</span>
+          )}
           {action && <div className="flex-shrink-0">{action}</div>}
         </div>
       )}
@@ -21,42 +26,52 @@ export function Card({ children, className = '', title, action }: CardProps) {
   );
 }
 
-const GRADIENT_MAP: Record<string, string> = {
-  orange: 'linear-gradient(135deg, #F97316, #EA580C)',
-  purple: 'linear-gradient(135deg, #8B5CF6, #6D28D9)',
-  blue:   'linear-gradient(135deg, #3B82F6, #1D4ED8)',
-  teal:   'linear-gradient(135deg, #14B8A6, #0D9488)',
-  red:    'linear-gradient(135deg, #EF4444, #DC2626)',
-  indigo: 'linear-gradient(135deg, #6366F1, #4338CA)',
-};
-
 export function KpiCard({
   label, value, sub, accent = false, gradient,
 }: {
-  label: string; value: string; sub?: string; accent?: boolean; gradient?: keyof typeof GRADIENT_MAP;
+  label: string; value: string; sub?: string; accent?: boolean; gradient?: string;
 }) {
+  // gradient prop kept for backward compat — maps to amber tones
   if (gradient) {
-    const bg = GRADIENT_MAP[gradient] ?? GRADIENT_MAP.blue;
+    const GRADIENT_MAP: Record<string, string> = {
+      orange: 'linear-gradient(135deg, #F97316, #EA580C)',
+      purple: 'linear-gradient(135deg, #8B5CF6, #6D28D9)',
+      teal:   'linear-gradient(135deg, #14B8A6, #0D9488)',
+      red:    'linear-gradient(135deg, #EF4444, #DC2626)',
+      amber:  'linear-gradient(135deg, #D4AF37, #B8962E)',
+      blue:   'linear-gradient(135deg, #D4AF37, #B8962E)', // remap blue→amber
+      indigo: 'linear-gradient(135deg, #D4AF37, #B8962E)', // remap indigo→amber
+    };
+    const bg = GRADIENT_MAP[gradient] ?? GRADIENT_MAP.amber;
     return (
       <div className="rounded-xl p-5 shadow-sm" style={{ background: bg, color: 'white' }}>
-        <p className="text-sm opacity-80">{label}</p>
-        <p className="text-2xl font-bold mt-1">{value}</p>
-        {sub && <p className="text-xs mt-1 opacity-70">{sub}</p>}
+        <p className="text-xs font-medium uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.75)' }}>{label}</p>
+        <p className="text-2xl font-bold mt-1" style={{ fontWeight: 500, fontSize: '22px' }}>{value}</p>
+        {sub && <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.6)' }}>{sub}</p>}
       </div>
     );
   }
+
+  // Hero card (accent=true): dark bg, gold border
+  if (accent) {
+    return (
+      <div className="rounded-xl p-5 shadow-sm"
+        style={{ background: '#161310', border: '1px solid #D4AF37' }}>
+        <p className="text-xs font-medium uppercase tracking-wider"
+          style={{ color: '#D4AF37', letterSpacing: '0.05em' }}>{label}</p>
+        <p className="mt-1 font-medium" style={{ color: 'white', fontSize: '22px', fontWeight: 500 }}>{value}</p>
+        {sub && <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.55)' }}>{sub}</p>}
+      </div>
+    );
+  }
+
+  // Standard card: cream bg, amber-brown label, dark value
   return (
-    <div
-      className="rounded-xl p-5 shadow-sm"
-      style={
-        accent
-          ? { background: 'linear-gradient(135deg, #3B82F6, #1D4ED8)', color: 'white' }
-          : { background: '#151B3D', border: '1px solid #2A3158', color: '#F1F5F9' }
-      }
-    >
-      <p className="text-sm" style={{ color: accent ? 'rgba(255,255,255,0.75)' : '#CBD5E1' }}>{label}</p>
-      <p className="text-2xl font-bold mt-1">{value}</p>
-      {sub && <p className="text-xs mt-1" style={{ color: accent ? 'rgba(255,255,255,0.6)' : '#64748B' }}>{sub}</p>}
+    <div className="rounded-xl p-5 shadow-sm"
+      style={{ background: '#F7F5F0', border: '1px solid #DDD8CC' }}>
+      <p className="text-sm" style={{ color: '#92400E' }}>{label}</p>
+      <p className="text-2xl font-bold mt-1" style={{ color: '#1C1917' }}>{value}</p>
+      {sub && <p className="text-xs mt-1" style={{ color: '#A8A29E' }}>{sub}</p>}
     </div>
   );
 }

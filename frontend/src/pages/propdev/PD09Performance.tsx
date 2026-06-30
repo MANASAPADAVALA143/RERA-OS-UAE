@@ -1,4 +1,4 @@
-import { usePropDev } from '../../contexts/PropertyDevContext';
+﻿import { usePropDev } from '../../contexts/PropertyDevContext';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 const fmt = (n: number) => `$${Math.round(n).toLocaleString()}`;
@@ -91,7 +91,7 @@ export default function PD09Performance() {
               <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={v => `$${(v/1000).toFixed(0)}K`} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} />
               <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, 'Per Lot']} />
-              <Bar dataKey="perLot" fill="#2563EB" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="perLot" fill="#D4AF37" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

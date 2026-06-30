@@ -212,7 +212,7 @@ export default function RentalBuildingExpenses() {
               <XAxis dataKey="name" tick={{ fontSize: 10 }} />
               <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
               <Tooltip formatter={(v: number) => fmtUSD(v)} />
-              <Bar dataKey="expenses" fill="#1E3A8A" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="expenses" fill="#B8962E" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

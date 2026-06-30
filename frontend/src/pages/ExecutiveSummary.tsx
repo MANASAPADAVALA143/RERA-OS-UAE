@@ -10,7 +10,7 @@ import { LoadingSkeleton } from '../components/ui/Table';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { fmtUSD, fmtPct } from '../components/ProtectedRoute';
 
-const CHART_COLORS = ['#1E3A8A', '#3B82F6', '#4BA892', '#1D4ED8'];
+const CHART_COLORS = ['#D4AF37', '#B8962E', '#92400E', '#F0D070'];
 
 const safe = (n: number | null | undefined) => (n == null || Number.isNaN(n) ? 0 : n);
 
@@ -265,7 +265,7 @@ export default function ExecutiveSummary() {
                   <XAxis dataKey="status" tick={{ fontSize: 11 }} />
                   <YAxis allowDecimals={false} />
                   <Tooltip />
-                  <Bar dataKey="count" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="count" fill="#D4AF37" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -352,7 +352,7 @@ export default function ExecutiveSummary() {
                   <XAxis type="number" tickFormatter={(v) => `$${(v / 1e6).toFixed(1)}M`} />
                   <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 12 }} />
                   <Tooltip formatter={(v: number) => fmtUSD(v)} />
-                  <Bar dataKey="value" fill="#1E3A8A" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="value" fill="#B8962E" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

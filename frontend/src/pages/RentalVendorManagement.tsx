@@ -459,7 +459,7 @@ export default function RentalVendorManagement() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm font-sans">
             <thead>
-              <tr className="text-white text-xs" style={{ backgroundColor: '#0F1830' }}>
+              <tr className="text-white text-xs" style={{ backgroundColor: '#F0EDE5' }}>
                 <th className="px-4 py-2.5 text-left"></th>
                 <th className="px-4 py-2.5 text-left whitespace-nowrap">Vendor Name</th>
                 <th className="px-4 py-2.5 text-left whitespace-nowrap">Category</th>
@@ -577,7 +577,7 @@ export default function RentalVendorManagement() {
           ) : (
             <table className="w-full text-sm font-sans">
               <thead>
-                <tr className="text-white text-xs" style={{ backgroundColor: '#0F1830' }}>
+                <tr className="text-white text-xs" style={{ backgroundColor: '#F0EDE5' }}>
                   <th className="px-4 py-2.5 text-left">Vendor</th>
                   <th className="px-4 py-2.5 text-left">Category</th>
                   <th className="px-4 py-2.5 text-left">EIN / SSN</th>

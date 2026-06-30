@@ -185,7 +185,7 @@ export default function Development() {
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                       <YAxis allowDecimals={false} />
                       <Tooltip />
-                      <Line type="monotone" dataKey="sold" stroke="#3B82F6" strokeWidth={2} dot={{ fill: '#1E3A8A' }} name="Units Sold" />
+                      <Line type="monotone" dataKey="sold" stroke="#D4AF37" strokeWidth={2} dot={{ fill: '#B8962E' }} name="Units Sold" />
                     </LineChart>
                   </ResponsiveContainer>
                 )}
@@ -202,7 +202,7 @@ export default function Development() {
                       <XAxis dataKey="range" tick={{ fontSize: 11 }} />
                       <YAxis allowDecimals={false} />
                       <Tooltip />
-                      <Bar dataKey="count" fill="#1E3A8A" name="Units" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="count" fill="#B8962E" name="Units" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}

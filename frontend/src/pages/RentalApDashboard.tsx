@@ -267,7 +267,7 @@ export default function RentalApDashboard() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm font-sans">
             <thead>
-              <tr className="text-white text-xs" style={{ backgroundColor: '#0F1830' }}>
+              <tr className="text-white text-xs" style={{ backgroundColor: '#F0EDE5' }}>
                 <th className="px-4 py-2.5 text-left">Entity</th>
                 <th className="px-4 py-2.5 text-right whitespace-nowrap">Current</th>
                 <th className="px-4 py-2.5 text-right whitespace-nowrap">1–30</th>
@@ -300,7 +300,7 @@ export default function RentalApDashboard() {
               })}
             </tbody>
             <tfoot>
-              <tr className="text-white font-bold" style={{ backgroundColor: '#0F1830' }}>
+              <tr className="text-white font-bold" style={{ backgroundColor: '#F0EDE5' }}>
                 <td className="px-4 py-2.5">Portfolio Total</td>
                 <td className="px-4 py-2.5 text-right font-mono">{$$(current)}</td>
                 <td className="px-4 py-2.5 text-right font-mono">{$$(b130)}</td>

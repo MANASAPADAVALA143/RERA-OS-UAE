@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, ScatterChart, Scatter, CartesianGrid, ReferenceLine } from 'recharts';
 import { Calendar, Filter, RefreshCw, AlertCircle, TrendingUp, TrendingDown, DollarSign, Users, Home, AlertTriangle, Building2, CreditCard, TrendingUpIcon, Zap } from 'lucide-react';
 import api from '../services/api';
@@ -27,8 +27,8 @@ interface CompanySummary {
   vacant_units: number;
 }
 
-const COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6'];
-const TOOLTIP_STYLE = { contentStyle: { background: '#1E2A4A', border: '1px solid #3A4170', color: '#F1F5F9', borderRadius: 8 } };
+const COLORS = ['#10B981', '#D4AF37', '#F59E0B', '#EF4444', '#8B5CF6'];
+const TOOLTIP_STYLE = { contentStyle: { background: '#F7F5F0', border: '1px solid #DDD8CC', color: '#1C1917', borderRadius: 8 } };
 
 interface StyledKpiProps {
   icon: React.ReactNode;
@@ -60,18 +60,18 @@ function StyledKpiCard({ icon, label, value, sub, borderColor, iconBgColor }: St
         alignItems: 'center',
         justifyContent: 'center',
         flexShrink: 0,
-        color: '#F1F5F9',
+        color: '#1C1917',
       }}>
         {icon}
       </div>
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: 500, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        <div style={{ fontSize: '12px', color: '#92400E', fontWeight: 500, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
           {label}
         </div>
-        <div style={{ fontSize: '28px', fontWeight: 700, color: '#F1F5F9', fontFamily: 'monospace', marginBottom: '4px' }}>
+        <div style={{ fontSize: '28px', fontWeight: 700, color: '#1C1917', fontFamily: 'monospace', marginBottom: '4px' }}>
           {value}
         </div>
-        <div style={{ fontSize: '12px', color: '#64748B' }}>
+        <div style={{ fontSize: '12px', color: '#A8A29E' }}>
           {sub}
         </div>
       </div>
@@ -100,7 +100,7 @@ export default function RentalPortfolio() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  if (loading || !data) return <div className="p-6" style={{ color: '#94A3B8' }}>Loading portfolio...</div>;
+  if (loading || !data) return <div className="p-6" style={{ color: '#92400E' }}>Loading portfolio...</div>;
 
   const filteredCompanies = selectedCompany === 'all' ? data.by_company : data.by_company.filter(c => c.company_id === selectedCompany);
   const collectionRate = data.billed_this_month > 0 ? (data.collected_this_month / data.billed_this_month) * 100 : 0;
@@ -114,18 +114,18 @@ export default function RentalPortfolio() {
       {/* ─────── TOP BAR ─────── */}
       <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold" style={{ color: '#F1F5F9' }}>Rental Portfolio Dashboard</h1>
-          <p className="text-sm mt-1" style={{ color: '#64748B' }}>Executive overview of portfolio performance</p>
+          <h1 className="text-3xl font-bold" style={{ color: '#1C1917' }}>Rental Portfolio Dashboard</h1>
+          <p className="text-sm mt-1" style={{ color: '#A8A29E' }}>Executive overview of portfolio performance</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2" style={{ background: '#1E2A4A', border: '1px solid #2A3158', padding: '8px 12px', borderRadius: '8px' }}>
-            <Calendar size={16} style={{ color: '#60A5FA' }} />
-            <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} style={{ background: 'transparent', color: '#F1F5F9', border: 'none', fontSize: '14px' }} />
+          <div className="flex items-center gap-2" style={{ background: '#F7F5F0', border: '1px solid #DDD8CC', padding: '8px 12px', borderRadius: '8px' }}>
+            <Calendar size={16} style={{ color: '#D4AF37' }} />
+            <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} style={{ background: 'transparent', color: '#1C1917', border: 'none', fontSize: '14px' }} />
           </div>
-          <button style={{ background: '#1E2A4A', border: '1px solid #2A3158', color: '#60A5FA', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px' }}>
+          <button style={{ background: '#F7F5F0', border: '1px solid #DDD8CC', color: '#D4AF37', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px' }}>
             <Filter size={14} className="inline mr-1" /> Filters
           </button>
-          <button onClick={() => fetchData()} style={{ background: 'transparent', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: '12px' }}>
+          <button onClick={() => fetchData()} style={{ background: 'transparent', border: 'none', color: '#92400E', cursor: 'pointer', fontSize: '12px' }}>
             <RefreshCw size={14} className="inline mr-1" /> Last updated: {lastUpdated.toLocaleTimeString()}
           </button>
         </div>
@@ -146,7 +146,7 @@ export default function RentalPortfolio() {
           label="Rent Collected"
           value={fmtUSD(data.collected_this_month)}
           sub={`${collectionRate.toFixed(1)}% collection rate`}
-          borderColor="#3B82F6"
+          borderColor="#D4AF37"
           iconBgColor="rgba(59, 130, 246, 0.15)"
         />
         <StyledKpiCard
@@ -154,7 +154,7 @@ export default function RentalPortfolio() {
           label="NOI This Month"
           value={fmtUSD(data.noi_this_month)}
           sub={`${noiMargin.toFixed(1)}% margin`}
-          borderColor="#3B82F6"
+          borderColor="#D4AF37"
           iconBgColor="rgba(59, 130, 246, 0.15)"
         />
         <StyledKpiCard
@@ -186,40 +186,40 @@ export default function RentalPortfolio() {
       {/* ─────── ROW 2: INCOME TREND + NOI BY COMPANY ─────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div style={{ background: '#0F1629', border: '1px solid #1E2942', borderRadius: '10px', padding: '20px' }}>
-          <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#F1F5F9', marginBottom: '16px' }}>Income Trend (Last 6 Months)</h3>
+          <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#1C1917', marginBottom: '16px' }}>Income Trend (Last 6 Months)</h3>
           {data.income_trend && data.income_trend.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
               <LineChart data={data.income_trend.slice(-6)}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2A3158" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94A3B8' }} />
-                <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#DDD8CC" />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#92400E' }} />
+                <YAxis tick={{ fontSize: 11, fill: '#92400E' }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v: number) => fmtUSD(v)} {...TOOLTIP_STYLE} />
                 <Legend wrapperStyle={{ paddingTop: '16px' }} />
                 <Line type="monotone" dataKey="collected" stroke="#10B981" name="Collected" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="billed" stroke="#60A5FA" name="Gross Potential" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                <Line type="monotone" dataKey="billed" stroke="#D4AF37" name="Gross Potential" strokeWidth={2} strokeDasharray="5 5" dot={false} />
               </LineChart>
             </ResponsiveContainer>
           ) : (
-            <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8' }}>
+            <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#92400E' }}>
               No historical data available
             </div>
           )}
         </div>
 
         <div style={{ background: '#0F1629', border: '1px solid #1E2942', borderRadius: '10px', padding: '20px' }}>
-          <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#F1F5F9', marginBottom: '16px' }}>NOI by Company</h3>
+          <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#1C1917', marginBottom: '16px' }}>NOI by Company</h3>
           {filteredCompanies.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={filteredCompanies.slice(0, 6)}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2A3158" />
-                <XAxis dataKey="company_name" tick={{ fontSize: 10, fill: '#94A3B8' }} />
-                <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#DDD8CC" />
+                <XAxis dataKey="company_name" tick={{ fontSize: 10, fill: '#92400E' }} />
+                <YAxis tick={{ fontSize: 11, fill: '#92400E' }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v: number) => fmtUSD(v)} {...TOOLTIP_STYLE} />
-                <Bar dataKey="noi_this_month" fill="#3B82F6" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="noi_this_month" fill="#D4AF37" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8' }}>
+            <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#92400E' }}>
               No company data available
             </div>
           )}
@@ -229,19 +229,19 @@ export default function RentalPortfolio() {
       {/* ─────── ROW 3: OCCUPANCY GAUGE + VACANT UNITS + ARREARS ─────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div style={{ background: '#0F1629', border: '1px solid #1E2942', borderRadius: '10px', padding: '20px' }}>
-          <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#F1F5F9', marginBottom: '20px' }}>Occupancy vs Target</h3>
+          <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#1C1917', marginBottom: '20px' }}>Occupancy vs Target</h3>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: '48px', fontWeight: 'bold', color: data.occupancy_pct >= 0.95 ? '#10B981' : '#F59E0B', fontFamily: 'monospace' }}>
               {fmtPct(data.occupancy_pct)}
             </div>
-            <div style={{ fontSize: '12px', color: '#94A3B8', marginTop: '12px' }}>
+            <div style={{ fontSize: '12px', color: '#92400E', marginTop: '12px' }}>
               {data.occupancy_pct >= 0.95 ? '✓ Above 95% target' : '⚠ Below 95% target'}
             </div>
           </div>
         </div>
 
         <div style={{ background: '#0F1629', border: '1px solid #1E2942', borderRadius: '10px', padding: '20px' }}>
-          <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#F1F5F9', marginBottom: '16px' }}>Occupied vs Vacant</h3>
+          <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#1C1917', marginBottom: '16px' }}>Occupied vs Vacant</h3>
           <ResponsiveContainer width="100%" height={240}>
             <PieChart>
               <Pie data={[{ name: 'Occupied', value: data.total_units - data.vacant_units }, { name: 'Vacant', value: data.vacant_units }]} cx="50%" cy="50%" innerRadius={60} outerRadius={80} dataKey="value">
@@ -254,7 +254,7 @@ export default function RentalPortfolio() {
         </div>
 
         <div style={{ background: '#0F1629', border: '1px solid #1E2942', borderRadius: '10px', padding: '20px' }}>
-          <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#F1F5F9', marginBottom: '16px' }}>Arrears by Age</h3>
+          <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#1C1917', marginBottom: '16px' }}>Arrears by Age</h3>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={[
               { bucket: 'Current', amount: data.arrears_aging.current || 0, fill: '#10B981' },
@@ -262,8 +262,8 @@ export default function RentalPortfolio() {
               { bucket: '31-60d', amount: data.arrears_aging['31_60'] || 0, fill: '#F97316' },
               { bucket: '60+d', amount: (data.arrears_aging['61_90'] || 0) + (data.arrears_aging['90_plus'] || 0), fill: '#EF4444' },
             ]} layout="vertical">
-              <XAxis type="number" tick={{ fontSize: 11, fill: '#94A3B8' }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
-              <YAxis dataKey="bucket" type="category" tick={{ fontSize: 11, fill: '#94A3B8' }} />
+              <XAxis type="number" tick={{ fontSize: 11, fill: '#92400E' }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+              <YAxis dataKey="bucket" type="category" tick={{ fontSize: 11, fill: '#92400E' }} />
               <Tooltip formatter={(v: number) => fmtUSD(v)} {...TOOLTIP_STYLE} />
               <Bar dataKey="amount" radius={[0, 6, 6, 0]} />
             </BarChart>
@@ -273,7 +273,7 @@ export default function RentalPortfolio() {
 
       {/* ─────── ROW 5: ATTENTION PANEL ─────── */}
       <div style={{ background: '#0F1629', border: '1px solid #1E2942', borderRadius: '10px', padding: '20px' }}>
-        <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#F1F5F9', marginBottom: '16px' }}>Attention Now</h3>
+        <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#1C1917', marginBottom: '16px' }}>Attention Now</h3>
         <div className="space-y-2">
           {data.occupancy_pct < 0.9 && (
             <div style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#FCA5A5', padding: '12px', borderRadius: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>

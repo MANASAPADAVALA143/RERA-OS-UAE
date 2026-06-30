@@ -34,24 +34,32 @@ const NAV = [
   { to: '/pipeline-market',   label: 'Pipeline & Market', icon: Map             },
 ];
 
+// ── Sub-nav shared styles ──────────────────────────────────────────────────
+const subActive   = { background: 'rgba(212,175,55,0.18)', color: '#D4AF37' } as const;
+const subInactive = { color: '#9C9893' } as const;
+const subBase     = 'w-full flex items-center gap-2 pl-7 pr-3 py-1.5 rounded-lg text-xs transition-colors text-left hover:bg-white/5';
+
 function SidebarInner() {
   const { profile, signOut } = useAuth();
   const location = useLocation();
   const onConstruction = location.pathname.startsWith('/construction');
-  const onRental = location.pathname.startsWith('/rental');
-  const onPropDev = location.pathname.startsWith('/property-dev');
+  const onRental       = location.pathname.startsWith('/rental');
+  const onPropDev      = location.pathname.startsWith('/property-dev');
   const { tab, setTab, projectId, setProjectId, projects } = useConstructionNav();
-  const { tab: rentalTab, setTab: setRentalTab } = useRentalNav();
+  const { tab: rentalTab, setTab: setRentalTab }           = useRentalNav();
   const navigate = useNavigate();
-  const { tab: propDevTab, setTab: setPropDevTab } = usePropDevNav();
+  const { tab: propDevTab, setTab: setPropDevTab }         = usePropDevNav();
 
   return (
-    <div className="dark-app flex h-screen overflow-hidden" style={{ background: '#1C1917' }}>
-      <aside className="w-64 bg-primary text-white flex flex-col shrink-0 h-screen overflow-hidden" style={{ background: '#1C1917', borderRight: '1px solid #44403C' }}>
+    <div className="dark-app flex h-screen overflow-hidden" style={{ background: '#ECE9E3' }}>
+      {/* ── Sidebar ─────────────────────────────────────────────────────── */}
+      <aside className="w-64 flex flex-col shrink-0 h-screen overflow-hidden"
+        style={{ background: '#161310', borderRight: '1px solid rgba(212,175,55,0.15)' }}>
+
         {/* Brand */}
-        <div className="p-5 border-b border-white/10">
-          <h1 className="text-xl font-bold tracking-tight text-white">All in one MIS</h1>
-          <p className="text-xs mt-1 truncate" style={{ color: '#F59E0B' }}>{profile?.company_name}</p>
+        <div className="p-5" style={{ borderBottom: '1px solid rgba(212,175,55,0.12)' }}>
+          <h1 className="text-xl font-bold tracking-tight" style={{ color: '#F5F5F4' }}>All in one MIS</h1>
+          <p className="text-xs mt-1 truncate" style={{ color: '#D4AF37' }}>{profile?.company_name}</p>
         </div>
 
         {/* Main nav */}
@@ -60,25 +68,25 @@ function SidebarInner() {
             <div key={to}>
               <NavLink
                 to={to}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                    isActive
-                      ? 'text-white bg-accent'
-                      : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                  }`
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors hover:bg-white/5"
+                style={({ isActive }) =>
+                  isActive
+                    ? { background: '#D4AF37', color: '#161310', fontWeight: 600 }
+                    : { color: '#9C9893' }
                 }
               >
                 <Icon size={18} />
                 {label}
               </NavLink>
 
-              {/* Rental sub-nav — only when route is active */}
+              {/* Rental sub-nav */}
               {to === '/rental' && onRental && (
                 <div className="mt-1 mb-1">
                   {RENTAL_TABS.filter((item) => !item.hidden).map(({ id, label: itemLabel, Icon: ItemIcon, groupLabel }) => (
                     <div key={id}>
                       {groupLabel && (
-                        <p className="pl-7 pr-3 pt-3 pb-1 text-xs uppercase tracking-wider text-amber-400 font-medium">
+                        <p className="pl-7 pr-3 pt-3 pb-1 text-xs uppercase tracking-wider font-medium"
+                          style={{ color: '#D4AF37', opacity: 0.7 }}>
                           ─── {groupLabel} ───
                         </p>
                       )}
@@ -88,11 +96,8 @@ function SidebarInner() {
                           const path = rentalPathForTab(id);
                           if (path !== location.pathname) navigate(path);
                         }}
-                        className={`w-full flex items-center gap-2 pl-7 pr-3 py-1.5 rounded-lg text-xs transition-colors text-left ${
-                          rentalTab === id
-                            ? 'bg-accent text-white'
-                            : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                        }`}
+                        className={subBase}
+                        style={rentalTab === id ? subActive : subInactive}
                       >
                         <ItemIcon size={13} className="shrink-0" />
                         {itemLabel}
@@ -102,23 +107,21 @@ function SidebarInner() {
                 </div>
               )}
 
-              {/* Property Dev sub-nav — only when route is active */}
+              {/* Property Dev sub-nav */}
               {to === '/property-dev' && onPropDev && (
                 <div className="mt-1 mb-1">
                   {PROPDEV_TABS.map(({ id, label: itemLabel, Icon: ItemIcon, groupLabel }) => (
                     <div key={id}>
                       {groupLabel && (
-                        <p className="pl-7 pr-3 pt-2 pb-0.5 text-xs uppercase tracking-wider text-amber-400 font-medium">
+                        <p className="pl-7 pr-3 pt-2 pb-0.5 text-xs uppercase tracking-wider font-medium"
+                          style={{ color: '#D4AF37', opacity: 0.7 }}>
                           ─── {groupLabel} ───
                         </p>
                       )}
                       <button
                         onClick={() => setPropDevTab(id)}
-                        className={`w-full flex items-center gap-2 pl-7 pr-3 py-1.5 rounded-lg text-xs transition-colors text-left ${
-                          propDevTab === id
-                            ? 'bg-accent text-white'
-                            : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                        }`}
+                        className={subBase}
+                        style={propDevTab === id ? subActive : subInactive}
                       >
                         <ItemIcon size={13} className="shrink-0" />
                         {itemLabel}
@@ -128,35 +131,34 @@ function SidebarInner() {
                 </div>
               )}
 
-              {/* Construction sub-nav — only when route is active */}
+              {/* Construction sub-nav */}
               {to === '/construction' && onConstruction && (
                 <div className="mt-1 mb-1">
-                  {/* Project selector */}
                   <div className="px-2 pb-1.5">
                     <select
                       value={projectId}
                       onChange={(e) => setProjectId(e.target.value)}
-                      className="w-full px-2 py-1.5 rounded-md text-xs bg-white/10 text-white border border-white/20 focus:outline-none focus:ring-1 focus:ring-accent"
+                      className="w-full px-2 py-1.5 rounded-md text-xs focus:outline-none focus:ring-1"
+                      style={{
+                        background: 'rgba(212,175,55,0.08)',
+                        border: '1px solid rgba(212,175,55,0.2)',
+                        color: '#F5F5F4',
+                      }}
                     >
                       {projects.length === 0 && <option value="">No projects</option>}
                       {projects.map((p) => (
-                        <option key={p.id} value={p.id} className="bg-primary text-white">
+                        <option key={p.id} value={p.id} style={{ background: '#161310', color: '#F5F5F4' }}>
                           {p.project_code ? `${p.project_code} — ` : ''}{p.project_name}
                         </option>
                       ))}
                     </select>
                   </div>
-
-                  {/* Section items */}
                   {ALL_TABS.map(({ id, label: itemLabel, Icon: ItemIcon }) => (
                     <button
                       key={id}
                       onClick={() => setTab(id)}
-                      className={`w-full flex items-center gap-2 pl-7 pr-3 py-1.5 rounded-lg text-xs transition-colors text-left ${
-                        tab === id
-                          ? 'bg-accent text-white'
-                          : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                      }`}
+                      className={subBase}
+                      style={tab === id ? subActive : subInactive}
                     >
                       <ItemIcon size={13} className="shrink-0" />
                       {itemLabel}
@@ -169,27 +171,32 @@ function SidebarInner() {
         </nav>
 
         {/* Footer */}
-        <div className="p-4 border-t border-white/10 space-y-3">
+        <div className="p-4 space-y-3" style={{ borderTop: '1px solid rgba(212,175,55,0.12)' }}>
           <div className="text-sm">
-            <p className="font-medium truncate">{profile?.email}</p>
+            <p className="font-medium truncate" style={{ color: '#F5F5F4' }}>{profile?.email}</p>
             <Badge variant="accent">{profile?.role}</Badge>
           </div>
-          <NavLink to="/settings" className="flex items-center gap-2 text-sm text-gray-300 hover:text-white">
+          <NavLink to="/settings"
+            className="flex items-center gap-2 text-sm hover:opacity-80 transition-opacity"
+            style={{ color: '#9C9893' }}>
             <Settings size={16} /> Settings
           </NavLink>
-          <NavLink to="/settings/companies" className="flex items-center gap-2 text-sm text-gray-300 hover:text-white">
+          <NavLink to="/settings/companies"
+            className="flex items-center gap-2 text-sm hover:opacity-80 transition-opacity"
+            style={{ color: '#9C9893' }}>
             <Database size={16} /> Company Registry
           </NavLink>
-          <button onClick={signOut} className="flex items-center gap-2 text-sm text-gray-300 hover:text-white w-full">
+          <button onClick={signOut}
+            className="flex items-center gap-2 text-sm w-full hover:opacity-80 transition-opacity"
+            style={{ color: '#9C9893' }}>
             <LogOut size={16} /> Sign out
           </button>
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-4 lg:p-6 flex flex-col" style={{ background: '#1C1917' }}>
-        <div className="flex-1" style={{ background: '#292524', border: '1px solid #44403C', borderRadius: '1rem', padding: '1.5rem' }}>
-          <Outlet />
-        </div>
+      {/* ── Main content ─────────────────────────────────────────────────── */}
+      <main className="flex-1 overflow-y-auto p-4 lg:p-6" style={{ background: '#ECE9E3' }}>
+        <Outlet />
       </main>
     </div>
   );

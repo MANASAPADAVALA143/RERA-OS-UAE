@@ -6,130 +6,156 @@ body {
   margin: 0;
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
-  background: #1C1917;
+  background: #ECE9E3;
   min-height: 100vh;
-  color: #F5F5F4;
+  color: #1C1917;
 }
 
-/* ── Charcoal + Amber app theme ──────────────────────────────────────── */
+/* ── Charcoal + Amber app theme (light cream content, dark sidebar) ──────── */
 
-/* Card / surface backgrounds */
-.dark-app .bg-white        { background-color: #292524 !important; }
-.dark-app .bg-gray-50      { background-color: #1C1917 !important; }
-.dark-app .bg-gray-100     { background-color: #171614 !important; }
-.dark-app .bg-gray-200     { background-color: #3C3835 !important; }
-.dark-app .bg-gray-900     { background-color: #0C0A09 !important; }
-.dark-app .bg-gray-800     { background-color: #1C1917 !important; }
+/* Card / surface backgrounds — Tailwind utilities → cream palette */
+.dark-app .bg-white        { background-color: #F7F5F0 !important; }
+.dark-app .bg-gray-50      { background-color: #F0EDE5 !important; }
+.dark-app .bg-gray-100     { background-color: #E8E4DC !important; }
+.dark-app .bg-gray-200     { background-color: #DDD8CC !important; }
+.dark-app .bg-gray-900     { background-color: #161310 !important; } /* table headers — keep dark */
+.dark-app .bg-gray-800     { background-color: #2A2520 !important; }
 
 /* Borders */
-.dark-app .border-gray-100 { border-color: #44403C !important; }
-.dark-app .border-gray-200 { border-color: #44403C !important; }
-.dark-app .border-gray-300 { border-color: #57534E !important; }
-.dark-app .border-b        { border-bottom-color: #44403C; }
-.dark-app .border-t        { border-top-color: #44403C; }
+.dark-app .border-gray-100 { border-color: #DDD8CC !important; }
+.dark-app .border-gray-200 { border-color: #DDD8CC !important; }
+.dark-app .border-gray-300 { border-color: #C8C2B7 !important; }
+.dark-app .border-b        { border-bottom-color: #DDD8CC; }
+.dark-app .border-t        { border-top-color: #DDD8CC; }
 
 /* Divide lines */
-.dark-app .divide-y > :not([hidden]) ~ :not([hidden])        { border-top-color: #44403C !important; }
-.dark-app .divide-gray-50 > :not([hidden]) ~ :not([hidden])  { border-top-color: #44403C !important; }
-.dark-app .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-top-color: #44403C !important; }
+.dark-app .divide-y > :not([hidden]) ~ :not([hidden])        { border-top-color: #DDD8CC !important; }
+.dark-app .divide-gray-50 > :not([hidden]) ~ :not([hidden])  { border-top-color: #DDD8CC !important; }
+.dark-app .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-top-color: #DDD8CC !important; }
 
-/* Text */
-.dark-app .text-gray-900  { color: #FAFAF9 !important; }
-.dark-app .text-gray-800  { color: #F5F5F4 !important; }
-.dark-app .text-gray-700  { color: #E7E5E4 !important; }
-.dark-app .text-gray-600  { color: #A8A29E !important; }
+/* Text — stone/warm scale for cream backgrounds */
+.dark-app .text-gray-900  { color: #1C1917 !important; }
+.dark-app .text-gray-800  { color: #292524 !important; }
+.dark-app .text-gray-700  { color: #44403C !important; }
+.dark-app .text-gray-600  { color: #57534E !important; }
 .dark-app .text-gray-500  { color: #78716C !important; }
-.dark-app .text-gray-400  { color: #57534E !important; }
-.dark-app .text-charcoal  { color: #F5F5F4 !important; }
-.dark-app .text-primary   { color: #F59E0B !important; }
+.dark-app .text-gray-400  { color: #A8A29E !important; }
+.dark-app .text-charcoal  { color: #1C1917 !important; }
+.dark-app .text-primary   { color: #D4AF37 !important; } /* amber accent for links/values */
 
 /* Hover table rows */
-.dark-app .hover\:bg-gray-50:hover          { background-color: #3C3835 !important; }
-.dark-app .hover\:bg-gray-50\/60:hover      { background-color: rgba(60,56,53,0.6) !important; }
-.dark-app .hover\:bg-blue-50\/30:hover      { background-color: rgba(245,158,11,0.06) !important; }
-.dark-app .hover\:bg-indigo-50\/20:hover    { background-color: rgba(245,158,11,0.04) !important; }
-.dark-app .hover\:bg-blue-50:hover          { background-color: #3C3835 !important; }
-.dark-app .hover\:bg-red-50:hover           { background-color: #2D1522 !important; }
+.dark-app .hover\:bg-gray-50:hover          { background-color: #F0EDE5 !important; }
+.dark-app .hover\:bg-gray-50\/60:hover      { background-color: rgba(240,237,229,0.6) !important; }
+.dark-app .hover\:bg-gray-50\/50:hover      { background-color: rgba(240,237,229,0.5) !important; }
+.dark-app .hover\:bg-blue-50\/30:hover      { background-color: rgba(212,175,55,0.06) !important; }
+.dark-app .hover\:bg-indigo-50\/20:hover    { background-color: rgba(212,175,55,0.04) !important; }
+.dark-app .hover\:bg-blue-50:hover          { background-color: #F0EDE5 !important; }
+.dark-app .hover\:bg-red-50:hover           { background-color: #FEE2E2 !important; }
+.dark-app .hover\:bg-gray-100:hover         { background-color: #E8E4DC !important; }
 
-/* Form inputs */
+/* Form inputs — light cream */
 .dark-app input:not([type='range']):not([type='checkbox']):not([type='radio']):not([type='file']),
 .dark-app select,
 .dark-app textarea {
-  background-color: #1C1917 !important;
-  border-color: #44403C !important;
-  color: #F5F5F4 !important;
+  background-color: #F7F5F0 !important;
+  border-color: #C8C2B7 !important;
+  color: #1C1917 !important;
 }
 .dark-app input::placeholder,
-.dark-app textarea::placeholder { color: #78716C !important; }
-.dark-app select option  { background-color: #292524; color: #F5F5F4; }
-.dark-app datalist       { background-color: #292524; color: #F5F5F4; }
+.dark-app textarea::placeholder { color: #A8A29E !important; }
+.dark-app select option  { background-color: #F7F5F0; color: #1C1917; }
+.dark-app datalist       { background-color: #F7F5F0; color: #1C1917; }
 
 /* Expanded / tinted rows */
-.dark-app .bg-blue-50\/50  { background-color: rgba(245,158,11,0.05) !important; }
-.dark-app .bg-blue-50\/40  { background-color: rgba(245,158,11,0.04) !important; }
-.dark-app .bg-blue-50\/30  { background-color: rgba(245,158,11,0.03) !important; }
-.dark-app .bg-indigo-50\/30 { background-color: rgba(245,158,11,0.04) !important; }
-.dark-app .bg-blue-100     { background-color: rgba(245,158,11,0.12) !important; }
-.dark-app .border-blue-100 { border-color: rgba(245,158,11,0.18) !important; }
-.dark-app .border-blue-200 { border-color: rgba(245,158,11,0.22) !important; }
-.dark-app .border-indigo-100 { border-color: rgba(245,158,11,0.15) !important; }
-.dark-app .bg-indigo-50\/40  { background-color: rgba(245,158,11,0.05) !important; }
+.dark-app .bg-blue-50\/50  { background-color: rgba(212,175,55,0.06) !important; }
+.dark-app .bg-blue-50\/40  { background-color: rgba(212,175,55,0.05) !important; }
+.dark-app .bg-blue-50\/30  { background-color: rgba(212,175,55,0.04) !important; }
+.dark-app .bg-indigo-50\/30 { background-color: rgba(212,175,55,0.05) !important; }
+.dark-app .bg-blue-100     { background-color: rgba(212,175,55,0.10) !important; }
+.dark-app .border-blue-100 { border-color: rgba(212,175,55,0.20) !important; }
+.dark-app .border-blue-200 { border-color: rgba(212,175,55,0.25) !important; }
+.dark-app .border-indigo-100 { border-color: rgba(212,175,55,0.18) !important; }
+.dark-app .bg-indigo-50\/40  { background-color: rgba(212,175,55,0.06) !important; }
 
-/* Shadows */
-.dark-app .shadow-sm  { box-shadow: 0 1px 3px rgba(0,0,0,0.5) !important; }
-.dark-app .shadow-lg  { box-shadow: 0 10px 40px rgba(0,0,0,0.6) !important; }
-.dark-app .shadow-xl  { box-shadow: 0 20px 60px rgba(0,0,0,0.7) !important; }
-.dark-app .shadow-2xl { box-shadow: 0 25px 80px rgba(0,0,0,0.8) !important; }
+/* Shadows — softer for cream context */
+.dark-app .shadow-sm  { box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important; }
+.dark-app .shadow-lg  { box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important; }
+.dark-app .shadow-xl  { box-shadow: 0 16px 40px rgba(0,0,0,0.14) !important; }
+.dark-app .shadow-2xl { box-shadow: 0 24px 60px rgba(0,0,0,0.16) !important; }
 
 /* Alert / notification boxes */
-.dark-app .bg-amber-50    { background-color: rgba(251,191,36,0.08) !important; }
-.dark-app .bg-green-50    { background-color: rgba(34,197,94,0.08) !important; }
-.dark-app .bg-blue-50     { background-color: rgba(245,158,11,0.08) !important; }
-.dark-app .bg-red-50      { background-color: rgba(239,68,68,0.08) !important; }
-.dark-app .border-amber-200 { border-color: rgba(251,191,36,0.3) !important; }
-.dark-app .border-green-200 { border-color: rgba(34,197,94,0.3) !important; }
-.dark-app .border-blue-200  { border-color: rgba(245,158,11,0.25) !important; }
-.dark-app .border-red-200   { border-color: rgba(239,68,68,0.3) !important; }
+.dark-app .bg-amber-50    { background-color: rgba(212,175,55,0.10) !important; }
+.dark-app .bg-green-50    { background-color: rgba(34,197,94,0.08)  !important; }
+.dark-app .bg-blue-50     { background-color: rgba(212,175,55,0.08) !important; }
+.dark-app .bg-red-50      { background-color: rgba(239,68,68,0.08)  !important; }
+.dark-app .border-amber-200 { border-color: rgba(212,175,55,0.35) !important; }
+.dark-app .border-green-200 { border-color: rgba(34,197,94,0.30)  !important; }
+.dark-app .border-blue-200  { border-color: rgba(212,175,55,0.28) !important; }
+.dark-app .border-red-200   { border-color: rgba(239,68,68,0.30)  !important; }
 
-/* Status text colors — keep green/red as-is, amber lighter for Monitor badge */
-.dark-app .text-amber-800 { color: #FDE68A !important; }  /* Monitor badge text — soft yellow */
-.dark-app .text-amber-700 { color: #FDE68A !important; }  /* Monitor badge text — soft yellow */
-.dark-app .text-green-800 { color: #4ADE80 !important; }
-.dark-app .text-green-700 { color: #4ADE80 !important; }
-.dark-app .text-blue-800  { color: #F59E0B !important; }  /* repurposed → amber accent */
-.dark-app .text-blue-700  { color: #F59E0B !important; }
-.dark-app .text-red-800   { color: #FCA5A5 !important; }
-.dark-app .text-red-700   { color: #FCA5A5 !important; }
-.dark-app .text-amber-600 { color: #FDE68A !important; }  /* Monitor — light yellow-amber */
-.dark-app .text-green-600 { color: #22C55E !important; }
-.dark-app .text-blue-600  { color: #F59E0B !important; }  /* → amber accent */
-.dark-app .text-red-600   { color: #F87171 !important; }
-.dark-app .text-indigo-600 { color: #F59E0B !important; } /* → amber accent */
-.dark-app .text-blue-500  { color: #FCD34D !important; }  /* lighter amber */
+/* Status text — warm semantic tones on cream */
+.dark-app .text-amber-800 { color: #92400E !important; }
+.dark-app .text-amber-700 { color: #92400E !important; }
+.dark-app .text-amber-600 { color: #B45309 !important; }
+.dark-app .text-green-800 { color: #065F46 !important; }
+.dark-app .text-green-700 { color: #047857 !important; }
+.dark-app .text-green-600 { color: #059669 !important; }
+.dark-app .text-blue-800  { color: #D4AF37 !important; } /* → amber accent */
+.dark-app .text-blue-700  { color: #D4AF37 !important; }
+.dark-app .text-blue-600  { color: #D4AF37 !important; }
+.dark-app .text-blue-500  { color: #B8962E !important; }
+.dark-app .text-red-800   { color: #991B1B !important; }
+.dark-app .text-red-700   { color: #B91C1C !important; }
+.dark-app .text-red-600   { color: #DC2626 !important; }
+.dark-app .text-indigo-600 { color: #D4AF37 !important; } /* → amber accent */
 
-/* Recharts charcoal theme */
-.dark-app .recharts-wrapper text          { fill: #A8A29E !important; }
-.dark-app .recharts-legend-item-text      { color: #A8A29E !important; }
+/* Accent/primary buttons */
+.dark-app .bg-accent       { background-color: #D4AF37 !important; }
+.dark-app .bg-primary      { background-color: #161310 !important; }
+.dark-app .hover\:bg-blue-700:hover { background-color: #B8962E !important; }
+.dark-app .bg-indigo-600   { background-color: #D4AF37 !important; }
+.dark-app .hover\:bg-indigo-700:hover { background-color: #B8962E !important; }
+.dark-app .bg-green-700    { background-color: #059669 !important; }
+.dark-app .hover\:bg-green-800:hover { background-color: #047857 !important; }
+.dark-app .text-accent     { color: #D4AF37 !important; }
+.dark-app .text-white      { color: #F5F5F4 !important; } /* keep white as near-white */
+
+/* Badge backgrounds (semantic — keep distinct from brand gold) */
+.dark-app .bg-green-100    { background-color: rgba(34,197,94,0.12)  !important; }
+.dark-app .bg-red-100      { background-color: rgba(239,68,68,0.10)  !important; }
+.dark-app .bg-amber-100    { background-color: rgba(250,199,117,0.20) !important; } /* FAC775 tint, not D4AF37 */
+.dark-app .bg-purple-100   { background-color: rgba(139,92,246,0.10) !important; }
+.dark-app .bg-blue-50      { background-color: rgba(212,175,55,0.08) !important; }
+.dark-app .text-green-800  { color: #065F46 !important; }
+.dark-app .text-red-800    { color: #991B1B !important; }
+.dark-app .text-amber-800  { color: #92400E !important; }
+.dark-app .text-purple-700 { color: #7C3AED !important; }
+.dark-app .text-blue-700   { color: #D4AF37 !important; }
+
+/* Recharts — amber primary, warm stone grid */
+.dark-app .recharts-wrapper text          { fill: #78716C !important; }
+.dark-app .recharts-legend-item-text      { color: #78716C !important; }
 .dark-app .recharts-cartesian-grid-horizontal line,
-.dark-app .recharts-cartesian-grid-vertical line { stroke: rgba(68,64,60,0.5) !important; }
+.dark-app .recharts-cartesian-grid-vertical line { stroke: rgba(200,194,183,0.5) !important; }
 .dark-app .recharts-default-tooltip {
-  background-color: #292524 !important;
-  border-color: #44403C !important;
-  color: #F5F5F4 !important;
+  background-color: #F7F5F0 !important;
+  border-color: #DDD8CC !important;
+  color: #1C1917 !important;
+  border-radius: 8px;
 }
-.dark-app .recharts-tooltip-label { color: #E7E5E4 !important; }
+.dark-app .recharts-tooltip-label { color: #57534E !important; }
 
-/* Scrollbar */
+/* Scrollbar — warm stone */
 .dark-app ::-webkit-scrollbar       { width: 5px; height: 5px; }
-.dark-app ::-webkit-scrollbar-track  { background: #0C0A09; }
-.dark-app ::-webkit-scrollbar-thumb  { background: #44403C; border-radius: 3px; }
-.dark-app ::-webkit-scrollbar-thumb:hover { background: #F59E0B; }
+.dark-app ::-webkit-scrollbar-track  { background: #E8E4DC; }
+.dark-app ::-webkit-scrollbar-thumb  { background: #C8C2B7; border-radius: 3px; }
+.dark-app ::-webkit-scrollbar-thumb:hover { background: #D4AF37; }
 
-/* ── Gradient KPI card utilities ─────────────────────────────────────── */
+/* ── KPI gradient card utilities ─────────────────────────────────────── */
+/* Hero card: dark bg with gold border — defined in component via inline style */
+.kpi-hero    { background: #161310; border: 1px solid #D4AF37; color: white; }
 .kpi-orange  { background: linear-gradient(135deg, #F97316, #EA580C); color: white; }
 .kpi-purple  { background: linear-gradient(135deg, #8B5CF6, #6D28D9); color: white; }
-.kpi-blue    { background: linear-gradient(135deg, #3B82F6, #1D4ED8); color: white; }
 .kpi-teal    { background: linear-gradient(135deg, #14B8A6, #0D9488); color: white; }
 .kpi-red     { background: linear-gradient(135deg, #EF4444, #DC2626); color: white; }
-.kpi-indigo  { background: linear-gradient(135deg, #6366F1, #4338CA); color: white; }
-.kpi-amber   { background: linear-gradient(135deg, #F59E0B, #D97706); color: white; }
+.kpi-amber   { background: linear-gradient(135deg, #D4AF37, #B8962E); color: white; }

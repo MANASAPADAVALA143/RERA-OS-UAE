@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+﻿import { useState, useRef, useCallback, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
@@ -217,11 +217,11 @@ function calcKpis(fin: ParsedFinancials, year: number): KpiData {
 function EmptyUpload({ onUpload, company, onAddMetrics }: { onUpload: () => void; onAddMetrics: () => void; company: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
-      <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ background: '#1E2A4A' }}>
-        <FileSpreadsheet className="w-8 h-8" style={{ color: '#60A5FA' }} />
+      <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ background: '#F7F5F0' }}>
+        <FileSpreadsheet className="w-8 h-8" style={{ color: '#D4AF37' }} />
       </div>
-      <h3 className="text-lg font-semibold mb-2" style={{ color: '#F1F5F9' }}>No Financial Data Uploaded</h3>
-      <p className="text-sm mb-6 max-w-sm" style={{ color: '#94A3B8' }}>
+      <h3 className="text-lg font-semibold mb-2" style={{ color: '#1C1917' }}>No Financial Data Uploaded</h3>
+      <p className="text-sm mb-6 max-w-sm" style={{ color: '#92400E' }}>
         {company === 'All Companies'
           ? 'Select a specific company from the dropdown above to upload their financials.'
           : `Upload ${company}'s Excel financial statements (P&L and Balance Sheet) or enter metrics manually.`}
@@ -236,7 +236,7 @@ function EmptyUpload({ onUpload, company, onAddMetrics }: { onUpload: () => void
           </button>
         </div>
       )}
-      <p className="text-xs mt-4" style={{ color: '#64748B' }}>Supported format: Excel (.xlsx) with P&L and Balance Sheet data</p>
+      <p className="text-xs mt-4" style={{ color: '#A8A29E' }}>Supported format: Excel (.xlsx) with P&L and Balance Sheet data</p>
     </div>
   );
 }
@@ -408,7 +408,7 @@ function KCard({ label, value, sub, status, icon, trendData, category }: KCardPr
     balance: 'rgba(34, 197, 94, 0.15)',
   }[category || 'profitability'];
   const iconColor = {
-    profitability: '#3B82F6',
+    profitability: '#D4AF37',
     rental: '#8B5CF6',
     balance: '#22C55E',
   }[category || 'profitability'];
@@ -634,7 +634,7 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
   } else if (margin > 0) {
     insightText = `Healthy margin at ${margin.toFixed(1)}%. Watch expense growth relative to ${fmtFull(k.totalRevenue)} revenue.`;
     insightColor = '#1E40AF'; insightBg = '#EFF6FF'; insightBorder = '#BFDBFE';
-    InsightIcon = <TrendingUp size={20} style={{ color: '#3B82F6', flexShrink: 0 }} />;
+    InsightIcon = <TrendingUp size={20} style={{ color: '#D4AF37', flexShrink: 0 }} />;
   } else if (k.totalRevenue > 0) {
     insightText = `Net loss of ${fmtFull(Math.abs(k.netIncome))} (${margin.toFixed(1)}% margin). NOI is ${fmtFull(k.noi)} — check interest and depreciation charges.`;
     insightColor = '#92400E'; insightBg = '#FFFBEB'; insightBorder = '#FCD34D';
@@ -671,15 +671,15 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
 
       {/* Year Selector */}
       <div className="flex flex-wrap items-center gap-2">
-        <span style={{ fontSize: '12px', color: '#94A3B8', fontWeight: 600, marginRight: '4px' }}>YEAR:</span>
+        <span style={{ fontSize: '12px', color: '#92400E', fontWeight: 600, marginRight: '4px' }}>YEAR:</span>
         {fin.years.map(y => (
           <button
             key={y}
             onClick={() => setSelectedYear(y)}
             style={{
-              background: selectedYear === y ? '#3B82F6' : '#1E2A4A',
-              color: selectedYear === y ? '#FFFFFF' : '#94A3B8',
-              border: '1px solid ' + (selectedYear === y ? '#3B82F6' : '#2D3A56'),
+              background: selectedYear === y ? '#D4AF37' : '#F7F5F0',
+              color: selectedYear === y ? '#FFFFFF' : '#92400E',
+              border: '1px solid ' + (selectedYear === y ? '#D4AF37' : '#2D3A56'),
               padding: '5px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
             }}
           >
@@ -776,7 +776,7 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
               <YAxis tick={{ fontSize: 9 }} tickFormatter={v => fmt(v as number)} />
               <Tooltip formatter={(v: number) => fmtFull(v)} />
               <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-              <Bar dataKey="Revenue"  fill="#3B82F6" radius={[4,4,0,0]} />
+              <Bar dataKey="Revenue"  fill="#D4AF37" radius={[4,4,0,0]} />
               <Bar dataKey="Expenses" fill="#EF4444" radius={[4,4,0,0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -835,7 +835,7 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
         </div>
         <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: '12px', padding: '16px' }}>
           <p style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Avg Profit Margin</p>
-          <p style={{ fontSize: '22px', fontWeight: 700, color: avgMargin >= 0 ? '#1D4ED8' : '#991B1B', marginTop: '8px' }}>{avgMargin.toFixed(1)}%</p>
+          <p style={{ fontSize: '22px', fontWeight: 700, color: avgMargin >= 0 ? '#B8962E' : '#991B1B', marginTop: '8px' }}>{avgMargin.toFixed(1)}%</p>
           <p style={{ fontSize: '11px', color: '#6B7280', marginTop: '4px' }}>Across {fin.years.length} years</p>
         </div>
         <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: '12px', padding: '16px' }}>
