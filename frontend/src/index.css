@@ -6,34 +6,127 @@ body {
   margin: 0;
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
-  background: #F8F9FB;
+  background: linear-gradient(135deg, #0B1437 0%, #1A2456 100%);
   min-height: 100vh;
-  color: #111827;
+  color: #F1F5F9;
 }
 
-/* ── Scrollbar ───────────────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: #F1F5F9; }
-::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #3B82F6; }
+/* ── Dark app theme ──────────────────────────────────────────────────── */
 
-/* ── Recharts light theme ────────────────────────────────────────────── */
-.recharts-wrapper text { fill: #6B7280; }
-.recharts-legend-item-text { color: #6B7280; }
-.recharts-cartesian-grid-horizontal line,
-.recharts-cartesian-grid-vertical line { stroke: #E5E7EB; }
-.recharts-default-tooltip {
-  background-color: #FFFFFF !important;
-  border-color: #E5E7EB !important;
-  color: #111827 !important;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+/* Card / surface backgrounds */
+.dark-app .bg-white { background-color: #151B3D !important; }
+.dark-app .bg-gray-50 { background-color: #0F1830 !important; }
+.dark-app .bg-gray-100 { background-color: #0D1526 !important; }
+.dark-app .bg-gray-200 { background-color: #1A2456 !important; }
+.dark-app .bg-gray-900 { background-color: #060A1F !important; }
+.dark-app .bg-gray-800 { background-color: #0A0F2C !important; }
+
+/* Borders */
+.dark-app .border-gray-100 { border-color: #2A3158 !important; }
+.dark-app .border-gray-200 { border-color: #2A3158 !important; }
+.dark-app .border-gray-300 { border-color: #3A4170 !important; }
+.dark-app .border-b { border-bottom-color: #2A3158; }
+.dark-app .border-t { border-top-color: #2A3158; }
+
+/* Divide lines */
+.dark-app .divide-y > :not([hidden]) ~ :not([hidden]) { border-top-color: #2A3158 !important; }
+.dark-app .divide-gray-50 > :not([hidden]) ~ :not([hidden]) { border-top-color: #2A3158 !important; }
+.dark-app .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-top-color: #2A3158 !important; }
+
+/* Text */
+.dark-app .text-gray-900 { color: #F1F5F9 !important; }
+.dark-app .text-gray-800 { color: #E2E8F0 !important; }
+.dark-app .text-gray-700 { color: #CBD5E1 !important; }
+.dark-app .text-gray-600 { color: #94A3B8 !important; }
+.dark-app .text-gray-500 { color: #64748B !important; }
+.dark-app .text-gray-400 { color: #475569 !important; }
+.dark-app .text-charcoal { color: #F1F5F9 !important; }
+.dark-app .text-primary { color: #60A5FA !important; }
+
+/* Hover table rows */
+.dark-app .hover\:bg-gray-50:hover { background-color: #1A2450 !important; }
+.dark-app .hover\:bg-gray-50\/60:hover { background-color: rgba(26,36,80,0.6) !important; }
+.dark-app .hover\:bg-blue-50\/30:hover { background-color: rgba(59,130,246,0.08) !important; }
+.dark-app .hover\:bg-indigo-50\/20:hover { background-color: rgba(99,102,241,0.06) !important; }
+.dark-app .hover\:bg-blue-50:hover { background-color: #1E2F6A !important; }
+.dark-app .hover\:bg-red-50:hover { background-color: #2D1522 !important; }
+
+/* Form inputs */
+.dark-app input:not([type='range']):not([type='checkbox']):not([type='radio']):not([type='file']),
+.dark-app select,
+.dark-app textarea {
+  background-color: #1E2A4A !important;
+  border-color: #3A4170 !important;
+  color: #F1F5F9 !important;
 }
-.recharts-tooltip-label { color: #374151 !important; }
+.dark-app input::placeholder,
+.dark-app textarea::placeholder { color: #475569 !important; }
+.dark-app select option { background-color: #1E2A4A; color: #F1F5F9; }
+.dark-app datalist { background-color: #1E2A4A; color: #F1F5F9; }
 
-/* ── Gradient KPI card utilities ─────────────────────────────────────── */
-.kpi-orange  { background: linear-gradient(135deg, #FB923C, #EA580C); color: white; }
-.kpi-purple  { background: linear-gradient(135deg, #A78BFA, #7C3AED); color: white; }
-.kpi-blue    { background: linear-gradient(135deg, #60A5FA, #2563EB); color: white; }
-.kpi-teal    { background: linear-gradient(135deg, #2DD4BF, #0D9488); color: white; }
-.kpi-red     { background: linear-gradient(135deg, #F87171, #DC2626); color: white; }
-.kpi-indigo  { background: linear-gradient(135deg, #818CF8, #4338CA); color: white; }
+/* Blue-tinted expanded rows (Company Registry suites) */
+.dark-app .bg-blue-50\/50 { background-color: rgba(59,130,246,0.06) !important; }
+.dark-app .bg-blue-50\/40 { background-color: rgba(59,130,246,0.05) !important; }
+.dark-app .bg-blue-50\/30 { background-color: rgba(59,130,246,0.04) !important; }
+.dark-app .bg-indigo-50\/30 { background-color: rgba(99,102,241,0.05) !important; }
+.dark-app .bg-blue-100 { background-color: rgba(59,130,246,0.15) !important; }
+.dark-app .border-blue-100 { border-color: rgba(59,130,246,0.2) !important; }
+.dark-app .border-blue-200 { border-color: rgba(59,130,246,0.25) !important; }
+.dark-app .border-indigo-100 { border-color: rgba(99,102,241,0.2) !important; }
+.dark-app .bg-indigo-50\/40 { background-color: rgba(99,102,241,0.06) !important; }
+
+/* Shadows */
+.dark-app .shadow-sm { box-shadow: 0 1px 3px rgba(0,0,0,0.5) !important; }
+.dark-app .shadow-lg { box-shadow: 0 10px 40px rgba(0,0,0,0.6) !important; }
+.dark-app .shadow-xl { box-shadow: 0 20px 60px rgba(0,0,0,0.7) !important; }
+.dark-app .shadow-2xl { box-shadow: 0 25px 80px rgba(0,0,0,0.8) !important; }
+
+/* Alert / notification boxes */
+.dark-app .bg-amber-50 { background-color: rgba(251,191,36,0.08) !important; }
+.dark-app .bg-green-50 { background-color: rgba(34,197,94,0.08) !important; }
+.dark-app .bg-blue-50 { background-color: rgba(59,130,246,0.08) !important; }
+.dark-app .bg-red-50 { background-color: rgba(239,68,68,0.08) !important; }
+.dark-app .border-amber-200 { border-color: rgba(251,191,36,0.3) !important; }
+.dark-app .border-green-200 { border-color: rgba(34,197,94,0.3) !important; }
+.dark-app .border-blue-200 { border-color: rgba(59,130,246,0.3) !important; }
+.dark-app .border-red-200 { border-color: rgba(239,68,68,0.3) !important; }
+.dark-app .text-amber-800 { color: #FCD34D !important; }
+.dark-app .text-amber-700 { color: #FCD34D !important; }
+.dark-app .text-green-800 { color: #4ADE80 !important; }
+.dark-app .text-green-700 { color: #4ADE80 !important; }
+.dark-app .text-blue-800 { color: #93C5FD !important; }
+.dark-app .text-blue-700 { color: #93C5FD !important; }
+.dark-app .text-red-800 { color: #FCA5A5 !important; }
+.dark-app .text-red-700 { color: #FCA5A5 !important; }
+.dark-app .text-amber-600 { color: #FBBF24 !important; }
+.dark-app .text-green-600 { color: #22C55E !important; }
+.dark-app .text-blue-600 { color: #60A5FA !important; }
+.dark-app .text-red-600 { color: #F87171 !important; }
+.dark-app .text-indigo-600 { color: #818CF8 !important; }
+.dark-app .text-blue-500 { color: #93C5FD !important; }
+
+/* Recharts dark theme */
+.dark-app .recharts-wrapper text { fill: #94A3B8 !important; }
+.dark-app .recharts-legend-item-text { color: #94A3B8 !important; }
+.dark-app .recharts-cartesian-grid-horizontal line,
+.dark-app .recharts-cartesian-grid-vertical line { stroke: rgba(255,255,255,0.08) !important; }
+.dark-app .recharts-default-tooltip {
+  background-color: #1E2A4A !important;
+  border-color: #3A4170 !important;
+  color: #F1F5F9 !important;
+}
+.dark-app .recharts-tooltip-label { color: #CBD5E1 !important; }
+
+/* Scrollbar */
+.dark-app ::-webkit-scrollbar { width: 5px; height: 5px; }
+.dark-app ::-webkit-scrollbar-track { background: #060A1F; }
+.dark-app ::-webkit-scrollbar-thumb { background: #2A3158; border-radius: 3px; }
+.dark-app ::-webkit-scrollbar-thumb:hover { background: #3B82F6; }
+
+/* ── Gradient KPI card utilities ─────────────────────────────────── */
+.kpi-orange  { background: linear-gradient(135deg, #F97316, #EA580C); color: white; }
+.kpi-purple  { background: linear-gradient(135deg, #8B5CF6, #6D28D9); color: white; }
+.kpi-blue    { background: linear-gradient(135deg, #3B82F6, #1D4ED8); color: white; }
+.kpi-teal    { background: linear-gradient(135deg, #14B8A6, #0D9488); color: white; }
+.kpi-red     { background: linear-gradient(135deg, #EF4444, #DC2626); color: white; }
+.kpi-indigo  { background: linear-gradient(135deg, #6366F1, #4338CA); color: white; }
