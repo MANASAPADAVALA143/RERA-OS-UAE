@@ -4,7 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid,
 } from 'recharts';
-import { Upload, Building2, FileSpreadsheet, TrendingUp } from 'lucide-react';
+import { Upload, Building2, FileSpreadsheet, TrendingUp, TrendingDown, DollarSign, Home, Vault, BarChart3 } from 'lucide-react';
 import { api } from '../services/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -393,16 +393,64 @@ function CFTable({ fin }: { fin: ParsedFinancials }) {
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
 
-function KCard({ label, value, sub, status }: { label:string; value:string; sub:string; status:'good'|'warn'|'bad'|'info' }) {
-  const border = { good:'border-green-500 bg-green-50', warn:'border-amber-500 bg-amber-50', bad:'border-red-500 bg-red-50', info:'border-blue-500 bg-blue-50' }[status];
-  const pill   = { good:'bg-green-100 text-green-700', warn:'bg-amber-100 text-amber-700', bad:'bg-red-100 text-red-700', info:'bg-blue-100 text-blue-700' }[status];
+interface KCardProps {
+  label: string; value: string; sub: string;
+  status: 'good'|'warn'|'bad'|'info';
+  icon?: React.ReactNode;
+  trendData?: number[];
+  category?: 'profitability'|'rental'|'balance';
+}
+
+function KCard({ label, value, sub, status, icon, trendData, category }: KCardProps) {
+  const iconBgColor = {
+    profitability: 'rgba(59, 130, 246, 0.15)',
+    rental: 'rgba(139, 92, 246, 0.15)',
+    balance: 'rgba(34, 197, 94, 0.15)',
+  }[category || 'profitability'];
+  const iconColor = {
+    profitability: '#3B82F6',
+    rental: '#8B5CF6',
+    balance: '#22C55E',
+  }[category || 'profitability'];
+  const borderColor = {
+    good:'border-l-green-500 bg-green-50/50 hover:bg-green-100/50',
+    warn:'border-l-amber-500 bg-amber-50/50 hover:bg-amber-100/50',
+    bad:'border-l-red-500 bg-red-50/50 hover:bg-red-100/50',
+    info:'border-l-blue-500 bg-blue-50/50 hover:bg-blue-100/50'
+  }[status];
+  const pill = {
+    good:'bg-green-100 text-green-700',
+    warn:'bg-amber-100 text-amber-700',
+    bad:'bg-red-100 text-red-700',
+    info:'bg-blue-100 text-blue-700'
+  }[status];
   const pillTx = { good:'✓ Healthy', warn:'⚠ Monitor', bad:'✗ Review', info:'ℹ Info' }[status];
+
   return (
-    <div className={`border-l-4 ${border} rounded-lg p-4 shadow-sm`}>
-      <p className="text-xs text-gray-500 mb-1">{label}</p>
-      <p className="text-xl font-bold font-mono text-gray-900">{value}</p>
-      <p className="text-xs text-gray-500 mt-1">{sub}</p>
-      <span className={`inline-block text-xs px-2 py-0.5 rounded-full mt-2 font-medium ${pill}`}>{pillTx}</span>
+    <div className={`border-l-4 ${borderColor} rounded-lg p-4 shadow-sm transition-all hover:shadow-md hover:scale-105 relative`}>
+      {/* Icon Badge */}
+      {icon && (
+        <div style={{ background: iconBgColor, width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px', color: iconColor }}>
+          {icon}
+        </div>
+      )}
+
+      <p className="text-xs text-gray-500 mb-1 font-semibold">{label}</p>
+      <p className="text-2xl font-bold font-mono text-gray-900 mb-1">{value}</p>
+      <p className="text-xs text-gray-500 mb-3">{sub}</p>
+
+      {/* Sparkline (mini chart) */}
+      {trendData && trendData.length > 0 && (
+        <div style={{ marginBottom: '12px', height: '40px', opacity: 0.8 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={trendData.map((v, i) => ({ x: i, y: v }))}>
+              <Line type="monotone" dataKey="y" stroke={iconColor} dot={false} strokeWidth={2} isAnimationActive={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      <span className={`inline-block text-xs px-3 py-1 rounded-full font-medium ${pill} w-full text-center`}>{pillTx}</span>
     </div>
   );
 }
@@ -427,10 +475,29 @@ function KPITab({ fin }: { fin: ParsedFinancials }) {
   const alR   = k.totalLiabilities > 0 ? k.totalAssets / k.totalLiabilities : 0;
   const dte   = k.equity > 0 ? k.totalLiabilities / k.equity : 0;
 
+  // Calculate trend data for sparklines
+  const noiMTrend = fin.years.map(y => { const kk = calcKpis(fin, y); return kk.totalRevenue > 0 ? kk.noi / kk.totalRevenue * 100 : 0; });
+  const netMTrend = fin.years.map(y => { const kk = calcKpis(fin, y); return kk.totalRevenue > 0 ? kk.netIncome / kk.totalRevenue * 100 : 0; });
+  const revGTrend = fin.years.map(y => { const kk = calcKpis(fin, y); return kk.totalRevenue; });
+  const cashTrend = fin.years.map(y => { const kk = calcKpis(fin, y); return kk.cash; });
+
   const trendData = fin.years.map(y => {
     const kk = calcKpis(fin, y);
     return { year: String(y), Revenue: kk.totalRevenue, Expenses: kk.totalExpenses, 'Net Income': kk.netIncome, NOI: kk.noi };
   });
+
+  // Data for new charts
+  const lastKpi = k;
+  const revenueAllocation = [
+    { name: 'NOI', value: Math.max(0, lastKpi.noi) },
+    { name: 'Expenses', value: lastKpi.totalExpenses },
+  ];
+  const yoyComparison = prevY ? [
+    { kpi: 'NOI Margin', current: noiM, previous: (calcKpis(fin, prevY).totalRevenue > 0 ? calcKpis(fin, prevY).noi / calcKpis(fin, prevY).totalRevenue * 100 : 0) },
+    { kpi: 'Net Margin', current: netM, previous: (calcKpis(fin, prevY).totalRevenue > 0 ? calcKpis(fin, prevY).netIncome / calcKpis(fin, prevY).totalRevenue * 100 : 0) },
+    { kpi: 'Expense Ratio', current: expR, previous: (calcKpis(fin, prevY).totalRevenue > 0 ? calcKpis(fin, prevY).totalExpenses / calcKpis(fin, prevY).totalRevenue * 100 : 0) },
+    { kpi: 'D/E Ratio', current: dte, previous: (calcKpis(fin, prevY).equity > 0 ? calcKpis(fin, prevY).totalLiabilities / calcKpis(fin, prevY).equity : 0) },
+  ] : [];
 
   return (
     <div className="space-y-6">
@@ -439,30 +506,30 @@ function KPITab({ fin }: { fin: ParsedFinancials }) {
       <div>
         <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">Profitability</p>
         <div className="grid grid-cols-4 gap-4">
-          <KCard label="NOI Margin" value={`${noiM.toFixed(1)}%`} sub={`NOI: ${fmt(k.noi)}`} status={noiM>=40?'good':noiM>=20?'warn':'bad'} />
-          <KCard label="Net Income Margin" value={`${netM.toFixed(1)}%`} sub={`Net: ${fmt(k.netIncome)}`} status={netM>=10?'good':netM>=0?'warn':'bad'} />
-          <KCard label="Revenue Growth YoY" value={revG!==null?`${revG>=0?'+':''}${revG.toFixed(1)}%`:'N/A'} sub={prevY?`${lastY} vs ${prevY}`:'Only 1 year'} status={revG===null?'info':revG>=3?'good':revG>=0?'warn':'bad'} />
-          <KCard label="Expense Ratio" value={`${expR.toFixed(1)}%`} sub={`Total exp: ${fmt(k.totalExpenses)}`} status={expR<=70?'good':expR<=85?'warn':'bad'} />
+          <KCard label="NOI Margin" value={`${noiM.toFixed(1)}%`} sub={`NOI: ${fmt(k.noi)}`} status={noiM>=40?'good':noiM>=20?'warn':'bad'} icon={<TrendingUp size={18} />} trendData={noiMTrend} category="profitability" />
+          <KCard label="Net Income Margin" value={`${netM.toFixed(1)}%`} sub={`Net: ${fmt(k.netIncome)}`} status={netM>=10?'good':netM>=0?'warn':'bad'} icon={<BarChart3 size={18} />} trendData={netMTrend} category="profitability" />
+          <KCard label="Revenue Growth YoY" value={revG!==null?`${revG>=0?'+':''}${revG.toFixed(1)}%`:'N/A'} sub={prevY?`${lastY} vs ${prevY}`:'Only 1 year'} status={revG===null?'info':revG>=3?'good':revG>=0?'warn':'bad'} icon={<TrendingUp size={18} />} trendData={revGTrend} category="profitability" />
+          <KCard label="Expense Ratio" value={`${expR.toFixed(1)}%`} sub={`Total exp: ${fmt(k.totalExpenses)}`} status={expR<=70?'good':expR<=85?'warn':'bad'} icon={<TrendingDown size={18} />} category="profitability" />
         </div>
       </div>
 
       <div>
         <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">Rental Performance</p>
         <div className="grid grid-cols-4 gap-4">
-          <KCard label="Rental Income %" value={`${rentP.toFixed(1)}%`} sub={`${fmt(k.rentalIncome)} of ${fmt(k.totalRevenue)}`} status={rentP>=80?'good':'info'} />
-          <KCard label="Interest Coverage" value={iCov>0?`${iCov.toFixed(2)}x`:'N/A'} sub={`NOI ÷ Interest (${fmt(k.interestExpense)})`} status={iCov>=2?'good':iCov>=1.2?'warn':'bad'} />
-          <KCard label="Mgmt Fee %" value={`${mgmtP.toFixed(1)}%`} sub={`${fmt(k.managementFee)} of revenue`} status={mgmtP<=10?'good':mgmtP<=15?'warn':'bad'} />
-          <KCard label="Repair % of Revenue" value={`${repP.toFixed(1)}%`} sub={`${fmt(k.repairs)} repairs/maint`} status={repP<=5?'good':repP<=10?'warn':'bad'} />
+          <KCard label="Rental Income %" value={`${rentP.toFixed(1)}%`} sub={`${fmt(k.rentalIncome)} of ${fmt(k.totalRevenue)}`} status={rentP>=80?'good':'info'} icon={<Home size={18} />} category="rental" />
+          <KCard label="Interest Coverage" value={iCov>0?`${iCov.toFixed(2)}x`:'N/A'} sub={`NOI ÷ Interest (${fmt(k.interestExpense)})`} status={iCov>=2?'good':iCov>=1.2?'warn':'bad'} icon={<BarChart3 size={18} />} category="rental" />
+          <KCard label="Mgmt Fee %" value={`${mgmtP.toFixed(1)}%`} sub={`${fmt(k.managementFee)} of revenue`} status={mgmtP<=10?'good':mgmtP<=15?'warn':'bad'} icon={<DollarSign size={18} />} category="rental" />
+          <KCard label="Repair % of Revenue" value={`${repP.toFixed(1)}%`} sub={`${fmt(k.repairs)} repairs/maint`} status={repP<=5?'good':repP<=10?'warn':'bad'} icon={<Building2 size={18} />} category="rental" />
         </div>
       </div>
 
       <div>
         <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">Balance Sheet</p>
         <div className="grid grid-cols-4 gap-4">
-          <KCard label="LTV (Loans / Building)" value={ltv>0?`${ltv.toFixed(1)}%`:'N/A'} sub={`Loans: ${fmt(k.longTermLoans)}`} status={ltv>0&&ltv<=75?'good':ltv<=85?'warn':'bad'} />
-          <KCard label="Asset / Liability Ratio" value={alR>0?`${alR.toFixed(2)}x`:'N/A'} sub={`Assets: ${fmt(k.totalAssets)}`} status={alR>=1.5?'good':alR>=1?'warn':'bad'} />
-          <KCard label="Debt-to-Equity" value={dte>0?`${dte.toFixed(2)}x`:'N/A'} sub={`Equity: ${fmt(k.equity)}`} status={dte>0&&dte<=2?'good':dte<=4?'warn':'bad'} />
-          <KCard label="Cash Balance" value={fmt(k.cash)} sub={`As of Dec 31, ${lastY}`} status={k.cash>10000?'good':k.cash>0?'warn':'bad'} />
+          <KCard label="LTV (Loans / Building)" value={ltv>0?`${ltv.toFixed(1)}%`:'N/A'} sub={`Loans: ${fmt(k.longTermLoans)}`} status={ltv>0&&ltv<=75?'good':ltv<=85?'warn':'bad'} icon={<Vault size={18} />} category="balance" />
+          <KCard label="Asset / Liability Ratio" value={alR>0?`${alR.toFixed(2)}x`:'N/A'} sub={`Assets: ${fmt(k.totalAssets)}`} status={alR>=1.5?'good':alR>=1?'warn':'bad'} icon={<DollarSign size={18} />} category="balance" />
+          <KCard label="Debt-to-Equity" value={dte>0?`${dte.toFixed(2)}x`:'N/A'} sub={`Equity: ${fmt(k.equity)}`} status={dte>0&&dte<=2?'good':dte<=4?'warn':'bad'} icon={<BarChart3 size={18} />} category="balance" />
+          <KCard label="Cash Balance" value={fmt(k.cash)} sub={`As of Dec 31, ${lastY}`} status={k.cash>10000?'good':k.cash>0?'warn':'bad'} icon={<Building2 size={18} />} trendData={cashTrend} category="balance" />
         </div>
       </div>
 
@@ -483,6 +550,41 @@ function KPITab({ fin }: { fin: ParsedFinancials }) {
             </LineChart>
           </ResponsiveContainer>
         </div>
+      </div>
+
+      {/* New Visualization Row */}
+      <div className="grid grid-cols-2 gap-6">
+        {/* Revenue Allocation Donut */}
+        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+          <p className="text-sm font-semibold text-gray-700 mb-3">Revenue Allocation ({lastY})</p>
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart>
+              <Pie data={revenueAllocation} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value">
+                {revenueAllocation.map((_, i) => <Cell key={i} fill={CC[i % CC.length]} />)}
+              </Pie>
+              <Tooltip formatter={(v:number) => fmtFull(v)} />
+              <Legend iconSize={8} wrapperStyle={{ fontSize:10 }} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* YoY Comparison Bar */}
+        {yoyComparison.length > 0 && (
+          <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+            <p className="text-sm font-semibold text-gray-700 mb-3">This Year vs Last Year</p>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={yoyComparison}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                <XAxis dataKey="kpi" tick={{ fontSize:9 }} />
+                <YAxis tick={{ fontSize:10 }} />
+                <Tooltip formatter={(v:number) => v.toFixed(2)} />
+                <Legend iconSize={8} wrapperStyle={{ fontSize:10 }} />
+                <Bar dataKey="current" name={`${lastY} (Current)`} fill={CC[0]} />
+                <Bar dataKey="previous" name={`${prevY} (Previous)`} fill={CC[2]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
     </div>
   );
