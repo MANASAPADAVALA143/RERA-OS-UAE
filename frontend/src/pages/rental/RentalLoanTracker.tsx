@@ -1,4 +1,4 @@
-﻿import { useMemo, useRef, useState } from 'react';
+﻿import { useMemo, useRef, useState, useEffect } from 'react';
 import { Download, Zap, CheckCircle2, TrendingDown, Plus, X, FileSpreadsheet, DollarSign, Briefcase, AlertCircle, TrendingUp, Calendar } from 'lucide-react';
 import { useRentalCfoData, dscrStatus } from '../../hooks/useRentalCfoData';
 import { LoadingSkeleton } from '../../components/ui/Table';
@@ -165,6 +165,11 @@ export default function RentalLoanTracker() {
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
+
+  // DEBUG: Log data state
+  useEffect(() => {
+    console.log('🔍 Loan Tracker Debug:', { loading, error, loansCount: loans?.length ?? 0, companiesCount: companies?.length ?? 0 });
+  }, [loading, error, loans, companies]);
 
   async function handleImportExcel(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
