@@ -272,17 +272,23 @@ export default function RentalOverview() {
   const monthLabel = MONTH_OPTIONS.find(o => o.value === selectedMonth)?.label ?? selectedMonth;
 
   // Occupancy gauge data (0-100%)
-  const occupancyGaugeData = useMemo(() => [{
-    name: 'Occupancy',
-    value: parseFloat((kpis.occupancy_pct * 100).toFixed(1)),
-    fill: (kpis.occupancy_pct * 100) >= 80 ? '#10B981' : (kpis.occupancy_pct * 100) >= 60 ? '#F59E0B' : '#EF4444',
-  }], [kpis]);
+  const occupancyGaugeData = useMemo(() => {
+    if (!kpis) return [];
+    return [{
+      name: 'Occupancy',
+      value: parseFloat((kpis.occupancy_pct * 100).toFixed(1)),
+      fill: (kpis.occupancy_pct * 100) >= 80 ? '#10B981' : (kpis.occupancy_pct * 100) >= 60 ? '#F59E0B' : '#EF4444',
+    }];
+  }, [kpis]);
 
   // Occupied vs Vacant donut data
-  const occupiedVacantData = useMemo(() => [
-    { name: 'Occupied', value: kpis.occupied_units, fill: '#10B981' },
-    { name: 'Vacant', value: kpis.vacant_units, fill: '#EF4444' },
-  ], [kpis]);
+  const occupiedVacantData = useMemo(() => {
+    if (!kpis) return [];
+    return [
+      { name: 'Occupied', value: kpis.occupied_units, fill: '#10B981' },
+      { name: 'Vacant', value: kpis.vacant_units, fill: '#EF4444' },
+    ];
+  }, [kpis]);
 
   // Gross Potential Rent by company donut data
   const rentCompositionData = useMemo(() => {
