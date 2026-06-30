@@ -1163,7 +1163,11 @@ async def import_ownership(
     current_user: CurrentUser = Depends(require_write_access()),
     db: Session = Depends(get_db),
 ):
-    """Import partners from Excel file (Partner Name | Ownership % | Role columns required)"""
+    """Import partners from Excel file. Auto-detects header row and column positions.
+    Supports flexible formats — looks for columns named Partner Name, Ownership %, Role.
+    Role aliases: Managing Partner → managing_member, Investor Partner → limited_partner, etc.
+    Also stores Capital Contributed and Current Equity Balance if present.
+    """
     import openpyxl
     try:
         content = await file.read()
@@ -1174,20 +1178,89 @@ async def import_ownership(
         imported_count = 0
         errors = []
 
-        for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        ROLE_MAP = {
+            "managing_partner":   "managing_member",
+            "managing_member":    "managing_member",
+            "general_partner":    "general_partner",
+            "limited_partner":    "limited_partner",
+            "partner":            "limited_partner",
+            "investor_partner":   "limited_partner",
+            "passive_investor":   "passive_investor",
+            "silent_partner":     "silent_partner",
+            "management_entity":  "managing_member",
+        }
+        VALID_ROLES = set(ROLE_MAP.values())
+
+        # ── Auto-detect header row by scanning for "partner name" keyword ──
+        header_row_idx = None
+        col_map: dict[str, int] = {}
+        all_rows = list(ws.iter_rows(values_only=True))
+
+        for i, row in enumerate(all_rows):
+            cells = [str(c or "").strip().lower() for c in row]
+            if any("partner name" in c or c == "partner" for c in cells):
+                header_row_idx = i
+                for j, cell in enumerate(cells):
+                    if "partner name" in cell or cell == "partner":
+                        col_map["name"] = j
+                    elif "ownership" in cell or "own %" in cell or cell == "own%":
+                        col_map["pct"] = j
+                    elif "role" in cell:
+                        col_map["role"] = j
+                    elif "capital contributed" in cell or "capital in" in cell:
+                        col_map["capital"] = j
+                    elif "equity balance" in cell or "current equity" in cell:
+                        col_map["equity"] = j
+                break
+
+        # Fallback to positional (col 0=name, 1=pct, 2=role) if no header found
+        if header_row_idx is None:
+            col_map = {"name": 0, "pct": 1, "role": 2}
+            data_rows = all_rows[1:]  # skip first row
+        else:
+            data_rows = all_rows[header_row_idx + 1:]
+
+        name_col   = col_map.get("name", 0)
+        pct_col    = col_map.get("pct", 1)
+        role_col   = col_map.get("role", 2)
+        cap_col    = col_map.get("capital")
+        equity_col = col_map.get("equity")
+
+        for row_idx, row in enumerate(data_rows, start=1):
             try:
-                if not row[0]:  # Skip empty rows
+                raw_name = row[name_col] if len(row) > name_col else None
+                if not raw_name:
+                    continue
+                partner_name = str(raw_name).strip()
+                # Skip totals row
+                if partner_name.upper() in ("TOTAL", "GRAND TOTAL", "SUM"):
                     continue
 
-                partner_name = str(row[0]).strip()
-                ownership_pct = float(row[1] or 0)
-                role = str(row[2] or "limited_partner").lower().replace(" ", "_")
+                raw_pct = row[pct_col] if len(row) > pct_col else 0
+                try:
+                    ownership_pct = float(raw_pct or 0)
+                except (ValueError, TypeError):
+                    ownership_pct = 0.0
 
-                # Validate role
-                if role not in ["general_partner", "limited_partner", "silent_partner", "managing_member", "passive_investor"]:
+                raw_role = str(row[role_col] if len(row) > role_col else "").strip().lower().replace(" ", "_") if role_col is not None else ""
+                role = ROLE_MAP.get(raw_role, "limited_partner")
+                if role not in VALID_ROLES:
                     role = "limited_partner"
 
-                # Check if partner already exists
+                capital_contributed = None
+                if cap_col is not None and len(row) > cap_col:
+                    try:
+                        capital_contributed = float(row[cap_col] or 0)
+                    except (ValueError, TypeError):
+                        capital_contributed = None
+
+                equity_balance = None
+                if equity_col is not None and len(row) > equity_col:
+                    try:
+                        equity_balance = float(row[equity_col] or 0)
+                    except (ValueError, TypeError):
+                        equity_balance = None
+
                 existing = db.query(RentalOwnership).filter(
                     RentalOwnership.tenant_id == current_user.tenant_id,
                     RentalOwnership.company_id == co_id,
@@ -1195,19 +1268,27 @@ async def import_ownership(
                 ).first()
 
                 if not existing:
-                    o = RentalOwnership(
+                    kwargs: dict = dict(
                         tenant_id=current_user.tenant_id,
                         company_id=co_id,
                         partner_name=partner_name,
                         ownership_pct=ownership_pct,
                         role=RentalPartnerRole(role),
                     )
-                    db.add(o)
+                    if capital_contributed is not None and hasattr(RentalOwnership, "capital_contributed"):
+                        kwargs["capital_contributed"] = capital_contributed
+                    if equity_balance is not None and hasattr(RentalOwnership, "equity_balance"):
+                        kwargs["equity_balance"] = equity_balance
+                    db.add(RentalOwnership(**kwargs))
                     imported_count += 1
                 else:
-                    # Update existing
                     existing.ownership_pct = ownership_pct
                     existing.role = RentalPartnerRole(role)
+                    if capital_contributed is not None and hasattr(existing, "capital_contributed"):
+                        existing.capital_contributed = capital_contributed
+                    if equity_balance is not None and hasattr(existing, "equity_balance"):
+                        existing.equity_balance = equity_balance
+
             except Exception as e:
                 errors.append(f"Row {row_idx}: {str(e)}")
 
