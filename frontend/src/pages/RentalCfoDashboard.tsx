@@ -1,23 +1,12 @@
+import { useEffect, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from 'recharts';
+import api from '../services/api';
 
 const fmt$ = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
-
-const COMPANIES = [
-  { name: 'Sunstone Rentals LLC',     units: 6, occupied: 5, rent: 9885,  collected: 7535, noi: 164,  margin: 1.7  },
-  { name: 'Meridian Residential LLC', units: 6, occupied: 5, rent: 11140, collected: 9850, noi: 2480, margin: 22.3 },
-  { name: 'Cornerstone Housing LLC',  units: 6, occupied: 5, rent: 9535,  collected: 8420, noi: 1820, margin: 19.1 },
-  { name: 'Pinnacle Rentals I LLC',   units: 6, occupied: 5, rent: 10645, collected: 9400, noi: 2100, margin: 19.7 },
-  { name: 'Summit Living LLC',        units: 6, occupied: 5, rent: 9635,  collected: 8500, noi: 1640, margin: 17.0 },
-  { name: 'Heritage Residential LLC', units: 6, occupied: 5, rent: 9635,  collected: 8200, noi: 1420, margin: 14.7 },
-  { name: 'Riverview Rentals LLC',    units: 6, occupied: 5, rent: 10345, collected: 9100, noi: 2260, margin: 21.8 },
-  { name: 'Landmark Housing LLC',     units: 6, occupied: 5, rent: 9940,  collected: 8750, noi: 1980, margin: 19.9 },
-  { name: 'Horizon Rentals LLC',      units: 6, occupied: 5, rent: 10345, collected: 9200, noi: 2040, margin: 19.7 },
-  { name: 'Crestview Living LLC',     units: 6, occupied: 5, rent: 10195, collected: 9100, noi: 2080, margin: 20.4 },
-];
 
 const PIE_COLORS = [
   '#dc2626','#1d4ed8','#16a34a','#7c3aed','#d97706',
@@ -31,32 +20,88 @@ function statusInfo(margin: number) {
 }
 
 export default function RentalCfoDashboard() {
-  const barData = COMPANIES.map(c => ({
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [portfolioData, setPortfolioData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [portfolioRes] = await Promise.all([
+          api.get('/api/rentals/portfolio-summary'),
+        ]);
+
+        const portfolio = portfolioRes.data || {};
+        setPortfolioData(portfolio);
+
+        // Transform portfolio company data into table format
+        const companiesData = (portfolio.by_company || []).map((c: any) => ({
+          name: c.company_name || c.company_id,
+          units: c.total_units || 0,
+          occupied: (c.total_units || 0) - (c.vacant_units || 0),
+          rent: c.billed_this_month || 0,
+          collected: c.collected_this_month || 0,
+          noi: c.noi_this_month || 0,
+          margin: c.noi_margin !== undefined ? c.noi_margin : 0,
+        }));
+        setCompanies(companiesData);
+      } catch (err) {
+        console.error('Error fetching CFO data:', err);
+        setCompanies([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const barData = companies.map(c => ({
     name: c.name.split(' ').slice(0, 2).join(' '),
     Rent: c.rent,
     Collected: c.collected,
   }));
 
-  const pieData = COMPANIES.map(c => ({
+  const pieData = companies.map(c => ({
     name: c.name.split(' ').slice(0, 2).join(' '),
     value: Math.max(c.noi, 0),
   }));
 
+  const totalRent = companies.reduce((s, c) => s + c.rent, 0);
+  const totalCollected = companies.reduce((s, c) => s + c.collected, 0);
+  const totalUnits = companies.reduce((s, c) => s + c.units, 0);
+  const totalOccupied = companies.reduce((s, c) => s + c.occupied, 0);
+  const totalNoi = companies.reduce((s, c) => s + c.noi, 0);
+  const totalVacant = totalUnits - totalOccupied;
+  const collectionRate = totalRent > 0 ? (totalCollected / totalRent) * 100 : 0;
+  const vacancyLoss = portfolioData?.vacancy_loss || 0;
+
   const TILES = [
-    { label: 'Total Rent Roll',  value: fmt$(108060) + '/mo', sub: 'EGI excl. vacant'  },
-    { label: 'Rent Collected',   value: fmt$(95535),           sub: 'Current month'     },
-    { label: 'Collection Rate',  value: '88.4%',               sub: 'vs 90% target'     },
-    { label: 'NOI (Portfolio)',  value: fmt$(42180),            sub: 'EGI − OpEx'        },
-    { label: 'Vacancy Loss',     value: fmt$(9885),             sub: '10 units vacant'   },
-    { label: 'Total Units',      value: '60',                  sub: '50 occupied'        },
+    { label: 'Total Rent Roll',  value: fmt$(totalRent) + '/mo', sub: 'EGI excl. vacant'  },
+    { label: 'Rent Collected',   value: fmt$(totalCollected),    sub: 'Current month'     },
+    { label: 'Collection Rate',  value: `${collectionRate.toFixed(1)}%`,               sub: 'vs 90% target'     },
+    { label: 'NOI (Portfolio)',  value: fmt$(totalNoi),          sub: 'EGI − OpEx'        },
+    { label: 'Vacancy Loss',     value: fmt$(vacancyLoss),       sub: `${totalVacant} units vacant` },
+    { label: 'Total Units',      value: totalUnits.toString(),   sub: `${totalOccupied} occupied`   },
   ];
 
+  const lowMarginCompanies = companies.filter(c => c.margin < 15).slice(0, 2);
   const ACTIONS = [
-    { icon: '⚠️', cls: 'bg-red-50 border-red-200',    text: 'Sunstone NOI at $164 — expenses exceed collections this month. Review HOA + maintenance costs.' },
-    { icon: '⚠️', cls: 'bg-amber-50 border-amber-200', text: 'Portfolio collection rate 88.4% — below 90% target. 3 units have outstanding AR.' },
-    { icon: 'ℹ️', cls: 'bg-blue-50 border-blue-200',   text: '10 units currently vacant across portfolio. At avg $1,897/mo = $18,970 monthly revenue opportunity.' },
-    { icon: '✅', cls: 'bg-green-50 border-green-200', text: '8 of 10 companies above 15% NOI margin — portfolio health strong.' },
+    lowMarginCompanies.length > 0 ?
+      { icon: '⚠️', cls: 'bg-red-50 border-red-200', text: `${lowMarginCompanies[0].name} NOI margin at ${lowMarginCompanies[0].margin.toFixed(1)}% — below 15% target. Review expenses.` }
+      : { icon: '✅', cls: 'bg-green-50 border-green-200', text: 'All companies at healthy NOI margins.' },
+    collectionRate < 90 ?
+      { icon: '⚠️', cls: 'bg-amber-50 border-amber-200', text: `Portfolio collection rate ${collectionRate.toFixed(1)}% — below 90% target. Review AR.` }
+      : { icon: '✅', cls: 'bg-green-50 border-green-200', text: 'Collection rate above target.' },
+    totalVacant > 0 ?
+      { icon: 'ℹ️', cls: 'bg-blue-50 border-blue-200', text: `${totalVacant} units currently vacant. Address vacancies to recover lost revenue.` }
+      : { icon: '✅', cls: 'bg-green-50 border-green-200', text: 'Portfolio fully occupied.' },
+    companies.filter(c => c.margin > 15).length > Math.ceil(companies.length * 0.75) ?
+      { icon: '✅', cls: 'bg-green-50 border-green-200', text: `${companies.filter(c => c.margin > 15).length} of ${companies.length} companies above 15% NOI margin — portfolio health strong.` }
+      : { icon: '⚠️', cls: 'bg-amber-50 border-amber-200', text: 'Several companies below target NOI margins.' },
   ];
+
+  if (loading) return <div className="p-6 text-gray-500">Loading CFO Dashboard...</div>;
 
   return (
     <div className="space-y-8">
@@ -64,7 +109,7 @@ export default function RentalCfoDashboard() {
       <div>
         <p className="text-xs uppercase tracking-wider" style={{ color: '#B8860B' }}>CFO VIEW</p>
         <h1 className="text-3xl font-bold text-gray-900 mt-1">CFO Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-1">10 entities · 60 units · Rental Portfolio</p>
+        <p className="text-sm text-gray-500 mt-1">{companies.length} entities · {totalUnits} units · Rental Portfolio</p>
       </div>
 
       {/* Section A — 6 KPI tiles */}
@@ -99,7 +144,10 @@ export default function RentalCfoDashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {COMPANIES.map(c => {
+              {companies.length === 0 ? (
+                <tr><td colSpan={9} className="px-4 py-6 text-center text-gray-500">No company data available</td></tr>
+              ) : null}
+              {companies.map(c => {
                 const s = statusInfo(c.margin);
                 return (
                   <tr key={c.name} className="hover:bg-gray-50">
