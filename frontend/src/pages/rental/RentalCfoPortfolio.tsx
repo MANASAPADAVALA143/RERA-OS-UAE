@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { Zap, AlertTriangle } from 'lucide-react';
 import { useRentalCfoData } from '../../hooks/useRentalCfoData';
 import { LoadingSkeleton } from '../../components/ui/Table';
@@ -114,7 +114,7 @@ export default function RentalCfoPortfolio() {
     `px-3 py-1.5 rounded-full text-xs border transition-colors ${active ? 'bg-amber-100 border-amber-600 text-amber-900' : 'border-amber-300 text-gray-600 hover:bg-amber-50'}`;
 
   return (
-    <div className="space-y-6 -m-6 p-6" style={{ background: '#FAFAF7' }}>
+    <div className="space-y-6 -m-6 p-6" style={{ background: 'transparent' }}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-charcoal">CFO Portfolio</h1>

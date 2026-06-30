@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+﻿import { useMemo, useRef, useState } from 'react';
 import { Download, Zap, CheckCircle2, TrendingDown, Plus, X, FileSpreadsheet } from 'lucide-react';
 import { useRentalCfoData, dscrStatus } from '../../hooks/useRentalCfoData';
 import { LoadingSkeleton } from '../../components/ui/Table';
@@ -243,7 +243,7 @@ export default function RentalLoanTracker() {
   if (error) return <div className="text-red-600 p-4">{error}<button className="ml-3 underline" onClick={reload}>Retry</button></div>;
 
   return (
-    <div className="space-y-6 -m-6 p-6" style={{ background: '#FAFAF7' }}>
+    <div className="space-y-6 -m-6 p-6" style={{ background: 'transparent' }}>
       <AddLoanDrawer
         open={showAdd}
         onClose={() => setShowAdd(false)}

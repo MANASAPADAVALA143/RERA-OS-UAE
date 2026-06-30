@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api, { setStoredToken } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -53,7 +53,7 @@ export default function Register() {
           ))}
           {error && <p className="text-red-600 text-sm">{error}</p>}
           <button type="submit" disabled={loading}
-            className="w-full bg-accent text-white py-2.5 rounded-lg font-medium hover:bg-accent-dark disabled:opacity-50">
+            className="w-full bg-accent text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50">
             {loading ? 'Creating account...' : 'Create account'}
           </button>
         </form>

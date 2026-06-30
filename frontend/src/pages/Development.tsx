@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
@@ -185,7 +185,7 @@ export default function Development() {
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                       <YAxis allowDecimals={false} />
                       <Tooltip />
-                      <Line type="monotone" dataKey="sold" stroke="#2F8F7A" strokeWidth={2} dot={{ fill: '#0E3B36' }} name="Units Sold" />
+                      <Line type="monotone" dataKey="sold" stroke="#3B82F6" strokeWidth={2} dot={{ fill: '#1E3A8A' }} name="Units Sold" />
                     </LineChart>
                   </ResponsiveContainer>
                 )}
@@ -202,7 +202,7 @@ export default function Development() {
                       <XAxis dataKey="range" tick={{ fontSize: 11 }} />
                       <YAxis allowDecimals={false} />
                       <Tooltip />
-                      <Bar dataKey="count" fill="#0E3B36" name="Units" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="count" fill="#1E3A8A" name="Units" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}

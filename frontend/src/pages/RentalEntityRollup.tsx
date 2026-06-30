@@ -1,4 +1,4 @@
-import { useRentalPortfolio, computeEntityMetrics, sumMetrics } from '../contexts/RentalPortfolioContext';
+﻿import { useRentalPortfolio, computeEntityMetrics, sumMetrics } from '../contexts/RentalPortfolioContext';
 import { useRentalNav } from '../contexts/RentalNavContext';
 
 const $ = (n: number) =>
@@ -139,17 +139,17 @@ export default function RentalEntityRollup() {
               <thead>
                 <tr>
                   <th className="px-3 py-2.5 text-left bg-gray-900 text-white">Entity</th>
-                  <th colSpan={6} className="px-3 py-2 text-center text-white whitespace-nowrap" style={{ backgroundColor: '#1B4332' }}>Accounts Receivable</th>
+                  <th colSpan={6} className="px-3 py-2 text-center text-white whitespace-nowrap" style={{ backgroundColor: '#1E3A8A' }}>Accounts Receivable</th>
                   <th colSpan={5} className="px-3 py-2 text-center text-white whitespace-nowrap" style={{ backgroundColor: '#7B1D1D' }}>Accounts Payable</th>
                 </tr>
                 <tr>
                   <th className="px-3 py-2 text-left bg-gray-800 text-white">Entity</th>
-                  <th className="px-3 py-2 text-right text-white whitespace-nowrap" style={{ backgroundColor: '#1B4332' }}>Current</th>
-                  <th className="px-3 py-2 text-right text-white whitespace-nowrap" style={{ backgroundColor: '#1B4332' }}>1-30</th>
-                  <th className="px-3 py-2 text-right text-white whitespace-nowrap" style={{ backgroundColor: '#1B4332' }}>31-60</th>
-                  <th className="px-3 py-2 text-right text-white whitespace-nowrap" style={{ backgroundColor: '#1B4332' }}>61-90</th>
-                  <th className="px-3 py-2 text-right text-white whitespace-nowrap" style={{ backgroundColor: '#1B4332' }}>90+</th>
-                  <th className="px-3 py-2 text-right text-white font-bold whitespace-nowrap" style={{ backgroundColor: '#1B4332' }}>AR Total</th>
+                  <th className="px-3 py-2 text-right text-white whitespace-nowrap" style={{ backgroundColor: '#1E3A8A' }}>Current</th>
+                  <th className="px-3 py-2 text-right text-white whitespace-nowrap" style={{ backgroundColor: '#1E3A8A' }}>1-30</th>
+                  <th className="px-3 py-2 text-right text-white whitespace-nowrap" style={{ backgroundColor: '#1E3A8A' }}>31-60</th>
+                  <th className="px-3 py-2 text-right text-white whitespace-nowrap" style={{ backgroundColor: '#1E3A8A' }}>61-90</th>
+                  <th className="px-3 py-2 text-right text-white whitespace-nowrap" style={{ backgroundColor: '#1E3A8A' }}>90+</th>
+                  <th className="px-3 py-2 text-right text-white font-bold whitespace-nowrap" style={{ backgroundColor: '#1E3A8A' }}>AR Total</th>
                   <th className="px-3 py-2 text-right text-white whitespace-nowrap" style={{ backgroundColor: '#7B1D1D' }}>Current</th>
                   <th className="px-3 py-2 text-right text-white whitespace-nowrap" style={{ backgroundColor: '#7B1D1D' }}>1-30</th>
                   <th className="px-3 py-2 text-right text-white whitespace-nowrap" style={{ backgroundColor: '#7B1D1D' }}>31-60</th>

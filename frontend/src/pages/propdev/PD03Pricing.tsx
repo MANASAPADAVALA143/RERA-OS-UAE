@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+﻿import { useState, useMemo } from 'react';
 import { usePropDev } from '../../contexts/PropertyDevContext';
 import type { Lot } from '../../contexts/PropertyDevContext';
 import { AlertTriangle, TrendingUp, ChevronDown, ChevronRight } from 'lucide-react';
@@ -484,7 +484,7 @@ export default function PD03Pricing() {
                   <button
                     onClick={() => toggleCollapse(company.id)}
                     className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:opacity-90 transition-opacity"
-                    style={{ backgroundColor: '#1B4332' }}
+                    style={{ backgroundColor: '#1E3A8A' }}
                   >
                     <div className="flex items-center gap-3">
                       {isCollapsed

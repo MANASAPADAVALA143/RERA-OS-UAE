@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Sparkles, Plus, X } from 'lucide-react';
 import api from '../services/api';
 import { Card } from '../components/ui/Card';
@@ -214,7 +214,7 @@ export default function PipelineMarket() {
           )}
 
           {comparison && (
-            <div className="mt-4 p-4 bg-surface rounded-xl text-sm text-charcoal leading-relaxed">
+            <div className="mt-4 p-4 bg-transparent rounded-xl text-sm text-charcoal leading-relaxed">
               <p>{comparison}</p>
               <button onClick={() => setComparison(null)} className="text-xs text-gray-400 mt-2 hover:text-gray-600">Dismiss</button>
             </div>
@@ -228,7 +228,7 @@ export default function PipelineMarket() {
             {canWrite && (
               <button
                 onClick={() => setShowModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-accent text-white rounded-lg hover:bg-accent-dark"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-accent text-white rounded-lg hover:bg-blue-700"
               >
                 <Plus size={14} /> Add Comp
               </button>

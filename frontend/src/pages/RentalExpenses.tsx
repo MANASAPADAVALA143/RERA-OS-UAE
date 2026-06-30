@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+﻿import { useCallback, useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import api from '../services/api';
 import { Card, KpiCard } from '../components/ui/Card';
@@ -42,7 +42,7 @@ const CAT_PILL: Record<string, string> = {
   other:       'bg-gray-100 text-gray-800',
 };
 
-const CAT_COLORS = ['#0E3B36', '#2F8F7A', '#4BA892', '#1A5249', '#6ECABB', '#8FD5C4', '#ef4444', '#f97316'];
+const CAT_COLORS = ['#1E3A8A', '#3B82F6', '#4BA892', '#1D4ED8', '#6ECABB', '#8FD5C4', '#ef4444', '#f97316'];
 
 export default function RentalExpenses() {
   const [data, setData] = useState<ExpenseResponse | null>(null);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   Bar, BarChart, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -108,7 +108,7 @@ const OPEX_CATEGORIES = [
 ];
 
 const STATUS_COLORS: Record<string, string> = {
-  green: '#2F8F7A',
+  green: '#3B82F6',
   amber: '#D97706',
   red: '#DC2626',
 };
@@ -515,8 +515,8 @@ export default function ReitPropertyDetail() {
                     <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
                     <Tooltip formatter={(v: number) => fmtUSD(v)} />
                     <Legend />
-                    <Bar dataKey="net" name="Net Cash Flow" fill="#2F8F7A" radius={[4, 4, 0, 0]} />
-                    <Line type="monotone" dataKey="closing" name="Closing Balance" stroke="#0E3B36" strokeWidth={2} dot />
+                    <Bar dataKey="net" name="Net Cash Flow" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                    <Line type="monotone" dataKey="closing" name="Closing Balance" stroke="#1E3A8A" strokeWidth={2} dot />
                   </ComposedChart>
                 </ResponsiveContainer>
               </Card>

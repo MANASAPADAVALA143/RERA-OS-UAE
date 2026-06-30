@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../services/api';
 import { LoadingSkeleton } from '../components/ui/Table';
 import { fmtUSD } from '../components/ProtectedRoute';
@@ -49,7 +49,7 @@ const ROLE_MAP: Record<string, Nature> = {
   passive_investor: 'Passive Investor',
 };
 
-const COLORS = ['#1B4332','#2D6A4F','#40916C','#52B788','#74C69D','#95D5B2','#FBBF24','#F97316','#7C3AED','#DB2777'];
+const COLORS = ['#1E3A8A','#2D6A4F','#40916C','#52B788','#74C69D','#95D5B2','#FBBF24','#F97316','#7C3AED','#DB2777'];
 
 const CONTRIB_TYPES = [
   'Initial Contribution',
@@ -378,7 +378,7 @@ export default function RentalOwnership() {
   const avgROI = kpis.avgROI;
 
   return (
-    <div className="space-y-6 -m-6 p-6" style={{ background: '#FAFAF7' }}>
+    <div className="space-y-6 -m-6 p-6" style={{ background: 'transparent' }}>
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -544,7 +544,7 @@ export default function RentalOwnership() {
       ═══════════════════════════════════════════════════════════════════════ */}
       {selectedPartner && selPartnerData && selF && (
         <div className="bg-white rounded-xl border border-green-200 overflow-hidden">
-          <div className="flex items-center justify-between p-4 border-b border-gray-100" style={{ background: '#1B4332' }}>
+          <div className="flex items-center justify-between p-4 border-b border-gray-100" style={{ background: '#1E3A8A' }}>
             <h3 className="font-semibold text-white">{selectedPartner} — Ownership Profile</h3>
             <button onClick={() => setSelectedPartner(null)} className="text-green-300 hover:text-white"><X size={16} /></button>
           </div>
@@ -887,7 +887,7 @@ export default function RentalOwnership() {
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={80} />
                 <Tooltip formatter={(v: number) => [`${v}%`, 'ROI']} />
                 <ReferenceLine x={avgROI} stroke="#D97706" strokeDasharray="4 2" label={{ value: `Avg ${avgROI.toFixed(1)}%`, fontSize: 9, fill: '#D97706', position: 'insideTopRight' }} />
-                <Bar dataKey="roi" fill="#1B4332" radius={[0,3,3,0]} />
+                <Bar dataKey="roi" fill="#1E3A8A" radius={[0,3,3,0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -921,7 +921,7 @@ export default function RentalOwnership() {
       {showAddPartner && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowAddPartner(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b" style={{ background: '#1B4332' }}>
+            <div className="flex items-center justify-between px-5 py-4 border-b" style={{ background: '#1E3A8A' }}>
               <h3 className="font-bold text-white">Add Partner</h3>
               <button onClick={() => setShowAddPartner(false)} className="text-green-300 hover:text-white"><X size={18} /></button>
             </div>
@@ -970,7 +970,7 @@ export default function RentalOwnership() {
       {showAddContrib && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowAddContrib(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b" style={{ background: '#1B4332' }}>
+            <div className="flex items-center justify-between px-5 py-4 border-b" style={{ background: '#1E3A8A' }}>
               <h3 className="font-bold text-white">Add Transaction</h3>
               <button onClick={() => setShowAddContrib(false)} className="text-green-300 hover:text-white"><X size={18} /></button>
             </div>

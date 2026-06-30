@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+﻿import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Calendar, ChevronDown, ChevronRight, ChevronUp, Sparkles } from 'lucide-react';
 import api from '../services/api';
 import { Card, KpiCard } from '../components/ui/Card';
@@ -219,7 +219,7 @@ function AiaBillingDrawer({
             <button
               onClick={onSave}
               disabled={saving || !liveValid}
-              className="text-xs text-white bg-accent hover:bg-accent-dark px-2.5 py-1 rounded disabled:opacity-50"
+              className="text-xs text-white bg-accent hover:bg-blue-700 px-2.5 py-1 rounded disabled:opacity-50"
             >
               {saving ? 'Saving…' : 'Save'}
             </button>
@@ -332,7 +332,7 @@ function MasterSOVCard({ sov }: { sov: SovRow }) {
   const fillPct = Math.min(100, safe(sov.pct_complete) * 100);
 
   return (
-    <div className="bg-surface rounded-xl border border-gray-200 shadow-sm">
+    <div className="bg-transparent rounded-xl border border-gray-200 shadow-sm">
       <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
         <div>
           <p className="font-semibold text-primary text-base">{name}</p>

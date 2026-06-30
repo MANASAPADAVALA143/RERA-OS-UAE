@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+﻿import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
@@ -10,7 +10,7 @@ import { LoadingSkeleton } from '../components/ui/Table';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { fmtUSD, fmtPct } from '../components/ProtectedRoute';
 
-const CHART_COLORS = ['#0E3B36', '#2F8F7A', '#4BA892', '#1A5249'];
+const CHART_COLORS = ['#1E3A8A', '#3B82F6', '#4BA892', '#1D4ED8'];
 
 const safe = (n: number | null | undefined) => (n == null || Number.isNaN(n) ? 0 : n);
 
@@ -223,7 +223,7 @@ export default function ExecutiveSummary() {
             <button
               onClick={fetchBriefing}
               disabled={briefingLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-accent text-white rounded-lg hover:bg-accent-dark disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-accent text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
             >
               <RefreshCw size={14} className={briefingLoading ? 'animate-spin' : ''} />
               Refresh
@@ -265,7 +265,7 @@ export default function ExecutiveSummary() {
                   <XAxis dataKey="status" tick={{ fontSize: 11 }} />
                   <YAxis allowDecimals={false} />
                   <Tooltip />
-                  <Bar dataKey="count" fill="#2F8F7A" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="count" fill="#3B82F6" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -352,7 +352,7 @@ export default function ExecutiveSummary() {
                   <XAxis type="number" tickFormatter={(v) => `$${(v / 1e6).toFixed(1)}M`} />
                   <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 12 }} />
                   <Tooltip formatter={(v: number) => fmtUSD(v)} />
-                  <Bar dataKey="value" fill="#0E3B36" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="value" fill="#1E3A8A" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

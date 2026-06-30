@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+﻿import { useCallback, useEffect, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell,
 } from 'recharts';
@@ -251,7 +251,7 @@ function StackedBar({
           title={`Retainage: ${fmtUSD(retainage)}`}
         />
         <div
-          className="h-full bg-accent-light transition-all opacity-70"
+          className="h-full bg-blue-400 transition-all opacity-70"
           style={{ width: `${committedPct}%` }}
           title={`Committed: ${fmtUSD(committed)}`}
         />
@@ -259,7 +259,7 @@ function StackedBar({
       <div className="flex gap-4 mt-2 text-xs text-gray-500">
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-primary inline-block" />Paid</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-accent inline-block" />Retainage</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-accent-light opacity-70 inline-block" />Committed</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-blue-400 opacity-70 inline-block" />Committed</span>
       </div>
     </div>
   );
@@ -456,7 +456,7 @@ function CostExposureChart({ trades }: { trades: CostTrade[] }) {
   const statusColor = (status: string) => {
     if (status === 'over_budget') return '#DC2626';
     if (status === 'watch') return '#F59E0B';
-    return '#2F8F7A';
+    return '#3B82F6';
   };
 
   return (
@@ -470,7 +470,7 @@ function CostExposureChart({ trades }: { trades: CostTrade[] }) {
         <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={160} />
         <Tooltip formatter={(v: number) => fmtUSD(v)} />
         <Legend wrapperStyle={{ fontSize: 11 }} />
-        <Bar dataKey="budgeted" name="Budgeted" fill="#0E3B36" radius={[0, 3, 3, 0]} maxBarSize={12} />
+        <Bar dataKey="budgeted" name="Budgeted" fill="#1E3A8A" radius={[0, 3, 3, 0]} maxBarSize={12} />
         <Bar dataKey="exposure" name="Actual + Committed" radius={[0, 3, 3, 0]} maxBarSize={12}>
           {chartData.map((entry, i) => (
             <Cell key={i} fill={statusColor(entry.status)} />
@@ -1436,7 +1436,7 @@ export default function Construction() {
                         <KpiCard label="Net Sale Proceeds" value={roiSummary.net_sale_proceeds != null ? fmtUSD(roiSummary.net_sale_proceeds) : '—'} />
                       </div>
                       {roiSummary.irr != null && (
-                        <div className="p-3 bg-surface rounded-lg text-sm">
+                        <div className="p-3 bg-transparent rounded-lg text-sm">
                           <p className="font-medium text-charcoal">
                             Simplified IRR (single cash-flow estimate): {fmtPct(roiSummary.irr)}
                           </p>

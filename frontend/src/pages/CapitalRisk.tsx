@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+﻿import { useCallback, useEffect, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
@@ -239,7 +239,7 @@ export default function CapitalRisk() {
                 <XAxis dataKey="bucket" tick={{ fontSize: 11 }} />
                 <YAxis tickFormatter={(v) => `$${(v / 1e6).toFixed(1)}M`} />
                 <Tooltip formatter={(v: number) => fmtUSD(v)} />
-                <Bar dataKey="amount" fill="#0E3B36" name="Committed" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="amount" fill="#1E3A8A" name="Committed" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -279,7 +279,7 @@ export default function CapitalRisk() {
                 <XAxis type="number" tickFormatter={(v) => `${v}%`} />
                 <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} />
                 <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} />
-                <Bar dataKey="pct" fill="#2F8F7A" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="pct" fill="#3B82F6" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}

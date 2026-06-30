@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+﻿import { Fragment, useMemo, useState } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
   ReferenceLine, Area, ComposedChart,
@@ -80,7 +80,7 @@ export default function Rental13WeekCashFlow() {
   if (error) return <div className="text-red-600 p-4">{error}<button className="ml-3 underline" onClick={reload}>Retry</button></div>;
 
   return (
-    <div className="space-y-6 -m-6 p-6" style={{ background: '#FAFAF7' }}>
+    <div className="space-y-6 -m-6 p-6" style={{ background: 'transparent' }}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-charcoal">13-Week Rolling Cash Flow Forecast</h1>

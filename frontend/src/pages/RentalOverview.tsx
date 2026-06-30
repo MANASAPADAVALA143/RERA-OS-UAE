@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, Legend,
@@ -271,7 +271,7 @@ export default function RentalOverview() {
               <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={60} />
               <YAxis domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} />
               <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} />
-              <Bar dataKey="occupancy_pct" fill="#0E3B36" name="Occupancy %" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="occupancy_pct" fill="#1E3A8A" name="Occupancy %" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -283,7 +283,7 @@ export default function RentalOverview() {
               <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
               <Tooltip formatter={(v: number) => fmtUSD(v)} />
               <Legend />
-              <Line type="monotone" dataKey="collected" stroke="#2F8F7A" name="Collected" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="collected" stroke="#3B82F6" name="Collected" strokeWidth={2} dot={false} />
               {!hasSyncedData && (
                 <Line type="monotone" dataKey="expense" stroke="#ef4444" name="Expense" strokeWidth={2} dot={false} />
               )}
@@ -308,7 +308,7 @@ export default function RentalOverview() {
               <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={60} />
               <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
               <Tooltip formatter={(v: number) => fmtUSD(v)} />
-              <Bar dataKey="noi" fill="#2F8F7A" name="NOI" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="noi" fill="#3B82F6" name="NOI" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </Card>

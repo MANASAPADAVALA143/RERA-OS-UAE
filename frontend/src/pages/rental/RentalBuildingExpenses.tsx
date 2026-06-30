@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+﻿import { Fragment, useMemo, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
   LineChart, Line, Cell,
@@ -14,7 +14,7 @@ const STATUS_STYLE = {
   high: 'bg-red-100 text-red-800',
 };
 
-const CAT_COLORS = ['#1B4332', '#2563EB', '#D97706', '#DC2626', '#7C3AED', '#0891B2', '#65A30D', '#DB2777', '#6B7280', '#B8860B'];
+const CAT_COLORS = ['#1E3A8A', '#2563EB', '#D97706', '#DC2626', '#7C3AED', '#0891B2', '#65A30D', '#DB2777', '#6B7280', '#B8860B'];
 
 const fmtK = (n: number) => n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(2)}M` : n >= 1000 ? `$${(n / 1000).toFixed(0)}K` : fmtUSD(n);
 
@@ -71,7 +71,7 @@ export default function RentalBuildingExpenses() {
   if (error) return <div className="text-red-600 p-4">{error}<button className="ml-3 underline" onClick={reload}>Retry</button></div>;
 
   return (
-    <div className="space-y-6 -m-6 p-6" style={{ background: '#FAFAF7' }}>
+    <div className="space-y-6 -m-6 p-6" style={{ background: 'transparent' }}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-charcoal">Building Expenses</h1>
@@ -212,7 +212,7 @@ export default function RentalBuildingExpenses() {
               <XAxis dataKey="name" tick={{ fontSize: 10 }} />
               <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
               <Tooltip formatter={(v: number) => fmtUSD(v)} />
-              <Bar dataKey="expenses" fill="#1B4332" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="expenses" fill="#1E3A8A" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

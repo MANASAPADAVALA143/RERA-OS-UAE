@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+﻿import { useCallback, useEffect, useState } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell,
@@ -84,7 +84,7 @@ const COND_PILL: Record<string, string> = {
   needs_repair: 'bg-red-100 text-red-800',
 };
 
-const CAT_COLORS = ['#0E3B36', '#2F8F7A', '#4BA892', '#1A5249', '#6ECABB', '#8FD5C4', '#B3E5DC', '#D1F0EA'];
+const CAT_COLORS = ['#1E3A8A', '#3B82F6', '#4BA892', '#1D4ED8', '#6ECABB', '#8FD5C4', '#B3E5DC', '#D1F0EA'];
 
 type DashTab = 'overview' | 'leases' | 'maintenance' | 'inspections';
 
@@ -186,8 +186,8 @@ export default function RentalCompanyDashboard({ companyId }: Props) {
                   <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                   <Tooltip formatter={(v: number) => fmtUSD(v)} />
                   <Legend />
-                  <Line type="monotone" dataKey="billed"    stroke="#0E3B36" name="Billed"    strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="collected" stroke="#2F8F7A" name="Collected" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="billed"    stroke="#1E3A8A" name="Billed"    strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="collected" stroke="#3B82F6" name="Collected" strokeWidth={2} dot={false} />
                   <Line type="monotone" dataKey="expense"   stroke="#ef4444" name="Expense"   strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>

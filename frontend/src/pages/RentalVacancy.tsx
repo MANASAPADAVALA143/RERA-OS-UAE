@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+﻿import { useCallback, useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import api from '../services/api';
 import { Card, KpiCard } from '../components/ui/Card';
@@ -82,7 +82,7 @@ export default function RentalVacancy() {
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                   <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                   <Tooltip formatter={(v: number) => fmtUSD(v)} />
-                  <Bar dataKey="loss" fill="#0E3B36" name="Vacancy Loss" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="loss" fill="#1E3A8A" name="Vacancy Loss" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </Card>

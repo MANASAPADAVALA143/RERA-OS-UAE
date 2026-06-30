@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { usePropDev } from '../../contexts/PropertyDevContext';
 import type { Partner, CapitalCall, CompanyData } from '../../contexts/PropertyDevContext';
 import {
@@ -784,7 +784,7 @@ export default function PD05Partners() {
         </div>
 
         {/* Center */}
-        <div className="flex-1 min-w-0 min-h-0 overflow-y-auto bg-[#FAFAF7]">
+        <div className="flex-1 min-w-0 min-h-0 overflow-y-auto bg-[transparent]">
           {selectedPartnerName === 'all' || !selectedSummary ? (
             <CenterAllView
               summaries={summaries}

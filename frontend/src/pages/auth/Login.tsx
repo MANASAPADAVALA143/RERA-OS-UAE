@@ -31,20 +31,20 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-8">
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #0B1437 0%, #1A2456 100%)' }}>
+      <div className="w-full max-w-sm p-8 rounded-2xl" style={{ background: '#151B3D', border: '1px solid #2A3158', boxShadow: '0 25px 80px rgba(0,0,0,0.7)' }}>
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-12 h-12 bg-gray-900 rounded-xl mx-auto mb-3 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #3B82F6, #1D4ED8)' }}>
             <span className="text-white font-bold text-lg">E</span>
           </div>
-          <h1 className="text-xl font-bold text-gray-900">EstateCFO</h1>
-          <p className="text-sm text-gray-400 mt-1">Real estate financial intelligence</p>
+          <h1 className="text-xl font-bold text-white">EstateCFO</h1>
+          <p className="text-sm mt-1" style={{ color: '#94A3B8' }}>Real estate financial intelligence</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1.5">
+            <label className="block text-xs font-medium mb-1.5" style={{ color: '#CBD5E1' }}>
               Email address
             </label>
             <input
@@ -54,13 +54,13 @@ export default function Login() {
               placeholder="your@email.com"
               required
               autoComplete="email"
-              className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5
-                         focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className="w-full text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={{ background: '#1E2A4A', border: '1px solid #3A4170', color: '#F1F5F9' }}
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1.5">
+            <label className="block text-xs font-medium mb-1.5" style={{ color: '#CBD5E1' }}>
               Password
             </label>
             <input
@@ -70,13 +70,13 @@ export default function Login() {
               placeholder="••••••••"
               required
               autoComplete="current-password"
-              className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5
-                         focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className="w-full text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={{ background: '#1E2A4A', border: '1px solid #3A4170', color: '#F1F5F9' }}
             />
           </div>
 
           {error && (
-            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <div className="text-xs rounded-lg px-3 py-2" style={{ color: '#FCA5A5', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)' }}>
               {error}
             </div>
           )}
@@ -84,14 +84,14 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full text-sm bg-gray-900 text-white py-2.5 rounded-xl
-                       hover:bg-gray-800 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full text-sm text-white py-2.5 rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+            style={{ background: 'linear-gradient(135deg, #3B82F6, #1D4ED8)' }}
           >
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
 
-        <p className="text-center text-xs text-gray-400 mt-6">
+        <p className="text-center text-xs mt-6" style={{ color: '#475569' }}>
           Contact your administrator to get access
         </p>
       </div>
