@@ -6,7 +6,6 @@ import { fmtUSD } from '../../components/ProtectedRoute';
 import { api } from '../../services/api';
 
 const MARKET_RATE = 0.065;
-const fmtK = (n: number) => n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(2)}M` : n >= 1000 ? `$${(n / 1000).toFixed(0)}K` : fmtUSD(n);
 
 const DSCR_STYLE = { green: 'bg-green-100 text-green-800', amber: 'bg-amber-100 text-amber-800', red: 'bg-red-100 text-red-800', grey: 'bg-gray-100 text-gray-600' };
 
@@ -294,8 +293,8 @@ export default function RentalLoanTracker() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Total Loan Portfolio', value: fmtK(kpis.portfolio) },
-          { label: 'Total Monthly EMI', value: fmtK(kpis.emi) },
+          { label: 'Total Loan Portfolio', value: fmtUSD(kpis.portfolio) },
+          { label: 'Total Monthly EMI', value: fmtUSD(kpis.emi) },
           { label: 'Weighted Avg Rate', value: `${(kpis.wAvg * 100).toFixed(2)}%` },
           { label: 'Next Maturity', value: kpis.nextMat?.loan_maturity_date ?? '—', sub: kpis.nextMat?.property_name },
         ].map(k => (
@@ -326,10 +325,10 @@ export default function RentalLoanTracker() {
                     <td className="px-3 py-2.5">{l.company_name}</td>
                     <td className="px-3 py-2.5">{l.property_name}</td>
                     <td className="px-3 py-2.5">{l.loan_bank_name}</td>
-                    <td className="px-3 py-2.5 text-right font-mono">{fmtK(l.loan_amount)}</td>
+                    <td className="px-3 py-2.5 text-right font-mono">{fmtUSD(l.loan_amount)}</td>
                     <td className="px-3 py-2.5 text-right font-mono">{l.loan_interest_rate != null ? `${(l.loan_interest_rate * 100).toFixed(2)}%` : '—'}</td>
                     <td className="px-3 py-2.5 text-right font-mono">{l.loan_emi != null ? fmtUSD(l.loan_emi) : '—'}</td>
-                    <td className="px-3 py-2.5 text-right font-mono">{fmtK(l.loan_balance_as_of ?? l.loan_amount)}</td>
+                    <td className="px-3 py-2.5 text-right font-mono">{fmtUSD(l.loan_balance_as_of ?? l.loan_amount)}</td>
                     <td className="px-3 py-2.5 text-right text-xs">{l.loan_maturity_date ?? '—'}</td>
                     <td className="px-3 py-2.5 text-right">{l.loan_emi_day ?? '—'}</td>
                     <td className="px-3 py-2.5 text-right font-mono">{l.dscr != null ? `${l.dscr.toFixed(2)}x` : '—'}</td>
@@ -400,8 +399,8 @@ export default function RentalLoanTracker() {
               {dscrHealth.map(row => (
                 <tr key={row.building} className="hover:bg-gray-50">
                   <td className="px-3 py-2.5 font-medium">{row.building}</td>
-                  <td className="px-3 py-2.5 text-right font-mono">{fmtK(row.noi)}</td>
-                  <td className="px-3 py-2.5 text-right font-mono">{fmtK(row.debtService)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono">{fmtUSD(row.noi)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono">{fmtUSD(row.debtService)}</td>
                   <td className="px-3 py-2.5 text-right font-mono">{row.dscr != null ? `${row.dscr.toFixed(2)}x` : '—'}</td>
                   <td className="px-3 py-2.5 text-right">
                     <span className={`px-2 py-0.5 rounded-full text-xs ${DSCR_STYLE[row.status]}`}>{row.status}</span>
