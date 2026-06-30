@@ -68,7 +68,7 @@ export default function RentalExpenses() {
     try {
       const params: Record<string, string> = {};
       if (filterCompany) params.company_id = filterCompany;
-      const res = await api.get<ExpenseResponse>('/api/rentals/expenses', { params });
+      const res = await api.get<ExpenseResponse>('/api/rentals/expenses-summary', { params });
       setData(res.data);
     } catch {
       setError('Failed to load expenses. Check your connection.');

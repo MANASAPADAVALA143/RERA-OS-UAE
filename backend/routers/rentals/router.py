@@ -950,7 +950,6 @@ def list_expenses(
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    from datetime import datetime
     tid = current_user.tenant_id
     q = db.query(RentalExpense).filter(RentalExpense.tenant_id == tid)
     if company_id:
@@ -964,21 +963,39 @@ def list_expenses(
         except ValueError:
             pass
     expenses = q.order_by(RentalExpense.expense_date.desc()).all()
-    items = [_expense_dict(e) for e in expenses]
+    result = [_expense_dict(e) for e in expenses]
 
     if fmt == "csv":
         output = io.StringIO()
-        if items:
-            writer = csv.DictWriter(output, fieldnames=items[0].keys())
+        if result:
+            writer = csv.DictWriter(output, fieldnames=result[0].keys())
             writer.writeheader()
-            writer.writerows(items)
+            writer.writerows(result)
         return StreamingResponse(
             iter([output.getvalue()]),
             media_type="text/csv",
             headers={"Content-Disposition": "attachment; filename=expenses.csv"},
         )
+    return result
 
-    # Calculate KPIs and category breakdown for JSON response
+
+@router.get("/expenses-summary")
+def get_expenses_summary(
+    company_id: str = Query(None),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get expenses with KPIs and category breakdown."""
+    tid = current_user.tenant_id
+    q = db.query(RentalExpense).filter(RentalExpense.tenant_id == tid)
+    if company_id:
+        try:
+            q = q.filter(RentalExpense.company_id == uuid.UUID(company_id))
+        except ValueError:
+            pass
+    expenses = q.order_by(RentalExpense.expense_date.desc()).all()
+    items = [_expense_dict(e) for e in expenses]
+
     today = date.today()
     current_month = today.strftime("%Y-%m")
 
