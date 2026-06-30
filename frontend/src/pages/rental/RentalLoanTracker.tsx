@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Download, Zap, CheckCircle2, TrendingDown, Plus, X } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { Download, Zap, CheckCircle2, TrendingDown, Plus, X, FileSpreadsheet } from 'lucide-react';
 import { useRentalCfoData, dscrStatus } from '../../hooks/useRentalCfoData';
 import { LoadingSkeleton } from '../../components/ui/Table';
 import { fmtUSD } from '../../components/ProtectedRoute';
@@ -162,6 +162,28 @@ export default function RentalLoanTracker() {
   const [companyFilter, setCompanyFilter] = useState('all');
   const [buildingFilter, setBuildingFilter] = useState('all');
   const [showAdd, setShowAdd] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const importRef = useRef<HTMLInputElement>(null);
+
+  async function handleImportExcel(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true); setImportMsg(null);
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const res = await api.post<{ created: number; message: string }>('/api/real-estate/loans/import-excel', fd);
+      setImportMsg({ text: res.data.message, ok: true });
+      reload();
+    } catch (ex: unknown) {
+      const msg = (ex as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setImportMsg({ text: msg ?? 'Import failed — check the file format.', ok: false });
+    } finally {
+      setImporting(false);
+      if (importRef.current) importRef.current.value = '';
+    }
+  }
 
   const buildingOptions = useMemo(() => {
     const names = new Set(loans.map(l => l.property_name));
@@ -248,6 +270,13 @@ export default function RentalLoanTracker() {
           </select>
           <button className="flex items-center gap-1 px-3 py-1.5 border rounded-lg text-xs"><Download size={13} /> Export</button>
           <button className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs"><Zap size={13} /> AI Insights</button>
+          <input ref={importRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportExcel} />
+          <button
+            onClick={() => importRef.current?.click()}
+            disabled={importing}
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium">
+            <FileSpreadsheet size={14} />{importing ? 'Importing…' : 'Import Excel'}
+          </button>
           <button
             onClick={() => setShowAdd(true)}
             className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium">
@@ -255,6 +284,13 @@ export default function RentalLoanTracker() {
           </button>
         </div>
       </div>
+
+      {importMsg && (
+        <div className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-sm border ${importMsg.ok ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+          <span>{importMsg.text}</span>
+          <button onClick={() => setImportMsg(null)} className="text-xs underline shrink-0">Dismiss</button>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[

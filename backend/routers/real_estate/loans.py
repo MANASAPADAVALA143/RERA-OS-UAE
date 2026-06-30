@@ -2,7 +2,7 @@ import uuid
 from datetime import date, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -251,3 +251,137 @@ def delete_loan(
         raise HTTPException(status_code=404, detail="Loan not found")
     db.delete(loan)
     db.commit()
+
+
+# ── Excel bulk import ─────────────────────────────────────────────────────────
+
+def _parse_num(v) -> float | None:
+    if v is None:
+        return None
+    try:
+        return float(str(v).replace("$", "").replace(",", "").strip())
+    except ValueError:
+        return None
+
+
+def _parse_date(v) -> date | None:
+    if v is None:
+        return None
+    if hasattr(v, "date"):
+        return v.date()
+    s = str(v).strip()
+    for fmt in ("%m-%d-%Y", "%m/%d/%Y", "%Y-%m-%d", "%d-%m-%Y"):
+        try:
+            from datetime import datetime as _dt
+            return _dt.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _parse_emi_day(v) -> int | None:
+    import re
+    if v is None:
+        return None
+    digits = re.sub(r"[^0-9]", "", str(v))
+    return int(digits) if digits else None
+
+
+@router.post("/import-excel", status_code=201)
+async def import_loans_excel(
+    file: UploadFile = File(...),
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    """
+    Parse an Excel file with loan data and bulk-insert rows.
+
+    Expected columns (by position, 0-indexed):
+      0  Sl No.
+      1  Company Name
+      2  Property Name
+      3  Loan Bank Name
+      4  Loan Date          (MM-DD-YYYY or date cell)
+      5  Loan Amount        ($1,399,000.00 or numeric)
+      6  Loan Interest Rate (4.25% or 0.0425 or 4.25)
+      7  Loan EMI           ($8,710.47 or numeric)
+      8  Lender Name
+      9  Loan Maturity Date
+      10 Loan Balance as of …
+      11 Loan EMI Day       (14th, 9th, 29th, or plain integer)
+      12 Loan Deduction Bank Account
+    """
+    import openpyxl
+    from io import BytesIO
+
+    content = await file.read()
+    wb = openpyxl.load_workbook(BytesIO(content), data_only=True)
+    ws = wb.active
+
+    SKIP_KEYWORDS = {
+        "company name", "company", "sl no", "sl no.", "sl", "#",
+        "property name", "loan bank", "lender", "loan amount",
+    }
+
+    created = 0
+    skipped_rows: list[int] = []
+
+    for row_idx, row in enumerate(ws.iter_rows(values_only=True), start=1):
+        # Normalize first few cells to detect header / empty rows
+        col1 = str(row[1] if len(row) > 1 else "").strip().lower()
+        if not col1 or col1 in SKIP_KEYWORDS:
+            continue
+
+        company = str(row[1] or "").strip() if len(row) > 1 else ""
+        if not company:
+            continue
+
+        property_name = str(row[2] or "").strip() if len(row) > 2 else company
+        bank_name = str(row[3] or "").strip() if len(row) > 3 else ""
+        loan_date = _parse_date(row[4]) if len(row) > 4 else None
+        loan_amount = _parse_num(row[5]) if len(row) > 5 else None
+        if not loan_amount:
+            skipped_rows.append(row_idx)
+            continue
+
+        # Interest rate: handle both "4.25%" and "4.25" (as %), and "0.0425" (as decimal)
+        rate_raw = _parse_num(row[6]) if len(row) > 6 else None
+        if rate_raw is not None:
+            loan_interest_rate = rate_raw / 100 if rate_raw > 1 else rate_raw
+        else:
+            loan_interest_rate = None
+
+        loan_emi = _parse_num(row[7]) if len(row) > 7 else None
+        lender_name = str(row[8] or "").strip() if len(row) > 8 else None
+        maturity_date = _parse_date(row[9]) if len(row) > 9 else None
+        loan_balance = _parse_num(row[10]) if len(row) > 10 else None
+        loan_emi_day = _parse_emi_day(row[11]) if len(row) > 11 else None
+        deduction_acct = str(row[12] or "").strip() if len(row) > 12 else None
+
+        loan = Loan(
+            tenant_id=current_user.tenant_id,
+            company_name=company,
+            property_name=property_name,
+            loan_bank_name=bank_name or "—",
+            loan_date=loan_date,
+            loan_amount=loan_amount,
+            loan_interest_rate=loan_interest_rate,
+            loan_emi=loan_emi,
+            lender_name=lender_name or None,
+            loan_maturity_date=maturity_date,
+            loan_balance_as_of=loan_balance,
+            loan_balance_as_of_date=date.today(),
+            loan_emi_day=loan_emi_day,
+            loan_deduction_bank_account=deduction_acct or None,
+            context_type="rental",
+            created_by=current_user.email,
+        )
+        db.add(loan)
+        created += 1
+
+    db.commit()
+    return {
+        "created": created,
+        "skipped_rows": skipped_rows,
+        "message": f"Imported {created} loan(s) successfully.",
+    }
