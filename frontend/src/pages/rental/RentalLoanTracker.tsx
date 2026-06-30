@@ -1,18 +1,167 @@
 import { useMemo, useState } from 'react';
-import { Download, Zap, CheckCircle2, TrendingDown } from 'lucide-react';
+import { Download, Zap, CheckCircle2, TrendingDown, Plus, X } from 'lucide-react';
 import { useRentalCfoData, dscrStatus } from '../../hooks/useRentalCfoData';
 import { LoadingSkeleton } from '../../components/ui/Table';
 import { fmtUSD } from '../../components/ProtectedRoute';
+import { api } from '../../services/api';
 
 const MARKET_RATE = 0.065;
 const fmtK = (n: number) => n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(2)}M` : n >= 1000 ? `$${(n / 1000).toFixed(0)}K` : fmtUSD(n);
 
 const DSCR_STYLE = { green: 'bg-green-100 text-green-800', amber: 'bg-amber-100 text-amber-800', red: 'bg-red-100 text-red-800', grey: 'bg-gray-100 text-gray-600' };
 
+const EMPTY_FORM = {
+  company_name: '', property_name: '', loan_bank_name: '',
+  loan_amount: '', loan_interest_rate: '', loan_emi: '',
+  loan_emi_day: '', loan_maturity_date: '', loan_balance_as_of: '',
+  loan_balance_as_of_date: '', loan_date: '', noi_annual: '',
+  current_property_value: '', lender_name: '', lender_phone: '',
+};
+
+function AddLoanDrawer({ open, onClose, onSaved, companyNames }: {
+  open: boolean; onClose: () => void; onSaved: () => void; companyNames: string[];
+}) {
+  const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  const set = (k: keyof typeof EMPTY_FORM, v: string) => setForm(prev => ({ ...prev, [k]: v }));
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.company_name || !form.property_name || !form.loan_bank_name || !form.loan_amount) {
+      setErr('Company, Property, Bank, and Loan Amount are required.'); return;
+    }
+    setSaving(true); setErr('');
+    try {
+      await api.post('/api/real-estate/loans', {
+        company_name: form.company_name,
+        property_name: form.property_name,
+        loan_bank_name: form.loan_bank_name,
+        loan_amount: parseFloat(form.loan_amount),
+        loan_interest_rate: form.loan_interest_rate ? parseFloat(form.loan_interest_rate) / 100 : null,
+        loan_emi: form.loan_emi ? parseFloat(form.loan_emi) : null,
+        loan_emi_day: form.loan_emi_day ? parseInt(form.loan_emi_day) : null,
+        loan_maturity_date: form.loan_maturity_date || null,
+        loan_balance_as_of: form.loan_balance_as_of ? parseFloat(form.loan_balance_as_of) : null,
+        loan_balance_as_of_date: form.loan_balance_as_of_date || null,
+        loan_date: form.loan_date || null,
+        noi_annual: form.noi_annual ? parseFloat(form.noi_annual) : null,
+        current_property_value: form.current_property_value ? parseFloat(form.current_property_value) : null,
+        lender_name: form.lender_name || null,
+        lender_phone: form.lender_phone || null,
+        context_type: 'rental',
+      });
+      setForm({ ...EMPTY_FORM });
+      onSaved();
+      onClose();
+    } catch (ex: unknown) {
+      const msg = (ex as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setErr(msg ?? 'Failed to save loan. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!open) return null;
+
+  const F = ({ label, id, type = 'text', required = false, placeholder = '', hint = '' }: {
+    label: string; id: keyof typeof EMPTY_FORM; type?: string; required?: boolean; placeholder?: string; hint?: string;
+  }) => (
+    <div>
+      <label className="block text-xs font-semibold text-gray-600 mb-1">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      <input
+        type={type} value={form[id]} onChange={e => set(id, e.target.value)}
+        placeholder={placeholder}
+        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+      />
+      {hint && <p className="text-[10px] text-gray-400 mt-0.5">{hint}</p>}
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      <div className="flex-1 bg-black/40" onClick={onClose} />
+      <div className="w-full max-w-lg bg-white shadow-2xl flex flex-col overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b bg-gray-900 text-white shrink-0">
+          <h2 className="font-bold text-lg">Add Loan</h2>
+          <button onClick={onClose}><X size={18} /></button>
+        </div>
+
+        <form onSubmit={submit} className="flex-1 overflow-y-auto p-6 space-y-5">
+          {err && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</p>}
+
+          <div className="space-y-1">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Property</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Company<span className="text-red-500 ml-0.5">*</span></label>
+                <input list="co-opts" value={form.company_name} onChange={e => { set('company_name', e.target.value); set('property_name', e.target.value); }}
+                  placeholder="ABC LLC"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                <datalist id="co-opts">{companyNames.map(n => <option key={n} value={n} />)}</datalist>
+              </div>
+              <F label="Building / Suite" id="property_name" required placeholder="Suite 123" />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Loan Details</p>
+            <div className="grid grid-cols-2 gap-3">
+              <F label="Bank / Lender" id="loan_bank_name" required placeholder="Bank of America" />
+              <F label="Loan Amount ($)" id="loan_amount" type="number" required placeholder="500000" />
+              <F label="Interest Rate (%)" id="loan_interest_rate" type="number" placeholder="6.5" hint="Enter as percentage e.g. 6.5 for 6.5%" />
+              <F label="Monthly EMI ($)" id="loan_emi" type="number" placeholder="3200" />
+              <F label="EMI Day of Month" id="loan_emi_day" type="number" placeholder="1" hint="1–31, day EMI is debited" />
+              <F label="Loan Date" id="loan_date" type="date" />
+              <F label="Maturity Date" id="loan_maturity_date" type="date" />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Outstanding Balance</p>
+            <div className="grid grid-cols-2 gap-3">
+              <F label="Current Balance ($)" id="loan_balance_as_of" type="number" placeholder="480000" />
+              <F label="Balance As-Of Date" id="loan_balance_as_of_date" type="date" />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">DSCR / LTV Inputs (optional)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <F label="NOI Annual ($)" id="noi_annual" type="number" placeholder="42000" hint="Net Operating Income per year" />
+              <F label="Property Value ($)" id="current_property_value" type="number" placeholder="750000" hint="Current market value for LTV calc" />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Lender Contact (optional)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <F label="Contact Name" id="lender_name" placeholder="John Smith" />
+              <F label="Phone" id="lender_phone" placeholder="+1 555 000 0000" />
+            </div>
+          </div>
+        </form>
+
+        <div className="px-6 py-4 border-t bg-gray-50 shrink-0 flex justify-end gap-3">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-100">Cancel</button>
+          <button type="submit" disabled={saving} onClick={submit}
+            className="px-6 py-2 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold disabled:opacity-50">
+            {saving ? 'Saving…' : 'Save Loan'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function RentalLoanTracker() {
   const { companies, buildings, loans, loading, error, reload } = useRentalCfoData();
   const [companyFilter, setCompanyFilter] = useState('all');
   const [buildingFilter, setBuildingFilter] = useState('all');
+  const [showAdd, setShowAdd] = useState(false);
 
   const buildingOptions = useMemo(() => {
     const names = new Set(loans.map(l => l.property_name));
@@ -74,6 +223,13 @@ export default function RentalLoanTracker() {
 
   return (
     <div className="space-y-6 -m-6 p-6" style={{ background: '#FAFAF7' }}>
+      <AddLoanDrawer
+        open={showAdd}
+        onClose={() => setShowAdd(false)}
+        onSaved={reload}
+        companyNames={companies.map(c => c.company_name)}
+      />
+
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-charcoal">Loan Tracker</h1>
@@ -92,6 +248,11 @@ export default function RentalLoanTracker() {
           </select>
           <button className="flex items-center gap-1 px-3 py-1.5 border rounded-lg text-xs"><Download size={13} /> Export</button>
           <button className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs"><Zap size={13} /> AI Insights</button>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium">
+            <Plus size={14} /> Add Loan
+          </button>
         </div>
       </div>
 
