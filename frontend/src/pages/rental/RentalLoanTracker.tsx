@@ -335,23 +335,23 @@ export default function RentalLoanTracker() {
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
-          { label: 'Total Loan Portfolio', value: fmtUSD(kpis.portfolio), icon: DollarSign, color: 'rgba(59, 130, 246, 0.15)', border: '#3B82F6' },
-          { label: 'Total Monthly EMI', value: fmtUSD(kpis.emi), icon: TrendingUp, color: 'rgba(139, 92, 246, 0.15)', border: '#8B5CF6' },
-          { label: 'Weighted Avg Rate', value: `${(kpis.wAvg * 100).toFixed(2)}%`, icon: AlertCircle, color: 'rgba(251, 146, 60, 0.15)', border: '#FB923C' },
+          { label: 'Total Loan Portfolio', value: fmtUSD(kpis.portfolio ?? 0), icon: DollarSign, color: 'rgba(59, 130, 246, 0.15)', border: '#3B82F6' },
+          { label: 'Total Monthly EMI', value: fmtUSD(kpis.emi ?? 0), icon: TrendingUp, color: 'rgba(139, 92, 246, 0.15)', border: '#8B5CF6' },
+          { label: 'Weighted Avg Rate', value: `${((kpis.wAvg ?? 0) * 100).toFixed(2)}%`, icon: AlertCircle, color: 'rgba(251, 146, 60, 0.15)', border: '#FB923C' },
           { label: 'Next Maturity', value: kpis.nextMat?.loan_maturity_date ?? '—', icon: Calendar, color: 'rgba(34, 197, 94, 0.15)', border: '#22C55E', sub: kpis.nextMat?.property_name },
-          { label: 'Total Outstanding', value: fmtUSD(filtered.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0)), icon: Briefcase, color: 'rgba(168, 85, 247, 0.15)', border: '#A855F7' },
+          { label: 'Total Outstanding', value: fmtUSD(filtered.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0) ?? 0), icon: Briefcase, color: 'rgba(168, 85, 247, 0.15)', border: '#A855F7' },
         ].map(k => {
           const Icon = k.icon;
           return (
-            <div key={k.label} className="rounded-xl border p-4 hover:shadow-md transition-all" style={{ background: '#FAFAF9', borderColor: '#E5E7EB', borderLeft: `4px solid ${k.border}` }}>
-              <div className="flex items-start justify-between">
-                <p className="text-xs text-gray-600 uppercase font-semibold">{k.label}</p>
-                <div style={{ background: k.color, width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon size={16} style={{ color: k.border }} />
+            <div key={k.label} className="rounded-xl border p-5" style={{ background: '#FFFFFF', borderColor: '#E5E7EB', borderLeft: `4px solid ${k.border}` }}>
+              <div className="flex items-start justify-between mb-3">
+                <p className="text-xs text-gray-600 uppercase font-semibold tracking-wider">{k.label}</p>
+                <div style={{ background: k.color, width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Icon size={18} style={{ color: k.border }} />
                 </div>
               </div>
-              <p className="text-lg font-bold font-mono mt-2 text-gray-900">{k.value}</p>
-              {k.sub && <p className="text-xs text-gray-500 mt-1 truncate">{k.sub}</p>}
+              <p className="text-2xl font-bold font-mono text-gray-900" style={{ minHeight: '32px' }}>{k.value}</p>
+              {k.sub && <p className="text-xs text-gray-500 mt-2 truncate">{k.sub}</p>}
             </div>
           );
         })}
