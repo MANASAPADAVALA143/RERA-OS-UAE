@@ -132,38 +132,12 @@ function LiveDataPanel({ fin }: { fin: LiveFin }) {
   );
 }
 
-const CO_DATA = [
-  { name: 'Sunstone',    occ: 83.3, revUnit: 1507, expUnit: 1370, dscr: 0.82, icr: 0.31, currRatio: 2.8, noiMargin: 1.7  },
-  { name: 'Meridian',    occ: 83.3, revUnit: 1970, expUnit: 870,  dscr: 1.42, icr: 1.18, currRatio: 4.6, noiMargin: 22.3 },
-  { name: 'Cornerstone', occ: 83.3, revUnit: 1684, expUnit: 952,  dscr: 1.28, icr: 1.05, currRatio: 3.9, noiMargin: 19.1 },
-  { name: 'Pinnacle',    occ: 83.3, revUnit: 1880, expUnit: 980,  dscr: 1.31, icr: 1.07, currRatio: 4.0, noiMargin: 19.7 },
-  { name: 'Summit',      occ: 83.3, revUnit: 1700, expUnit: 980,  dscr: 1.19, icr: 0.98, currRatio: 3.5, noiMargin: 17.0 },
-  { name: 'Heritage',    occ: 83.3, revUnit: 1640, expUnit: 956,  dscr: 1.14, icr: 0.91, currRatio: 3.3, noiMargin: 14.7 },
-  { name: 'Riverview',   occ: 83.3, revUnit: 1820, expUnit: 858,  dscr: 1.37, icr: 1.12, currRatio: 4.2, noiMargin: 21.8 },
-  { name: 'Landmark',    occ: 83.3, revUnit: 1750, expUnit: 882,  dscr: 1.32, icr: 1.08, currRatio: 4.0, noiMargin: 19.9 },
-  { name: 'Horizon',     occ: 83.3, revUnit: 1840, expUnit: 888,  dscr: 1.33, icr: 1.09, currRatio: 4.1, noiMargin: 19.7 },
-  { name: 'Crestview',   occ: 83.3, revUnit: 1820, expUnit: 892,  dscr: 1.34, icr: 1.10, currRatio: 4.0, noiMargin: 20.4 },
+// Data will be fetched from API instead of hardcoded
+const DEFAULT_CO_DATA: any[] = [];
+const DEFAULT_TREND_DATA = [
+  { year: '—', noiMargin: 0, netProfitMargin: 0 },
 ];
-
-const TREND_DATA = [
-  { year: '2022', noiMargin: 33.2, netProfitMargin: -8.1 },
-  { year: '2023', noiMargin: 35.8, netProfitMargin: -6.2 },
-  { year: '2024', noiMargin: 37.1, netProfitMargin: -5.4 },
-  { year: '2025', noiMargin: 39.0, netProfitMargin: -4.8 },
-];
-
-const LOAN_DATA = [
-  { company: 'Sunstone Rentals LLC',      amount: 892000,  rate: 5.75, payment: 5204, balance: 872000, ltv: 89.2, maturity: 2047, highLtv: true  },
-  { company: 'Meridian Residential LLC',  amount: 1024000, rate: 5.90, payment: 6089, balance: 998000, ltv: 88.4, maturity: 2048, highLtv: true  },
-  { company: 'Cornerstone Housing LLC',   amount: 876000,  rate: 5.65, payment: 5028, balance: 851000, ltv: 87.1, maturity: 2047, highLtv: true  },
-  { company: 'Pinnacle Rentals I LLC',    amount: 968000,  rate: 6.10, payment: 5881, balance: 944000, ltv: 86.2, maturity: 2046, highLtv: true  },
-  { company: 'Summit Living LLC',         amount: 884000,  rate: 5.80, payment: 5197, balance: 862000, ltv: 85.6, maturity: 2048, highLtv: false },
-  { company: 'Heritage Residential LLC',  amount: 884000,  rate: 5.75, payment: 5146, balance: 861000, ltv: 85.6, maturity: 2047, highLtv: false },
-  { company: 'Riverview Rentals LLC',     amount: 952000,  rate: 6.00, payment: 5712, balance: 928000, ltv: 86.0, maturity: 2046, highLtv: true  },
-  { company: 'Landmark Housing LLC',      amount: 912000,  rate: 5.85, payment: 5380, balance: 889000, ltv: 85.3, maturity: 2048, highLtv: false },
-  { company: 'Horizon Rentals LLC',       amount: 952000,  rate: 5.90, payment: 5656, balance: 929000, ltv: 85.6, maturity: 2047, highLtv: false },
-  { company: 'Crestview Living LLC',      amount: 936000,  rate: 5.75, payment: 5453, balance: 913000, ltv: 84.8, maturity: 2049, highLtv: false },
-];
+const DEFAULT_LOAN_DATA: any[] = [];
 
 const fmt$ = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -266,67 +240,80 @@ const COST_RATIOS: RatioCard[] = [
   { name: 'Balloon Risk',          formula: 'Loans maturing <3 years',      value: '2 loans', benchmark: 'None',         status: 'monitor', statusLabel: '⚠️ Monitor',       note: 'Pinnacle I (2046) and Riverview (2046) — begin refi planning 2043' },
 ];
 
-function ProfitabilityTab() {
+function ProfitabilityTab({ coData, trendData }: { coData: any[]; trendData: any[] }) {
+  const displayTrend = trendData.length > 0 ? trendData : [{ year: 'No data', noiMargin: 0, netProfitMargin: 0 }];
   return (
     <div className="space-y-6">
       <CardGrid cards={PROFITABILITY} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 className="text-sm font-bold text-gray-900 mb-4">Portfolio Margin Trend (2022–2025)</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={TREND_DATA} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} />
-              <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`]} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Line type="monotone" dataKey="noiMargin"        name="NOI Margin %"         stroke="#1a3a2a" strokeWidth={2} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="netProfitMargin"  name="Net Profit Margin %"  stroke="#B8860B" strokeWidth={2} dot={{ r: 3 }} strokeDasharray="5 3" />
-            </LineChart>
-          </ResponsiveContainer>
+          <h3 className="text-sm font-bold text-gray-900 mb-4">Portfolio Margin Trend</h3>
+          {displayTrend[0].year === 'No data' ? (
+            <div className="h-[200px] flex items-center justify-center text-gray-500">No historical data available</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={displayTrend} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="year" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} />
+                <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`]} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Line type="monotone" dataKey="noiMargin"        name="NOI Margin %"         stroke="#1a3a2a" strokeWidth={2} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="netProfitMargin"  name="Net Profit Margin %"  stroke="#B8860B" strokeWidth={2} dot={{ r: 3 }} strokeDasharray="5 3" />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
         </div>
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 className="text-sm font-bold text-gray-900 mb-4">NOI Margin by Company (2025)</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={CO_DATA} margin={{ left: 0, right: 5, top: 5, bottom: 40 }}>
-              <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-35} textAnchor="end" interval={0} />
-              <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} />
-              <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'NOI Margin']} />
-              <ReferenceLine y={25} stroke="#dc2626" strokeDasharray="4 2" label={{ value: '25% benchmark', position: 'right', fontSize: 9, fill: '#dc2626' }} />
-              <Bar dataKey="noiMargin" name="NOI Margin %" radius={[3, 3, 0, 0]}>
-                {CO_DATA.map((d, i) => <Cell key={i} fill={d.noiMargin > 20 ? '#16a34a' : d.noiMargin >= 15 ? '#d97706' : '#dc2626'} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <h3 className="text-sm font-bold text-gray-900 mb-4">NOI Margin by Company</h3>
+          {coData.length === 0 ? (
+            <div className="h-[200px] flex items-center justify-center text-gray-500">No company data available</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={coData} margin={{ left: 0, right: 5, top: 5, bottom: 40 }}>
+                <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-35} textAnchor="end" interval={0} />
+                <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} />
+                <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'NOI Margin']} />
+                <ReferenceLine y={25} stroke="#dc2626" strokeDasharray="4 2" label={{ value: '25% benchmark', position: 'right', fontSize: 9, fill: '#dc2626' }} />
+                <Bar dataKey="noiMargin" name="NOI Margin %" radius={[3, 3, 0, 0]}>
+                  {coData.map((d, i) => <Cell key={i} fill={d.noiMargin > 20 ? '#16a34a' : d.noiMargin >= 15 ? '#d97706' : '#dc2626'} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function LiquidityTab() {
+function LiquidityTab({ coData }: { coData: any[] }) {
   return (
     <div className="space-y-6">
       <CardGrid cards={LIQUIDITY} />
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
         <h3 className="text-sm font-bold text-gray-900 mb-4">Current Ratio by Company — benchmark 1.5x</h3>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={CO_DATA} layout="vertical" margin={{ left: 60, right: 40, top: 5, bottom: 5 }}>
-            <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `${v}x`} domain={[0, 6]} />
-            <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={70} />
-            <Tooltip formatter={(v: number) => [`${v.toFixed(2)}x`, 'Current Ratio']} />
-            <ReferenceLine x={1.5} stroke="#dc2626" strokeDasharray="4 2" label={{ value: '1.5x min', position: 'top', fontSize: 9, fill: '#dc2626' }} />
-            <Bar dataKey="currRatio" name="Current Ratio" radius={[0, 3, 3, 0]}>
-              {CO_DATA.map((d, i) => <Cell key={i} fill={d.currRatio >= 1.5 ? '#1a3a2a' : '#dc2626'} />)}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        {coData.length === 0 ? (
+          <div className="h-[220px] flex items-center justify-center text-gray-500">No company data available</div>
+        ) : (
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={coData} layout="vertical" margin={{ left: 60, right: 40, top: 5, bottom: 5 }}>
+              <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `${v}x`} domain={[0, 6]} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={70} />
+              <Tooltip formatter={(v: number) => [`${v.toFixed(2)}x`, 'Current Ratio']} />
+              <ReferenceLine x={1.5} stroke="#dc2626" strokeDasharray="4 2" label={{ value: '1.5x min', position: 'top', fontSize: 9, fill: '#dc2626' }} />
+              <Bar dataKey="currRatio" name="Current Ratio" radius={[0, 3, 3, 0]}>
+                {coData.map((d, i) => <Cell key={i} fill={d.currRatio >= 1.5 ? '#1a3a2a' : '#dc2626'} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
     </div>
   );
 }
 
-function SolvencyTab() {
+function SolvencyTab({ coData }: { coData: any[] }) {
   return (
     <div className="space-y-6">
       <CardGrid cards={SOLVENCY} />
@@ -337,8 +324,7 @@ function SolvencyTab() {
           <div>
             <p className="text-sm font-semibold text-blue-900">CFO Note: High leverage ratios are EXPECTED for residential rental portfolios.</p>
             <p className="text-xs text-blue-700 mt-1">
-              The key metrics to watch are DSCR (&gt;1.25x) and LTV (&lt;80%). Current DSCR at 1.24x
-              is just at the floor — focus on NOI improvement to create buffer.
+              The key metrics to watch are DSCR (&gt;1.25x) and LTV (&lt;80%). Focus on NOI improvement to create buffer.
               Leverage ratios will naturally decline as mortgages amortize.
             </p>
           </div>
@@ -347,60 +333,72 @@ function SolvencyTab() {
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
         <h3 className="text-sm font-bold text-gray-900 mb-4">DSCR vs Interest Coverage by Company</h3>
-        <ResponsiveContainer width="100%" height={240}>
-          <ComposedChart data={CO_DATA} margin={{ left: 0, right: 5, top: 5, bottom: 40 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
-            <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-35} textAnchor="end" interval={0} />
-            <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}x`} />
-            <Tooltip formatter={(v: number) => [`${v.toFixed(2)}x`]} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
-            <ReferenceLine y={1.25} stroke="#16a34a" strokeDasharray="4 2" label={{ value: '1.25x DSCR floor', position: 'right', fontSize: 9, fill: '#16a34a' }} />
-            <ReferenceLine y={1.5}  stroke="#B8860B" strokeDasharray="4 2" label={{ value: '1.5x ICR benchmark', position: 'right', fontSize: 9, fill: '#B8860B' }} />
-            <Bar dataKey="dscr" name="DSCR"             fill="#1a3a2a" radius={[3, 3, 0, 0]} />
-            <Bar dataKey="icr"  name="Interest Coverage" fill="#B8860B" radius={[3, 3, 0, 0]} />
-          </ComposedChart>
-        </ResponsiveContainer>
+        {coData.length === 0 ? (
+          <div className="h-[240px] flex items-center justify-center text-gray-500">No company data available</div>
+        ) : (
+          <ResponsiveContainer width="100%" height={240}>
+            <ComposedChart data={coData} margin={{ left: 0, right: 5, top: 5, bottom: 40 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
+              <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-35} textAnchor="end" interval={0} />
+              <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}x`} />
+              <Tooltip formatter={(v: number) => [`${v.toFixed(2)}x`]} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <ReferenceLine y={1.25} stroke="#16a34a" strokeDasharray="4 2" label={{ value: '1.25x DSCR floor', position: 'right', fontSize: 9, fill: '#16a34a' }} />
+              <ReferenceLine y={1.5}  stroke="#B8860B" strokeDasharray="4 2" label={{ value: '1.5x ICR benchmark', position: 'right', fontSize: 9, fill: '#B8860B' }} />
+              <Bar dataKey="dscr" name="DSCR"             fill="#1a3a2a" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="icr"  name="Interest Coverage" fill="#B8860B" radius={[3, 3, 0, 0]} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        )}
       </div>
     </div>
   );
 }
 
-function RentalKPIsTab() {
+function RentalKPIsTab({ coData }: { coData: any[] }) {
   return (
     <div className="space-y-6">
       <CardGrid cards={RENTAL_KPIS} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
           <h3 className="text-sm font-bold text-gray-900 mb-4">Occupancy Rate by Company vs 90% Target</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={CO_DATA} margin={{ left: 0, right: 5, top: 5, bottom: 40 }}>
-              <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-35} textAnchor="end" interval={0} />
-              <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} domain={[60, 100]} />
-              <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'Occupancy']} />
-              <ReferenceLine y={90} stroke="#dc2626" strokeDasharray="4 2" label={{ value: '90% target', position: 'right', fontSize: 9, fill: '#dc2626' }} />
-              <Bar dataKey="occ" name="Occupancy %" fill="#1a3a2a" radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          {coData.length === 0 ? (
+            <div className="h-[220px] flex items-center justify-center text-gray-500">No company data available</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={coData} margin={{ left: 0, right: 5, top: 5, bottom: 40 }}>
+                <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-35} textAnchor="end" interval={0} />
+                <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} domain={[60, 100]} />
+                <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'Occupancy']} />
+                <ReferenceLine y={90} stroke="#dc2626" strokeDasharray="4 2" label={{ value: '90% target', position: 'right', fontSize: 9, fill: '#dc2626' }} />
+                <Bar dataKey="occ" name="Occupancy %" fill="#1a3a2a" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
           <h3 className="text-sm font-bold text-gray-900 mb-4">Revenue per Unit vs Expense per Unit</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={CO_DATA} margin={{ left: 0, right: 5, top: 5, bottom: 40 }}>
-              <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-35} textAnchor="end" interval={0} />
-              <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `$${v}`} />
-              <Tooltip formatter={(v: number) => [fmt$(v)]} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="revUnit" name="Revenue / Unit"  fill="#1a3a2a" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="expUnit" name="Expense / Unit"  fill="#B8860B" radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          {coData.length === 0 ? (
+            <div className="h-[220px] flex items-center justify-center text-gray-500">No company data available</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={coData} margin={{ left: 0, right: 5, top: 5, bottom: 40 }}>
+                <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-35} textAnchor="end" interval={0} />
+                <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `$${v}`} />
+                <Tooltip formatter={(v: number) => [fmt$(v)]} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="revUnit" name="Revenue / Unit"  fill="#1a3a2a" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="expUnit" name="Expense / Unit"  fill="#B8860B" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function CostOfCapitalTab() {
+function CostOfCapitalTab({ loanData }: { loanData: any[] }) {
   return (
     <div className="space-y-6">
       <CardGrid cards={COST_RATIOS} />
@@ -408,52 +406,56 @@ function CostOfCapitalTab() {
       {/* Loan Schedule Table */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100">
-          <h3 className="text-sm font-bold text-gray-900">Loan Schedule — All Companies</h3>
+          <h3 className="text-sm font-bold text-gray-900">Loan Schedule — All Rental Companies</h3>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
-                <th className="text-left px-4 py-3">Company</th>
-                <th className="text-right px-3 py-3">Loan Amount</th>
-                <th className="text-center px-3 py-3">Rate</th>
-                <th className="text-right px-3 py-3">Monthly Pmt</th>
-                <th className="text-right px-3 py-3">Balance</th>
-                <th className="text-center px-3 py-3">LTV</th>
-                <th className="text-center px-3 py-3">Maturity</th>
-                <th className="text-center px-3 py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {LOAN_DATA.map(l => (
-                <tr key={l.company} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-xs font-medium text-gray-900 whitespace-nowrap">{l.company}</td>
-                  <td className="px-3 py-3 text-right font-mono text-xs">{fmt$(l.amount)}</td>
-                  <td className="px-3 py-3 text-center font-mono text-xs">{l.rate.toFixed(2)}%</td>
-                  <td className="px-3 py-3 text-right font-mono text-xs">{fmt$(l.payment)}</td>
-                  <td className="px-3 py-3 text-right font-mono text-xs">{fmt$(l.balance)}</td>
-                  <td className={`px-3 py-3 text-center font-mono text-xs font-semibold ${l.ltv > 86 ? 'text-amber-700' : 'text-green-700'}`}>
-                    {l.ltv.toFixed(1)}%
-                  </td>
-                  <td className="px-3 py-3 text-center text-gray-600 text-xs">{l.maturity}</td>
-                  <td className="px-3 py-3 text-center">
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${l.highLtv ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'}`}>
-                      {l.highLtv ? '🟡 High LTV' : '🟢 Acceptable'}
-                    </span>
-                  </td>
+        {loanData.length === 0 ? (
+          <div className="px-5 py-8 text-center text-gray-500">No loans found for rental companies</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+                  <th className="text-left px-4 py-3">Company</th>
+                  <th className="text-right px-3 py-3">Loan Amount</th>
+                  <th className="text-center px-3 py-3">Rate</th>
+                  <th className="text-right px-3 py-3">Monthly Pmt</th>
+                  <th className="text-right px-3 py-3">Balance</th>
+                  <th className="text-center px-3 py-3">LTV</th>
+                  <th className="text-center px-3 py-3">Maturity</th>
+                  <th className="text-center px-3 py-3">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {loanData.map(l => (
+                  <tr key={l.company} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-xs font-medium text-gray-900 whitespace-nowrap">{l.company}</td>
+                    <td className="px-3 py-3 text-right font-mono text-xs">{fmt$(l.amount)}</td>
+                    <td className="px-3 py-3 text-center font-mono text-xs">{l.rate.toFixed(2)}%</td>
+                    <td className="px-3 py-3 text-right font-mono text-xs">{fmt$(l.payment)}</td>
+                    <td className="px-3 py-3 text-right font-mono text-xs">{fmt$(l.balance)}</td>
+                    <td className={`px-3 py-3 text-center font-mono text-xs font-semibold ${l.ltv > 86 ? 'text-amber-700' : 'text-green-700'}`}>
+                      {l.ltv.toFixed(1)}%
+                    </td>
+                    <td className="px-3 py-3 text-center text-gray-600 text-xs">{l.maturity}</td>
+                    <td className="px-3 py-3 text-center">
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${l.highLtv ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'}`}>
+                        {l.highLtv ? '🟡 High LTV' : '🟢 Acceptable'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* CFO Insights */}
       <div className="space-y-3">
-        {[
-          { icon: '💡', text: 'Refinancing Opportunity: 3 loans originated >3 years ago at rates above 6%. Refinancing at current market could save ~$180K annually across the portfolio.' },
-          { icon: '💡', text: 'LTV Reduction Strategy: At current principal paydown pace, portfolio LTV drops below 80% by 2029 — unlocking better refinancing rates and covenant relief.' },
-          { icon: '💡', text: 'Balloon Risk: Pinnacle I and Riverview loans mature in 2046 with significant remaining balance — begin refinancing conversations in 2043.' },
+        {loanData.length > 0 && [
+          { icon: '💡', text: 'Review active loans and refinancing opportunities at current market rates.' },
+          { icon: '💡', text: 'Monitor loans approaching maturity dates and plan refinancing strategy in advance.' },
+          { icon: '💡', text: 'Track LTV ratios — lower LTV unlocks better refinancing rates and covenant relief.' },
         ].map((item, i) => (
           <div key={i} className="flex gap-3 items-start bg-amber-50 border border-amber-200 rounded-xl p-4">
             <span className="text-base shrink-0">{item.icon}</span>
@@ -473,11 +475,73 @@ export default function RentalFinancialRatios() {
   const [selectedId, setSelectedId] = useState<string>('');
   const [liveData, setLiveData] = useState<LiveFin | null>(null);
   const [loadingLive, setLoadingLive] = useState(false);
+  const [coData, setCoData] = useState<any[]>([]);
+  const [loanData, setLoanData] = useState<any[]>([]);
+  const [trendData, setTrendData] = useState<any[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
     api.get<CoOption[]>('/api/rentals/companies')
       .then(res => setCompanies(Array.isArray(res.data) ? res.data : []))
       .catch(() => {});
+  }, []);
+
+  // Fetch real company data, loans, and calculate metrics
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoadingData(true);
+        // Fetch companies and portfolio summary for metrics
+        const [companiesRes, portfolioRes, loansRes] = await Promise.all([
+          api.get<any[]>('/api/rentals/companies'),
+          api.get<any>('/api/rentals/portfolio-summary'),
+          api.get<any>('/api/real-estate/loans'),
+        ]);
+
+        const companyList = Array.isArray(companiesRes.data) ? companiesRes.data : [];
+        const portfolio = portfolioRes.data || {};
+        const loansResp = loansRes.data || {};
+
+        // Build company data from portfolio
+        const newCoData = (portfolio.by_company || []).map((c: any) => ({
+          name: c.company_name || c.company_id,
+          occ: c.occupancy_pct ? c.occupancy_pct * 100 : 0,
+          revUnit: c.rent_per_unit || 0,
+          expUnit: c.expense_per_unit || 0,
+          dscr: c.dscr || 0,
+          icr: c.icr || 0,
+          currRatio: c.current_ratio || 0,
+          noiMargin: c.noi_margin || 0,
+        }));
+        setCoData(newCoData);
+
+        // Build loan data from real loans
+        const newLoanData = (loansResp.items || [])
+          .filter((l: any) => l.context_type === 'rental')
+          .map((l: any) => ({
+            company: l.company_name,
+            amount: l.loan_amount || 0,
+            rate: l.loan_interest_rate || 0,
+            payment: l.loan_emi || 0,
+            balance: l.loan_balance_as_of || 0,
+            ltv: l.ltv_current || 0,
+            maturity: l.loan_maturity_date ? new Date(l.loan_maturity_date).getFullYear() : '—',
+            highLtv: (l.ltv_current || 0) > 86,
+          }));
+        setLoanData(newLoanData);
+
+        // For trend data, we'd need historical data - for now show empty state
+        setTrendData([]);
+      } catch (err) {
+        console.error('Error fetching financial data:', err);
+        setCoData([]);
+        setLoanData([]);
+        setTrendData([]);
+      } finally {
+        setLoadingData(false);
+      }
+    };
+    fetchData();
   }, []);
 
   useEffect(() => {
@@ -538,11 +602,11 @@ export default function RentalFinancialRatios() {
 
       {/* Tab content */}
       <div>
-        {activeTab === 'Profitability'    && <ProfitabilityTab />}
-        {activeTab === 'Liquidity'        && <LiquidityTab />}
-        {activeTab === 'Solvency'         && <SolvencyTab />}
-        {activeTab === 'Rental KPIs'      && <RentalKPIsTab />}
-        {activeTab === 'Cost of Capital'  && <CostOfCapitalTab />}
+        {activeTab === 'Profitability'    && <ProfitabilityTab coData={coData} trendData={trendData} />}
+        {activeTab === 'Liquidity'        && <LiquidityTab coData={coData} />}
+        {activeTab === 'Solvency'         && <SolvencyTab coData={coData} />}
+        {activeTab === 'Rental KPIs'      && <RentalKPIsTab coData={coData} />}
+        {activeTab === 'Cost of Capital'  && <CostOfCapitalTab loanData={loanData} />}
       </div>
     </div>
   );
