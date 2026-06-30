@@ -240,6 +240,47 @@ export default function RentalLoanTracker() {
     };
   }), [buildings, loans]);
 
+  const debtByBuildingData = useMemo(() => {
+    const map: Record<string, number> = {};
+    filtered.forEach(l => {
+      map[l.property_name] = (map[l.property_name] || 0) + (l.loan_balance_as_of ?? l.loan_amount);
+    });
+    return Object.entries(map).map(([name, value]) => ({ name, value }));
+  }, [filtered]);
+
+  const emiByBankData = useMemo(() => {
+    const map: Record<string, number> = {};
+    filtered.forEach(l => {
+      map[l.loan_bank_name] = (map[l.loan_bank_name] || 0) + (l.loan_emi ?? 0);
+    });
+    return Object.entries(map).map(([name, value]) => ({ name, value }));
+  }, [filtered]);
+
+  const rateComparisonData = useMemo(() => {
+    return filtered
+      .filter(l => l.loan_interest_rate != null)
+      .map(l => ({
+        name: l.property_name,
+        rate: (l.loan_interest_rate ?? 0) * 100,
+        market: MARKET_RATE * 100,
+      }));
+  }, [filtered]);
+
+  const maturityTimelineData = useMemo(() => {
+    const now = new Date();
+    return filtered
+      .filter(l => l.loan_maturity_date)
+      .sort((a, b) => (a.loan_maturity_date ?? '').localeCompare(b.loan_maturity_date ?? ''))
+      .map(l => {
+        const matDate = new Date(l.loan_maturity_date!);
+        const monthsLeft = (matDate.getFullYear() - now.getFullYear()) * 12 + (matDate.getMonth() - now.getMonth());
+        let color = '#10B981';
+        if (monthsLeft < 12) color = '#EF4444';
+        else if (monthsLeft < 24) color = '#F59E0B';
+        return { ...l, monthsLeft, color };
+      });
+  }, [filtered]);
+
   if (loading) return <LoadingSkeleton rows={10} />;
   if (error) return <div className="text-red-600 p-4">{error}<button className="ml-3 underline" onClick={reload}>Retry</button></div>;
 
@@ -411,14 +452,7 @@ export default function RentalLoanTracker() {
           <ResponsiveContainer width="100%" height={250}>
             <PieChart>
               <Pie
-                data={useMemo(() =>
-                  Object.entries(
-                    filtered.reduce((acc, l) => {
-                      acc[l.property_name] = (acc[l.property_name] || 0) + (l.loan_balance_as_of ?? l.loan_amount);
-                      return acc;
-                    }, {} as Record<string, number>)
-                  ).map(([name, value]) => ({ name, value }))
-                , [filtered])}
+                data={debtByBuildingData}
                 cx="50%" cy="50%"
                 outerRadius={80}
                 dataKey="value"
@@ -436,14 +470,7 @@ export default function RentalLoanTracker() {
           <h3 className="font-semibold text-gray-900 mb-4">EMI Breakdown by Bank</h3>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart
-              data={useMemo(() =>
-                Object.entries(
-                  filtered.reduce((acc, l) => {
-                    acc[l.loan_bank_name] = (acc[l.loan_bank_name] || 0) + (l.loan_emi ?? 0);
-                    return acc;
-                  }, {} as Record<string, number>)
-                ).map(([name, value]) => ({ name, value }))
-              , [filtered])}
+              data={emiByBankData}
               margin={{ left: 0, right: 10, top: 5, bottom: 40 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
@@ -460,40 +487,26 @@ export default function RentalLoanTracker() {
         <div className="bg-white rounded-xl border p-5">
           <h3 className="font-semibold text-gray-900 mb-4">Maturity Timeline</h3>
           <div className="space-y-2">
-            {useMemo(() => {
-              const now = new Date();
-              const sorted = filtered
-                .filter(l => l.loan_maturity_date)
-                .sort((a, b) => (a.loan_maturity_date ?? '').localeCompare(b.loan_maturity_date ?? ''))
-                .map(l => {
-                  const matDate = new Date(l.loan_maturity_date!);
-                  const monthsLeft = (matDate.getFullYear() - now.getFullYear()) * 12 + (matDate.getMonth() - now.getMonth());
-                  let color = '#10B981', bg = 'bg-green-100';
-                  if (monthsLeft < 12) { color = '#EF4444'; bg = 'bg-red-100'; }
-                  else if (monthsLeft < 24) { color = '#F59E0B'; bg = 'bg-amber-100'; }
-                  return { ...l, monthsLeft, color, bg };
-                });
-              return sorted.map((l, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <div className="flex-1">
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="font-medium text-gray-900">{l.property_name}</span>
-                      <span className="text-gray-600">{l.monthsLeft}mo</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="h-2 rounded-full"
-                        style={{
-                          width: `${Math.min(100, (l.monthsLeft / 60) * 100)}%`,
-                          background: l.color
-                        }}
-                      />
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">{l.loan_maturity_date}</p>
+            {maturityTimelineData.map((l, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <div className="flex-1">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="font-medium text-gray-900">{l.property_name}</span>
+                    <span className="text-gray-600">{l.monthsLeft}mo</span>
                   </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="h-2 rounded-full"
+                      style={{
+                        width: `${Math.min(100, (l.monthsLeft / 60) * 100)}%`,
+                        background: l.color
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">{l.loan_maturity_date}</p>
                 </div>
-              ));
-            }, [filtered])}
+              </div>
+            ))}
           </div>
         </div>
 
@@ -501,15 +514,7 @@ export default function RentalLoanTracker() {
           <h3 className="font-semibold text-gray-900 mb-4">Interest Rate Comparison vs Market</h3>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart
-              data={useMemo(() =>
-                filtered
-                  .filter(l => l.loan_interest_rate != null)
-                  .map(l => ({
-                    name: l.property_name,
-                    rate: (l.loan_interest_rate ?? 0) * 100,
-                    market: MARKET_RATE * 100,
-                  }))
-              , [filtered])}
+              data={rateComparisonData}
               margin={{ left: 0, right: 10, top: 5, bottom: 40 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
