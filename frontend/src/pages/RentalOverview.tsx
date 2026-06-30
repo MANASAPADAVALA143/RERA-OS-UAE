@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  LineChart, Line, Legend,
+  LineChart, Line, Legend, PieChart, Pie,
 } from 'recharts';
 import { X } from 'lucide-react';
 import api from '../services/api';
@@ -271,6 +271,31 @@ export default function RentalOverview() {
 
   const monthLabel = MONTH_OPTIONS.find(o => o.value === selectedMonth)?.label ?? selectedMonth;
 
+  // Occupancy gauge data (0-100%)
+  const occupancyGaugeData = useMemo(() => [{
+    name: 'Occupancy',
+    value: parseFloat((kpis.occupancy_pct * 100).toFixed(1)),
+    fill: (kpis.occupancy_pct * 100) >= 80 ? '#10B981' : (kpis.occupancy_pct * 100) >= 60 ? '#F59E0B' : '#EF4444',
+  }], [kpis]);
+
+  // Occupied vs Vacant donut data
+  const occupiedVacantData = useMemo(() => [
+    { name: 'Occupied', value: kpis.occupied_units, fill: '#10B981' },
+    { name: 'Vacant', value: kpis.vacant_units, fill: '#EF4444' },
+  ], [kpis]);
+
+  // Gross Potential Rent by company donut data
+  const rentCompositionData = useMemo(() => {
+    if (!data) return [];
+    return data.by_company
+      .filter(c => c.gross_potential_rent > 0)
+      .map(c => ({
+        name: c.company_name.length > 20 ? c.company_name.slice(0, 18) + '…' : c.company_name,
+        value: c.gross_potential_rent,
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [data]);
+
   // ── chart click handler ────────────────────────────────────────────────────
 
   function handleBarClick(payload: { company_id?: string } | undefined) {
@@ -307,10 +332,11 @@ export default function RentalOverview() {
   }
 
   const agingData = [
-    { bucket: '0–30d',  amount: data.arrears_aging['0_30'] },
-    { bucket: '31–60d', amount: data.arrears_aging['31_60'] },
-    { bucket: '61–90d', amount: data.arrears_aging['61_90'] },
-    { bucket: '90+d',   amount: data.arrears_aging['90_plus'] },
+    { bucket: 'Current',  amount: data.arrears_aging['current'] ?? 0 },
+    { bucket: '1–30d',    amount: data.arrears_aging['1_30'] ?? 0 },
+    { bucket: '31–60d',   amount: data.arrears_aging['31_60'] ?? 0 },
+    { bucket: '61–90d',   amount: data.arrears_aging['61_90'] ?? 0 },
+    { bucket: '90+d',     amount: data.arrears_aging['90_plus'] ?? 0 },
   ];
 
   return (
@@ -569,6 +595,111 @@ export default function RentalOverview() {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+          </Card>
+        </div>
+      )}
+
+      {/* ── Additional Charts: Gauge + Donuts ─────────────────────────────────── */}
+      {!fetching && data && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+          {/* Occupancy Gauge */}
+          <Card title="Occupancy Rate Gauge">
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart>
+                <Pie
+                  data={[
+                    { name: 'Occupied', value: kpis.occupancy_pct * 100 },
+                    { name: 'Vacant', value: 100 - (kpis.occupancy_pct * 100) },
+                  ]}
+                  cx="50%"
+                  cy="50%"
+                  startAngle={180}
+                  endAngle={0}
+                  innerRadius={60}
+                  outerRadius={90}
+                  dataKey="value"
+                >
+                  <Cell fill={kpis.occupancy_pct >= 0.8 ? '#10B981' : kpis.occupancy_pct >= 0.6 ? '#F59E0B' : '#EF4444'} />
+                  <Cell fill="#1E2A4A" />
+                </Pie>
+              </PieChart>
+              <div className="text-center mt-4">
+                <div className="text-3xl font-bold" style={{ color: '#F1F5F9' }}>
+                  {(kpis.occupancy_pct * 100).toFixed(1)}%
+                </div>
+                <div className="text-xs" style={{ color: '#94A3B8' }}>
+                  {kpis.occupied_units} of {kpis.total_units} units
+                </div>
+              </div>
+            </ResponsiveContainer>
+          </Card>
+
+          {/* Occupied vs Vacant Donut */}
+          <Card title="Occupied vs Vacant Units">
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart>
+                <Pie
+                  data={occupiedVacantData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={80}
+                  paddingAngle={2}
+                  dataKey="value"
+                >
+                  {occupiedVacantData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: number) => `${value} units`} {...TOOLTIP_STYLE} />
+              </PieChart>
+              <div className="text-center mt-2 space-y-1">
+                <div style={{ color: '#10B981' }} className="text-sm">
+                  ● {kpis.occupied_units} Occupied
+                </div>
+                <div style={{ color: '#EF4444' }} className="text-sm">
+                  ● {kpis.vacant_units} Vacant
+                </div>
+              </div>
+            </ResponsiveContainer>
+          </Card>
+
+          {/* Gross Potential Rent by Company Donut */}
+          <Card title="Gross Potential Rent by Company">
+            {rentCompositionData.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height={240}>
+                  <PieChart>
+                    <Pie
+                      data={rentCompositionData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      dataKey="value"
+                    >
+                      {rentCompositionData.map((entry, index) => {
+                        const colors = ['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#06B6D4', '#EF4444'];
+                        return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                      })}
+                    </Pie>
+                    <Tooltip formatter={(value: number) => fmtUSD(value)} {...TOOLTIP_STYLE} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="text-center mt-2 text-xs space-y-1" style={{ color: '#94A3B8' }}>
+                  {rentCompositionData.slice(0, 3).map((item, i) => (
+                    <div key={i}>{item.name}: {fmtUSD(item.value)}</div>
+                  ))}
+                  {rentCompositionData.length > 3 && (
+                    <div>+{rentCompositionData.length - 3} more</div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p style={{ color: '#94A3B8' }} className="text-center py-12">No data available</p>
+            )}
           </Card>
         </div>
       )}

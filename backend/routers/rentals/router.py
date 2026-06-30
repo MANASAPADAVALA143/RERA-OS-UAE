@@ -1805,3 +1805,87 @@ def delete_financials(
         db.delete(row)
         db.commit()
 
+
+# ── ar aging detail (month-by-month per unit) ────────────────────────────────
+
+@router.get("/ar-aging-detail")
+def get_ar_aging_detail(
+    company_id: str = Query(None),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get AR aging by bucket with per-unit, per-month breakdown."""
+    tid = current_user.tenant_id
+    today = date.today()
+
+    query = db.query(RentalUnit).filter(RentalUnit.tenant_id == tid)
+    if company_id:
+        try:
+            cid = uuid.UUID(company_id)
+            query = query.filter(RentalUnit.company_id == cid)
+        except ValueError:
+            pass
+
+    units = query.all()
+    unit_aging_detail = []
+    portfolio_buckets = {"current": 0.0, "1_30": 0.0, "31_60": 0.0, "61_90": 0.0, "90_plus": 0.0}
+
+    for unit in units:
+        invoices = db.query(RentalInvoice).filter(
+            RentalInvoice.tenant_id == tid, RentalInvoice.unit_id == unit.id
+        ).order_by(RentalInvoice.billing_period.desc()).all()
+
+        unit_buckets = {"current": 0.0, "1_30": 0.0, "31_60": 0.0, "61_90": 0.0, "90_plus": 0.0}
+
+        for inv in invoices:
+            collected = sum(float(c.amount_collected) for c in inv.collections)
+            owed = max(0.0, float(inv.amount_billed) - collected)
+            if owed <= 0:
+                continue
+
+            due_date = inv.billing_period.replace(day=1)
+            days_past_due = (today - due_date).days
+
+            if days_past_due <= 0:
+                bucket = "current"
+            elif days_past_due <= 30:
+                bucket = "1_30"
+            elif days_past_due <= 60:
+                bucket = "31_60"
+            elif days_past_due <= 90:
+                bucket = "61_90"
+            else:
+                bucket = "90_plus"
+
+            unit_buckets[bucket] += owed
+            portfolio_buckets[bucket] += owed
+
+            unit_aging_detail.append({
+                "unit_id": str(unit.id),
+                "unit_number": unit.unit_number,
+                "company_name": unit.company.company_name if unit.company else "",
+                "billing_month": inv.billing_period.isoformat(),
+                "amount_billed": float(inv.amount_billed),
+                "amount_collected": collected,
+                "owed": round(owed, 2),
+                "days_past_due": days_past_due,
+                "bucket": bucket,
+            })
+
+        if sum(unit_buckets.values()) > 0:
+            unit_aging_detail.append({
+                "unit_id": str(unit.id),
+                "unit_number": unit.unit_number,
+                "company_name": unit.company.company_name if unit.company else "",
+                "billing_month": "UNIT_TOTAL",
+                "owed": round(sum(unit_buckets.values()), 2),
+                "buckets": {k: round(v, 2) for k, v in unit_buckets.items()},
+            })
+
+    return {
+        "portfolio_buckets": {k: round(v, 2) for k, v in portfolio_buckets.items()},
+        "total_ar": round(sum(portfolio_buckets.values()), 2),
+        "unit_detail": unit_aging_detail,
+        "generated_at": today.isoformat(),
+    }
+

@@ -83,13 +83,27 @@ def company_summary(
 
 
 def arrears_aging(invoices_with_collections: list[dict], today: date | None = None) -> dict:
+    """Age each unpaid invoice independently into buckets based on days overdue.
+
+    Buckets:
+    - current: rent due this month but not yet late (0-0 days past due date)
+    - 1_30: 1-30 days past the due date
+    - 31_60: 31-60 days past the due date
+    - 61_90: 61-90 days past the due date
+    - 90_plus: 90+ days past the due date
+
+    Due date is assumed to be the 1st of the billing month (e.g., June rent due June 1).
+    Each unpaid month ages independently — May and June unpaid balances are bucketed separately.
+    """
     today = today or date.today()
-    buckets: dict[str, float] = {"0_30": 0.0, "31_60": 0.0, "61_90": 0.0, "90_plus": 0.0}
+    buckets: dict[str, float] = {"current": 0.0, "1_30": 0.0, "31_60": 0.0, "61_90": 0.0, "90_plus": 0.0}
+
     for inv in invoices_with_collections:
         collected = sum(_f(c["amount_collected"]) for c in inv.get("collections", []))
         owed = max(0.0, _f(inv["amount_billed"]) - collected)
         if owed <= 0:
             continue
+
         try:
             bp_str = str(inv.get("billing_period", ""))
             bp = date.fromisoformat(bp_str) if bp_str else None
@@ -97,15 +111,21 @@ def arrears_aging(invoices_with_collections: list[dict], today: date | None = No
             bp = None
         if not bp:
             continue
-        days = (today - bp).days
-        if days <= 30:
-            buckets["0_30"] += owed
-        elif days <= 60:
+
+        due_date = bp.replace(day=1)
+        days_past_due = (today - due_date).days
+
+        if days_past_due <= 0:
+            buckets["current"] += owed
+        elif days_past_due <= 30:
+            buckets["1_30"] += owed
+        elif days_past_due <= 60:
             buckets["31_60"] += owed
-        elif days <= 90:
+        elif days_past_due <= 90:
             buckets["61_90"] += owed
         else:
             buckets["90_plus"] += owed
+
     return {k: round(v, 2) for k, v in buckets.items()}
 
 
