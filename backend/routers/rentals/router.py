@@ -100,6 +100,8 @@ def _unit_dict(u: RentalUnit, inv_list: list[dict] | None = None, today: date | 
         "lease_end": active_lease.lease_end.isoformat() if active_lease else None,
         "lease_status": active_lease.status.value if active_lease else None,
         "arrears": arrears,
+        "rent_history": u.rent_history or {},
+        "vacancy_loss": float(u.vacancy_loss) if u.vacancy_loss is not None else None,
     }
 
 

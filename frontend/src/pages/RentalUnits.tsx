@@ -11,423 +11,534 @@ import { fmtUSD } from '../components/ProtectedRoute';
 import { occupancyStats } from '../utils/occupancyStats';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
 interface UnitRow extends Record<string, unknown> {
-  id: string; unit_number: string; company_id: string;
-  company_name: string | null; property_name: string | null;
-  status: string; monthly_rent: number; tenant_name: string | null;
-  lease_end: string | null; arrears: number; days_vacant: number | null;
+  id: string;
+  unit_number: string;
+  company_id: string;
+  company_name: string | null;
+  property_name: string | null;
+  status: string;
+  monthly_rent: number;
+  tenant_name: string | null;
+  lease_end: string | null;
+  arrears: number;
+  days_vacant: number | null;
+  rent_history: Record<string, number> | null;
+  vacancy_loss: number | null;
 }
+
 interface CompanyOption { id: string; company_name: string; }
 
-// ── LTM hardcoded data ────────────────────────────────────────────────────────
-const MONTHS_LTM = ['Jul 2024','Aug 2024','Sep 2024','Oct 2024','Nov 2024','Dec 2024',
-                    'Jan 2025','Feb 2025','Mar 2025','Apr 2025','May 2025','Jun 2025'];
-const MONTHS_SHORT = ['Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun'];
+// ── Constants ─────────────────────────────────────────────────────────────────
 
-type MonthStatus = 'occupied'|'vacant'|'notice'|'maintenance'|'reserved';
-interface MonthEntry { status: MonthStatus; rent: number; }
-interface UnitHistoryEntry {
-  id: string; unit: string; company: string; building: string;
-  marketRent: number; tenant: string|null; leaseEnd: string|null; turnovers: number;
-  months: MonthEntry[];
-}
-
-const UNIT_HISTORY: UnitHistoryEntry[] = [
-  {
-    id:'U01', unit:'01-01', company:'Sunstone Rentals LLC', building:'Desert Vista Townhomes',
-    marketRent:2100, tenant:'James Wilson', leaseEnd:'2025-12-31', turnovers:1,
-    months:[
-      {status:'occupied',rent:2100},{status:'occupied',rent:2100},{status:'occupied',rent:2100},
-      {status:'occupied',rent:2100},{status:'occupied',rent:2100},{status:'occupied',rent:2100},
-      {status:'occupied',rent:2100},{status:'occupied',rent:2100},{status:'vacant',rent:0},
-      {status:'vacant',rent:0},{status:'occupied',rent:2000},{status:'occupied',rent:2000},
-    ],
-  },
-  {
-    id:'U02', unit:'01-02', company:'Sunstone Rentals LLC', building:'Desert Vista Townhomes',
-    marketRent:2100, tenant:null, leaseEnd:null, turnovers:3,
-    months:[
-      {status:'occupied',rent:2100},{status:'notice',rent:2100},{status:'vacant',rent:0},
-      {status:'vacant',rent:0},{status:'vacant',rent:0},{status:'occupied',rent:1900},
-      {status:'occupied',rent:1900},{status:'notice',rent:1900},{status:'vacant',rent:0},
-      {status:'vacant',rent:0},{status:'vacant',rent:0},{status:'vacant',rent:0},
-    ],
-  },
-  {
-    id:'U03', unit:'02-01', company:'Meridian Residential LLC', building:'Crestline Apartments',
-    marketRent:1950, tenant:'Sarah Chen', leaseEnd:'2025-09-30', turnovers:1,
-    months:[
-      {status:'occupied',rent:1950},{status:'occupied',rent:1950},{status:'occupied',rent:1950},
-      {status:'occupied',rent:1950},{status:'occupied',rent:1950},{status:'occupied',rent:1950},
-      {status:'occupied',rent:1950},{status:'occupied',rent:1950},{status:'occupied',rent:1950},
-      {status:'occupied',rent:1950},{status:'occupied',rent:1950},{status:'occupied',rent:1950},
-    ],
-  },
-  {
-    id:'U04', unit:'02-03', company:'Meridian Residential LLC', building:'Crestline Apartments',
-    marketRent:2050, tenant:null, leaseEnd:null, turnovers:2,
-    months:[
-      {status:'occupied',rent:2050},{status:'occupied',rent:2050},{status:'occupied',rent:2050},
-      {status:'occupied',rent:2050},{status:'notice',rent:2050},{status:'vacant',rent:0},
-      {status:'vacant',rent:0},{status:'vacant',rent:0},{status:'vacant',rent:0},
-      {status:'vacant',rent:0},{status:'vacant',rent:0},{status:'vacant',rent:0},
-    ],
-  },
-  {
-    id:'U05', unit:'03-01', company:'Cornerstone Housing LLC', building:'Oakwood Commons',
-    marketRent:2100, tenant:'Maria Rodriguez', leaseEnd:'2026-03-31', turnovers:1,
-    months:[
-      {status:'occupied',rent:1800},{status:'occupied',rent:1800},{status:'occupied',rent:1800},
-      {status:'occupied',rent:1800},{status:'occupied',rent:1800},{status:'occupied',rent:1800},
-      {status:'occupied',rent:1800},{status:'occupied',rent:1800},{status:'occupied',rent:1800},
-      {status:'occupied',rent:1800},{status:'occupied',rent:1800},{status:'occupied',rent:1800},
-    ],
-  },
-  {
-    id:'U06', unit:'04-02', company:'Pinnacle Rentals I LLC', building:'Pinnacle Ridge Homes',
-    marketRent:2200, tenant:'David Kim', leaseEnd:'2025-08-31', turnovers:1,
-    months:[
-      {status:'occupied',rent:2200},{status:'occupied',rent:2200},{status:'occupied',rent:2200},
-      {status:'occupied',rent:2200},{status:'occupied',rent:2200},{status:'occupied',rent:2200},
-      {status:'occupied',rent:2200},{status:'occupied',rent:2200},{status:'occupied',rent:2200},
-      {status:'occupied',rent:2200},{status:'occupied',rent:2200},{status:'maintenance',rent:0},
-    ],
-  },
-  {
-    id:'U07', unit:'05-01', company:'Summit Living LLC', building:'Summit Park Flats',
-    marketRent:1800, tenant:'Tom Baker', leaseEnd:'2025-11-30', turnovers:1,
-    months:[
-      {status:'vacant',rent:0},{status:'vacant',rent:0},{status:'occupied',rent:1750},
-      {status:'occupied',rent:1750},{status:'occupied',rent:1750},{status:'occupied',rent:1750},
-      {status:'occupied',rent:1750},{status:'occupied',rent:1750},{status:'occupied',rent:1750},
-      {status:'occupied',rent:1750},{status:'occupied',rent:1750},{status:'occupied',rent:1750},
-    ],
-  },
-  {
-    id:'U08', unit:'06-03', company:'Heritage Residential LLC', building:'Heritage Glen Suites',
-    marketRent:1900, tenant:'Lisa Park', leaseEnd:'2025-10-31', turnovers:2,
-    months:[
-      {status:'occupied',rent:1900},{status:'occupied',rent:1900},{status:'notice',rent:1900},
-      {status:'vacant',rent:0},{status:'occupied',rent:1850},{status:'occupied',rent:1850},
-      {status:'occupied',rent:1850},{status:'occupied',rent:1850},{status:'occupied',rent:1850},
-      {status:'occupied',rent:1850},{status:'occupied',rent:1850},{status:'occupied',rent:1850},
-    ],
-  },
+// All 2026 months in Mon-YYYY order (matches rent_history keys from Excel sync)
+const ALL_MONTHS = [
+  'Jan-2026','Feb-2026','Mar-2026','Apr-2026','May-2026','Jun-2026',
+  'Jul-2026','Aug-2026','Sep-2026','Oct-2026','Nov-2026','Dec-2026',
 ];
 
-// ── Status config ─────────────────────────────────────────────────────────────
-const STATUS_DOT: Record<MonthStatus,string>  = { occupied:'🟢', vacant:'🔴', notice:'🟡', maintenance:'🔵', reserved:'⚪' };
-const STATUS_LABEL: Record<MonthStatus,string> = { occupied:'Occupied', vacant:'Vacant', notice:'Notice Given', maintenance:'Maintenance', reserved:'Reserved' };
-const STATUS_ROW: Record<MonthStatus,string>   = { occupied:'bg-green-50', vacant:'bg-red-50', notice:'bg-amber-50', maintenance:'bg-blue-50', reserved:'bg-gray-50' };
-
-const STATUS_PILL: Record<string,string> = {
-  occupied: 'bg-green-100 text-green-800', vacant: 'bg-red-100 text-red-800',
-  notice: 'bg-amber-100 text-amber-800', reserved: 'bg-blue-100 text-blue-800',
+const STATUS_PILL: Record<string, string> = {
+  occupied:         'bg-green-100 text-green-800',
+  vacant:           'bg-red-100 text-red-800',
+  notice:           'bg-amber-100 text-amber-800',
+  reserved:         'bg-blue-100 text-blue-800',
   maintenance_hold: 'bg-gray-100 text-gray-800',
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const fmtN = (n: number) => '$' + n.toLocaleString('en-US');
 
-function maxConsecVacant(months: MonthEntry[]): number {
-  let max = 0, cur = 0;
-  for (const m of months) { m.status === 'vacant' ? (cur++, max = Math.max(max, cur)) : (cur = 0); }
-  return max;
+const fmtN = (n: number) => '$' + Math.round(n).toLocaleString('en-US');
+
+/** All months for which ≥ 1 unit has rent_history data */
+function getAvailableMonths(units: UnitRow[]): string[] {
+  const set = new Set<string>();
+  for (const u of units) {
+    for (const m of Object.keys(u.rent_history ?? {})) {
+      if (ALL_MONTHS.includes(m)) set.add(m);
+    }
+  }
+  return ALL_MONTHS.filter(m => set.has(m));
 }
-function countVacant(months: MonthEntry[]) { return months.filter(m => m.status === 'vacant').length; }
-function rentCollected(months: MonthEntry[]) { return months.reduce((s, m) => s + m.rent, 0); }
-function getTrend(months: MonthEntry[]): 'up'|'down'|'stable' {
-  const last = months.slice(-3).filter(m => m.status === 'occupied').length;
-  const prev = months.slice(-6,-3).filter(m => m.status === 'occupied').length;
-  return last > prev ? 'up' : last < prev ? 'down' : 'stable';
+
+interface UnitLtm {
+  marketRent: number;
+  monthData: { month: string; rent: number; status: 'occupied' | 'vacant' }[];
+  occMonths: number;
+  vacMonths: number;
+  totalMonths: number;
+  collected: number;
+  expected: number;
+  lost: number;
+  occPct: number;
+  avgRent: number;
+  trend: 'up' | 'down' | 'stable';
+  action: string;
+  maxConsecVacant: number;
+  lastStatus: 'occupied' | 'vacant';
 }
-function getAction(u: UnitHistoryEntry): string {
-  const consec = maxConsecVacant(u.months);
-  const last   = u.months[u.months.length-1].status;
-  const avg    = u.months.filter(m=>m.rent>0).reduce((s,m)=>s+m.rent,0)/(u.months.filter(m=>m.rent>0).length||1);
-  if (last === 'vacant' && consec >= 2) return 'Offer discount';
-  if (u.turnovers >= 3) return 'Inspect unit';
-  if (avg < u.marketRent * 0.9) return 'Review rent';
-  if (countVacant(u.months) === 0) return 'Retain tenant';
-  return 'Monitor';
+
+function computeUnitLtm(unit: UnitRow, months: string[]): UnitLtm {
+  const hist = unit.rent_history ?? {};
+  const monthData = months.map(m => ({
+    month: m,
+    rent: hist[m] ?? 0,
+    status: ((hist[m] ?? 0) > 0 ? 'occupied' : 'vacant') as 'occupied' | 'vacant',
+  }));
+
+  const histValues = Object.values(hist).filter((v): v is number => v > 0);
+  const marketRent = histValues.length > 0
+    ? Math.max(...histValues, unit.monthly_rent ?? 0)
+    : (unit.monthly_rent ?? 0);
+
+  const totalMonths = monthData.length;
+  const occMonths   = monthData.filter(m => m.rent > 0).length;
+  const vacMonths   = totalMonths - occMonths;
+  const collected   = monthData.reduce((s, m) => s + m.rent, 0);
+  const expected    = marketRent * totalMonths;
+  const lost        = Math.max(0, expected - collected);
+  const occPct      = totalMonths > 0 ? Math.round((occMonths / totalMonths) * 100) : 0;
+  const avgRent     = occMonths > 0 ? Math.round(collected / occMonths) : 0;
+
+  const lastN = (n: number) => monthData.slice(-n).filter(m => m.rent > 0).length;
+  const trend: 'up' | 'down' | 'stable' =
+    lastN(3) > lastN(6) - lastN(3) ? 'up' : lastN(3) < lastN(6) - lastN(3) ? 'down' : 'stable';
+
+  let consecVacant = 0, maxConsecVacant = 0;
+  for (const m of monthData) {
+    m.status === 'vacant'
+      ? (consecVacant++, maxConsecVacant = Math.max(maxConsecVacant, consecVacant))
+      : (consecVacant = 0);
+  }
+
+  const lastStatus = monthData.length > 0 ? monthData[monthData.length - 1].status : 'vacant';
+
+  let action = 'Monitor';
+  if (lastStatus === 'vacant' && maxConsecVacant >= 2) action = 'Offer discount';
+  else if (avgRent > 0 && marketRent > 0 && avgRent < marketRent * 0.9) action = 'Review rent';
+  else if (occPct === 100) action = 'Retain tenant';
+
+  return { marketRent, monthData, occMonths, vacMonths, totalMonths, collected, expected, lost, occPct, avgRent, trend, action, maxConsecVacant, lastStatus };
 }
+
+// Dark-theme tooltip style shared across charts
+const TOOLTIP_STYLE = {
+  contentStyle: { background: '#1E2A4A', border: '1px solid #3A4170', color: '#F1F5F9', borderRadius: 8 },
+  labelStyle: { color: '#94A3B8' },
+};
+const TICK = { fill: '#94A3B8', fontSize: 11 };
+const SEL_STYLE: React.CSSProperties = {
+  background: '#1E2A4A', border: '1px solid #3A4170', color: '#F1F5F9',
+  borderRadius: '0.5rem', padding: '0.375rem 0.75rem', fontSize: '0.875rem',
+};
 
 // ── STATUS HISTORY TAB ────────────────────────────────────────────────────────
+
 function StatusHistoryTab() {
-  const [selId, setSelId] = useState(UNIT_HISTORY[0].id);
-  const u = UNIT_HISTORY.find(h => h.id === selId)!;
-  const consec  = maxConsecVacant(u.months);
-  const vacMos  = countVacant(u.months);
-  const revLost = vacMos * u.marketRent;
-  const allOcc  = u.months.every(m => m.status === 'occupied');
+  const [units, setUnits]     = useState<UnitRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selId, setSelId]     = useState('');
+
+  useEffect(() => {
+    api.get<UnitRow[]>('/api/rentals/units').then(r => {
+      // Only units that have real rent_history data
+      const withHist = r.data.filter(u => u.rent_history && Object.keys(u.rent_history).length > 0);
+      setUnits(withHist);
+      if (withHist.length > 0) setSelId(withHist[0].id);
+    }).finally(() => setLoading(false));
+  }, []);
+
+  const availableMonths = useMemo(() => getAvailableMonths(units), [units]);
+  const unit = useMemo(() => units.find(u => u.id === selId), [units, selId]);
+
+  const ltm = useMemo(
+    () => unit ? computeUnitLtm(unit, availableMonths) : null,
+    [unit, availableMonths],
+  );
+
+  if (loading) return <LoadingSkeleton rows={6} />;
+
+  if (units.length === 0) {
+    return (
+      <div className="rounded-xl p-6 text-center" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)' }}>
+        <p className="font-medium mb-1" style={{ color: '#60A5FA' }}>No rent history available yet</p>
+        <p className="text-sm" style={{ color: '#64748B' }}>
+          Upload your Rent Receivable Excel file via <strong>Sync Rent Data</strong> to populate month-by-month status history for each unit.
+        </p>
+      </div>
+    );
+  }
+
+  const periodLabel = availableMonths.length > 0
+    ? `${availableMonths[0]} → ${availableMonths[availableMonths.length - 1]}`
+    : '';
 
   return (
     <div className="space-y-5">
-      {/* Selector */}
+      {/* Unit selector */}
       <div className="flex flex-wrap items-center gap-3">
-        <label className="text-sm font-medium text-gray-700">Select Unit:</label>
-        <select value={selId} onChange={e => setSelId(e.target.value)}
-          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-1 focus:ring-green-600">
-          {UNIT_HISTORY.map(h => (
-            <option key={h.id} value={h.id}>Unit {h.unit} — {h.company}</option>
+        <label className="text-sm font-medium" style={{ color: '#94A3B8' }}>Select Unit:</label>
+        <select value={selId} onChange={e => setSelId(e.target.value)} style={SEL_STYLE}>
+          {units.map(u => (
+            <option key={u.id} value={u.id} style={{ background: '#1E2A4A' }}>
+              {u.unit_number} — {u.company_name}
+            </option>
           ))}
         </select>
-        <span className="text-sm text-gray-500">
-          {u.building} · Market: {fmtN(u.marketRent)}/mo{u.tenant ? ` · ${u.tenant}` : ' · VACANT'}
+        {unit && (
+          <span className="text-sm" style={{ color: '#64748B' }}>
+            {unit.property_name} · Market: {fmtN(ltm?.marketRent ?? 0)}/mo
+            {unit.tenant_name ? ` · ${unit.tenant_name}` : ' · VACANT'}
+          </span>
+        )}
+        <span className="ml-auto text-xs" style={{ color: '#475569' }}>
+          {availableMonths.length} months available ({periodLabel})
         </span>
       </div>
 
-      {/* Strategic flags */}
-      <div className="space-y-2">
-        {consec >= 2 && (
-          <div className="flex gap-3 p-3 rounded-lg border-l-4 border-red-500 bg-red-50">
-            <AlertTriangle size={16} className="text-red-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-semibold text-red-800">Unit {u.unit} vacant {consec}+ months consecutively</p>
-              <p className="text-sm text-red-700">Revenue lost: {fmtN(revLost)} · Recommended action: Offer discount to fill faster</p>
+      {/* Flags */}
+      {ltm && (
+        <div className="space-y-2">
+          {ltm.maxConsecVacant >= 2 && (
+            <div className="flex gap-3 p-3 rounded-lg border-l-4" style={{ borderColor: '#EF4444', background: 'rgba(239,68,68,0.1)' }}>
+              <AlertTriangle size={16} style={{ color: '#F87171', flexShrink: 0, marginTop: 2 }} />
+              <div>
+                <p className="text-sm font-semibold" style={{ color: '#FCA5A5' }}>
+                  {unit?.unit_number} vacant {ltm.maxConsecVacant}+ consecutive months
+                </p>
+                <p className="text-sm" style={{ color: '#FCA5A5', opacity: 0.8 }}>
+                  Revenue lost: {fmtN(ltm.lost)} · Recommended: offer discount to fill faster
+                </p>
+              </div>
             </div>
-          </div>
-        )}
-        {u.turnovers >= 3 && (
-          <div className="flex gap-3 p-3 rounded-lg border-l-4 border-amber-500 bg-amber-50">
-            <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-semibold text-amber-800">High turnover unit — {u.turnovers} tenants this year</p>
-              <p className="text-sm text-amber-700">Check maintenance issues or pricing strategy</p>
+          )}
+          {ltm.occPct === 100 && availableMonths.length >= 3 && (
+            <div className="flex gap-3 p-3 rounded-lg border-l-4" style={{ borderColor: '#22C55E', background: 'rgba(34,197,94,0.1)' }}>
+              <span style={{ flexShrink: 0 }}>🟢</span>
+              <div>
+                <p className="text-sm font-semibold" style={{ color: '#86EFAC' }}>
+                  {unit?.unit_number} — 100% occupancy across all {ltm.totalMonths} available months
+                </p>
+                <p className="text-sm" style={{ color: '#86EFAC', opacity: 0.8 }}>
+                  Best-performing unit · Consider rent increase at renewal
+                </p>
+              </div>
             </div>
-          </div>
-        )}
-        {allOcc && (
-          <div className="flex gap-3 p-3 rounded-lg border-l-4 border-green-500 bg-green-50">
-            <span className="text-green-600 shrink-0">🟢</span>
-            <div>
-              <p className="text-sm font-semibold text-green-800">Unit {u.unit} — 100% occupancy all 12 months</p>
-              <p className="text-sm text-green-700">Best-performing unit · No action needed</p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Timeline */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-          <p className="font-semibold text-gray-900 text-sm">Unit {u.unit} — 12-Month Status Timeline</p>
-          <p className="text-xs text-gray-400">Jul 2024 → Jun 2025</p>
+          )}
         </div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50 text-xs text-gray-500 uppercase">
-              <th className="text-left px-4 py-2">Month</th>
-              <th className="text-left px-4 py-2">Status</th>
-              <th className="text-right px-4 py-2">Rent Collected</th>
-              <th className="text-right px-4 py-2">Revenue Lost</th>
-            </tr>
-          </thead>
-          <tbody>
-            {u.months.map((m, i) => (
-              <tr key={i} className={`border-t border-gray-50 ${STATUS_ROW[m.status]}`}>
-                <td className="px-4 py-2.5 font-medium text-gray-700">{MONTHS_LTM[i]}</td>
-                <td className="px-4 py-2.5">
-                  <span className="flex items-center gap-2 flex-wrap">
-                    <span>{STATUS_DOT[m.status]}</span>
-                    <span className={`text-xs font-medium ${
-                      m.status==='occupied'?'text-green-700':m.status==='vacant'?'text-red-700':
-                      m.status==='notice'?'text-amber-700':m.status==='maintenance'?'text-blue-700':'text-gray-600'
-                    }`}>{STATUS_LABEL[m.status]}</span>
-                    {m.status==='vacant' && i>0 && u.months[i-1].status!=='vacant' &&
-                      <span className="text-xs text-gray-400 italic">← tenant left</span>}
-                    {m.status==='occupied' && m.rent < u.marketRent &&
-                      <span className="text-xs text-amber-600 italic">← discount given</span>}
-                  </span>
+      )}
+
+      {/* Timeline table */}
+      {unit && ltm && (
+        <div className="rounded-xl overflow-hidden" style={{ background: '#151B3D', border: '1px solid #2A3158' }}>
+          <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid #2A3158' }}>
+            <p className="font-semibold text-sm" style={{ color: '#F1F5F9' }}>
+              {unit.unit_number} — {unit.company_name} · Status Timeline
+            </p>
+            <p className="text-xs" style={{ color: '#475569' }}>{periodLabel}</p>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ background: '#0F1830' }}>
+                {['Month', 'Status', 'Rent Collected', 'Revenue Lost'].map(h => (
+                  <th key={h} className={`px-4 py-2 text-xs font-medium uppercase ${h !== 'Month' && h !== 'Status' ? 'text-right' : 'text-left'}`} style={{ color: '#64748B' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {ltm.monthData.map((m, i) => (
+                <tr key={i} style={{ borderTop: '1px solid #1E2A4A' }}>
+                  <td className="px-4 py-2.5 font-medium" style={{ color: '#F1F5F9' }}>{m.month}</td>
+                  <td className="px-4 py-2.5">
+                    <span className="flex items-center gap-2">
+                      <span>{m.status === 'occupied' ? '🟢' : '🔴'}</span>
+                      <span className="text-xs font-medium" style={{ color: m.status === 'occupied' ? '#86EFAC' : '#FCA5A5' }}>
+                        {m.status === 'occupied' ? 'Occupied' : 'Vacant'}
+                      </span>
+                      {m.status === 'vacant' && i > 0 && ltm.monthData[i - 1].status !== 'vacant' && (
+                        <span className="text-xs italic" style={{ color: '#64748B' }}>← tenant left</span>
+                      )}
+                      {m.status === 'occupied' && m.rent > 0 && m.rent < ltm.marketRent && (
+                        <span className="text-xs italic" style={{ color: '#FCD34D' }}>← below market</span>
+                      )}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono">
+                    {m.rent > 0
+                      ? <span style={{ color: '#86EFAC' }}>{fmtN(m.rent)}</span>
+                      : <span style={{ color: '#475569' }}>$0</span>}
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono">
+                    {m.status === 'vacant'
+                      ? <span style={{ color: '#F87171' }}>{fmtN(ltm.marketRent)}</span>
+                      : <span style={{ color: '#2A3158' }}>—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ background: '#0A0F2C' }}>
+                <td className="px-4 py-3 font-semibold text-sm" style={{ color: '#F1F5F9' }}>Summary</td>
+                <td className="px-4 py-3 text-xs" style={{ color: '#94A3B8' }}>
+                  Vacant: {ltm.vacMonths} mo · Occupied: {ltm.occMonths} mo · {ltm.totalMonths} total
                 </td>
-                <td className="px-4 py-2.5 text-right font-mono">
-                  {m.rent > 0
-                    ? <span className="text-green-700">{fmtN(m.rent)}</span>
-                    : <span className="text-gray-400">$0</span>}
+                <td className="px-4 py-3 text-right font-mono font-semibold" style={{ color: '#86EFAC' }}>
+                  {fmtN(ltm.collected)}
                 </td>
-                <td className="px-4 py-2.5 text-right font-mono">
-                  {m.status==='vacant'
-                    ? <span className="text-red-600">{fmtN(u.marketRent)}</span>
-                    : <span className="text-gray-300">—</span>}
+                <td className="px-4 py-3 text-right font-mono font-semibold" style={{ color: '#F87171' }}>
+                  {ltm.lost > 0 ? fmtN(ltm.lost) : '—'}
                 </td>
               </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="bg-gray-900 text-white text-sm">
-              <td className="px-4 py-3 font-semibold">Summary</td>
-              <td className="px-4 py-3 text-xs">Vacant: {vacMos} months · Occupied: {12-vacMos} months</td>
-              <td className="px-4 py-3 text-right font-mono font-semibold">{fmtN(rentCollected(u.months))}</td>
-              <td className="px-4 py-3 text-right font-mono text-red-300 font-semibold">{fmtN(revLost)}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+            </tfoot>
+          </table>
+        </div>
+      )}
 
       {/* Legend */}
-      <div className="flex flex-wrap gap-4 text-xs text-gray-500">
-        {(Object.entries(STATUS_DOT) as [MonthStatus,string][]).map(([s,dot]) => (
-          <span key={s} className="flex items-center gap-1">{dot} {STATUS_LABEL[s]}</span>
-        ))}
+      <div className="flex flex-wrap gap-4 text-xs" style={{ color: '#64748B' }}>
+        <span className="flex items-center gap-1">🟢 Occupied</span>
+        <span className="flex items-center gap-1">🔴 Vacant</span>
       </div>
     </div>
   );
 }
 
 // ── LTM PERFORMANCE TAB ───────────────────────────────────────────────────────
+
 function LTMPerformanceTab() {
-  const [selId, setSelId] = useState('all');
+  const [allUnits, setAllUnits] = useState<UnitRow[]>([]);
+  const [loading, setLoading]   = useState(true);
   const [filterCo, setFilterCo] = useState('');
-  const [viewMode, setViewMode] = useState<'chart'|'table'>('chart');
+  const [selId, setSelId]       = useState('all');
+  const [viewMode, setViewMode] = useState<'chart' | 'table'>('chart');
 
-  const companies = [...new Set(UNIT_HISTORY.map(u => u.company))];
-  const filtered  = filterCo ? UNIT_HISTORY.filter(u => u.company === filterCo) : UNIT_HISTORY;
-  const displayUnit = selId !== 'all' ? UNIT_HISTORY.find(u => u.id === selId) : undefined;
-
-  const chartData = displayUnit ? MONTHS_SHORT.map((mo, i) => {
-    const m = displayUnit.months[i];
-    return { month: mo, rent: m.rent, occupancy: (m.status==='occupied'||m.status==='notice') ? 100 : 0, status: m.status, lost: m.status==='vacant' ? displayUnit.marketRent : 0 };
-  }) : [];
-
-  const insights = useMemo(() => {
-    const list: { type:'red'|'orange'|'yellow'|'green'; unit:string; text:string; rec:string }[] = [];
-    for (const u of UNIT_HISTORY) {
-      const consec = maxConsecVacant(u.months);
-      const vac    = countVacant(u.months);
-      const lost   = vac * u.marketRent;
-      const last   = u.months[u.months.length-1].status;
-      const avg    = u.months.filter(m=>m.rent>0).reduce((s,m)=>s+m.rent,0)/(u.months.filter(m=>m.rent>0).length||1);
-      if (consec >= 3)
-        list.push({ type:'red',    unit:u.unit, text:`Unit ${u.unit} — vacant ${consec} months · Revenue lost: ${fmtN(lost)}`, rec:`Offer 1 month free or reduce rent 10% to fill quickly` });
-      else if (last==='vacant' && consec>=2)
-        list.push({ type:'orange', unit:u.unit, text:`Unit ${u.unit} — currently vacant ${consec} months`, rec:`Contact prospects now · Offer early move-in special` });
-      else if (avg < u.marketRent*0.9 && last==='occupied')
-        list.push({ type:'yellow', unit:u.unit, text:`Unit ${u.unit} — renting at ${fmtN(Math.round(avg))}, market rate ${fmtN(u.marketRent)}`, rec:`Gradual increase $100/year to reach market rate` });
-      else if (u.months.every(m=>m.status==='occupied') && avg >= u.marketRent)
-        list.push({ type:'green',  unit:u.unit, text:`Unit ${u.unit} — 100% occupancy 12 months, at/above market rate`, rec:`No action needed — consider rent increase at renewal` });
-    }
-    return list;
+  useEffect(() => {
+    api.get<UnitRow[]>('/api/rentals/units').then(r => {
+      setAllUnits(r.data);
+    }).finally(() => setLoading(false));
   }, []);
 
-  const insightCls = { red:'border-red-400 bg-red-50', orange:'border-orange-400 bg-orange-50', yellow:'border-amber-400 bg-amber-50', green:'border-green-400 bg-green-50' };
-  const insightIco = { red:'🔴', orange:'🟠', yellow:'🟡', green:'🟢' };
+  const availableMonths = useMemo(() => getAvailableMonths(allUnits), [allUnits]);
+
+  const companies = useMemo(
+    () => [...new Set(allUnits.map(u => u.company_name).filter((n): n is string => !!n))].sort(),
+    [allUnits],
+  );
+
+  const filteredUnits = useMemo(
+    () => filterCo ? allUnits.filter(u => u.company_name === filterCo) : allUnits,
+    [allUnits, filterCo],
+  );
+
+  const displayUnit = useMemo(
+    () => selId !== 'all' ? allUnits.find(u => u.id === selId) : undefined,
+    [allUnits, selId],
+  );
+
+  const displayLtm = useMemo(
+    () => displayUnit ? computeUnitLtm(displayUnit, availableMonths) : null,
+    [displayUnit, availableMonths],
+  );
+
+  const chartData = useMemo(() => {
+    if (!displayLtm) return [];
+    return displayLtm.monthData.map(m => ({
+      month: m.month.slice(0, 3),  // "Jan" from "Jan-2026"
+      fullMonth: m.month,
+      rent: m.rent,
+      occupancy: m.rent > 0 ? 100 : 0,
+      status: m.status,
+      lost: m.status === 'vacant' ? displayLtm.marketRent : 0,
+    }));
+  }, [displayLtm]);
+
+  // Strategic insights from REAL units
+  const insights = useMemo(() => {
+    if (availableMonths.length === 0) return [];
+    const list: { type: 'red' | 'orange' | 'yellow' | 'green'; text: string; rec: string }[] = [];
+    for (const unit of filteredUnits) {
+      const ltm = computeUnitLtm(unit, availableMonths);
+      if (ltm.totalMonths === 0) continue;
+      if (ltm.maxConsecVacant >= 3) {
+        list.push({ type: 'red', text: `${unit.unit_number} (${unit.company_name}) — vacant ${ltm.maxConsecVacant} months · Lost: ${fmtN(ltm.lost)}`, rec: 'Offer 1 month free or reduce rent 10% to fill quickly' });
+      } else if (ltm.lastStatus === 'vacant' && ltm.maxConsecVacant >= 2) {
+        list.push({ type: 'orange', text: `${unit.unit_number} (${unit.company_name}) — currently vacant ${ltm.maxConsecVacant} months`, rec: 'Contact prospects now · Offer early move-in special' });
+      } else if (ltm.avgRent > 0 && ltm.marketRent > 0 && ltm.avgRent < ltm.marketRent * 0.9 && ltm.lastStatus === 'occupied') {
+        list.push({ type: 'yellow', text: `${unit.unit_number} (${unit.company_name}) — avg rent ${fmtN(ltm.avgRent)}, market ${fmtN(ltm.marketRent)}`, rec: 'Gradual increase $100/year to approach market rate' });
+      } else if (ltm.occPct === 100 && ltm.totalMonths >= 3) {
+        list.push({ type: 'green', text: `${unit.unit_number} (${unit.company_name}) — 100% occupancy across ${ltm.totalMonths} months`, rec: 'Best performer · Consider rent increase at renewal' });
+      }
+    }
+    return list.slice(0, 12);
+  }, [filteredUnits, availableMonths]);
+
+  const insightBorder = { red: '#EF4444', orange: '#F97316', yellow: '#F59E0B', green: '#22C55E' };
+  const insightBg = { red: 'rgba(239,68,68,0.1)', orange: 'rgba(249,115,22,0.1)', yellow: 'rgba(245,158,11,0.1)', green: 'rgba(34,197,94,0.1)' };
+  const insightColor = { red: '#FCA5A5', orange: '#FDBA74', yellow: '#FDE68A', green: '#86EFAC' };
+  const insightIcon = { red: '🔴', orange: '🟠', yellow: '🟡', green: '🟢' };
+
+  if (loading) return <LoadingSkeleton rows={8} />;
+
+  const periodLabel = availableMonths.length > 0
+    ? `${availableMonths.length} months (${availableMonths[0]} – ${availableMonths[availableMonths.length - 1]})`
+    : 'No rent history available';
 
   return (
     <div className="space-y-5">
       {/* Controls */}
       <div className="flex flex-wrap gap-2 items-center">
-        <select value={filterCo} onChange={e => { setFilterCo(e.target.value); setSelId('all'); }}
-          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-1 focus:ring-green-600">
-          <option value="">All Companies</option>
-          {companies.map(c => <option key={c} value={c}>{c}</option>)}
+        <select value={filterCo} onChange={e => { setFilterCo(e.target.value); setSelId('all'); }} style={SEL_STYLE}>
+          <option value="" style={{ background: '#1E2A4A' }}>All Companies</option>
+          {companies.map(c => <option key={c} value={c} style={{ background: '#1E2A4A' }}>{c}</option>)}
         </select>
-        <select value={selId} onChange={e => setSelId(e.target.value)}
-          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-1 focus:ring-green-600">
-          <option value="all">All Units</option>
-          {filtered.map(u => <option key={u.id} value={u.id}>Unit {u.unit} — {u.building}</option>)}
+        <select value={selId} onChange={e => setSelId(e.target.value)} style={SEL_STYLE}>
+          <option value="all" style={{ background: '#1E2A4A' }}>All Units</option>
+          {filteredUnits.map(u => (
+            <option key={u.id} value={u.id} style={{ background: '#1E2A4A' }}>
+              {u.unit_number} — {u.property_name || u.company_name}
+            </option>
+          ))}
         </select>
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg ml-auto">
-          {(['chart','table'] as const).map(v => (
+        <span className="text-xs ml-2" style={{ color: '#475569' }}>{periodLabel}</span>
+        <div className="flex gap-1 ml-auto p-1 rounded-lg" style={{ background: '#0F1830' }}>
+          {(['chart', 'table'] as const).map(v => (
             <button key={v} onClick={() => setViewMode(v)}
-              className={`px-3 py-1 rounded text-xs font-medium capitalize transition-colors ${viewMode===v ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>{v}</button>
+              className="px-3 py-1 rounded text-xs font-medium capitalize transition-colors"
+              style={viewMode === v
+                ? { background: '#1E2A4A', color: '#F1F5F9' }
+                : { color: '#64748B' }
+              }>{v}</button>
           ))}
         </div>
       </div>
 
-      {/* Chart — single unit */}
-      {viewMode==='chart' && displayUnit && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-          <p className="text-sm font-semibold text-gray-700">Unit {displayUnit.unit} — LTM Rent &amp; Occupancy</p>
-          <p className="text-xs text-gray-400 mb-4">Jul 2024 – Jun 2025 · Market rent: {fmtN(displayUnit.marketRent)}/mo</p>
+      {/* No history notice */}
+      {availableMonths.length === 0 && (
+        <div className="rounded-xl p-5 text-center" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)' }}>
+          <p className="font-medium mb-1" style={{ color: '#60A5FA' }}>No rent history data yet</p>
+          <p className="text-sm" style={{ color: '#64748B' }}>
+            Use <strong>Sync Rent Data</strong> to upload the Rent Receivable Excel — that populates month-by-month history for LTM analysis.
+          </p>
+        </div>
+      )}
+
+      {/* Dual-axis chart — single unit */}
+      {viewMode === 'chart' && displayUnit && displayLtm && chartData.length > 0 && (
+        <div className="rounded-xl p-5" style={{ background: '#151B3D', border: '1px solid #2A3158' }}>
+          <p className="text-sm font-semibold mb-0.5" style={{ color: '#F1F5F9' }}>
+            {displayUnit.unit_number} ({displayUnit.company_name}) — Rent &amp; Occupancy
+          </p>
+          <p className="text-xs mb-4" style={{ color: '#64748B' }}>
+            {periodLabel} · Market rent: {fmtN(displayLtm.marketRent)}/mo
+          </p>
           <ResponsiveContainer width="100%" height={260}>
-            <ComposedChart data={chartData} margin={{ left:0, right:30 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="month" tick={{ fontSize:11 }} />
-              <YAxis yAxisId="left" tickFormatter={v=>`$${(v/1000).toFixed(1)}K`} tick={{ fontSize:11 }} domain={[0, displayUnit.marketRent*1.2]} />
-              <YAxis yAxisId="right" orientation="right" tickFormatter={v=>`${v}%`} tick={{ fontSize:11 }} domain={[0,130]} />
-              <Tooltip content={({ active, payload, label }) => {
-                if (!active || !payload?.length) return null;
-                const d = payload[0]?.payload;
-                return (
-                  <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-xs">
-                    <p className="font-semibold text-gray-800 mb-1">{MONTHS_LTM[MONTHS_SHORT.indexOf(label as string)]}</p>
-                    <p className="text-gray-600">Status: <span className="font-medium">{STATUS_LABEL[d.status as MonthStatus] ?? d.status}</span></p>
-                    <p className="text-gray-600">Rent: <span className="font-mono">{fmtN(d.rent)}</span></p>
-                    {d.lost > 0 && <p className="text-red-600">Lost revenue: <span className="font-mono">{fmtN(d.lost)}</span></p>}
-                  </div>
-                );
-              }} />
-              <Bar yAxisId="left" dataKey="rent" name="Rent Collected" radius={[2,2,0,0]}>
-                {chartData.map((d, i) => <Cell key={i} fill={d.rent > 0 ? '#16A34A' : '#DC2626'} />)}
+            <ComposedChart data={chartData} margin={{ left: 0, right: 30 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1E2A4A" />
+              <XAxis dataKey="month" tick={TICK} />
+              <YAxis yAxisId="left" tickFormatter={v => `$${(v / 1000).toFixed(1)}K`} tick={TICK} domain={[0, displayLtm.marketRent * 1.2]} />
+              <YAxis yAxisId="right" orientation="right" tickFormatter={v => `${v}%`} tick={TICK} domain={[0, 130]} />
+              <Tooltip
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null;
+                  const d = payload[0]?.payload;
+                  return (
+                    <div style={{ background: '#1E2A4A', border: '1px solid #3A4170', borderRadius: 8, padding: '0.75rem', fontSize: '0.75rem', color: '#F1F5F9' }}>
+                      <p style={{ fontWeight: 600, marginBottom: 4, color: '#94A3B8' }}>{d.fullMonth || label}</p>
+                      <p>Status: <span style={{ fontWeight: 600 }}>{d.status === 'occupied' ? 'Occupied' : 'Vacant'}</span></p>
+                      <p>Rent: <span style={{ fontFamily: 'monospace' }}>{fmtN(d.rent)}</span></p>
+                      {d.lost > 0 && <p style={{ color: '#F87171' }}>Lost: <span style={{ fontFamily: 'monospace' }}>{fmtN(d.lost)}</span></p>}
+                    </div>
+                  );
+                }}
+              />
+              <Bar yAxisId="left" dataKey="rent" name="Rent Collected" radius={[2, 2, 0, 0]}>
+                {chartData.map((d, i) => <Cell key={i} fill={d.rent > 0 ? '#22C55E' : '#EF4444'} />)}
               </Bar>
-              <Line yAxisId="right" type="stepAfter" dataKey="occupancy" stroke="#B8860B" strokeWidth={2} dot={false} name="Occupancy %" />
+              <Line yAxisId="right" type="stepAfter" dataKey="occupancy" stroke="#F59E0B" strokeWidth={2} dot={false} name="Occupancy %" />
             </ComposedChart>
           </ResponsiveContainer>
-          <div className="flex gap-4 mt-2 text-xs text-gray-500">
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-green-600 inline-block"/>&nbsp;Rent Collected</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-red-600 inline-block"/>&nbsp;Vacant Month</span>
-            <span className="flex items-center gap-1"><span className="w-6 h-0.5 bg-amber-600 inline-block"/>&nbsp;Occupancy %</span>
+          <div className="flex gap-4 mt-2 text-xs" style={{ color: '#64748B' }}>
+            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#22C55E' }} /> Rent Collected</span>
+            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#EF4444' }} /> Vacant Month</span>
+            <span className="flex items-center gap-1"><span className="inline-block w-6 h-0.5" style={{ background: '#F59E0B' }} /> Occupancy %</span>
           </div>
         </div>
       )}
 
-      {viewMode==='chart' && !displayUnit && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700">
-          Select a specific unit above to view its LTM dual-axis chart.
+      {viewMode === 'chart' && !displayUnit && availableMonths.length > 0 && (
+        <div className="rounded-lg p-4 text-sm" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', color: '#60A5FA' }}>
+          Select a specific unit above to view its dual-axis chart.
         </div>
       )}
 
-      {/* Summary table */}
-      {(viewMode==='table' || true) && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <p className="font-semibold text-gray-900 text-sm">LTM Summary — {filterCo || 'All Companies'}</p>
+      {/* LTM Summary table — always visible */}
+      {availableMonths.length > 0 && (
+        <div className="rounded-xl overflow-hidden" style={{ background: '#151B3D', border: '1px solid #2A3158' }}>
+          <div className="px-4 py-3" style={{ borderBottom: '1px solid #2A3158' }}>
+            <p className="font-semibold text-sm" style={{ color: '#F1F5F9' }}>
+              LTM Summary — {filterCo || 'All Companies'} · {filteredUnits.length} units
+            </p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="bg-gray-900 text-white">
-                  {['Unit','Building','Company','Occ Mo','Vac Mo','Collected','Expected','Lost','Occ %','Avg Rent','Trend','Action'].map(h=>(
-                    <th key={h} className="px-3 py-2.5 text-left whitespace-nowrap font-medium">{h}</th>
+                <tr style={{ background: '#0A0F2C' }}>
+                  {['Unit', 'Building', 'Company', 'Occ Mo', 'Vac Mo', 'Collected', 'Expected', 'Lost', 'Occ %', 'Avg Rent', 'Trend', 'Action'].map(h => (
+                    <th key={h} className="px-3 py-2.5 text-left whitespace-nowrap font-medium" style={{ color: '#64748B' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(u => {
-                  const occ  = 12 - countVacant(u.months);
-                  const vac  = countVacant(u.months);
-                  const coll = rentCollected(u.months);
-                  const exp  = u.marketRent * 12;
-                  const lost = exp - coll;
-                  const pct  = Math.round((occ/12)*100);
-                  const avg  = u.months.filter(m=>m.rent>0).reduce((s,m)=>s+m.rent,0)/(occ||1);
-                  const trend = getTrend(u.months);
-                  const action = getAction(u);
+                {filteredUnits.map(u => {
+                  const ltm = computeUnitLtm(u, availableMonths);
+                  const noHistory = ltm.totalMonths === 0;
+                  const actionColor = {
+                    'Offer discount': { bg: 'rgba(239,68,68,0.15)', color: '#FCA5A5' },
+                    'Review rent':    { bg: 'rgba(245,158,11,0.15)', color: '#FDE68A' },
+                    'Retain tenant':  { bg: 'rgba(34,197,94,0.15)',  color: '#86EFAC' },
+                    'Monitor':        { bg: 'rgba(100,116,139,0.15)', color: '#94A3B8' },
+                  }[ltm.action] ?? { bg: 'rgba(100,116,139,0.15)', color: '#94A3B8' };
+
                   return (
-                    <tr key={u.id} className="border-t border-gray-100 hover:bg-gray-50">
-                      <td className="px-3 py-2 font-mono font-medium">{u.unit}</td>
-                      <td className="px-3 py-2 text-gray-600 max-w-[120px] truncate">{u.building}</td>
-                      <td className="px-3 py-2 text-gray-600 max-w-[120px] truncate">{u.company}</td>
-                      <td className="px-3 py-2 text-center text-green-700 font-medium">{occ}</td>
-                      <td className="px-3 py-2 text-center text-red-600 font-medium">{vac}</td>
-                      <td className="px-3 py-2 font-mono text-right">{fmtN(coll)}</td>
-                      <td className="px-3 py-2 font-mono text-right text-gray-400">{fmtN(exp)}</td>
-                      <td className="px-3 py-2 font-mono text-right text-red-600">{lost>0?fmtN(lost):'—'}</td>
-                      <td className="px-3 py-2 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${pct===100?'bg-green-100 text-green-700':pct>=75?'bg-amber-100 text-amber-700':'bg-red-100 text-red-700'}`}>{pct}%</span>
-                      </td>
-                      <td className="px-3 py-2 font-mono text-right">{fmtN(Math.round(avg))}</td>
-                      <td className="px-3 py-2 text-center text-base font-bold">
-                        {trend==='up'?<span className="text-green-600">↑</span>:trend==='down'?<span className="text-red-600">↓</span>:<span className="text-gray-400">→</span>}
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                          action==='Offer discount'?'bg-red-100 text-red-700':
-                          action==='Review rent'?'bg-amber-100 text-amber-700':
-                          action==='Inspect unit'?'bg-blue-100 text-blue-700':
-                          action==='Retain tenant'?'bg-green-100 text-green-700':'bg-gray-100 text-gray-600'
-                        }`}>{action}</span>
-                      </td>
+                    <tr key={u.id} style={{ borderTop: '1px solid #1E2A4A' }}>
+                      <td className="px-3 py-2 font-mono font-medium" style={{ color: '#F1F5F9' }}>{u.unit_number}</td>
+                      <td className="px-3 py-2 max-w-[120px] truncate" style={{ color: '#94A3B8' }}>{u.property_name || '—'}</td>
+                      <td className="px-3 py-2 max-w-[120px] truncate" style={{ color: '#94A3B8' }}>{u.company_name || '—'}</td>
+                      {noHistory ? (
+                        <td colSpan={9} className="px-3 py-2 text-xs italic" style={{ color: '#3A4170' }}>
+                          No history — upload rent receivable to see LTM data
+                        </td>
+                      ) : (
+                        <>
+                          <td className="px-3 py-2 text-center font-medium" style={{ color: '#86EFAC' }}>{ltm.occMonths}</td>
+                          <td className="px-3 py-2 text-center font-medium" style={{ color: ltm.vacMonths > 0 ? '#F87171' : '#64748B' }}>{ltm.vacMonths}</td>
+                          <td className="px-3 py-2 font-mono text-right" style={{ color: '#F1F5F9' }}>{fmtN(ltm.collected)}</td>
+                          <td className="px-3 py-2 font-mono text-right" style={{ color: '#64748B' }}>{fmtN(ltm.expected)}</td>
+                          <td className="px-3 py-2 font-mono text-right" style={{ color: ltm.lost > 0 ? '#F87171' : '#64748B' }}>{ltm.lost > 0 ? fmtN(ltm.lost) : '—'}</td>
+                          <td className="px-3 py-2 text-center">
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={
+                              ltm.occPct === 100
+                                ? { background: 'rgba(34,197,94,0.15)', color: '#86EFAC' }
+                                : ltm.occPct >= 75
+                                  ? { background: 'rgba(245,158,11,0.15)', color: '#FDE68A' }
+                                  : { background: 'rgba(239,68,68,0.15)', color: '#FCA5A5' }
+                            }>{ltm.occPct}%</span>
+                          </td>
+                          <td className="px-3 py-2 font-mono text-right" style={{ color: '#F1F5F9' }}>{ltm.avgRent > 0 ? fmtN(ltm.avgRent) : '—'}</td>
+                          <td className="px-3 py-2 text-center text-base font-bold">
+                            {ltm.trend === 'up'
+                              ? <span style={{ color: '#86EFAC' }}>↑</span>
+                              : ltm.trend === 'down'
+                                ? <span style={{ color: '#F87171' }}>↓</span>
+                                : <span style={{ color: '#64748B' }}>→</span>}
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className="px-2 py-0.5 rounded text-xs font-medium" style={{ background: actionColor.bg, color: actionColor.color }}>
+                              {ltm.action}
+                            </span>
+                          </td>
+                        </>
+                      )}
                     </tr>
                   );
                 })}
@@ -438,26 +549,43 @@ function LTMPerformanceTab() {
       )}
 
       {/* Strategic Insights */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-        <p className="text-sm font-semibold text-gray-700 mb-3">Strategic Insights</p>
-        <div className="space-y-2">
-          {insights.map((ins, i) => (
-            <div key={i} className={`border-l-4 rounded-r-lg p-3 ${insightCls[ins.type]}`}>
-              <p className="text-sm font-medium text-gray-800"><span className="mr-2">{insightIco[ins.type]}</span>{ins.text}</p>
-              <p className="text-sm text-gray-600 mt-0.5 ml-6">💡 {ins.rec}</p>
-            </div>
-          ))}
+      {insights.length > 0 && (
+        <div className="rounded-xl p-5" style={{ background: '#151B3D', border: '1px solid #2A3158' }}>
+          <p className="text-sm font-semibold mb-3" style={{ color: '#F1F5F9' }}>Strategic Insights</p>
+          <div className="space-y-2">
+            {insights.map((ins, i) => (
+              <div
+                key={i}
+                className="rounded-r-lg p-3 border-l-4"
+                style={{ borderColor: insightBorder[ins.type], background: insightBg[ins.type] }}
+              >
+                <p className="text-sm font-medium" style={{ color: insightColor[ins.type] }}>
+                  <span className="mr-2">{insightIcon[ins.type]}</span>{ins.text}
+                </p>
+                <p className="text-sm mt-0.5 ml-6" style={{ color: insightColor[ins.type], opacity: 0.8 }}>
+                  💡 {ins.rec}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+
+      {insights.length === 0 && availableMonths.length > 0 && (
+        <div className="rounded-xl p-4 text-sm" style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', color: '#86EFAC' }}>
+          🟢 No urgent issues found — all units are performing within normal range.
+        </div>
+      )}
     </div>
   );
 }
 
-// ── MAIN COMPONENT (existing units list + new tabs) ───────────────────────────
-export default function RentalUnits() {
-  const [activeTab, setActiveTab] = useState<'list'|'history'|'ltm'>('list');
+// ── MAIN COMPONENT ────────────────────────────────────────────────────────────
 
-  // ── existing state ──
+export default function RentalUnits() {
+  const [activeTab, setActiveTab] = useState<'list' | 'history' | 'ltm'>('list');
+
+  // Units list state
   const [units,         setUnits]         = useState<UnitRow[]>([]);
   const [companies,     setCompanies]     = useState<CompanyOption[]>([]);
   const [filterCompany, setFilterCompany] = useState('');
@@ -468,7 +596,7 @@ export default function RentalUnits() {
   const fetchUnits = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const params: Record<string,string> = {};
+      const params: Record<string, string> = {};
       if (filterCompany) params.company_id = filterCompany;
       if (filterStatus)  params.status     = filterStatus;
       const res = await api.get<UnitRow[]>('/api/rentals/units', { params });
@@ -478,38 +606,47 @@ export default function RentalUnits() {
   }, [filterCompany, filterStatus]);
 
   const fetchCompanies = useCallback(async () => {
-    try { const res = await api.get<CompanyOption[]>('/api/rentals/companies'); setCompanies(res.data); } catch { /* ignore */ }
+    try {
+      const res = await api.get<CompanyOption[]>('/api/rentals/companies');
+      setCompanies(res.data);
+    } catch { /* ignore */ }
   }, []);
 
   useEffect(() => { fetchCompanies(); }, [fetchCompanies]);
   useEffect(() => { if (activeTab === 'list') fetchUnits(); }, [fetchUnits, activeTab]);
 
   const { occupied: occupiedCount, vacant: vacCnt } = useMemo(() => occupancyStats(units), [units]);
-  const totalArrears = useMemo(() => units.reduce((s,u) => s+(u.arrears??0), 0), [units]);
+  const totalArrears = useMemo(() => units.reduce((s, u) => s + (u.arrears ?? 0), 0), [units]);
 
   const columns: Column<UnitRow>[] = [
-    { key:'unit_number',  label:'Unit No.',  sortValue:(r)=>r.unit_number },
-    { key:'company_name', label:'Company',   sortValue:(r)=>r.company_name??'' },
-    { key:'property_name',label:'Property',  sortValue:(r)=>r.property_name??'' },
-    { key:'status', label:'Status',
-      render:(r)=><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_PILL[r.status]??'bg-gray-100 text-gray-800'}`}>{r.status}</span>,
-      sortValue:(r)=>r.status },
-    { key:'tenant_name', label:'Tenant',
-      render:(r)=>r.status==='vacant'&&r.days_vacant!=null
-        ?<span className="text-gray-400 text-xs">— ({r.days_vacant}d vacant)</span>
-        :(r.tenant_name??'—'),
-      sortValue:(r)=>r.tenant_name??'' },
-    { key:'lease_end',     label:'Lease End',     sortValue:(r)=>r.lease_end??'' },
-    { key:'monthly_rent',  label:'Monthly Rent',  render:(r)=>fmtUSD(r.monthly_rent), sortValue:(r)=>r.monthly_rent },
-    { key:'arrears', label:'Arrears',
-      render:(r)=>r.arrears>0?<span className="text-red-600 font-medium">{fmtUSD(r.arrears)}</span>:'—',
-      sortValue:(r)=>r.arrears },
+    { key: 'unit_number',   label: 'Unit No.',  sortValue: r => r.unit_number },
+    { key: 'company_name',  label: 'Company',   sortValue: r => r.company_name ?? '' },
+    { key: 'property_name', label: 'Property',  sortValue: r => r.property_name ?? '' },
+    {
+      key: 'status', label: 'Status',
+      render: r => <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_PILL[r.status] ?? 'bg-gray-100 text-gray-800'}`}>{r.status}</span>,
+      sortValue: r => r.status,
+    },
+    {
+      key: 'tenant_name', label: 'Tenant',
+      render: r => r.status === 'vacant' && r.days_vacant != null
+        ? <span className="text-gray-400 text-xs">— ({r.days_vacant}d vacant)</span>
+        : (r.tenant_name ?? '—'),
+      sortValue: r => r.tenant_name ?? '',
+    },
+    { key: 'lease_end',    label: 'Lease End',    sortValue: r => r.lease_end ?? '' },
+    { key: 'monthly_rent', label: 'Monthly Rent', render: r => fmtUSD(r.monthly_rent), sortValue: r => r.monthly_rent },
+    {
+      key: 'arrears', label: 'Arrears',
+      render: r => r.arrears > 0 ? <span className="text-red-600 font-medium">{fmtUSD(r.arrears)}</span> : '—',
+      sortValue: r => r.arrears,
+    },
   ];
 
   const TABS = [
-    { id:'list'    as const, label:'Units List'      },
-    { id:'history' as const, label:'Status History'  },
-    { id:'ltm'     as const, label:'LTM Performance' },
+    { id: 'list'    as const, label: 'Units List'      },
+    { id: 'history' as const, label: 'Status History'  },
+    { id: 'ltm'     as const, label: 'LTM Performance' },
   ];
 
   return (
@@ -517,32 +654,33 @@ export default function RentalUnits() {
       <h1 className="text-2xl font-bold text-charcoal">Units</h1>
 
       {/* Tab switcher */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+      <div className="flex gap-1 p-1 rounded-lg w-fit" style={{ background: '#0F1830' }}>
         {TABS.map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id)}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              activeTab===t.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}>{t.label}</button>
+            className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors"
+            style={activeTab === t.id
+              ? { background: '#1E2A4A', color: '#F1F5F9' }
+              : { color: '#64748B' }
+            }
+          >{t.label}</button>
         ))}
       </div>
 
-      {/* ── Tab 1: existing Units List ── */}
+      {/* Units List */}
       {activeTab === 'list' && (
         <>
           <div className="flex flex-wrap gap-3">
-            <select value={filterCompany} onChange={e=>setFilterCompany(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
-              <option value="">All Companies</option>
-              {companies.map(c=><option key={c.id} value={c.id}>{c.company_name}</option>)}
+            <select value={filterCompany} onChange={e => setFilterCompany(e.target.value)} style={SEL_STYLE}>
+              <option value="" style={{ background: '#1E2A4A' }}>All Companies</option>
+              {companies.map(c => <option key={c.id} value={c.id} style={{ background: '#1E2A4A' }}>{c.company_name}</option>)}
             </select>
-            <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
-              <option value="">All Statuses</option>
-              <option value="occupied">Occupied</option>
-              <option value="vacant">Vacant</option>
-              <option value="notice">Notice</option>
-              <option value="reserved">Reserved</option>
-              <option value="maintenance_hold">Maintenance Hold</option>
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={SEL_STYLE}>
+              <option value="" style={{ background: '#1E2A4A' }}>All Statuses</option>
+              <option value="occupied"         style={{ background: '#1E2A4A' }}>Occupied</option>
+              <option value="vacant"           style={{ background: '#1E2A4A' }}>Vacant</option>
+              <option value="notice"           style={{ background: '#1E2A4A' }}>Notice</option>
+              <option value="reserved"         style={{ background: '#1E2A4A' }}>Reserved</option>
+              <option value="maintenance_hold" style={{ background: '#1E2A4A' }}>Maintenance Hold</option>
             </select>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -561,11 +699,8 @@ export default function RentalUnits() {
         </>
       )}
 
-      {/* ── Tab 2: Status History ── */}
       {activeTab === 'history' && <StatusHistoryTab />}
-
-      {/* ── Tab 3: LTM Performance ── */}
-      {activeTab === 'ltm' && <LTMPerformanceTab />}
+      {activeTab === 'ltm'     && <LTMPerformanceTab />}
     </div>
   );
 }
