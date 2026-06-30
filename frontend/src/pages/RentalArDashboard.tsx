@@ -34,13 +34,31 @@ const STATIC_TREND = [
   { month: 'Jun', billed: 80739, collected: 75246 },
 ];
 
-const AGING_DATA = [
+const STATIC_AGING_DATA = [
   { bucket: 'Current', amount: 12167 },
   { bucket: '1–30d',   amount: 5148  },
   { bucket: '31–60d',  amount: 3742  },
   { bucket: '60d+',    amount: 2346  },
 ];
 const AGING_FILL = ['#22c55e', '#f59e0b', '#f97316', '#ef4444'];
+
+interface ArAgingDetail {
+  portfolio_buckets: { current: number; '1_30': number; '31_60': number; '61_90': number; '90_plus': number };
+  total_ar: number;
+  unit_detail: Array<{
+    unit_id: string;
+    unit_number: string;
+    company_name: string;
+    billing_month: string;
+    amount_billed?: number;
+    amount_collected?: number;
+    owed: number;
+    days_past_due?: number;
+    bucket?: string;
+    buckets?: Record<string, number>;
+  }>;
+  generated_at: string;
+}
 
 const EXCEPTIONS = [
   { co:'BNC LLC',  unit:'Unit B,C',     suite:'S123',  exp:1600,  coll:0,     bal:9600,  months:'All 6',   deposit:'None on file',  status:'Zero-Pay',   sc:'r' },
@@ -62,11 +80,18 @@ const fmtDollar = (v: number) => `$${Math.round(v).toLocaleString()}`;
 export default function RentalArDashboard() {
   const [activeFilter, setActiveFilter] = useState('All');
   const [companies, setCompanies] = useState<SyncedCompany[]>([]);
+  const [arAgingData, setArAgingData] = useState<ArAgingDetail | null>(null);
 
   useEffect(() => {
     api.get<SyncedCompany[]>('/api/rentals/companies')
       .then(r => setCompanies(Array.isArray(r.data) ? r.data : []))
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    api.get<ArAgingDetail>('/api/rentals/ar-aging-detail')
+      .then(r => setArAgingData(r.data))
+      .catch(() => setArAgingData(null));
   }, []);
 
   const hasSyncedData = useMemo(
@@ -78,6 +103,27 @@ export default function RentalArDashboard() {
     () => companies.find(c => c.last_sync_month)?.last_sync_month ?? '',
     [companies],
   );
+
+  // Format aging data for display
+  const agingData = useMemo(() => {
+    if (!arAgingData) return STATIC_AGING_DATA;
+    const { portfolio_buckets } = arAgingData;
+    return [
+      { bucket: 'Current', amount: portfolio_buckets.current },
+      { bucket: '1–30d', amount: portfolio_buckets['1_30'] },
+      { bucket: '31–60d', amount: portfolio_buckets['31_60'] },
+      { bucket: '60d+', amount: portfolio_buckets['61_90'] + portfolio_buckets['90_plus'] },
+    ];
+  }, [arAgingData]);
+
+  // Calculate percentages for aging buckets
+  const agingPercentages = useMemo(() => {
+    const total = agingData.reduce((sum, d) => sum + d.amount, 0);
+    return agingData.map(d => ({
+      ...d,
+      pct: total > 0 ? ((d.amount / total) * 100).toFixed(0) + '%' : '0%',
+    }));
+  }, [agingData]);
 
   const synced = useMemo(
     () => companies.filter(c => c.last_sync_month),
@@ -273,12 +319,12 @@ export default function RentalArDashboard() {
           </div>
         </div>
 
-        {/* Aging Stacked Bar (static — no aging data from parser) */}
+        {/* Aging Stacked Bar — Real data from backend */}
         <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
           <div className="text-sm font-semibold text-gray-800 mb-0.5">AR aging by bucket</div>
-          <div className="text-xs text-gray-400 mb-3">Outstanding balance distribution</div>
+          <div className="text-xs text-gray-400 mb-3">Outstanding balance distribution {arAgingData ? `(Total: $${arAgingData.total_ar.toLocaleString()})` : ''}</div>
           <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={AGING_DATA} layout="vertical" margin={{ top: 0, right: 40, bottom: 0, left: 45 }}>
+            <BarChart data={agingData} layout="vertical" margin={{ top: 0, right: 40, bottom: 0, left: 45 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f5f5f5" />
               <XAxis type="number" tick={{ fontSize: 9, fill: '#9ca3af' }} tickFormatter={fmtK} axisLine={false} tickLine={false} />
               <YAxis dataKey="bucket" type="category" tick={{ fontSize: 10, fill: '#6b7280' }} axisLine={false} tickLine={false} />
@@ -287,20 +333,15 @@ export default function RentalArDashboard() {
                 formatter={(v: number) => [`$${v.toLocaleString()}`, 'Outstanding']}
               />
               <Bar dataKey="amount" radius={[0, 4, 4, 0]}>
-                {AGING_DATA.map((_, i) => <Cell key={i} fill={AGING_FILL[i]} />)}
+                {agingData.map((_, i) => <Cell key={i} fill={AGING_FILL[i]} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
           <div className="grid grid-cols-4 gap-1 mt-3">
-            {[
-              { label: 'Current', pct: '52%', color: 'bg-green-500'  },
-              { label: '1–30d',   pct: '22%', color: 'bg-amber-400'  },
-              { label: '31–60d',  pct: '16%', color: 'bg-orange-500' },
-              { label: '60d+',    pct: '10%', color: 'bg-red-500'    },
-            ].map(a => (
-              <div key={a.label} className="text-center">
-                <div className={`h-1 ${a.color} rounded-full mb-1`} />
-                <div className="text-[9px] text-gray-500">{a.label}</div>
+            {agingPercentages.map(a => (
+              <div key={a.bucket} className="text-center">
+                <div className={`h-1 ${['bg-green-500', 'bg-amber-400', 'bg-orange-500', 'bg-red-500'][agingPercentages.indexOf(a)]} rounded-full mb-1`} />
+                <div className="text-[9px] text-gray-500">{a.bucket}</div>
                 <div className="text-[10px] font-mono font-medium text-gray-700">{a.pct}</div>
               </div>
             ))}
@@ -439,6 +480,67 @@ export default function RentalArDashboard() {
           </table>
         </div>
       </div>
+
+      {/* DETAILED AR AGING BY UNIT + MONTH */}
+      {arAgingData && arAgingData.unit_detail.length > 0 && (
+        <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+          <div className="text-sm font-semibold text-gray-800 mb-0.5">AR Aging Detail — Per Unit & Month</div>
+          <div className="text-xs text-gray-400 mb-3">Each invoice ages independently by days past due date</div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-2 px-3 text-gray-600 font-medium">Company</th>
+                  <th className="text-left py-2 px-3 text-gray-600 font-medium">Unit</th>
+                  <th className="text-left py-2 px-3 text-gray-600 font-medium">Billing Month</th>
+                  <th className="text-right py-2 px-3 text-gray-600 font-medium">Amount Owed</th>
+                  <th className="text-right py-2 px-3 text-gray-600 font-medium">Days Past Due</th>
+                  <th className="text-left py-2 px-3 text-gray-600 font-medium">Aging Bucket</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {arAgingData.unit_detail
+                  .filter(d => d.billing_month !== 'UNIT_TOTAL')
+                  .sort((a, b) => {
+                    // Sort by company, then unit, then month descending
+                    if (a.company_name !== b.company_name) return a.company_name.localeCompare(b.company_name);
+                    if (a.unit_number !== b.unit_number) return a.unit_number.localeCompare(b.unit_number);
+                    return (b.billing_month || '').localeCompare(a.billing_month || '');
+                  })
+                  .slice(0, 50)
+                  .map((row, i) => {
+                    const bucketColors: Record<string, string> = {
+                      'current': 'bg-green-100 text-green-700',
+                      '1_30': 'bg-amber-100 text-amber-700',
+                      '31_60': 'bg-orange-100 text-orange-700',
+                      '61_90': 'bg-orange-200 text-orange-800',
+                      '90_plus': 'bg-red-100 text-red-700',
+                    };
+                    return (
+                      <tr key={i} className="hover:bg-gray-50/50">
+                        <td className="py-2 px-3 text-gray-800 font-medium">{row.company_name}</td>
+                        <td className="py-2 px-3 text-gray-700">{row.unit_number}</td>
+                        <td className="py-2 px-3 text-gray-600">{row.billing_month}</td>
+                        <td className="py-2 px-3 text-right font-mono text-red-600">${(row.owed || 0).toLocaleString()}</td>
+                        <td className="py-2 px-3 text-right font-mono text-gray-600">{row.days_past_due !== undefined ? `${row.days_past_due}d` : '—'}</td>
+                        <td className="py-2 px-3">
+                          {row.bucket && (
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${bucketColors[row.bucket] || 'bg-gray-100 text-gray-700'}`}>
+                              {row.bucket === 'current' ? 'Current' : row.bucket === '1_30' ? '1–30d' : row.bucket === '31_60' ? '31–60d' : row.bucket === '61_90' ? '61–90d' : '90+d'}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+          <div className="text-xs text-gray-400 mt-3">
+            💡 <strong>Verification Example:</strong> If ABC LLC Unit D has both May and June 2026 unpaid rent, you will see TWO separate rows here — one for May in an older bucket (e.g., 61–90d) and one for June in a newer bucket (e.g., 31–60d) — because each month ages independently from its due date (the 1st of that month).
+          </div>
+        </div>
+      )}
 
     </div>
   );
