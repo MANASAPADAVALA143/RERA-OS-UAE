@@ -189,13 +189,13 @@ export default function RentalOverview() {
     if (!data) return null;
     if (selectedCo) {
       return {
-        total_units:             selectedCo.total_units,
-        occupied_units:          selectedCo.occupied_units,
-        vacant_units:            selectedCo.vacant_units ?? (selectedCo.total_units - selectedCo.occupied_units),
-        occupancy_pct:           selectedCo.occupancy_pct,
-        collected_this_month:    selectedCo.collected_this_month,
+        total_units:             selectedCo.total_units ?? 0,
+        occupied_units:          selectedCo.occupied_units ?? 0,
+        vacant_units:            selectedCo.vacant_units ?? (selectedCo.total_units ?? 0) - (selectedCo.occupied_units ?? 0),
+        occupancy_pct:           selectedCo.occupancy_pct ?? 0,
+        collected_this_month:    selectedCo.collected_this_month ?? 0,
         billed_this_month:       selectedCo.billed_this_month ?? 0,
-        noi_this_month:          selectedCo.noi_this_month,
+        noi_this_month:          selectedCo.noi_this_month ?? 0,
         gross_potential_rent:    selectedCo.gross_potential_rent ?? 0,
         vacancy_loss:            selectedCo.vacancy_loss ?? 0,
         arrears_total:           selectedCo.arrears_total ?? 0,
@@ -204,17 +204,17 @@ export default function RentalOverview() {
       };
     }
     return {
-      total_units:             data.total_units,
-      occupied_units:          data.occupied_units,
-      vacant_units:            data.vacant_units,
-      occupancy_pct:           data.occupancy_pct,
-      collected_this_month:    data.collected_this_month,
-      billed_this_month:       data.billed_this_month,
-      noi_this_month:          data.noi_this_month,
-      gross_potential_rent:    data.gross_potential_rent,
-      vacancy_loss:            data.vacancy_loss,
-      arrears_total:           data.arrears_total,
-      total_expense_this_month: data.total_expense_this_month,
+      total_units:             data.total_units ?? 0,
+      occupied_units:          data.occupied_units ?? 0,
+      vacant_units:            data.vacant_units ?? 0,
+      occupancy_pct:           data.occupancy_pct ?? 0,
+      collected_this_month:    data.collected_this_month ?? 0,
+      billed_this_month:       data.billed_this_month ?? 0,
+      noi_this_month:          data.noi_this_month ?? 0,
+      gross_potential_rent:    data.gross_potential_rent ?? 0,
+      vacancy_loss:            data.vacancy_loss ?? 0,
+      arrears_total:           data.arrears_total ?? 0,
+      total_expense_this_month: data.total_expense_this_month ?? 0,
       partner_share_payable:   data.partner_share_payable ?? 0,
     };
   }, [data, selectedCo]);
