@@ -1,13 +1,22 @@
 """
-AWS Bedrock Nova Lite narrative calls.
+AWS Bedrock Claude LLM integration for AI Assistant.
+
+Models tried (in order of preference):
+1. Claude 3.5 Sonnet (primary) — if access granted in Bedrock account
+2. Amazon Nova Lite (fallback) — if Claude not yet available
+   TODO: Remove fallback once Claude model access confirmed in AWS Console
+   (Bedrock → Model access → request Claude 3.5 Sonnet)
 
 IAM permission required (scoped in infra/terraform/iam.tf):
-  bedrock:InvokeModel on arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-lite-v1:0
+  bedrock:InvokeModel on Claude and/or Nova Lite model ARNs
   and the cross-region inference profile ARN.
 
 In production the IAM role attached to the compute resource (EC2 instance
 profile or ECS task role) provides credentials automatically. Static
 aws_access_key_id / aws_secret_access_key are only used locally.
+
+Data retention: OFF (default) — Bedrock does not retain prompts/outputs.
+No customer data is used for model training.
 """
 from __future__ import annotations
 
@@ -18,7 +27,10 @@ from config import settings
 
 logger = logging.getLogger(__name__)
 
+# Try Claude first; fall back to Nova Lite if not available
+CLAUDE_MODEL_ID = "anthropic.claude-3-5-sonnet-20241022-v2:0"
 NOVA_MODEL_ID = "us.amazon.nova-lite-v1:0"
+MODEL_ID = CLAUDE_MODEL_ID  # Primary; will try Nova Lite on 403 Forbidden
 
 
 def _bedrock_client():
@@ -35,10 +47,12 @@ def _bedrock_client():
 
 def invoke_narrative(prompt: str, max_tokens: int = 300) -> dict:
     """
-    Invoke Nova Lite and return {"text": str, "success": bool, "error": str|None}.
+    Invoke Claude (or fallback to Nova Lite) and return {"text": str, "success": bool, "error": str|None}.
 
     Returns success=False (never raises) so callers can fall back to non-AI text
     without crashing the request.
+
+    Data retention: OFF (default). Bedrock does not retain prompts/outputs.
     """
     try:
         client = _bedrock_client()
@@ -46,24 +60,48 @@ def invoke_narrative(prompt: str, max_tokens: int = 300) -> dict:
         logger.exception("Failed to create Bedrock client")
         return {"text": "", "success": False, "error": str(exc)}
 
-    try:
-        body = json.dumps({
-            "messages": [{"role": "user", "content": [{"text": prompt}]}],
-            "inferenceConfig": {"maxTokens": max_tokens, "temperature": 0.3},
-        })
+    # Try Claude first
+    model_to_try = CLAUDE_MODEL_ID
 
-        response = client.invoke_model(
-            modelId=NOVA_MODEL_ID,
-            body=body,
-            contentType="application/json",
-            accept="application/json",
-        )
+    for attempt, model_id in enumerate([CLAUDE_MODEL_ID, NOVA_MODEL_ID]):
+        try:
+            # Claude uses converse API; Nova Lite uses invoke_model
+            if "claude" in model_id.lower():
+                response = client.converse(
+                    modelId=model_id,
+                    messages=[{"role": "user", "content": [{"text": prompt}]}],
+                    inferenceConfig={"maxTokens": max_tokens, "temperature": 0.3},
+                )
+                text = response.get("output", {}).get("message", {}).get("content", [{}])[0].get("text", "")
+            else:
+                # Nova Lite fallback
+                body = json.dumps({
+                    "messages": [{"role": "user", "content": [{"text": prompt}]}],
+                    "inferenceConfig": {"maxTokens": max_tokens, "temperature": 0.3},
+                })
+                response = client.invoke_model(
+                    modelId=model_id,
+                    body=body,
+                    contentType="application/json",
+                    accept="application/json",
+                )
+                result = json.loads(response["body"].read())
+                text = result.get("output", {}).get("message", {}).get("content", [{}])[0].get("text", "")
 
-        result = json.loads(response["body"].read())
-        text = result.get("output", {}).get("message", {}).get("content", [{}])[0].get("text", "")
-        logger.info("Bedrock Nova Lite call succeeded (prompt_len=%d, model=%s)", len(prompt), NOVA_MODEL_ID)
-        return {"text": text.strip(), "success": bool(text), "error": None}
+            logger.info("LLM call succeeded (prompt_len=%d, model=%s)", len(prompt), model_id)
+            return {"text": text.strip(), "success": bool(text), "error": None}
 
-    except Exception as exc:
-        logger.exception("Bedrock invoke_model failed")
-        return {"text": "", "success": False, "error": str(exc)}
+        except client.exceptions.AccessDeniedException:
+            if attempt == 0 and model_id == CLAUDE_MODEL_ID:
+                logger.warning("Claude model access not yet enabled; falling back to Nova Lite")
+                continue
+            logger.exception("LLM model access denied for %s", model_id)
+            return {"text": "", "success": False, "error": f"Model access denied: {model_id}"}
+        except Exception as exc:
+            if attempt < 1:
+                logger.warning("Model %s failed, trying fallback: %s", model_id, str(exc))
+                continue
+            logger.exception("All LLM models failed")
+            return {"text": "", "success": False, "error": str(exc)}
+
+    return {"text": "", "success": False, "error": "No LLM models available"}

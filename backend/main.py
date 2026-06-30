@@ -134,12 +134,14 @@ from routers.lender_risk import router as lender_risk_router  # noqa: E402
 from routers.rentals.ar_ap import router as rentals_arap_router  # noqa: E402
 from routers.rentals.vendor_risk import router as rentals_vendor_risk_router  # noqa: E402
 from routers.rentals.export import router as rentals_export_router  # noqa: E402
+from routers.rentals.ai_chat import router as rentals_ai_router  # noqa: E402
 app.include_router(rentals_router)
 app.include_router(rentals_maintenance_router)
 app.include_router(lender_risk_router)
 app.include_router(rentals_arap_router)
 app.include_router(rentals_vendor_risk_router)
 app.include_router(rentals_export_router)
+app.include_router(rentals_ai_router)
 
 from routers.propdev.deal_advisor import router as deal_advisor_router  # noqa: E402
 from routers.propdev.companies import router as propdev_companies_router  # noqa: E402
