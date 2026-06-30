@@ -174,23 +174,24 @@ export default function RentalPortfolioUpload() {
       </div>
 
       {/* What gets updated */}
-      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 max-w-2xl mb-6">
-        <div className="text-xs font-semibold text-blue-800 mb-2">
+      <div className="rounded-xl p-4 max-w-2xl mb-6"
+        style={{ background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.25)' }}>
+        <div className="text-xs font-semibold mb-2" style={{ color: '#92400E' }}>
           ✅ After upload, these sections update automatically:
         </div>
         <div className="grid grid-cols-2 gap-1">
           {[
+            'Company Registry — units, suites, company list',
             'Overview — occupancy, collected, NOI',
             'Companies — per-company KPIs',
-            'Units — vacant/occupied status',
-            'AR Dashboard — collected vs billed',
+            'Units — vacant/occupied status & rent history',
+            'AR Dashboard — collection summary by company',
             'Vacancy & Loss — vacancy loss by unit',
             'Financial Ratios — all ratios recalculated',
             'Income vs Expense — 6-month trend chart',
-            'Financial page — monthly income data',
           ].map(item => (
-            <div key={item} className="text-xs text-blue-700 flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 bg-blue-400 rounded-full flex-shrink-0" />
+            <div key={item} className="text-xs flex items-center gap-1.5" style={{ color: '#92400E' }}>
+              <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#D4AF37' }} />
               {item}
             </div>
           ))}

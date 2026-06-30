@@ -112,9 +112,14 @@ body {
 /* Accent/primary buttons */
 .dark-app .bg-accent       { background-color: #D4AF37 !important; }
 .dark-app .bg-primary      { background-color: #161310 !important; }
+.dark-app .bg-blue-600     { background-color: #D4AF37 !important; }
+.dark-app .hover\:bg-blue-600:hover { background-color: #D4AF37 !important; }
 .dark-app .hover\:bg-blue-700:hover { background-color: #B8962E !important; }
 .dark-app .bg-indigo-600   { background-color: #D4AF37 !important; }
 .dark-app .hover\:bg-indigo-700:hover { background-color: #B8962E !important; }
+.dark-app .border-blue-600 { border-color: #D4AF37 !important; }
+.dark-app .border-blue-300 { border-color: #C8C2B7 !important; }
+.dark-app .hover\:bg-blue-100:hover { background-color: rgba(212,175,55,0.12) !important; }
 .dark-app .bg-green-700    { background-color: #059669 !important; }
 .dark-app .hover\:bg-green-800:hover { background-color: #047857 !important; }
 .dark-app .text-accent     { color: #D4AF37 !important; }

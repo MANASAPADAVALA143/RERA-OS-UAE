@@ -228,13 +228,38 @@ export default function RentalArDashboard() {
     { label: 'Best Performer',         value: 'ZYC LLC',  sub: '$94,675 YTD · Lowest variance',   valueColor: 'text-green-600', subColor: 'text-green-500',  accent: 'bg-green-500' },
   ];
 
-  // Only show exceptions for companies that still exist in the system
+  // Derive live exceptions from synced company data (post-upload)
+  const syncedExceptions = useMemo(() => {
+    if (!hasSyncedData) return null;
+    return synced
+      .filter(c => (c.sync_gross_potential ?? 0) > 0 || (c.sync_vacancy_loss ?? 0) > 0)
+      .map(c => {
+        const gross     = c.sync_gross_potential ?? 0;
+        const collected = c.sync_collected ?? 0;
+        const outstanding = Math.max(0, gross - collected);
+        const vacLoss   = c.sync_vacancy_loss ?? 0;
+        const occ       = c.sync_occupied_units ?? 0;
+        const total     = c.sync_total_units ?? 0;
+        const pct       = gross > 0 ? (collected / gross * 100) : 100;
+        const status    = outstanding === 0 ? 'Paid' : pct >= 95 ? 'Partial' : pct === 0 ? 'Zero-Pay' : pct < 85 ? 'Declining' : 'Partial';
+        return { co: c.company_name, month: c.last_sync_month ?? '', gross, collected, outstanding, vacLoss, occ, total, pct: Math.round(pct * 10) / 10, status };
+      })
+      .sort((a, b) => b.outstanding - a.outstanding);
+  }, [hasSyncedData, synced]);
+
+  // Only show static exceptions for companies that still exist in the system
   const validCompanyNames = new Set(companies.map(c => c.company_name));
   const exceptionsForValidCompanies = EXCEPTIONS.filter(e => validCompanyNames.has(e.co));
 
   const filteredExceptions = activeFilter === 'All'
     ? exceptionsForValidCompanies
     : exceptionsForValidCompanies.filter(r => r.status === activeFilter);
+
+  const filteredSyncedExceptions = useMemo(() => {
+    if (!syncedExceptions) return null;
+    if (activeFilter === 'All') return syncedExceptions;
+    return syncedExceptions.filter(r => r.status === activeFilter);
+  }, [syncedExceptions, activeFilter]);
 
   return (
     <div className="p-5 bg-gray-50 min-h-screen space-y-4">
@@ -309,13 +334,13 @@ export default function RentalArDashboard() {
                 contentStyle={{ fontSize: '11px', borderRadius: '8px', border: '0.5px solid #e5e7eb' }}
                 formatter={(v: number, n: string) => [`$${v.toLocaleString()}`, n === 'billed' ? 'Billed' : 'Collected']}
               />
-              <Bar dataKey="billed"    name="billed"    fill="#3b82f6" opacity={0.6} radius={[3, 3, 0, 0]} />
+              <Bar dataKey="billed"    name="billed"    fill="#D4AF37" opacity={0.75} radius={[3, 3, 0, 0]} />
               <Bar dataKey="collected" name="collected" fill="#22c55e" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
           <div className="flex gap-4 mt-2">
             <span className="flex items-center gap-1 text-[10px] text-gray-500">
-              <span className="w-2.5 h-2.5 rounded-sm bg-blue-400 inline-block opacity-60" />Billed
+              <span className="w-2.5 h-2.5 rounded-sm inline-block opacity-75" style={{ background: '#D4AF37' }} />Billed
             </span>
             <span className="flex items-center gap-1 text-[10px] text-gray-500">
               <span className="w-2.5 h-2.5 rounded-sm bg-green-500 inline-block" />Collected
@@ -421,11 +446,17 @@ export default function RentalArDashboard() {
       <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <div className="text-sm font-semibold text-gray-800">Exception matrix — units requiring action</div>
-            <div className="text-xs text-gray-400 mt-0.5">All units with zero payment, partial payment, or overdue balance</div>
+            <div className="text-sm font-semibold text-gray-800">
+              {hasSyncedData ? 'Collection summary by company' : 'Exception matrix — units requiring action'}
+            </div>
+            <div className="text-xs text-gray-400 mt-0.5">
+              {hasSyncedData
+                ? `Live data from ${lastSyncMonth} · Gross potential vs collected · vacancy loss`
+                : 'All units with zero payment, partial payment, or overdue balance'}
+            </div>
           </div>
           <div className="flex gap-2">
-            {['All', 'Zero-Pay', 'Partial', 'Overdue', 'Declining'].map(f => (
+            {(hasSyncedData ? ['All', 'Zero-Pay', 'Partial', 'Paid', 'Declining'] : ['All', 'Zero-Pay', 'Partial', 'Overdue', 'Declining']).map(f => (
               <button
                 key={f}
                 onClick={() => setActiveFilter(f)}
@@ -441,6 +472,49 @@ export default function RentalArDashboard() {
           </div>
         </div>
         <div className="overflow-x-auto">
+          {hasSyncedData && filteredSyncedExceptions ? (
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="text-left py-2 px-3 text-gray-400 font-normal rounded-l-lg">Company</th>
+                  <th className="text-left py-2 px-3 text-gray-400 font-normal">Month</th>
+                  <th className="text-right py-2 px-3 text-gray-400 font-normal">Units Occ/Total</th>
+                  <th className="text-right py-2 px-3 text-gray-400 font-normal">Gross Potential</th>
+                  <th className="text-right py-2 px-3 text-gray-400 font-normal">Collected</th>
+                  <th className="text-right py-2 px-3 text-gray-400 font-normal">Outstanding</th>
+                  <th className="text-right py-2 px-3 text-gray-400 font-normal">Vac Loss</th>
+                  <th className="text-left py-2 px-3 text-gray-400 font-normal rounded-r-lg">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filteredSyncedExceptions.length === 0 ? (
+                  <tr><td colSpan={8} className="py-8 text-center text-gray-400 text-xs">No exceptions for this filter</td></tr>
+                ) : filteredSyncedExceptions.map((row, i) => (
+                  <tr key={i} className="hover:bg-gray-50/50">
+                    <td className="py-2 px-3 font-medium text-gray-800">{row.co}</td>
+                    <td className="py-2 px-3 text-gray-500">{row.month}</td>
+                    <td className="py-2 px-3 text-right font-mono text-gray-600">{row.occ} / {row.total}</td>
+                    <td className="py-2 px-3 text-right font-mono text-gray-600">{fmtDollar(row.gross)}</td>
+                    <td className="py-2 px-3 text-right font-mono text-green-600">{fmtDollar(row.collected)}</td>
+                    <td className={`py-2 px-3 text-right font-mono font-medium ${row.outstanding > 0 ? 'text-red-500' : 'text-green-600'}`}>
+                      {row.outstanding > 0 ? fmtDollar(row.outstanding) : '—'}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono text-amber-600">{row.vacLoss > 0 ? fmtDollar(row.vacLoss) : '—'}</td>
+                    <td className="py-2 px-3">
+                      <span className={`text-[9px] font-medium px-2 py-0.5 rounded-full ${
+                        row.status === 'Zero-Pay' ? 'bg-red-100 text-red-700'
+                        : row.status === 'Declining' ? 'bg-amber-100 text-amber-700'
+                        : row.status === 'Paid' ? 'bg-green-100 text-green-700'
+                        : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {row.status} · {row.pct}%
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-gray-50">
@@ -482,6 +556,7 @@ export default function RentalArDashboard() {
               ))}
             </tbody>
           </table>
+          )}
         </div>
       </div>
 

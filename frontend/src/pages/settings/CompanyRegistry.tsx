@@ -106,13 +106,28 @@ const MODULES: ModuleDef[] = [
         options: ['Apartment Complex', 'Multifamily Townhome', 'Garden Apartment', 'Single Family Rental', 'Loft Apartment', 'Commercial'] },
       { name: 'total_units',   label: 'Total Units',   type: 'number' },
     ],
-    tableCols: ['Company Name', 'Property Type', 'Units', 'Status'],
-    rowCells: (c) => [c.company_name, (c.property_type as string) || '—', (c.total_units as number) ?? '—', null],
+    tableCols: ['Company Name', 'Property Type', 'Occ / Total', 'Last Sync', 'Collected', 'Status'],
+    rowCells: (c) => {
+      const syncTotal = c.sync_total_units as number | null;
+      const syncOcc   = c.sync_occupied_units as number | null;
+      const occTotal  = syncTotal != null
+        ? `${syncOcc ?? '?'} / ${syncTotal}`
+        : (c.total_units as number) != null ? `— / ${c.total_units}` : '—';
+      const lastSync  = (c.last_sync_month as string) || '—';
+      const collected = (c.sync_collected as number) != null
+        ? `$${Math.round(c.sync_collected as number).toLocaleString()}`
+        : '—';
+      return [c.company_name, (c.property_type as string) || '—', occTotal, lastSync, collected, null];
+    },
     normalise: (raw) => {
       const arr = Array.isArray(raw) ? raw : (raw as { companies?: unknown[] }).companies ?? [];
       return (arr as Record<string, unknown>[]).map(r => ({
         id: r.id as string, company_name: (r.company_name as string) ?? '',
         property_type: r.property_type as string, total_units: r.total_units,
+        sync_occupied_units: r.sync_occupied_units ?? null,
+        sync_total_units: r.sync_total_units ?? null,
+        sync_collected: r.sync_collected ?? null,
+        last_sync_month: r.last_sync_month ?? null,
         status: (r.status as string) ?? 'active',
       }));
     },
@@ -348,7 +363,7 @@ function InlineSuites({
         <div className="bg-blue-50/50 px-6 py-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <div className="w-1 h-5 bg-blue-400 rounded-full" />
+              <div className="w-1 h-5 rounded-full" style={{ background: '#D4AF37' }} />
               <span className="text-sm font-semibold text-gray-700">
                 Suites — <span className="font-normal text-gray-500">{companyName}</span>
               </span>
@@ -360,7 +375,8 @@ function InlineSuites({
             </div>
             {canWrite && (
               <button onClick={() => onAdd(companyId, companyName)}
-                className="flex items-center gap-1.5 text-xs bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 font-medium transition-colors">
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors"
+                style={{ background: '#161310', color: '#D4AF37' }}>
                 <Plus size={12} /> Add Suite
               </button>
             )}
@@ -414,7 +430,8 @@ function InlineSuites({
                         <td className="px-4 py-2.5 text-right">
                           <button
                             onClick={() => toggleUnits(s.id)}
-                            className="inline-flex items-center gap-1 text-xs font-mono text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-0.5 rounded transition-colors"
+                            className="inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded transition-colors"
+                            style={{ color: '#D4AF37' }}
                             title="Click to show/hide units"
                           >
                             {s.unit_count}
@@ -445,7 +462,7 @@ function InlineSuites({
                             <div className="bg-indigo-50/30 px-6 py-3">
                               <div className="flex items-center justify-between mb-2">
                                 <div className="flex items-center gap-2">
-                                  <div className="w-0.5 h-4 bg-indigo-400 rounded-full" />
+                                  <div className="w-0.5 h-4 rounded-full" style={{ background: '#B8962E' }} />
                                   <span className="text-xs font-semibold text-gray-600">
                                     Units — {s.property_name}
                                   </span>
@@ -458,7 +475,8 @@ function InlineSuites({
                                 {canWrite && (
                                   <button
                                     onClick={() => { setAddingUnitSuiteId(s.id); setNewUnitNum(''); setNewUnitRent(''); setNewUnitStatus('vacant'); }}
-                                    className="flex items-center gap-1 text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1 rounded-lg font-medium transition-colors">
+                                    className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg font-medium transition-colors"
+                                    style={{ background: '#D4AF37', color: '#161310' }}>
                                     <Plus size={10} /> Add Unit
                                   </button>
                                 )}
@@ -976,7 +994,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                   const isExpanded = expandedSuiteId === c.id;
                   return (
                     <Fragment key={c.id}>
-                      <tr className={`border-b border-gray-50 transition-colors ${isExpanded ? 'bg-blue-50/30' : 'hover:bg-gray-50/60'}`}>
+                      <tr className={`border-b border-gray-50 transition-colors ${isExpanded ? 'bg-blue-50/30' : 'hover:bg-gray-50/60'}`} style={isExpanded ? { background: 'rgba(212,175,55,0.05)' } : {}}>
                         <td className="px-4 py-3 text-xs text-gray-400">{idx + 1}</td>
                         {cells.map((cell, ci) => (
                           <td key={ci} className={`px-4 py-3 ${ci === 0 ? 'font-medium text-gray-800' : 'text-gray-500'}`}>
@@ -989,10 +1007,10 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                           <td className="px-4 py-3">
                             <button
                               onClick={() => setExpandedSuiteId(isExpanded ? null : c.id)}
-                              className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors
-                                ${isExpanded
-                                  ? 'bg-blue-600 text-white border-blue-600'
-                                  : 'text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-100'}`}>
+                              className="flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors"
+                              style={isExpanded
+                                ? { background: '#D4AF37', color: '#161310', borderColor: '#D4AF37' }
+                                : { color: '#D4AF37', borderColor: 'rgba(212,175,55,0.35)', background: 'rgba(212,175,55,0.08)' }}>
                               {isExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />} Suites
                             </button>
                           </td>
