@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Plus, Pencil, Trash2, X, Check, Search,
@@ -48,7 +48,7 @@ interface ModuleDef {
   endpoint: string;
   fields: FieldDef[];
   tableCols: string[];
-  rowCells: (c: Company) => (string | number | null)[];
+  rowCells: (c: Company) => (ReactNode | null)[];
   normalise: (raw: unknown) => Company[];
   toPayload: (form: Record<string, string>) => Record<string, unknown>;
 }
@@ -106,18 +106,62 @@ const MODULES: ModuleDef[] = [
         options: ['Apartment Complex', 'Multifamily Townhome', 'Garden Apartment', 'Single Family Rental', 'Loft Apartment', 'Commercial'] },
       { name: 'total_units',   label: 'Total Units',   type: 'number' },
     ],
-    tableCols: ['Company Name', 'Property Type', 'Occ / Total', 'Last Sync', 'Collected', 'Status'],
+    tableCols: ['Company Name', 'Property Type', 'Occupancy', 'Last Sync', 'Collected', 'Status'],
     rowCells: (c) => {
-      const syncTotal = c.sync_total_units as number | null;
-      const syncOcc   = c.sync_occupied_units as number | null;
-      const occTotal  = syncTotal != null
-        ? `${syncOcc ?? '?'} / ${syncTotal}`
-        : (c.total_units as number) != null ? `— / ${c.total_units}` : '—';
-      const lastSync  = (c.last_sync_month as string) || '—';
-      const collected = (c.sync_collected as number) != null
-        ? `$${Math.round(c.sync_collected as number).toLocaleString()}`
-        : '—';
-      return [c.company_name, (c.property_type as string) || '—', occTotal, lastSync, collected, null];
+      const syncTotal   = c.sync_total_units as number | null;
+      const syncOcc     = c.sync_occupied_units as number | null;
+      const syncGross   = c.sync_gross_potential as number | null;
+      const syncColl    = c.sync_collected as number | null;
+      const syncVac     = c.sync_vacancy_loss as number | null;
+      const lastSync    = (c.last_sync_month as string) || null;
+      const occPct      = syncTotal ? Math.round((syncOcc ?? 0) / syncTotal * 100) : null;
+      const collPct     = syncGross && syncGross > 0 ? Math.round((syncColl ?? 0) / syncGross * 100) : null;
+
+      const occCell: ReactNode = syncTotal != null ? (
+        <div className="min-w-[110px]">
+          <div className="flex items-center justify-between mb-0.5">
+            <span className="text-xs font-mono font-medium" style={{ color: '#1C1917' }}>
+              {syncOcc ?? '?'} / {syncTotal}
+            </span>
+            <span className="text-[10px] font-medium ml-2"
+              style={{ color: occPct != null && occPct >= 85 ? '#059669' : occPct != null && occPct >= 70 ? '#D97706' : '#DC2626' }}>
+              {occPct != null ? `${occPct}%` : ''}
+            </span>
+          </div>
+          <div className="h-1 rounded-full overflow-hidden" style={{ background: '#E8E4DC' }}>
+            <div className="h-full rounded-full transition-all"
+              style={{
+                width: `${occPct ?? 0}%`,
+                background: occPct != null && occPct >= 85 ? '#059669' : occPct != null && occPct >= 70 ? '#F59E0B' : '#EF4444',
+              }} />
+          </div>
+        </div>
+      ) : (c.total_units as number) != null ? (
+        <span className="text-gray-400 text-xs">— / {c.total_units}</span>
+      ) : '—';
+
+      const syncCell: ReactNode = lastSync ? (
+        <div>
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+            style={{ background: 'rgba(212,175,55,0.15)', color: '#92400E' }}>
+            {lastSync}
+          </span>
+        </div>
+      ) : <span className="text-gray-400 text-xs">Not synced</span>;
+
+      const collCell: ReactNode = syncColl != null ? (
+        <div>
+          <div className="text-xs font-mono font-medium" style={{ color: '#1C1917' }}>
+            ${Math.round(syncColl).toLocaleString()}
+          </div>
+          <div className="text-[10px] mt-0.5" style={{ color: '#A8A29E' }}>
+            {collPct != null ? `${collPct}% collected` : ''}
+            {syncVac != null && syncVac > 0 ? ` · $${Math.round(syncVac).toLocaleString()} vac loss` : ''}
+          </div>
+        </div>
+      ) : <span className="text-gray-400 text-xs">—</span>;
+
+      return [c.company_name, (c.property_type as string) || '—', occCell, syncCell, collCell, null];
     },
     normalise: (raw) => {
       const arr = Array.isArray(raw) ? raw : (raw as { companies?: unknown[] }).companies ?? [];
@@ -127,6 +171,8 @@ const MODULES: ModuleDef[] = [
         sync_occupied_units: r.sync_occupied_units ?? null,
         sync_total_units: r.sync_total_units ?? null,
         sync_collected: r.sync_collected ?? null,
+        sync_gross_potential: r.sync_gross_potential ?? null,
+        sync_vacancy_loss: r.sync_vacancy_loss ?? null,
         last_sync_month: r.last_sync_month ?? null,
         status: (r.status as string) ?? 'active',
       }));
@@ -461,16 +507,33 @@ function InlineSuites({
                           <td colSpan={suiteCols} className="px-0 py-0 border-t border-indigo-100">
                             <div className="bg-indigo-50/30 px-6 py-3">
                               <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <div className="w-0.5 h-4 rounded-full" style={{ background: '#B8962E' }} />
                                   <span className="text-xs font-semibold text-gray-600">
                                     Units — {s.property_name}
                                   </span>
-                                  {unitsMap[s.id] && (
-                                    <span className="text-xs text-gray-400">
-                                      ({unitsMap[s.id].length} units)
-                                    </span>
-                                  )}
+                                  {unitsMap[s.id] && (() => {
+                                    const occ = unitsMap[s.id].filter(u => u.status === 'occupied').length;
+                                    const vac = unitsMap[s.id].filter(u => u.status === 'vacant').length;
+                                    const tot = unitsMap[s.id].length;
+                                    return (
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(5,150,105,0.12)', color: '#059669' }}>
+                                          {occ} occ
+                                        </span>
+                                        {vac > 0 && (
+                                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(239,68,68,0.10)', color: '#DC2626' }}>
+                                            {vac} vacant
+                                          </span>
+                                        )}
+                                        {tot - occ - vac > 0 && (
+                                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(212,175,55,0.12)', color: '#92400E' }}>
+                                            {tot - occ - vac} other
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                                 {canWrite && (
                                   <button
@@ -483,11 +546,11 @@ function InlineSuites({
                               </div>
                               {!unitsMap[s.id] ? (
                                 <div className="flex items-center gap-2 py-3">
-                                  <div className="w-4 h-4 border-2 border-gray-200 border-t-indigo-500 rounded-full animate-spin" />
+                                  <div className="w-4 h-4 border-2 border-gray-200 rounded-full animate-spin" style={{ borderTopColor: '#D4AF37' }} />
                                   <span className="text-xs text-gray-400">Loading units…</span>
                                 </div>
                               ) : unitsMap[s.id].length === 0 && addingUnitSuiteId !== s.id ? (
-                                <p className="text-xs text-gray-400 py-2">No units found for this suite. Click <span className="font-medium text-indigo-600">+ Add Unit</span> to create one.</p>
+                                <p className="text-xs text-gray-400 py-2">No units found for this suite. Click <span className="font-medium" style={{ color: '#D4AF37' }}>+ Add Unit</span> to create one.</p>
                               ) : (
                                 <div className="bg-white rounded-lg border border-indigo-100 overflow-hidden">
                                   <table className="w-full text-xs">
@@ -502,7 +565,9 @@ function InlineSuites({
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
                                       {unitsMap[s.id].map((u, j) => (
-                                        <tr key={u.id} className="hover:bg-indigo-50/20">
+                                        <tr key={u.id}
+                                          className="hover:bg-indigo-50/20"
+                                          style={u.status === 'vacant' ? { background: 'rgba(239,68,68,0.04)' } : {}}>
                                           <td className="px-3 py-1.5 text-gray-400">{j + 1}</td>
                                           <td className="px-3 py-1.5 font-medium text-gray-800">
                                             {unitEditId === u.id ? (
@@ -925,6 +990,33 @@ export default function CompanyRegistry({ embedded = false }: Props) {
           </button>
         ))}
       </div>
+
+      {/* Rental sync banner */}
+      {activeId === 'rental' && companies.some(c => c.last_sync_month) && (() => {
+        const synced = companies.filter(c => c.last_sync_month);
+        const lastMonth = synced[0]?.last_sync_month as string;
+        const totalOcc  = synced.reduce((a, c) => a + ((c.sync_occupied_units as number) ?? 0), 0);
+        const totalUnits = synced.reduce((a, c) => a + ((c.sync_total_units as number) ?? 0), 0);
+        const totalColl  = synced.reduce((a, c) => a + ((c.sync_collected as number) ?? 0), 0);
+        const totalGross = synced.reduce((a, c) => a + ((c.sync_gross_potential as number) ?? 0), 0);
+        const collPct = totalGross > 0 ? Math.round(totalColl / totalGross * 100) : 0;
+        return (
+          <div className="flex items-center justify-between px-4 py-2.5 rounded-xl"
+            style={{ background: 'rgba(212,175,55,0.10)', border: '1px solid rgba(212,175,55,0.30)' }}>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#92400E' }}>Live Sync</span>
+              <span className="text-xs font-semibold" style={{ color: '#1C1917' }}>{lastMonth}</span>
+              <span className="text-xs" style={{ color: '#78716C' }}>·</span>
+              <span className="text-xs" style={{ color: '#1C1917' }}>{totalOcc}/{totalUnits} occupied</span>
+              <span className="text-xs" style={{ color: '#78716C' }}>·</span>
+              <span className="text-xs font-medium" style={{ color: '#059669' }}>${Math.round(totalColl).toLocaleString()} collected</span>
+              <span className="text-xs" style={{ color: '#78716C' }}>·</span>
+              <span className="text-xs font-medium" style={{ color: collPct >= 95 ? '#059669' : '#D97706' }}>{collPct}% collection rate</span>
+            </div>
+            <span className="text-[10px]" style={{ color: '#A8A29E' }}>{synced.length} companies synced</span>
+          </div>
+        );
+      })()}
 
       {/* Search + Add */}
       <div className="flex items-center justify-between gap-3">
