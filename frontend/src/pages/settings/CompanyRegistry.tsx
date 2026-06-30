@@ -235,6 +235,13 @@ function InlineSuites({
   const [unitEditRent, setUnitEditRent] = useState('');
   const [unitSaving, setUnitSaving] = useState(false);
 
+  // add unit inline form state
+  const [addingUnitSuiteId, setAddingUnitSuiteId] = useState<string | null>(null);
+  const [newUnitNum, setNewUnitNum] = useState('');
+  const [newUnitStatus, setNewUnitStatus] = useState('vacant');
+  const [newUnitRent, setNewUnitRent] = useState('');
+  const [unitAdding, setUnitAdding] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -295,6 +302,29 @@ function InlineSuites({
       push('Failed to update unit', false);
     } finally {
       setUnitSaving(false);
+    }
+  }
+
+  async function addUnit(suite: Suite) {
+    if (!newUnitNum.trim()) return;
+    setUnitAdding(true);
+    try {
+      await api.post('/api/rentals/units', {
+        property_id: suite.id,
+        company_id: suite.company_id,
+        unit_number: newUnitNum.trim(),
+        status: newUnitStatus,
+        monthly_rent: parseFloat(newUnitRent) || 0,
+      });
+      setNewUnitNum(''); setNewUnitRent(''); setNewUnitStatus('vacant');
+      setAddingUnitSuiteId(null);
+      push('Unit added');
+      await loadSuiteUnits(suite.id);
+      await load();
+    } catch {
+      push('Failed to add unit', false);
+    } finally {
+      setUnitAdding(false);
     }
   }
 
@@ -401,15 +431,24 @@ function InlineSuites({
                         <tr>
                           <td colSpan={suiteCols} className="px-0 py-0 border-t border-indigo-100">
                             <div className="bg-indigo-50/30 px-6 py-3">
-                              <div className="flex items-center gap-2 mb-2">
-                                <div className="w-0.5 h-4 bg-indigo-400 rounded-full" />
-                                <span className="text-xs font-semibold text-gray-600">
-                                  Units — {s.property_name}
-                                </span>
-                                {unitsMap[s.id] && (
-                                  <span className="text-xs text-gray-400">
-                                    ({unitsMap[s.id].length} units)
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-0.5 h-4 bg-indigo-400 rounded-full" />
+                                  <span className="text-xs font-semibold text-gray-600">
+                                    Units — {s.property_name}
                                   </span>
+                                  {unitsMap[s.id] && (
+                                    <span className="text-xs text-gray-400">
+                                      ({unitsMap[s.id].length} units)
+                                    </span>
+                                  )}
+                                </div>
+                                {canWrite && (
+                                  <button
+                                    onClick={() => { setAddingUnitSuiteId(s.id); setNewUnitNum(''); setNewUnitRent(''); setNewUnitStatus('vacant'); }}
+                                    className="flex items-center gap-1 text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1 rounded-lg font-medium transition-colors">
+                                    <Plus size={10} /> Add Unit
+                                  </button>
                                 )}
                               </div>
                               {!unitsMap[s.id] ? (
@@ -417,8 +456,8 @@ function InlineSuites({
                                   <div className="w-4 h-4 border-2 border-gray-200 border-t-indigo-500 rounded-full animate-spin" />
                                   <span className="text-xs text-gray-400">Loading units…</span>
                                 </div>
-                              ) : unitsMap[s.id].length === 0 ? (
-                                <p className="text-xs text-gray-400 py-2">No units found for this suite.</p>
+                              ) : unitsMap[s.id].length === 0 && addingUnitSuiteId !== s.id ? (
+                                <p className="text-xs text-gray-400 py-2">No units found for this suite. Click <span className="font-medium text-indigo-600">+ Add Unit</span> to create one.</p>
                               ) : (
                                 <div className="bg-white rounded-lg border border-indigo-100 overflow-hidden">
                                   <table className="w-full text-xs">
@@ -525,6 +564,52 @@ function InlineSuites({
                                           )}
                                         </tr>
                                       ))}
+                                      {addingUnitSuiteId === s.id && (
+                                        <tr className="bg-indigo-50/40 border-t border-indigo-200">
+                                          <td className="px-3 py-2 text-gray-400 text-xs">—</td>
+                                          <td className="px-3 py-2">
+                                            <input
+                                              autoFocus
+                                              value={newUnitNum}
+                                              onChange={e => setNewUnitNum(e.target.value)}
+                                              onKeyDown={e => { if (e.key === 'Enter') addUnit(s); if (e.key === 'Escape') setAddingUnitSuiteId(null); }}
+                                              placeholder="Unit 101"
+                                              className="text-xs border border-indigo-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-full min-w-[80px]"
+                                            />
+                                          </td>
+                                          <td className="px-3 py-2">
+                                            <select value={newUnitStatus} onChange={e => setNewUnitStatus(e.target.value)}
+                                              className="text-xs border border-indigo-300 rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                                              <option value="vacant">vacant</option>
+                                              <option value="occupied">occupied</option>
+                                              <option value="notice">notice</option>
+                                              <option value="reserved">reserved</option>
+                                              <option value="maintenance_hold">maintenance_hold</option>
+                                            </select>
+                                          </td>
+                                          <td className="px-3 py-2 text-right">
+                                            <input
+                                              type="number"
+                                              value={newUnitRent}
+                                              onChange={e => setNewUnitRent(e.target.value)}
+                                              placeholder="1200"
+                                              className="text-xs border border-indigo-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-24 text-right"
+                                            />
+                                          </td>
+                                          <td className="px-3 py-2 text-center">
+                                            <div className="flex items-center justify-center gap-1">
+                                              <button onClick={() => addUnit(s)} disabled={unitAdding || !newUnitNum.trim()}
+                                                className="text-indigo-600 hover:text-indigo-800 disabled:opacity-40">
+                                                <Check size={12} />
+                                              </button>
+                                              <button onClick={() => setAddingUnitSuiteId(null)}
+                                                className="text-gray-400 hover:text-gray-600">
+                                                <X size={12} />
+                                              </button>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      )}
                                     </tbody>
                                   </table>
                                 </div>
