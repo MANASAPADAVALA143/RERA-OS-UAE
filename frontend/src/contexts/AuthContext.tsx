@@ -72,6 +72,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
+  // Keepalive ping — wakes Render backend immediately on app load,
+  // then every 9 minutes to prevent the free-tier 15-min spin-down.
+  useEffect(() => {
+    const ping = () => api.get('/health').catch(() => {});
+    ping(); // immediate wake-up call
+    const interval = setInterval(ping, 9 * 60 * 1000); // every 9 min
+    return () => clearInterval(interval);
+  }, []);
+
   // Supabase token refresh listener — keeps the stored JWT up to date
   // without requiring the user to re-login when the 1-hour token expires.
   useEffect(() => {
