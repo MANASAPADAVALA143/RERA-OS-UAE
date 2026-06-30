@@ -4,7 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid,
 } from 'recharts';
-import { Upload, Building2, FileSpreadsheet, TrendingUp, TrendingDown, DollarSign, Home, Vault, BarChart3 } from 'lucide-react';
+import { Upload, Building2, FileSpreadsheet, TrendingUp, TrendingDown, DollarSign, Home, Vault, BarChart3, CheckCircle2, AlertCircle } from 'lucide-react';
 import { api } from '../services/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -594,66 +594,145 @@ function KPITab({ fin }: { fin: ParsedFinancials }) {
 
 function CFOTab({ fin }: { fin: ParsedFinancials }) {
   const lastY = fin.years[fin.years.length - 1];
-  const k = calcKpis(fin, lastY);
+  const [selectedYear, setSelectedYear] = useState<number>(lastY);
 
   const snapshotRows = fin.years.map(y => {
     const kk = calcKpis(fin, y);
-    return { year: y, revenue: kk.totalRevenue, expenses: kk.totalExpenses, netIncome: kk.netIncome, noi: kk.noi, margin: kk.totalRevenue > 0 ? kk.netIncome / kk.totalRevenue * 100 : 0 };
+    return { year: y, revenue: kk.totalRevenue, expenses: kk.totalExpenses, netIncome: kk.netIncome, noi: kk.noi, cash: kk.cash, margin: kk.totalRevenue > 0 ? kk.netIncome / kk.totalRevenue * 100 : 0 };
   });
+
+  const niTrajectory  = snapshotRows.map(r => ({ year: String(r.year), netIncome: r.netIncome }));
+  const expRatioTrend = snapshotRows.map(r => ({ year: String(r.year), ratio: r.revenue > 0 ? (r.expenses / r.revenue) * 100 : 0 }));
+  const revExpCombo   = snapshotRows.map(r => ({ year: String(r.year), Revenue: r.revenue, Expenses: r.expenses }));
+  const cashTrend     = snapshotRows.map(r => ({ year: String(r.year), cash: r.cash }));
 
   const revChart = fin.years.map(y => {
     const kk = calcKpis(fin, y);
-    const svc = Math.max(0, kk.totalRevenue - kk.rentalIncome - kk.otherIncome);
-    return { year: String(y), 'Rental Income': kk.rentalIncome, 'Other Income': kk.otherIncome, 'Services': svc };
+    return { year: String(y), 'Rental Income': kk.rentalIncome, 'Other Income': kk.otherIncome, 'Services': Math.max(0, kk.totalRevenue - kk.rentalIncome - kk.otherIncome) };
   });
 
+  const k = calcKpis(fin, selectedYear);
   const expPie = [
-    { name:'Interest Paid',  value: k.interestExpense  },
-    { name:'Property Tax',   value: k.propertyTax      },
-    { name:'HOA Fees',       value: k.hoaFees          },
-    { name:'Legal Fees',     value: k.legalFees        },
-    { name:'Mgmt Fee',       value: k.managementFee    },
-    { name:'Utilities',      value: k.utilities        },
-    { name:'Repairs',        value: k.repairs          },
-    { name:'Other',          value: Math.max(0, k.totalExpenses - k.interestExpense - k.propertyTax - k.hoaFees - k.legalFees - k.managementFee - k.utilities - k.repairs) },
+    { name: 'Interest Paid', value: k.interestExpense },
+    { name: 'Property Tax',  value: k.propertyTax },
+    { name: 'HOA Fees',      value: k.hoaFees },
+    { name: 'Legal Fees',    value: k.legalFees },
+    { name: 'Mgmt Fee',      value: k.managementFee },
+    { name: 'Utilities',     value: k.utilities },
+    { name: 'Repairs',       value: k.repairs },
+    { name: 'Other',         value: Math.max(0, k.totalExpenses - k.interestExpense - k.propertyTax - k.hoaFees - k.legalFees - k.managementFee - k.utilities - k.repairs) },
   ].filter(e => e.value > 0);
 
-  const intPct   = k.totalRevenue > 0 ? (k.interestExpense / k.totalRevenue * 100).toFixed(1) : '0';
-  const negYrs   = snapshotRows.filter(r => r.netIncome < 0).length;
-  const firstK   = calcKpis(fin, fin.years[0]);
-  const revGrowth = firstK.totalRevenue > 0 ? ((k.totalRevenue - firstK.totalRevenue) / firstK.totalRevenue * 100).toFixed(1) : null;
-  const avgRev   = fin.years.reduce((s,y) => s + calcKpis(fin,y).totalRevenue, 0) / fin.years.length;
-  const ltv      = k.buildings > 0 ? k.longTermLoans / k.buildings * 100 : 0;
-  const ltvLabel = ltv < 80 ? '✅ Good (below 80%)' : ltv < 90 ? '⚠️ Watch (80–90%)' : '🔴 High (above 90%)';
+  // Year insight card
+  const margin = k.totalRevenue > 0 ? (k.netIncome / k.totalRevenue) * 100 : 0;
+  let insightText = ''; let insightColor = '#374151'; let insightBg = '#F9FAFB'; let insightBorder = '#E5E7EB';
+  let InsightIcon: React.ReactNode = null;
+  if (margin > 20) {
+    insightText = `Strong profitability: ${margin.toFixed(1)}% net margin. Revenue of ${fmtFull(k.totalRevenue)} with controlled expenses.`;
+    insightColor = '#065F46'; insightBg = '#ECFDF5'; insightBorder = '#A7F3D0';
+    InsightIcon = <CheckCircle2 size={20} style={{ color: '#10B981', flexShrink: 0 }} />;
+  } else if (margin > 0) {
+    insightText = `Healthy margin at ${margin.toFixed(1)}%. Watch expense growth relative to ${fmtFull(k.totalRevenue)} revenue.`;
+    insightColor = '#1E40AF'; insightBg = '#EFF6FF'; insightBorder = '#BFDBFE';
+    InsightIcon = <TrendingUp size={20} style={{ color: '#3B82F6', flexShrink: 0 }} />;
+  } else if (k.totalRevenue > 0) {
+    insightText = `Net loss of ${fmtFull(Math.abs(k.netIncome))} (${margin.toFixed(1)}% margin). NOI is ${fmtFull(k.noi)} — check interest and depreciation charges.`;
+    insightColor = '#92400E'; insightBg = '#FFFBEB'; insightBorder = '#FCD34D';
+    InsightIcon = <AlertCircle size={20} style={{ color: '#F59E0B', flexShrink: 0 }} />;
+  } else {
+    insightText = 'No revenue recorded for this year.';
+    insightColor = '#991B1B'; insightBg = '#FEF2F2'; insightBorder = '#FECACA';
+    InsightIcon = <AlertCircle size={20} style={{ color: '#EF4444', flexShrink: 0 }} />;
+  }
 
-  const insights: Array<{color:string; text:string}> = [];
-  if (k.interestExpense > 0) insights.push({ color:'bg-blue-50 border-blue-200', text:`💡 Interest expense is ${intPct}% of revenue — the single largest expense at ${fmt(k.interestExpense)}. This represents mortgage interest on outstanding loans of ${fmt(k.longTermLoans)}.` });
-  if (negYrs > 0) insights.push({ color:'bg-amber-50 border-amber-200', text:`⚠️ Net income has been negative for ${negYrs} of ${fin.years.length} years due to depreciation and interest charges. NOI (pre-interest) is ${k.noi >= 0 ? 'positive' : 'negative'} at ${fmt(k.noi)}, indicating ${k.noi >= 0 ? 'healthy' : 'stressed'} operating performance.` });
-  if (revGrowth !== null) insights.push({ color:'bg-green-50 border-green-200', text:`✅ Revenue grew from ${fmt(firstK.totalRevenue)} (${fin.years[0]}) to ${fmt(k.totalRevenue)} (${lastY}) — ${revGrowth}% over ${fin.years.length - 1} years. Average annual revenue: ${fmt(avgRev)}/year.` });
-  if (k.buildings > 0) insights.push({ color:'bg-gray-50 border-gray-200', text:`📋 Property value (Buildings): ${fmt(k.buildings)} | Outstanding loans: ${fmt(k.longTermLoans)} | LTV: ${ltv.toFixed(1)}% — ${ltvLabel}` });
+  // Summary tiles
+  const latestRow = snapshotRows[snapshotRows.length - 1];
+  const prevRow   = snapshotRows.length > 1 ? snapshotRows[snapshotRows.length - 2] : null;
+  const niChange  = prevRow && prevRow.netIncome !== 0 ? ((latestRow.netIncome - prevRow.netIncome) / Math.abs(prevRow.netIncome)) * 100 : 0;
+  const avgMargin = snapshotRows.reduce((s, r) => s + r.margin, 0) / snapshotRows.length;
+
+  // CFO Insights (auto-generated from selected year)
+  const intPct    = k.totalRevenue > 0 ? (k.interestExpense / k.totalRevenue * 100).toFixed(1) : '0';
+  const negYrs    = snapshotRows.filter(r => r.netIncome < 0).length;
+  const firstK    = calcKpis(fin, fin.years[0]);
+  const revGrowth = firstK.totalRevenue > 0 ? ((k.totalRevenue - firstK.totalRevenue) / firstK.totalRevenue * 100).toFixed(1) : null;
+  const avgRev    = fin.years.reduce((s, y) => s + calcKpis(fin, y).totalRevenue, 0) / fin.years.length;
+  const ltv       = k.buildings > 0 ? k.longTermLoans / k.buildings * 100 : 0;
+  const ltvLabel  = ltv < 80 ? '✅ Good (below 80%)' : ltv < 90 ? '⚠️ Watch (80–90%)' : '🔴 High (above 90%)';
+
+  const insights: Array<{ color: string; text: string }> = [];
+  if (k.interestExpense > 0) insights.push({ color: 'bg-blue-50 border-blue-200', text: `💡 Interest expense is ${intPct}% of revenue — the single largest expense at ${fmt(k.interestExpense)}. This represents mortgage interest on outstanding loans of ${fmt(k.longTermLoans)}.` });
+  if (negYrs > 0) insights.push({ color: 'bg-amber-50 border-amber-200', text: `⚠️ Net income has been negative for ${negYrs} of ${fin.years.length} years due to depreciation and interest charges. NOI (pre-interest) is ${k.noi >= 0 ? 'positive' : 'negative'} at ${fmt(k.noi)}, indicating ${k.noi >= 0 ? 'healthy' : 'stressed'} operating performance.` });
+  if (revGrowth !== null) insights.push({ color: 'bg-green-50 border-green-200', text: `✅ Revenue grew from ${fmt(firstK.totalRevenue)} (${fin.years[0]}) to ${fmt(k.totalRevenue)} (${lastY}) — ${revGrowth}% over ${fin.years.length - 1} years. Average annual revenue: ${fmt(avgRev)}/year.` });
+  if (k.buildings > 0) insights.push({ color: 'bg-gray-50 border-gray-200', text: `📋 Property value (Buildings): ${fmt(k.buildings)} | Outstanding loans: ${fmt(k.longTermLoans)} | LTV: ${ltv.toFixed(1)}% — ${ltvLabel}` });
 
   return (
     <div className="space-y-6">
-      {/* Section A: 5-Year Snapshot */}
+
+      {/* Year Selector */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span style={{ fontSize: '12px', color: '#94A3B8', fontWeight: 600, marginRight: '4px' }}>YEAR:</span>
+        {fin.years.map(y => (
+          <button
+            key={y}
+            onClick={() => setSelectedYear(y)}
+            style={{
+              background: selectedYear === y ? '#3B82F6' : '#1E2A4A',
+              color: selectedYear === y ? '#FFFFFF' : '#94A3B8',
+              border: '1px solid ' + (selectedYear === y ? '#3B82F6' : '#2D3A56'),
+              padding: '5px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            {y}
+          </button>
+        ))}
+      </div>
+
+      {/* Year Insight Card */}
+      <div style={{ background: insightBg, border: `1px solid ${insightBorder}`, borderRadius: '12px', padding: '16px' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+          {InsightIcon}
+          <div style={{ flex: 1 }}>
+            <p style={{ fontWeight: 700, fontSize: '15px', color: insightColor, marginBottom: '6px' }}>{selectedYear} Financial Snapshot</p>
+            <p style={{ fontSize: '13px', color: '#374151' }}>{insightText}</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginTop: '12px' }}>
+              {[
+                { label: 'Revenue',    value: fmtFull(k.totalRevenue) },
+                { label: 'Expenses',   value: fmtFull(k.totalExpenses) },
+                { label: 'Net Income', value: fmtFull(k.netIncome) },
+                { label: 'Cash (Bank)',value: k.cash > 0 ? fmtFull(k.cash) : '—' },
+              ].map(item => (
+                <div key={item.label}>
+                  <p style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{item.label}</p>
+                  <p style={{ fontSize: '16px', fontWeight: 700, color: '#111827', marginTop: '2px' }}>{item.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Multi-Year Snapshot Table */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
-        <div className="bg-gray-900 text-white px-4 py-2 text-sm font-bold">5-Year Financial Snapshot</div>
+        <div className="bg-gray-900 text-white px-4 py-2 text-sm font-bold">Multi-Year Financial Snapshot</div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
-                {['Year','Total Revenue','Total Expenses','Net Income','NOI','Net Margin %'].map(h => (
+                {['Year','Total Revenue','Total Expenses','Net Income','NOI','Cash','Net Margin %'].map(h => (
                   <th key={h} className={`px-4 py-2 font-semibold text-gray-600 ${h==='Year'?'text-left':'text-right'}`}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {snapshotRows.map((r,i) => (
-                <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-2 font-bold">{r.year}</td>
+              {snapshotRows.map((r, i) => (
+                <tr key={i} style={{ background: r.year === selectedYear ? '#EFF6FF' : undefined }} className="border-t border-gray-100 hover:bg-gray-50">
+                  <td className="px-4 py-2 font-bold">{r.year}{r.year === selectedYear ? ' ◀' : ''}</td>
                   <td className="px-4 py-2 text-right font-mono">{fmt(r.revenue)}</td>
                   <td className="px-4 py-2 text-right font-mono text-red-600">{fmt(r.expenses)}</td>
                   <td className={`px-4 py-2 text-right font-mono font-semibold ${r.netIncome>=0?'text-green-700':'text-red-600'}`}>{fmt(r.netIncome)}</td>
                   <td className={`px-4 py-2 text-right font-mono ${r.noi>=0?'text-blue-700':'text-red-600'}`}>{fmt(r.noi)}</td>
+                  <td className="px-4 py-2 text-right font-mono text-purple-700">{r.cash > 0 ? fmt(r.cash) : '—'}</td>
                   <td className={`px-4 py-2 text-right font-mono ${r.margin>=0?'text-green-700':'text-red-600'}`}>{r.margin.toFixed(1)}%</td>
                 </tr>
               ))}
@@ -662,17 +741,71 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
         </div>
       </div>
 
-      {/* Sections B + C */}
+      {/* Charts Grid 2×2 */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+          <p className="text-sm font-semibold text-gray-700 mb-3">Net Income Trajectory</p>
+          <ResponsiveContainer width="100%" height={210}>
+            <LineChart data={niTrajectory} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis dataKey="year" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 9 }} tickFormatter={v => fmt(v as number)} />
+              <Tooltip formatter={(v: number) => fmtFull(v)} />
+              <Line type="monotone" dataKey="netIncome" stroke="#10B981" strokeWidth={2} dot={{ fill: '#10B981' }} name="Net Income" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+          <p className="text-sm font-semibold text-gray-700 mb-3">Expense Ratio Trend</p>
+          <ResponsiveContainer width="100%" height={210}>
+            <LineChart data={expRatioTrend} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis dataKey="year" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 9 }} tickFormatter={v => `${(v as number).toFixed(0)}%`} />
+              <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} />
+              <Line type="monotone" dataKey="ratio" stroke="#F59E0B" strokeWidth={2} dot={{ fill: '#F59E0B' }} name="Expense %" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+          <p className="text-sm font-semibold text-gray-700 mb-3">Revenue vs Expenses</p>
+          <ResponsiveContainer width="100%" height={210}>
+            <BarChart data={revExpCombo} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis dataKey="year" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 9 }} tickFormatter={v => fmt(v as number)} />
+              <Tooltip formatter={(v: number) => fmtFull(v)} />
+              <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
+              <Bar dataKey="Revenue"  fill="#3B82F6" radius={[4,4,0,0]} />
+              <Bar dataKey="Expenses" fill="#EF4444" radius={[4,4,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+          <p className="text-sm font-semibold text-gray-700 mb-3">Cash Balance Trend (Bank Accounts)</p>
+          <ResponsiveContainer width="100%" height={210}>
+            <LineChart data={cashTrend} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis dataKey="year" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 9 }} tickFormatter={v => fmt(v as number)} />
+              <Tooltip formatter={(v: number) => fmtFull(v)} />
+              <Line type="monotone" dataKey="cash" stroke="#8B5CF6" strokeWidth={2} dot={{ fill: '#8B5CF6' }} name="Cash" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Revenue Breakdown + Expense Pie for selected year */}
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
           <p className="text-sm font-semibold text-gray-700 mb-3">Revenue Breakdown by Year</p>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={revChart} margin={{ left:10 }}>
+          <ResponsiveContainer width="100%" height={210}>
+            <BarChart data={revChart} margin={{ left: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="year" tick={{ fontSize:10 }} />
-              <YAxis tickFormatter={v => fmt(v as number)} tick={{ fontSize:9 }} />
-              <Tooltip formatter={(v:number) => fmtFull(v)} />
-              <Legend iconSize={8} wrapperStyle={{ fontSize:10 }} />
+              <XAxis dataKey="year" tick={{ fontSize: 10 }} />
+              <YAxis tickFormatter={v => fmt(v as number)} tick={{ fontSize: 9 }} />
+              <Tooltip formatter={(v: number) => fmtFull(v)} />
+              <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
               <Bar dataKey="Rental Income" stackId="a" fill={CC[0]} />
               <Bar dataKey="Other Income"  stackId="a" fill={CC[1]} />
               <Bar dataKey="Services"      stackId="a" fill={CC[3]} />
@@ -680,20 +813,39 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
           </ResponsiveContainer>
         </div>
         <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
-          <p className="text-sm font-semibold text-gray-700 mb-3">Expense Breakdown ({lastY})</p>
-          <ResponsiveContainer width="100%" height={220}>
+          <p className="text-sm font-semibold text-gray-700 mb-3">Expense Breakdown ({selectedYear})</p>
+          <ResponsiveContainer width="100%" height={210}>
             <PieChart>
               <Pie data={expPie} cx="50%" cy="50%" outerRadius={75} dataKey="value">
-                {expPie.map((_,i) => <Cell key={i} fill={CC[i % CC.length]} />)}
+                {expPie.map((_, i) => <Cell key={i} fill={CC[i % CC.length]} />)}
               </Pie>
-              <Tooltip formatter={(v:number) => fmtFull(v)} />
-              <Legend iconSize={8} wrapperStyle={{ fontSize:10 }} />
+              <Tooltip formatter={(v: number) => fmtFull(v)} />
+              <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
             </PieChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* Section D: CFO Insights */}
+      {/* Summary Tiles */}
+      <div className="grid grid-cols-3 gap-4">
+        <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: '12px', padding: '16px' }}>
+          <p style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Latest Net Income ({lastY})</p>
+          <p style={{ fontSize: '22px', fontWeight: 700, color: latestRow.netIncome >= 0 ? '#065F46' : '#991B1B', marginTop: '8px' }}>{fmtFull(latestRow.netIncome)}</p>
+          {prevRow && <p style={{ fontSize: '11px', color: niChange >= 0 ? '#059669' : '#DC2626', marginTop: '4px' }}>{niChange >= 0 ? '↑' : '↓'} {Math.abs(niChange).toFixed(1)}% vs {prevRow.year}</p>}
+        </div>
+        <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: '12px', padding: '16px' }}>
+          <p style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Avg Profit Margin</p>
+          <p style={{ fontSize: '22px', fontWeight: 700, color: avgMargin >= 0 ? '#1D4ED8' : '#991B1B', marginTop: '8px' }}>{avgMargin.toFixed(1)}%</p>
+          <p style={{ fontSize: '11px', color: '#6B7280', marginTop: '4px' }}>Across {fin.years.length} years</p>
+        </div>
+        <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: '12px', padding: '16px' }}>
+          <p style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Latest Cash Position</p>
+          <p style={{ fontSize: '22px', fontWeight: 700, color: '#5B21B6', marginTop: '8px' }}>{latestRow.cash > 0 ? fmtFull(latestRow.cash) : '—'}</p>
+          <p style={{ fontSize: '11px', color: '#6B7280', marginTop: '4px' }}>Bank accounts ({lastY})</p>
+        </div>
+      </div>
+
+      {/* CFO Insights */}
       <div className="space-y-3">
         <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">CFO Insights</p>
         {insights.length === 0
