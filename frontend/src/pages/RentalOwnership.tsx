@@ -415,7 +415,7 @@ export default function RentalOwnership() {
             <select value={companyFilter} onChange={e => setCompanyFilter(e.target.value)}
               className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600">
               <option value="all">All Companies</option>
-              {allCompanies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {companies.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
             </select>
           </div>
           {/* Partner filter */}
