@@ -305,6 +305,18 @@ function InlineSuites({
     }
   }
 
+  async function deleteUnit(unitId: string, suiteId: string) {
+    if (!window.confirm('Delete this unit? This cannot be undone.')) return;
+    try {
+      await api.delete(`/api/rentals/units/${unitId}`);
+      push('Unit deleted');
+      await loadSuiteUnits(suiteId);
+      await load();
+    } catch {
+      push('Failed to delete unit', false);
+    }
+  }
+
   async function addUnit(suite: Suite) {
     if (!newUnitNum.trim()) return;
     setUnitAdding(true);
@@ -467,7 +479,7 @@ function InlineSuites({
                                         <th className="text-left px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Unit Name</th>
                                         <th className="text-left px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Status</th>
                                         <th className="text-right px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Rent / mo</th>
-                                        {canWrite && <th className="text-center px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Edit</th>}
+                                        {canWrite && <th className="text-center px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Actions</th>}
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
@@ -547,18 +559,27 @@ function InlineSuites({
                                                   </button>
                                                 </div>
                                               ) : (
-                                                <button
-                                                  onClick={() => {
-                                                    setUnitEditId(u.id);
-                                                    setUnitEditVal(u.unit_number);
-                                                    setUnitEditStatus(u.status);
-                                                    setUnitEditRent(String(u.monthly_rent));
-                                                  }}
-                                                  className="p-1 rounded text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-                                                  title="Edit unit"
-                                                >
-                                                  <Pencil size={11} />
-                                                </button>
+                                                <div className="flex items-center justify-center gap-1">
+                                                  <button
+                                                    onClick={() => {
+                                                      setUnitEditId(u.id);
+                                                      setUnitEditVal(u.unit_number);
+                                                      setUnitEditStatus(u.status);
+                                                      setUnitEditRent(String(u.monthly_rent));
+                                                    }}
+                                                    className="p-1 rounded text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                                    title="Edit unit"
+                                                  >
+                                                    <Pencil size={11} />
+                                                  </button>
+                                                  <button
+                                                    onClick={() => deleteUnit(u.id, s.id)}
+                                                    className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                                    title="Delete unit"
+                                                  >
+                                                    <Trash2 size={11} />
+                                                  </button>
+                                                </div>
                                               )}
                                             </td>
                                           )}
