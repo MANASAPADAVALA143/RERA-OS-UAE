@@ -303,7 +303,7 @@ def get_portfolio_summary(
     if expiring_60:
         attention.append({"type": "lease_expiry", "message": f"{len(expiring_60)} lease(s) expire within 60 days", "severity": "attention"})
 
-    aging_31_plus = sum(v for k, v in aging.items() if k != "0_30")
+    aging_31_plus = sum(v for k, v in aging.items() if k != "current")
     if aging_31_plus > 0:
         attention.append({"type": "arrears_aging", "message": f"${aging_31_plus:,.0f} in arrears older than 30 days", "severity": "warning"})
 
