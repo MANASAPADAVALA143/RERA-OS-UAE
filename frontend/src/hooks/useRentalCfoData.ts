@@ -157,17 +157,23 @@ export function useRentalCfoData() {
   const companyNames = useMemo(() => new Set(companies.map(c => c.company_name)), [companies]);
 
   const rentalLoans = useMemo(() => {
-    return loans.filter(l =>
-      l.context_type === 'rental' ||
-      companyNames.has(l.company_name),
-    );
+    return loans.filter(l => {
+      const isRentalContext = l.context_type === 'rental' || !l.context_type;
+      const isKnownCompany = companyNames.has(l.company_name);
+      return isRentalContext || isKnownCompany;
+    });
   }, [loans, companyNames]);
 
   const buildings = useMemo((): BuildingRow[] => {
     const curMonth = new Date().toISOString().slice(0, 7);
-    return companies.map(co => {
+    const buildingMap = new Map<string, BuildingRow>();
+
+    // Create buildings from companies data
+    companies.forEach(co => {
+      const key = `${co.company_name}|${co.property_name}`;
       const bExp = expenses.filter(e =>
         e.company_id === co.id &&
+        (e.property_name === co.property_name || !e.property_name) &&
         String(e.expense_date ?? '').slice(0, 7) === curMonth,
       );
       const totalExpenses = bExp.length > 0
@@ -176,7 +182,7 @@ export function useRentalCfoData() {
       const rentIncome = co.collected_this_month || co.gross_potential_rent;
       const noi = rentIncome - totalExpenses;
       const expenseRatio = rentIncome > 0 ? totalExpenses / rentIncome : 0;
-      return {
+      buildingMap.set(key, {
         id: `${co.id}-${co.property_name}`,
         companyId: co.id,
         companyName: co.company_name,
@@ -189,9 +195,33 @@ export function useRentalCfoData() {
         noiMargin: rentIncome > 0 ? noi / rentIncome : 0,
         vsLastMonth: rentIncome > 0 ? ((noi - co.noi_this_month * 0.92) / rentIncome) * 100 : 0,
         status: expenseRatioStatus(expenseRatio),
-      };
+      });
     });
-  }, [companies, expenses]);
+
+    // Add buildings from loans that don't exist in companies data
+    rentalLoans.forEach(l => {
+      const key = `${l.company_name}|${l.property_name}`;
+      if (!buildingMap.has(key)) {
+        const noi = (l.noi_annual ?? 0) / 12;
+        buildingMap.set(key, {
+          id: `${l.company_name}-${l.property_name}`,
+          companyId: '',
+          companyName: l.company_name,
+          buildingName: l.property_name,
+          units: 0,
+          rentIncome: 0,
+          totalExpenses: 0,
+          expenseRatio: 0,
+          noi,
+          noiMargin: 0,
+          vsLastMonth: 0,
+          status: 'watch',
+        });
+      }
+    });
+
+    return Array.from(buildingMap.values());
+  }, [companies, expenses, rentalLoans]);
 
   const buildingsByCompany = useCallback((companyId: string) =>
     buildings.filter(b => b.companyId === companyId),

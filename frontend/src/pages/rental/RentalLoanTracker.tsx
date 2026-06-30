@@ -1,9 +1,10 @@
 ﻿import { useMemo, useRef, useState } from 'react';
-import { Download, Zap, CheckCircle2, TrendingDown, Plus, X, FileSpreadsheet } from 'lucide-react';
+import { Download, Zap, CheckCircle2, TrendingDown, Plus, X, FileSpreadsheet, DollarSign, Briefcase, AlertCircle, TrendingUp, Calendar } from 'lucide-react';
 import { useRentalCfoData, dscrStatus } from '../../hooks/useRentalCfoData';
 import { LoadingSkeleton } from '../../components/ui/Table';
 import { fmtUSD } from '../../components/ProtectedRoute';
 import { api } from '../../services/api';
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 
 const MARKET_RATE = 0.065;
 
@@ -291,19 +292,28 @@ export default function RentalLoanTracker() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
-          { label: 'Total Loan Portfolio', value: fmtUSD(kpis.portfolio) },
-          { label: 'Total Monthly EMI', value: fmtUSD(kpis.emi) },
-          { label: 'Weighted Avg Rate', value: `${(kpis.wAvg * 100).toFixed(2)}%` },
-          { label: 'Next Maturity', value: kpis.nextMat?.loan_maturity_date ?? '—', sub: kpis.nextMat?.property_name },
-        ].map(k => (
-          <div key={k.label} className="bg-white rounded-xl border p-4">
-            <p className="text-xs text-gray-500 uppercase">{k.label}</p>
-            <p className="text-xl font-bold font-mono mt-1">{k.value}</p>
-            {k.sub && <p className="text-xs text-gray-400 truncate">{k.sub}</p>}
-          </div>
-        ))}
+          { label: 'Total Loan Portfolio', value: fmtUSD(kpis.portfolio), icon: DollarSign, color: 'rgba(59, 130, 246, 0.15)', border: '#3B82F6' },
+          { label: 'Total Monthly EMI', value: fmtUSD(kpis.emi), icon: TrendingUp, color: 'rgba(139, 92, 246, 0.15)', border: '#8B5CF6' },
+          { label: 'Weighted Avg Rate', value: `${(kpis.wAvg * 100).toFixed(2)}%`, icon: AlertCircle, color: 'rgba(251, 146, 60, 0.15)', border: '#FB923C' },
+          { label: 'Next Maturity', value: kpis.nextMat?.loan_maturity_date ?? '—', icon: Calendar, color: 'rgba(34, 197, 94, 0.15)', border: '#22C55E', sub: kpis.nextMat?.property_name },
+          { label: 'Total Outstanding', value: fmtUSD(filtered.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0)), icon: Briefcase, color: 'rgba(168, 85, 247, 0.15)', border: '#A855F7' },
+        ].map(k => {
+          const Icon = k.icon;
+          return (
+            <div key={k.label} className="rounded-xl border p-4 hover:shadow-md transition-all" style={{ background: '#FAFAF9', borderColor: '#E5E7EB', borderLeft: `4px solid ${k.border}` }}>
+              <div className="flex items-start justify-between">
+                <p className="text-xs text-gray-600 uppercase font-semibold">{k.label}</p>
+                <div style={{ background: k.color, width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon size={16} style={{ color: k.border }} />
+                </div>
+              </div>
+              <p className="text-lg font-bold font-mono mt-2 text-gray-900">{k.value}</p>
+              {k.sub && <p className="text-xs text-gray-500 mt-1 truncate">{k.sub}</p>}
+            </div>
+          );
+        })}
       </div>
 
       <div className="bg-white rounded-xl border overflow-hidden">
@@ -370,51 +380,204 @@ export default function RentalLoanTracker() {
         </div>
       </div>
 
-      {highRateLoans.length > 0 ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-          <div className="flex items-start gap-3">
-            <TrendingDown size={20} className="text-amber-600 shrink-0" />
-            <div>
-              <h4 className="font-semibold text-amber-800">Refinancing Opportunity</h4>
-              <p className="text-sm text-amber-700 mt-1">
-                {highRateLoans.length} loan(s) above market rate ({(MARKET_RATE * 100).toFixed(1)}%).
-                Est. monthly savings: <strong>{fmtUSD(monthlySavings)}</strong> ({fmtUSD(monthlySavings * 12)}/yr).
-              </p>
-            </div>
+      <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4" style={{ borderLeft: '4px solid #FB923C' }}>
+        <div className="flex items-start gap-3">
+          {highRateLoans.length > 0 ? (
+            <>
+              <AlertCircle size={20} className="text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-semibold text-amber-900">Refinancing Opportunity</h4>
+                <p className="text-sm text-amber-800 mt-1">
+                  {highRateLoans.length} loan(s) above market rate ({(MARKET_RATE * 100).toFixed(1)}%).
+                  Est. monthly savings: <strong>{fmtUSD(monthlySavings)}</strong> ({fmtUSD(monthlySavings * 12)}/yr)
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <CheckCircle2 size={20} className="text-green-600 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-semibold text-green-900">All Rates Optimized</h4>
+                <p className="text-sm text-green-800">All loans at or below market rate ({(MARKET_RATE * 100).toFixed(1)}%)</p>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl border p-5">
+          <h3 className="font-semibold text-gray-900 mb-4">Debt by Building</h3>
+          <ResponsiveContainer width="100%" height={250}>
+            <PieChart>
+              <Pie
+                data={useMemo(() =>
+                  Object.entries(
+                    filtered.reduce((acc, l) => {
+                      acc[l.property_name] = (acc[l.property_name] || 0) + (l.loan_balance_as_of ?? l.loan_amount);
+                      return acc;
+                    }, {} as Record<string, number>)
+                  ).map(([name, value]) => ({ name, value }))
+                , [filtered])}
+                cx="50%" cy="50%"
+                outerRadius={80}
+                dataKey="value"
+                nameKey="name"
+              >
+                {['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#EF4444'].map((color, i) => <Cell key={i} fill={color} />)}
+              </Pie>
+              <Tooltip formatter={(v: number) => fmtUSD(v)} />
+              <Legend iconSize={12} wrapperStyle={{ fontSize: 12 }} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white rounded-xl border p-5">
+          <h3 className="font-semibold text-gray-900 mb-4">EMI Breakdown by Bank</h3>
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart
+              data={useMemo(() =>
+                Object.entries(
+                  filtered.reduce((acc, l) => {
+                    acc[l.loan_bank_name] = (acc[l.loan_bank_name] || 0) + (l.loan_emi ?? 0);
+                    return acc;
+                  }, {} as Record<string, number>)
+                ).map(([name, value]) => ({ name, value }))
+              , [filtered])}
+              margin={{ left: 0, right: 10, top: 5, bottom: 40 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis dataKey="name" angle={-30} textAnchor="end" height={70} tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+              <Tooltip formatter={(v: number) => fmtUSD(v)} />
+              <Bar dataKey="value" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl border p-5">
+          <h3 className="font-semibold text-gray-900 mb-4">Maturity Timeline</h3>
+          <div className="space-y-2">
+            {useMemo(() => {
+              const now = new Date();
+              const sorted = filtered
+                .filter(l => l.loan_maturity_date)
+                .sort((a, b) => (a.loan_maturity_date ?? '').localeCompare(b.loan_maturity_date ?? ''))
+                .map(l => {
+                  const matDate = new Date(l.loan_maturity_date!);
+                  const monthsLeft = (matDate.getFullYear() - now.getFullYear()) * 12 + (matDate.getMonth() - now.getMonth());
+                  let color = '#10B981', bg = 'bg-green-100';
+                  if (monthsLeft < 12) { color = '#EF4444'; bg = 'bg-red-100'; }
+                  else if (monthsLeft < 24) { color = '#F59E0B'; bg = 'bg-amber-100'; }
+                  return { ...l, monthsLeft, color, bg };
+                });
+              return sorted.map((l, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="font-medium text-gray-900">{l.property_name}</span>
+                      <span className="text-gray-600">{l.monthsLeft}mo</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="h-2 rounded-full"
+                        style={{
+                          width: `${Math.min(100, (l.monthsLeft / 60) * 100)}%`,
+                          background: l.color
+                        }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">{l.loan_maturity_date}</p>
+                  </div>
+                </div>
+              ));
+            }, [filtered])}
           </div>
         </div>
-      ) : (
-        <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl text-sm text-green-800">
-          <CheckCircle2 size={16} /> All loans at or below market rate ({(MARKET_RATE * 100).toFixed(1)}%).
+
+        <div className="bg-white rounded-xl border p-5">
+          <h3 className="font-semibold text-gray-900 mb-4">Interest Rate Comparison vs Market</h3>
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart
+              data={useMemo(() =>
+                filtered
+                  .filter(l => l.loan_interest_rate != null)
+                  .map(l => ({
+                    name: l.property_name,
+                    rate: (l.loan_interest_rate ?? 0) * 100,
+                    market: MARKET_RATE * 100,
+                  }))
+              , [filtered])}
+              margin={{ left: 0, right: 10, top: 5, bottom: 40 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis dataKey="name" angle={-30} textAnchor="end" height={70} tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}%`} />
+              <Tooltip formatter={(v: number) => `${v.toFixed(2)}%`} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Bar dataKey="rate" fill="#3B82F6" name="Loan Rate" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="market" fill="#10B981" name="Market Rate" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
-      )}
+      </div>
 
       <div className="bg-white rounded-xl border overflow-hidden">
-        <div className="px-4 py-3 border-b bg-gray-900 text-white"><h3 className="font-semibold">Building DSCR Health</h3></div>
+        <div className="px-5 py-4 border-b bg-gradient-to-r from-slate-900 to-slate-800 text-white"><h3 className="font-semibold">Building DSCR Health</h3></div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+            <thead className="bg-gradient-to-r from-gray-50 to-gray-100 text-xs text-gray-600 uppercase font-semibold border-b border-gray-200">
               <tr>
-                {['Building', 'NOI (Annual)', 'Debt Service', 'DSCR', 'Status', 'Recommendation'].map(h => (
-                  <th key={h} className="px-3 py-2.5 text-right first:text-left">{h}</th>
-                ))}
+                <th className="px-4 py-3 text-left">Building</th>
+                <th className="px-4 py-3 text-right">NOI (Annual)</th>
+                <th className="px-4 py-3 text-right">Debt Service</th>
+                <th className="px-4 py-3 text-right">DSCR Ratio</th>
+                <th className="px-4 py-3 text-center">Status</th>
+                <th className="px-4 py-3 text-left">Recommendation</th>
               </tr>
             </thead>
-            <tbody className="divide-y">
-              {dscrHealth.map(row => (
-                <tr key={row.building} className="hover:bg-gray-50">
-                  <td className="px-3 py-2.5 font-medium">{row.building}</td>
-                  <td className="px-3 py-2.5 text-right font-mono">{fmtUSD(row.noi)}</td>
-                  <td className="px-3 py-2.5 text-right font-mono">{fmtUSD(row.debtService)}</td>
-                  <td className="px-3 py-2.5 text-right font-mono">{row.dscr != null ? `${row.dscr.toFixed(2)}x` : '—'}</td>
-                  <td className="px-3 py-2.5 text-right">
-                    <span className={`px-2 py-0.5 rounded-full text-xs ${DSCR_STYLE[row.status]}`}>{row.status}</span>
-                  </td>
-                  <td className="px-3 py-2.5 text-right text-xs text-gray-600">{row.recommendation}</td>
-                </tr>
-              ))}
+            <tbody className="divide-y divide-gray-100">
+              {dscrHealth.map(row => {
+                const statusConfig = {
+                  green: { bg: 'bg-emerald-50', text: 'text-emerald-800', dot: 'bg-emerald-500' },
+                  amber: { bg: 'bg-amber-50', text: 'text-amber-800', dot: 'bg-amber-500' },
+                  red: { bg: 'bg-red-50', text: 'text-red-800', dot: 'bg-red-500' },
+                  grey: { bg: 'bg-gray-50', text: 'text-gray-700', dot: 'bg-gray-400' },
+                };
+                const config = statusConfig[row.status];
+                return (
+                  <tr key={row.building} className={`${config.bg} hover:shadow-sm transition-all`}>
+                    <td className="px-4 py-3 font-semibold text-gray-900">{row.building}</td>
+                    <td className="px-4 py-3 text-right font-mono text-gray-900">{fmtUSD(row.noi)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-gray-900">{fmtUSD(row.debtService)}</td>
+                    <td className="px-4 py-3 text-right font-mono">
+                      {row.dscr != null ? (
+                        <span className={`font-bold text-lg ${row.status === 'green' ? 'text-emerald-600' : row.status === 'amber' ? 'text-amber-600' : 'text-red-600'}`}>
+                          {row.dscr.toFixed(2)}x
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium capitalize ${DSCR_STYLE[row.status]}`}>
+                        <span className={`w-2 h-2 rounded-full ${config.dot}`} />
+                        {row.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">{row.recommendation}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+          {dscrHealth.length === 0 && (
+            <div className="px-4 py-8 text-center text-gray-500 text-sm">
+              <p>No buildings with loans found</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
