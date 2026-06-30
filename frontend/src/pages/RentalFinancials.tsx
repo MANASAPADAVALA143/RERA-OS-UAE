@@ -848,6 +848,43 @@ export default function RentalFinancials() {
       .finally(() => setLoadingFin(false));
   }, [selectedCompanyId]);
 
+  // Load ALL companies' financials when "All Companies" is selected
+  useEffect(() => {
+    if (selectedCompanyId) return; // only for "All Companies" view
+    if (!companies.length) return;
+
+    setLoadingFin(true);
+    Promise.all(
+      companies.map(co =>
+        api.get<{
+          company_name: string; filename: string; date_range: string;
+          years: number[]; pl: FinItem[]; bs: FinItem[]; cf: FinItem[]; uploaded_at: string;
+        }>(`/api/rentals/financials/${co.id}`)
+          .then(res => {
+            const d = res.data;
+            return {
+              [co.id]: {
+                companyName: d.company_name,
+                fileName: d.filename,
+                dateRange: d.date_range,
+                uploadedAt: d.uploaded_at,
+                years: d.years,
+                pl: d.pl,
+                bs: d.bs,
+                cf: d.cf ?? [],
+              }
+            };
+          })
+          .catch(() => ({})) // 404 = no upload for this company
+      )
+    )
+    .then(results => {
+      const merged = results.reduce((acc, obj) => ({ ...acc, ...obj }), {});
+      setAllFinancials(prev => ({ ...prev, ...merged }));
+    })
+    .finally(() => setLoadingFin(false));
+  }, [selectedCompanyId, companies]);
+
   const isAll = !selectedCompanyId;
   const currentFin = selectedCompanyId ? allFinancials[selectedCompanyId] : null;
   const selectedCompanyName = companies.find(c => c.id === selectedCompanyId)?.company_name ?? '';
