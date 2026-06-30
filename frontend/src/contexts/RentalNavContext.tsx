@@ -25,6 +25,7 @@ export interface RentalNavItem {
   label: string;
   Icon: LucideIcon;
   groupLabel?: string;
+  hidden?: boolean;
 }
 
 export const RENTAL_TABS: RentalNavItem[] = [
@@ -37,10 +38,10 @@ export const RENTAL_TABS: RentalNavItem[] = [
   { id: "maintenance",       label: "Maintenance",       Icon: Wrench          },
   // ── FINANCIALS & RISK ─────────────────────────────────────────────────────
   { id: "ar-dashboard",      label: "AR Dashboard",      Icon: Activity,        groupLabel: "FINANCIALS & RISK" },
-  { id: "ap-dashboard",      label: "AP Dashboard",      Icon: Landmark        },
+  { id: "ap-dashboard",      label: "AP Dashboard",      Icon: Landmark,        hidden: true },
   { id: "expenses",          label: "Expenses",          Icon: DollarSign      },
-  { id: "vendor-risk",       label: "Vendor Risk",       Icon: AlertTriangle   },
-  { id: "collections",       label: "Collections",       Icon: CreditCard      },
+  { id: "vendor-risk",       label: "Vendor Risk",       Icon: AlertTriangle,   hidden: true },
+  { id: "collections",       label: "Collections",       Icon: CreditCard,      hidden: true },
   { id: "vacancy",           label: "Vacancy & Loss",    Icon: TrendingDown    },
   { id: "financials",        label: "Financials",        Icon: BookOpen        },
   { id: "financial-ratios",  label: "Financial Ratios",  Icon: Percent         },

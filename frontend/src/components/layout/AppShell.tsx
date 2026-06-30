@@ -75,7 +75,7 @@ function SidebarInner() {
               {/* Rental sub-nav — only when route is active */}
               {to === '/rental' && onRental && (
                 <div className="mt-1 mb-1">
-                  {RENTAL_TABS.map(({ id, label: itemLabel, Icon: ItemIcon, groupLabel }) => (
+                  {RENTAL_TABS.filter((item) => !item.hidden).map(({ id, label: itemLabel, Icon: ItemIcon, groupLabel }) => (
                     <div key={id}>
                       {groupLabel && (
                         <p className="pl-7 pr-3 pt-3 pb-1 text-xs uppercase tracking-wider text-amber-400 font-medium">

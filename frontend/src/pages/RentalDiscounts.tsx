@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Plus, X, Lightbulb, Calculator, Zap } from 'lucide-react';
+import api from '../services/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type DiscountType   = 'promotional' | 'fixed' | 'percentage';
@@ -12,28 +13,30 @@ interface Discount {
   reason: string; status: DiscountStatus; monthlyImpact: number; notes?: string;
 }
 
-// ── Static data ───────────────────────────────────────────────────────────────
-const SEED_DISCOUNTS: Discount[] = [];
+interface UnitApiRow {
+  id: string;
+  unit_number: string;
+  company_name: string | null;
+  property_name: string | null;
+  status: string;
+  monthly_rent: number;
+  rent_history: Record<string, number> | null;
+}
 
-const UNIT_OPTIONS = [
-  { id:'U02', label:'Unit 01-02 — Desert Vista Townhomes',  rent:2100, vacant:true  },
-  { id:'U04', label:'Unit 02-03 — Crestline Apartments',    rent:2050, vacant:true  },
-  { id:'U01', label:'Unit 01-01 — Desert Vista Townhomes',  rent:2000, vacant:false },
-  { id:'U03', label:'Unit 02-01 — Crestline Apartments',    rent:1950, vacant:false },
-  { id:'U05', label:'Unit 03-01 — Oakwood Commons',         rent:1800, vacant:false },
-  { id:'U06', label:'Unit 04-02 — Pinnacle Ridge Homes',    rent:2200, vacant:false },
-  { id:'U07', label:'Unit 05-01 — Summit Park Flats',       rent:1750, vacant:false },
-  { id:'U08', label:'Unit 06-03 — Heritage Glen Suites',    rent:1850, vacant:false },
+// ── Constants ─────────────────────────────────────────────────────────────────
+const ALL_MONTHS_ORDER = [
+  'Jan-2026','Feb-2026','Mar-2026','Apr-2026','May-2026','Jun-2026',
+  'Jul-2026','Aug-2026','Sep-2026','Oct-2026','Nov-2026','Dec-2026',
 ];
 
+const SEED_DISCOUNTS: Discount[] = [];
 const VACANT_RECS: { unit:string; building:string; company:string; marketRent:number; vacantMonths:number; lost:number }[] = [];
-
 const PROMOTIONS: string[] = ['First month free','2 weeks free','Refer a friend — $200 off first month','Custom promotion'];
 const REASONS: DiscountReason[] = ['Long vacancy','Tenant loyalty','Maintenance issue','Market adjustment','Early renewal','Move-in incentive'];
 const STORAGE_KEY = 'estatecfo_discounts_v1';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const fmt = (n: number) => '$' + n.toLocaleString('en-US');
+const fmt = (n: number) => '$' + Math.round(n).toLocaleString('en-US');
 
 function loadDiscounts(): Discount[] {
   try { const r = localStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : SEED_DISCOUNTS; }
@@ -41,10 +44,9 @@ function loadDiscounts(): Discount[] {
 }
 function saveDiscounts(d: Discount[]) { localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); }
 
-const TYPE_BADGE: Record<DiscountType,string>   = { promotional:'bg-purple-100 text-purple-700', fixed:'bg-blue-100 text-blue-700', percentage:'bg-amber-100 text-amber-700' };
+const TYPE_BADGE: Record<DiscountType,string>    = { promotional:'bg-purple-100 text-purple-700', fixed:'bg-blue-100 text-blue-700', percentage:'bg-amber-100 text-amber-700' };
 const STATUS_BADGE: Record<DiscountStatus,string> = { active:'bg-green-100 text-green-700', expired:'bg-gray-100 text-gray-500', pending:'bg-blue-100 text-blue-700' };
 
-// ── AI mock recommendation ────────────────────────────────────────────────────
 function buildAiRec(u: typeof VACANT_RECS[0]): string {
   return (
     `Based on ${u.vacantMonths} months of vacancy and market rent of ${fmt(u.marketRent)}/month:\n\n` +
@@ -60,9 +62,118 @@ function buildAiRec(u: typeof VACANT_RECS[0]): string {
   );
 }
 
+// ── Vacancy analysis helpers ──────────────────────────────────────────────────
+
+/** Months available across ALL units (union of all rent_history keys). */
+function getAllMonths(units: UnitApiRow[]): string[] {
+  const set = new Set<string>();
+  for (const u of units)
+    for (const m of Object.keys(u.rent_history ?? {}))
+      if (ALL_MONTHS_ORDER.includes(m)) set.add(m);
+  return ALL_MONTHS_ORDER.filter(m => set.has(m));
+}
+
+interface VacancyAnalysis {
+  marketRent: number;
+  dataMonths: number;
+  totalVacantMonths: number;
+  currentlyVacant: boolean;
+  currentVacancyRun: number;   // consecutive vacant at the trailing end
+  completedEpisodesCount: number;
+  avgRerentTime: number | null; // avg length of COMPLETED vacancy episodes
+  lastEpisodeMonths: number | null;
+  lastEpisodeLost: number | null;
+  totalLost: number;
+}
+
+function analyzeVacancy(unit: UnitApiRow, availMonths: string[]): VacancyAnalysis {
+  const hist = unit.rent_history ?? {};
+  // Only include months where this unit has a rent_history entry
+  const dataMonths = availMonths.filter(m => m in hist);
+
+  const histVals = Object.values(hist).filter((v): v is number => v > 0);
+  const marketRent = histVals.length > 0
+    ? Math.max(...histVals, unit.monthly_rent ?? 0)
+    : (unit.monthly_rent ?? 0);
+
+  // Build episode list
+  type Episode = { length: number; lost: number };
+  const completedEpisodes: Episode[] = [];
+  let currentRun = 0;
+  let inEpisode = false;
+  let episodeLen = 0;
+
+  for (const m of dataMonths) {
+    const rent = hist[m] ?? 0;
+    if (rent === 0) {
+      inEpisode = true;
+      episodeLen++;
+    } else {
+      if (inEpisode) {
+        completedEpisodes.push({ length: episodeLen, lost: episodeLen * marketRent });
+        inEpisode = false;
+        episodeLen = 0;
+      }
+    }
+  }
+  // Trailing run (currently vacant)
+  const currentlyVacant = inEpisode;
+  currentRun = inEpisode ? episodeLen : 0;
+
+  const totalVacantMonths = completedEpisodes.reduce((s, e) => s + e.length, 0) + currentRun;
+  const totalLost = completedEpisodes.reduce((s, e) => s + e.lost, 0) + currentRun * marketRent;
+
+  const avgRerentTime = completedEpisodes.length > 0
+    ? completedEpisodes.reduce((s, e) => s + e.length, 0) / completedEpisodes.length
+    : null;
+
+  const lastEp = completedEpisodes.length > 0 ? completedEpisodes[completedEpisodes.length - 1] : null;
+
+  return {
+    marketRent,
+    dataMonths: dataMonths.length,
+    totalVacantMonths,
+    currentlyVacant,
+    currentVacancyRun: currentRun,
+    completedEpisodesCount: completedEpisodes.length,
+    avgRerentTime,
+    lastEpisodeMonths: lastEp?.length ?? null,
+    lastEpisodeLost: lastEp?.lost ?? null,
+    totalLost,
+  };
+}
+
+/** Average completed-vacancy length across all units in the portfolio. Falls back to 2 if no data. */
+function portfolioAvgVacancy(units: UnitApiRow[], availMonths: string[]): number {
+  let total = 0, count = 0;
+  for (const u of units) {
+    const hist = u.rent_history ?? {};
+    let inEp = false, epLen = 0;
+    for (const m of availMonths) {
+      if (!(m in hist)) continue;
+      if (hist[m] === 0) { inEp = true; epLen++; }
+      else if (inEp) { total += epLen; count++; inEp = false; epLen = 0; }
+    }
+    // don't count open episodes
+  }
+  return count > 0 ? Math.round((total / count) * 10) / 10 : 2;
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function RentalDiscounts() {
   const [discounts, setDiscounts] = useState<Discount[]>(loadDiscounts);
+
+  // Real units from API
+  const [units,        setUnits]        = useState<UnitApiRow[]>([]);
+  const [unitsLoading, setUnitsLoading] = useState(true);
+
+  useEffect(() => {
+    api.get<UnitApiRow[]>('/api/rentals/units')
+      .then(r => setUnits(r.data))
+      .finally(() => setUnitsLoading(false));
+  }, []);
+
+  const allMonths = useMemo(() => getAllMonths(units), [units]);
 
   // Filters
   const [fCo,     setFCo]     = useState('');
@@ -72,7 +183,7 @@ export default function RentalDiscounts() {
   // Modal
   const [showModal,  setShowModal]  = useState(false);
   const [modalType,  setModalType]  = useState<DiscountType>('promotional');
-  const [fUnit,      setFUnit]      = useState(UNIT_OPTIONS[0].id);
+  const [fUnit,      setFUnit]      = useState('');
   const [fPromo,     setFPromo]     = useState(PROMOTIONS[0]);
   const [fPromoDesc, setFPromoDesc] = useState('');
   const [fAmount,    setFAmount]    = useState('');
@@ -80,8 +191,8 @@ export default function RentalDiscounts() {
   const [fPct,       setFPct]       = useState('');
   const [fDuration,  setFDuration]  = useState('3');
   const [fReason,    setFReason]    = useState<DiscountReason>('Long vacancy');
-  const [fStart,     setFStart]     = useState('2025-07-01');
-  const [fEnd,       setFEnd]       = useState('2025-09-30');
+  const [fStart,     setFStart]     = useState('2026-07-01');
+  const [fEnd,       setFEnd]       = useState('2026-09-30');
   const [fNotes,     setFNotes]     = useState('');
 
   // AI advisor
@@ -89,10 +200,23 @@ export default function RentalDiscounts() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResult,  setAiResult]  = useState<string|null>(null);
 
-  // Calculator
-  const [calcRent,   setCalcRent]   = useState('2100');
+  // Calculator — unit-driven
+  const [calcUnitId, setCalcUnitId] = useState('');
   const [calcPct,    setCalcPct]    = useState('10');
   const [calcMonths, setCalcMonths] = useState('3');
+
+  // Default modal unit once units load
+  useEffect(() => {
+    if (units.length > 0 && !fUnit) setFUnit(units[0].id);
+  }, [units, fUnit]);
+
+  // Default calc unit to first vacant unit, then first unit
+  useEffect(() => {
+    if (units.length > 0 && !calcUnitId) {
+      const firstVacant = units.find(u => u.status === 'vacant');
+      setCalcUnitId(firstVacant?.id ?? units[0].id);
+    }
+  }, [units, calcUnitId]);
 
   const companies = [...new Set(discounts.map(d => d.company).filter(Boolean))];
 
@@ -105,26 +229,39 @@ export default function RentalDiscounts() {
 
   const active = discounts.filter(d => d.status === 'active');
   const kpis = {
-    count:      active.length,
-    value:      active.reduce((s,d) => s+d.monthlyImpact, 0),
-    units:      new Set(active.map(d => d.unit)).size,
-    avgPct:     Math.round(
+    count:   active.length,
+    value:   active.reduce((s,d) => s+d.monthlyImpact, 0),
+    units:   new Set(active.map(d => d.unit)).size,
+    avgPct:  Math.round(
       active.filter(d=>d.type==='percentage').reduce((s,d)=>s+parseFloat(d.value),0) /
       (active.filter(d=>d.type==='percentage').length||1)
     ),
   };
 
+  // Group real units by company for dropdowns
+  const unitsByCompany = useMemo(() => {
+    const map = new Map<string, UnitApiRow[]>();
+    for (const u of units) {
+      const co = u.company_name ?? 'Other';
+      if (!map.has(co)) map.set(co, []);
+      map.get(co)!.push(u);
+    }
+    return map;
+  }, [units]);
+
   // ── Add discount ──────────────────────────────────────────────────────────
   function addDiscount() {
-    const opt = UNIT_OPTIONS.find(u => u.id === fUnit)!;
-    const unitLabel = opt.label.split('—')[0].trim().replace('Unit ','');
-    const building  = opt.label.split('—')[1]?.trim() ?? '';
+    const realUnit = units.find(u => u.id === fUnit);
+    if (!realUnit) return;
+    const unitLabel = realUnit.unit_number;
+    const building  = realUnit.property_name ?? '';
+    const company   = realUnit.company_name ?? '';
     let value = ''; let impact = 0;
-    if (modalType === 'promotional') { value = fPromo === 'Custom promotion' ? fPromoDesc : fPromo; impact = opt.rent; }
+    if (modalType === 'promotional') { value = fPromo === 'Custom promotion' ? fPromoDesc : fPromo; impact = realUnit.monthly_rent; }
     if (modalType === 'fixed')       { value = `${fmt(Number(fAmount))} ${fAmtType}`; impact = Number(fAmount); }
-    if (modalType === 'percentage')  { value = `${fPct}%`; impact = Math.round(opt.rent*Number(fPct)/100); }
+    if (modalType === 'percentage')  { value = `${fPct}%`; impact = Math.round(realUnit.monthly_rent * Number(fPct) / 100); }
     const d: Discount = {
-      id: `d${Date.now()}`, unit: unitLabel, building, company: '',
+      id: `d${Date.now()}`, unit: unitLabel, building, company,
       type: modalType, value, startDate: fStart, endDate: fEnd,
       reason: fReason, status: 'active', monthlyImpact: impact, notes: fNotes,
     };
@@ -141,18 +278,70 @@ export default function RentalDiscounts() {
     setTimeout(() => { setAiLoading(false); setAiResult(buildAiRec(u)); }, 1600);
   }
 
-  // ── Calculator ────────────────────────────────────────────────────────────
-  const cRent   = Number(calcRent)   || 0;
-  const cPct    = Number(calcPct)    || 0;
-  const cMonths = Number(calcMonths) || 0;
-  const cDisMo  = Math.round(cRent * cPct / 100);
-  const cCost   = cDisMo * cMonths;
-  const cVac    = cRent  * cMonths;
-  const cBenefit= cVac - cCost;
+  // ── Calculator derived values ─────────────────────────────────────────────
+  const calcUnit     = units.find(u => u.id === calcUnitId);
+  const calcRent     = calcUnit?.monthly_rent ?? 0;
+  const cPct         = Number(calcPct)    || 0;
+  const cMonths      = Number(calcMonths) || 0;
+  const cDisMo       = Math.round(calcRent * cPct / 100);
+  const cCost        = cDisMo * cMonths;
 
-  // ── Selected unit rent (for % calculator preview) ─────────────────────────
-  const selOpt = UNIT_OPTIONS.find(u => u.id === fUnit);
-  const calcPreviewMo  = selOpt && fPct ? Math.round(selOpt.rent * Number(fPct) / 100) : 0;
+  const vacAnalysis  = useMemo(
+    () => calcUnit ? analyzeVacancy(calcUnit, allMonths) : null,
+    [calcUnit, allMonths],
+  );
+
+  const portAvg = useMemo(() => portfolioAvgVacancy(units, allMonths), [units, allMonths]);
+
+  // Expected vacancy duration: how long will this unit realistically stay vacant?
+  const expectedVacancyMonths: number = useMemo(() => {
+    if (!vacAnalysis) return 3;
+    const { avgRerentTime, currentlyVacant, currentVacancyRun } = vacAnalysis;
+    if (avgRerentTime !== null) {
+      // Has completed past episodes → use avg, but ensure we count at least what's already elapsed
+      return currentlyVacant
+        ? Math.max(currentVacancyRun, Math.round(avgRerentTime * 10) / 10)
+        : avgRerentTime;
+    }
+    // No completed episodes → use portfolio average
+    return currentlyVacant ? Math.max(currentVacancyRun, portAvg) : portAvg;
+  }, [vacAnalysis, portAvg]);
+
+  const cVac     = Math.round(calcRent * expectedVacancyMonths);
+  const cBenefit = cVac - cCost;
+
+  // Basis note text
+  const basisNote: string = useMemo(() => {
+    if (!calcUnit || !vacAnalysis) return '';
+    const { totalVacantMonths, currentlyVacant, currentVacancyRun,
+            completedEpisodesCount, avgRerentTime, dataMonths,
+            lastEpisodeMonths, lastEpisodeLost, totalLost } = vacAnalysis;
+    const unitLabel = calcUnit.unit_number;
+
+    if (dataMonths === 0) return `No rent history available for ${unitLabel} — using portfolio average vacancy of ${portAvg} months.`;
+
+    if (totalVacantMonths === 0) {
+      return `No vacancy history for ${unitLabel} — always occupied across ${dataMonths} months of data. Estimate based on portfolio average vacancy duration of ${portAvg} months.`;
+    }
+
+    const parts: string[] = [`Based on ${unitLabel}'s vacancy history:`];
+    parts.push(`${totalVacantMonths} month${totalVacantMonths!==1?'s':''} total vacant in 2026, $${Math.round(totalLost).toLocaleString()} in lost rent.`);
+    if (currentlyVacant) parts.push(`Currently vacant ${currentVacancyRun} month${currentVacancyRun!==1?'s':''}.`);
+    if (avgRerentTime !== null && completedEpisodesCount > 0) {
+      parts.push(`Avg re-rent time: ${avgRerentTime % 1 === 0 ? avgRerentTime : avgRerentTime.toFixed(1)} months (${completedEpisodesCount} past episode${completedEpisodesCount!==1?'s':''}).`);
+    }
+    if (lastEpisodeMonths !== null && lastEpisodeLost !== null) {
+      parts.push(`Last vacancy: ${lastEpisodeMonths} month${lastEpisodeMonths!==1?'s':''} · $${Math.round(lastEpisodeLost).toLocaleString()} lost.`);
+    }
+    if (avgRerentTime === null) {
+      parts.push(`No completed vacancy cycles — using portfolio average of ${portAvg} months as expected duration.`);
+    }
+    return parts.join(' ');
+  }, [calcUnit, vacAnalysis, portAvg]);
+
+  // Modal preview (percentage type)
+  const modalUnit      = units.find(u => u.id === fUnit);
+  const calcPreviewMo  = modalUnit && fPct ? Math.round(modalUnit.monthly_rent * Number(fPct) / 100) : 0;
   const calcPreviewTot = calcPreviewMo * Number(fDuration || 0);
 
   return (
@@ -172,10 +361,10 @@ export default function RentalDiscounts() {
       {/* KPI strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label:'Active Discounts',    value:String(kpis.count),       sub:'currently running',       color:'text-gray-900' },
-          { label:'Total Discount Value',value:fmt(kpis.value)+'/mo',    sub:'monthly revenue impact',  color:'text-red-600'  },
-          { label:'Units with Discount', value:String(kpis.units),       sub:'across portfolio',        color:'text-gray-900' },
-          { label:'Avg Discount %',      value:`${kpis.avgPct}%`,        sub:'percentage-type only',    color:'text-amber-600'},
+          { label:'Active Discounts',    value:String(kpis.count),    sub:'currently running',      color:'text-gray-900' },
+          { label:'Total Discount Value',value:fmt(kpis.value)+'/mo', sub:'monthly revenue impact', color:'text-red-600'  },
+          { label:'Units with Discount', value:String(kpis.units),    sub:'across portfolio',       color:'text-gray-900' },
+          { label:'Avg Discount %',      value:`${kpis.avgPct}%`,     sub:'percentage-type only',   color:'text-amber-600'},
         ].map(k => (
           <div key={k.label} className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
             <p className="text-sm text-gray-500">{k.label}</p>
@@ -258,7 +447,7 @@ export default function RentalDiscounts() {
         </div>
       </div>
 
-      {/* Strategic recommendations — only shown when there are vacant units with data */}
+      {/* Strategic recommendations */}
       {VACANT_RECS.length > 0 && <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
         <div className="flex items-center gap-2 mb-4">
           <Lightbulb size={16} className="text-amber-500"/>
@@ -320,50 +509,135 @@ export default function RentalDiscounts() {
         </div>
       )}
 
-      {/* Impact calculator */}
+      {/* ── Discount Impact Calculator ──────────────────────────────────────── */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
         <div className="flex items-center gap-2 mb-4">
           <Calculator size={16} className="text-gray-600"/>
           <p className="font-semibold text-gray-900 text-sm">Discount Impact Calculator</p>
         </div>
-        <div className="grid grid-cols-3 gap-4 mb-5">
-          {[
-            { label:'Current Rent ($/mo)', val:calcRent,   set:setCalcRent   },
-            { label:'Discount %',          val:calcPct,    set:setCalcPct    },
-            { label:'Duration (months)',   val:calcMonths, set:setCalcMonths },
-          ].map(f=>(
-            <div key={f.label}>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{f.label}</label>
-              <input type="number" value={f.val} onChange={e=>f.set(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-green-600"/>
-            </div>
-          ))}
+
+        {/* Inputs row */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+          {/* Select Unit (replaces free-text rent) */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Select Unit</label>
+            {unitsLoading ? (
+              <div className="h-9 bg-gray-100 rounded-lg animate-pulse" />
+            ) : units.length === 0 ? (
+              <p className="text-xs text-gray-400 italic pt-2">No units loaded</p>
+            ) : (
+              <select
+                value={calcUnitId}
+                onChange={e => setCalcUnitId(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-green-600 bg-white"
+              >
+                {[...unitsByCompany.entries()].map(([co, coUnits]) => (
+                  <optgroup key={co} label={co}>
+                    {coUnits.map(u => (
+                      <option key={u.id} value={u.id}>
+                        {u.unit_number}{u.property_name ? ` — ${u.property_name}` : ''}
+                        {u.status === 'vacant' ? ' ⚠ Vacant' : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            )}
+            {calcUnit && (
+              <p className="text-xs text-gray-400 mt-1">
+                Market rent: <span className="font-medium text-gray-700">{fmt(calcRent)}/mo</span>
+                {vacAnalysis?.currentlyVacant && (
+                  <span className="ml-2 text-red-500 font-medium">
+                    · Vacant {vacAnalysis.currentVacancyRun} mo
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+
+          {/* Discount % */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Discount %</label>
+            <input
+              type="number" value={calcPct} onChange={e=>setCalcPct(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-green-600"
+            />
+          </div>
+
+          {/* Duration */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Duration (months)</label>
+            <input
+              type="number" value={calcMonths} onChange={e=>setCalcMonths(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-green-600"
+            />
+          </div>
         </div>
-        <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
-          <div className="flex justify-between text-gray-600">
-            <span>Current rent</span><span className="font-mono">{fmt(cRent)}/mo</span>
-          </div>
-          <div className="flex justify-between text-gray-600">
-            <span>Discount ({calcPct}% = {fmt(cDisMo)}/mo)</span>
-            <span className="font-mono text-red-600">−{fmt(cDisMo)}/mo</span>
-          </div>
-          <div className="flex justify-between text-gray-600">
-            <span>Duration</span><span className="font-mono">{cMonths} months</span>
-          </div>
-          <div className="border-t border-gray-200 pt-2 mt-2 space-y-1.5">
-            <div className="flex justify-between font-medium">
-              <span>Cost of discount</span><span className="font-mono text-red-600">{fmt(cCost)}</span>
+
+        {/* Results panel */}
+        {calcUnit ? (
+          <>
+            <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
+              <div className="flex justify-between text-gray-600">
+                <span>Unit {calcUnit.unit_number} · market rent</span>
+                <span className="font-mono">{fmt(calcRent)}/mo</span>
+              </div>
+              <div className="flex justify-between text-gray-600">
+                <span>Discount ({calcPct}% = {fmt(cDisMo)}/mo × {cMonths} months)</span>
+                <span className="font-mono text-red-600">−{fmt(cCost)} total</span>
+              </div>
+
+              <div className="border-t border-gray-200 pt-2 mt-2 space-y-1.5">
+                <div className="flex justify-between font-medium">
+                  <span>Cost of discount ({cMonths} mo)</span>
+                  <span className="font-mono text-red-600">{fmt(cCost)}</span>
+                </div>
+
+                {/* Real vacancy comparison */}
+                <div className="flex justify-between font-medium">
+                  <span className="flex items-center gap-1.5">
+                    vs. Staying vacant
+                    <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-xs rounded font-semibold">
+                      {typeof expectedVacancyMonths === 'number' && expectedVacancyMonths % 1 !== 0
+                        ? expectedVacancyMonths.toFixed(1)
+                        : expectedVacancyMonths} mo
+                    </span>
+                    <span className="text-xs font-normal text-gray-400">
+                      {vacAnalysis?.avgRerentTime !== null ? '(unit avg)' : '(portfolio avg)'}
+                    </span>
+                  </span>
+                  <span className="font-mono text-gray-500">{fmt(cVac)}</span>
+                </div>
+
+                {/* Past vacancy context */}
+                {vacAnalysis && vacAnalysis.lastEpisodeMonths !== null && (
+                  <div className="text-xs text-gray-500 pl-0 pt-0.5">
+                    Last vacancy: {vacAnalysis.lastEpisodeMonths} month{vacAnalysis.lastEpisodeMonths !== 1 ? 's' : ''}
+                    {' '}· cost {vacAnalysis.lastEpisodeLost != null ? fmt(vacAnalysis.lastEpisodeLost) : '—'} in lost rent
+                  </div>
+                )}
+              </div>
+
+              {/* Net benefit */}
+              <div className={`flex justify-between text-base font-bold pt-1 border-t border-gray-200 ${cBenefit > 0 ? 'text-green-700' : 'text-red-700'}`}>
+                <span>Net benefit of discounting</span>
+                <span>{fmt(cBenefit)} {cBenefit > 0 ? '✅' : '❌'}</span>
+              </div>
             </div>
-            <div className="flex justify-between font-medium">
-              <span>vs. Staying vacant {cMonths} months</span>
-              <span className="font-mono text-gray-500">{fmt(cVac)}</span>
-            </div>
+
+            {/* Basis note */}
+            {basisNote && (
+              <div className="mt-3 flex gap-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                <span className="text-blue-400 text-sm mt-0.5">ℹ</span>
+                <p className="text-xs text-blue-700 leading-relaxed">{basisNote}</p>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="bg-gray-50 rounded-xl p-6 text-center text-sm text-gray-400">
+            Select a unit above to run the impact calculation.
           </div>
-          <div className={`flex justify-between text-base font-bold pt-1 border-t border-gray-200 ${cBenefit>0?'text-green-700':'text-red-700'}`}>
-            <span>Net benefit of discounting</span>
-            <span>{fmt(cBenefit)} {cBenefit>0?'✅':'❌'}</span>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Add Discount Modal */}
@@ -388,18 +662,29 @@ export default function RentalDiscounts() {
                 </div>
               </div>
 
-              {/* Unit */}
+              {/* Unit — real data grouped by company */}
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Unit</label>
-                <select value={fUnit} onChange={e=>setFUnit(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-green-600">
-                  <optgroup label="⚠ Vacant Units (Priority)">
-                    {UNIT_OPTIONS.filter(u=>u.vacant).map(u=><option key={u.id} value={u.id}>{u.label}</option>)}
-                  </optgroup>
-                  <optgroup label="Occupied Units">
-                    {UNIT_OPTIONS.filter(u=>!u.vacant).map(u=><option key={u.id} value={u.id}>{u.label}</option>)}
-                  </optgroup>
-                </select>
+                {unitsLoading ? (
+                  <div className="h-9 bg-gray-100 rounded-lg animate-pulse" />
+                ) : (
+                  <select value={fUnit} onChange={e=>setFUnit(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-green-600">
+                    {[...unitsByCompany.entries()].map(([co, coUnits]) => (
+                      <optgroup key={co} label={co}>
+                        {coUnits.filter(u => u.status === 'vacant').map(u => (
+                          <option key={u.id} value={u.id}>⚠ {u.unit_number}{u.property_name ? ` — ${u.property_name}` : ''} (Vacant)</option>
+                        ))}
+                        {coUnits.filter(u => u.status !== 'vacant').map(u => (
+                          <option key={u.id} value={u.id}>{u.unit_number}{u.property_name ? ` — ${u.property_name}` : ''}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                )}
+                {modalUnit && (
+                  <p className="text-xs text-gray-400 mt-1">Market rent: {fmt(modalUnit.monthly_rent)}/mo</p>
+                )}
               </div>
 
               {/* Promotional */}
@@ -459,7 +744,7 @@ export default function RentalDiscounts() {
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-green-600"/>
                     </div>
                   </div>
-                  {fPct && selOpt && (
+                  {fPct && modalUnit && (
                     <div className="p-3 bg-amber-50 rounded-lg text-xs text-amber-800 space-y-1">
                       <p>Monthly savings for tenant: <strong>{fmt(calcPreviewMo)}</strong></p>
                       <p>Total over {fDuration} months: <strong>{fmt(calcPreviewTot)}</strong></p>
@@ -494,8 +779,8 @@ export default function RentalDiscounts() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-green-600"/>
               </div>
               <div className="flex gap-2 pt-1">
-                <button onClick={addDiscount}
-                  className="flex-1 px-4 py-2 bg-green-700 text-white rounded-lg text-sm font-medium hover:bg-green-800 transition-colors">
+                <button onClick={addDiscount} disabled={!fUnit}
+                  className="flex-1 px-4 py-2 bg-green-700 text-white rounded-lg text-sm font-medium hover:bg-green-800 transition-colors disabled:opacity-50">
                   Save Discount
                 </button>
                 <button onClick={()=>setShowModal(false)}

@@ -950,6 +950,7 @@ def list_expenses(
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    from datetime import datetime
     tid = current_user.tenant_id
     q = db.query(RentalExpense).filter(RentalExpense.tenant_id == tid)
     if company_id:
@@ -963,20 +964,45 @@ def list_expenses(
         except ValueError:
             pass
     expenses = q.order_by(RentalExpense.expense_date.desc()).all()
-    result = [_expense_dict(e) for e in expenses]
+    items = [_expense_dict(e) for e in expenses]
 
     if fmt == "csv":
         output = io.StringIO()
-        if result:
-            writer = csv.DictWriter(output, fieldnames=result[0].keys())
+        if items:
+            writer = csv.DictWriter(output, fieldnames=items[0].keys())
             writer.writeheader()
-            writer.writerows(result)
+            writer.writerows(items)
         return StreamingResponse(
             iter([output.getvalue()]),
             media_type="text/csv",
             headers={"Content-Disposition": "attachment; filename=expenses.csv"},
         )
-    return result
+
+    # Calculate KPIs and category breakdown for JSON response
+    today = date.today()
+    current_month = today.strftime("%Y-%m")
+
+    total_this_month = sum(e.amount for e in expenses if str(e.expense_date)[:7] == current_month)
+    total_all_time = sum(e.amount for e in expenses)
+
+    # Group by category
+    by_category_dict = {}
+    for e in expenses:
+        cat = e.category.value
+        by_category_dict[cat] = by_category_dict.get(cat, 0) + e.amount
+
+    by_category = [{"category": k, "amount": v} for k, v in sorted(by_category_dict.items(), key=lambda x: x[1], reverse=True)]
+    most_expensive_category = by_category[0]["category"] if by_category else None
+
+    return {
+        "kpis": {
+            "total_this_month": round(total_this_month, 2),
+            "total_all_time": round(total_all_time, 2),
+            "most_expensive_category": most_expensive_category,
+        },
+        "items": items,
+        "by_category": by_category,
+    }
 
 
 @router.post("/expenses", status_code=201)
