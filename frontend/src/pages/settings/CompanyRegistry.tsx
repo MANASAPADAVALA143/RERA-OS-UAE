@@ -231,6 +231,8 @@ function InlineSuites({
   const [unitsMap, setUnitsMap] = useState<Record<string, UnitRow[]>>({});
   const [unitEditId, setUnitEditId] = useState<string | null>(null);
   const [unitEditVal, setUnitEditVal] = useState('');
+  const [unitEditStatus, setUnitEditStatus] = useState('');
+  const [unitEditRent, setUnitEditRent] = useState('');
   const [unitSaving, setUnitSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -277,16 +279,20 @@ function InlineSuites({
     }
   }
 
-  async function saveUnitName(unitId: string, suiteId: string) {
+  async function saveUnit(unitId: string, suiteId: string) {
     if (!unitEditVal.trim()) { setUnitEditId(null); return; }
     setUnitSaving(true);
     try {
-      await api.put(`/api/rentals/units/${unitId}`, { unit_number: unitEditVal.trim() });
+      await api.put(`/api/rentals/units/${unitId}`, {
+        unit_number: unitEditVal.trim(),
+        status: unitEditStatus,
+        monthly_rent: parseFloat(unitEditRent) || 0,
+      });
       setUnitEditId(null);
-      push('Unit renamed');
+      push('Unit updated');
       await loadSuiteUnits(suiteId);
     } catch {
-      push('Failed to rename unit', false);
+      push('Failed to update unit', false);
     } finally {
       setUnitSaving(false);
     }
@@ -422,7 +428,7 @@ function InlineSuites({
                                         <th className="text-left px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Unit Name</th>
                                         <th className="text-left px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Status</th>
                                         <th className="text-right px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Rent / mo</th>
-                                        {canWrite && <th className="text-right px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Rename</th>}
+                                        {canWrite && <th className="text-center px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Edit</th>}
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
@@ -431,52 +437,86 @@ function InlineSuites({
                                           <td className="px-3 py-1.5 text-gray-400">{j + 1}</td>
                                           <td className="px-3 py-1.5 font-medium text-gray-800">
                                             {unitEditId === u.id ? (
-                                              <div className="flex items-center gap-1">
-                                                <input
-                                                  autoFocus
-                                                  value={unitEditVal}
-                                                  onChange={e => setUnitEditVal(e.target.value)}
-                                                  onKeyDown={e => {
-                                                    if (e.key === 'Enter') saveUnitName(u.id, s.id);
-                                                    if (e.key === 'Escape') setUnitEditId(null);
-                                                  }}
-                                                  disabled={unitSaving}
-                                                  className="text-xs border border-indigo-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 min-w-[100px]"
-                                                />
-                                                <button onClick={() => saveUnitName(u.id, s.id)} disabled={unitSaving}
-                                                  className="text-indigo-600 hover:text-indigo-800 disabled:opacity-40">
-                                                  <Check size={11} />
-                                                </button>
-                                                <button onClick={() => setUnitEditId(null)} disabled={unitSaving}
-                                                  className="text-gray-400 hover:text-gray-600">
-                                                  <X size={11} />
-                                                </button>
-                                              </div>
+                                              <input
+                                                autoFocus
+                                                value={unitEditVal}
+                                                onChange={e => setUnitEditVal(e.target.value)}
+                                                onKeyDown={e => { if (e.key === 'Escape') setUnitEditId(null); }}
+                                                disabled={unitSaving}
+                                                className="text-xs border border-indigo-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-full min-w-[90px]"
+                                              />
                                             ) : (
                                               u.unit_number
                                             )}
                                           </td>
                                           <td className="px-3 py-1.5">
-                                            <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${
-                                              u.status === 'occupied'
-                                                ? 'bg-green-100 text-green-700'
-                                                : 'bg-gray-100 text-gray-500'
-                                            }`}>
-                                              {u.status}
-                                            </span>
+                                            {unitEditId === u.id ? (
+                                              <select
+                                                value={unitEditStatus}
+                                                onChange={e => setUnitEditStatus(e.target.value)}
+                                                disabled={unitSaving}
+                                                className="text-xs border border-indigo-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                              >
+                                                <option value="occupied">occupied</option>
+                                                <option value="vacant">vacant</option>
+                                                <option value="notice">notice</option>
+                                                <option value="reserved">reserved</option>
+                                                <option value="maintenance_hold">maintenance_hold</option>
+                                              </select>
+                                            ) : (
+                                              <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                                                u.status === 'occupied'
+                                                  ? 'bg-green-100 text-green-700'
+                                                  : u.status === 'notice'
+                                                  ? 'bg-yellow-100 text-yellow-700'
+                                                  : u.status === 'reserved'
+                                                  ? 'bg-blue-100 text-blue-700'
+                                                  : u.status === 'maintenance_hold'
+                                                  ? 'bg-orange-100 text-orange-700'
+                                                  : 'bg-gray-100 text-gray-500'
+                                              }`}>
+                                                {u.status}
+                                              </span>
+                                            )}
                                           </td>
                                           <td className="px-3 py-1.5 text-right font-mono text-gray-700">
-                                            {u.monthly_rent > 0
-                                              ? `$${u.monthly_rent.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
-                                              : '—'}
+                                            {unitEditId === u.id ? (
+                                              <input
+                                                type="number"
+                                                value={unitEditRent}
+                                                onChange={e => setUnitEditRent(e.target.value)}
+                                                disabled={unitSaving}
+                                                className="text-xs border border-indigo-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-24 text-right"
+                                              />
+                                            ) : (
+                                              u.monthly_rent > 0
+                                                ? `$${u.monthly_rent.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+                                                : '—'
+                                            )}
                                           </td>
                                           {canWrite && (
-                                            <td className="px-3 py-1.5 text-right">
-                                              {unitEditId !== u.id && (
+                                            <td className="px-3 py-1.5 text-center">
+                                              {unitEditId === u.id ? (
+                                                <div className="flex items-center justify-center gap-1">
+                                                  <button onClick={() => saveUnit(u.id, s.id)} disabled={unitSaving}
+                                                    className="text-indigo-600 hover:text-indigo-800 disabled:opacity-40">
+                                                    <Check size={11} />
+                                                  </button>
+                                                  <button onClick={() => setUnitEditId(null)} disabled={unitSaving}
+                                                    className="text-gray-400 hover:text-gray-600">
+                                                    <X size={11} />
+                                                  </button>
+                                                </div>
+                                              ) : (
                                                 <button
-                                                  onClick={() => { setUnitEditId(u.id); setUnitEditVal(u.unit_number); }}
+                                                  onClick={() => {
+                                                    setUnitEditId(u.id);
+                                                    setUnitEditVal(u.unit_number);
+                                                    setUnitEditStatus(u.status);
+                                                    setUnitEditRent(String(u.monthly_rent));
+                                                  }}
                                                   className="p-1 rounded text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-                                                  title="Rename unit"
+                                                  title="Edit unit"
                                                 >
                                                   <Pencil size={11} />
                                                 </button>
