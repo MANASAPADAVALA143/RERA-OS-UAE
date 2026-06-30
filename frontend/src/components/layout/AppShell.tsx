@@ -186,8 +186,10 @@ function SidebarInner() {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-6 lg:p-8" style={{ background: 'transparent' }}>
-        <Outlet />
+      <main className="flex-1 overflow-y-auto p-4 lg:p-6 flex flex-col" style={{ background: 'transparent' }}>
+        <div className="flex-1" style={{ background: '#151B3D', border: '1px solid #2A3158', borderRadius: '1rem', padding: '1.5rem' }}>
+          <Outlet />
+        </div>
       </main>
     </div>
   );
