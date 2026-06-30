@@ -1156,6 +1156,71 @@ def create_ownership(
     return {"id": str(o.id)}
 
 
+@router.post("/ownership/import")
+async def import_ownership(
+    company_id: str = Form(...),
+    file: UploadFile = File(...),
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    """Import partners from Excel file (Partner Name | Ownership % | Role columns required)"""
+    import openpyxl
+    try:
+        content = await file.read()
+        wb = openpyxl.load_workbook(io.BytesIO(content))
+        ws = wb.active
+
+        co_id = uuid.UUID(company_id)
+        imported_count = 0
+        errors = []
+
+        for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            try:
+                if not row[0]:  # Skip empty rows
+                    continue
+
+                partner_name = str(row[0]).strip()
+                ownership_pct = float(row[1] or 0)
+                role = str(row[2] or "limited_partner").lower().replace(" ", "_")
+
+                # Validate role
+                if role not in ["general_partner", "limited_partner", "silent_partner", "managing_member", "passive_investor"]:
+                    role = "limited_partner"
+
+                # Check if partner already exists
+                existing = db.query(RentalOwnership).filter(
+                    RentalOwnership.tenant_id == current_user.tenant_id,
+                    RentalOwnership.company_id == co_id,
+                    RentalOwnership.partner_name == partner_name,
+                ).first()
+
+                if not existing:
+                    o = RentalOwnership(
+                        tenant_id=current_user.tenant_id,
+                        company_id=co_id,
+                        partner_name=partner_name,
+                        ownership_pct=ownership_pct,
+                        role=RentalPartnerRole(role),
+                    )
+                    db.add(o)
+                    imported_count += 1
+                else:
+                    # Update existing
+                    existing.ownership_pct = ownership_pct
+                    existing.role = RentalPartnerRole(role)
+            except Exception as e:
+                errors.append(f"Row {row_idx}: {str(e)}")
+
+        db.commit()
+        return {
+            "status": "imported",
+            "imported_count": imported_count,
+            "errors": errors,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Import failed: {str(e)}")
+
+
 # ── vacancy ───────────────────────────────────────────────────────────────────
 
 @router.get("/vacancy")
