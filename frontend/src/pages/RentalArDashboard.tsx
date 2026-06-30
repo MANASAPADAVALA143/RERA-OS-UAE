@@ -228,9 +228,13 @@ export default function RentalArDashboard() {
     { label: 'Best Performer',         value: 'ZYC LLC',  sub: '$94,675 YTD · Lowest variance',   valueColor: 'text-green-600', subColor: 'text-green-500',  accent: 'bg-green-500' },
   ];
 
+  // Only show exceptions for companies that still exist in the system
+  const validCompanyNames = new Set(companies.map(c => c.company_name));
+  const exceptionsForValidCompanies = EXCEPTIONS.filter(e => validCompanyNames.has(e.co));
+
   const filteredExceptions = activeFilter === 'All'
-    ? EXCEPTIONS
-    : EXCEPTIONS.filter(r => r.status === activeFilter);
+    ? exceptionsForValidCompanies
+    : exceptionsForValidCompanies.filter(r => r.status === activeFilter);
 
   return (
     <div className="p-5 bg-gray-50 min-h-screen space-y-4">
