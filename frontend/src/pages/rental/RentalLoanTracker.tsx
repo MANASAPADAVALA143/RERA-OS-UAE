@@ -312,8 +312,13 @@ export default function RentalLoanTracker() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
               <tr>
-                {['Company', 'Building', 'Bank', 'Loan Amount', 'Rate', 'EMI', 'Outstanding', 'Maturity', 'EMI Day', 'DSCR', 'Status'].map(h => (
-                  <th key={h} className="px-3 py-2.5 text-right first:text-left whitespace-nowrap">{h}</th>
+                {([
+                  ['Company', 'left'], ['Building', 'left'], ['Bank', 'left'],
+                  ['Loan Amount', 'right'], ['Rate', 'right'], ['EMI', 'right'],
+                  ['Outstanding', 'right'], ['Maturity', 'right'], ['EMI Day', 'right'],
+                  ['DSCR', 'right'], ['Status', 'right'],
+                ] as [string, string][]).map(([h, align]) => (
+                  <th key={h} className={`px-3 py-2.5 text-${align} whitespace-nowrap`}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -322,9 +327,9 @@ export default function RentalLoanTracker() {
                 const st = dscrStatus(l.dscr);
                 return (
                   <tr key={l.id} className="hover:bg-gray-50">
-                    <td className="px-3 py-2.5">{l.company_name}</td>
-                    <td className="px-3 py-2.5">{l.property_name}</td>
-                    <td className="px-3 py-2.5">{l.loan_bank_name}</td>
+                    <td className="px-3 py-2.5 text-left">{l.company_name}</td>
+                    <td className="px-3 py-2.5 text-left">{l.property_name}</td>
+                    <td className="px-3 py-2.5 text-left">{l.loan_bank_name}</td>
                     <td className="px-3 py-2.5 text-right font-mono">{fmtUSD(l.loan_amount)}</td>
                     <td className="px-3 py-2.5 text-right font-mono">{l.loan_interest_rate != null ? `${(l.loan_interest_rate * 100).toFixed(2)}%` : '—'}</td>
                     <td className="px-3 py-2.5 text-right font-mono">{l.loan_emi != null ? fmtUSD(l.loan_emi) : '—'}</td>
