@@ -210,3 +210,22 @@ class RentalOwnership(Base):
     company: Mapped["RentalCompany"] = relationship("RentalCompany", back_populates="ownership")
 
     __table_args__ = (Index("ix_r_ownership_tenant_company", "tenant_id", "company_id"),)
+
+
+class RentalFinancialUpload(Base):
+    """Stores parsed P&L / Balance Sheet / Cash Flow data uploaded per company."""
+    __tablename__ = "r_financial_uploads"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), nullable=False, index=True)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("r_companies.id", ondelete="CASCADE"), nullable=False, index=True)
+    company_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    filename: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    date_range: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    years: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    pl_data: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    bs_data: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    cf_data: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    uploaded_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    __table_args__ = (Index("ix_r_financial_uploads_tenant_company", "tenant_id", "company_id"),)

@@ -1611,3 +1611,129 @@ def seed_portfolio(
         ),
     }
 
+
+# ── financial statements (P&L / BS / CF) ─────────────────────────────────────
+
+def _ensure_fin_uploads_table(engine) -> None:
+    from models.rentals.models import RentalFinancialUpload
+    RentalFinancialUpload.__table__.create(bind=engine, checkfirst=True)
+
+
+@router.get("/financials")
+def list_financials(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from database import engine as _engine
+    _ensure_fin_uploads_table(_engine)
+    from models.rentals.models import RentalFinancialUpload
+    rows = db.query(RentalFinancialUpload).filter(
+        RentalFinancialUpload.tenant_id == current_user.tenant_id
+    ).all()
+    return [
+        {
+            "company_id": str(r.company_id),
+            "company_name": r.company_name,
+            "filename": r.filename,
+            "years": r.years or [],
+            "uploaded_at": r.uploaded_at.isoformat() if r.uploaded_at else None,
+        }
+        for r in rows
+    ]
+
+
+@router.get("/financials/{company_id}")
+def get_financials(
+    company_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from database import engine as _engine
+    _ensure_fin_uploads_table(_engine)
+    from models.rentals.models import RentalFinancialUpload
+    row = db.query(RentalFinancialUpload).filter(
+        RentalFinancialUpload.tenant_id == current_user.tenant_id,
+        RentalFinancialUpload.company_id == uuid.UUID(company_id),
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="No financials for this company")
+    return {
+        "company_id": str(row.company_id),
+        "company_name": row.company_name,
+        "filename": row.filename,
+        "date_range": row.date_range,
+        "years": row.years or [],
+        "pl": row.pl_data or [],
+        "bs": row.bs_data or [],
+        "cf": row.cf_data or [],
+        "uploaded_at": row.uploaded_at.isoformat() if row.uploaded_at else None,
+    }
+
+
+@router.post("/financials/save")
+def save_financials(
+    body: dict,
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    from database import engine as _engine
+    _ensure_fin_uploads_table(_engine)
+    from models.rentals.models import RentalFinancialUpload
+
+    company_id = uuid.UUID(body["company_id"])
+    existing = db.query(RentalFinancialUpload).filter(
+        RentalFinancialUpload.tenant_id == current_user.tenant_id,
+        RentalFinancialUpload.company_id == company_id,
+    ).first()
+
+    if existing:
+        existing.company_name = body.get("company_name", existing.company_name)
+        existing.filename = body.get("filename", existing.filename)
+        existing.date_range = body.get("date_range", existing.date_range)
+        existing.years = body.get("years", existing.years)
+        existing.pl_data = body.get("pl", existing.pl_data)
+        existing.bs_data = body.get("bs", existing.bs_data)
+        existing.cf_data = body.get("cf", existing.cf_data)
+        existing.uploaded_by = current_user.email
+    else:
+        row = RentalFinancialUpload(
+            tenant_id=current_user.tenant_id,
+            company_id=company_id,
+            company_name=body.get("company_name", ""),
+            filename=body.get("filename", ""),
+            date_range=body.get("date_range", ""),
+            years=body.get("years", []),
+            pl_data=body.get("pl", []),
+            bs_data=body.get("bs", []),
+            cf_data=body.get("cf", []),
+            uploaded_by=current_user.email,
+        )
+        db.add(row)
+
+    db.commit()
+    return {
+        "status": "saved",
+        "years": body.get("years", []),
+        "pl_rows": len(body.get("pl", [])),
+        "bs_rows": len(body.get("bs", [])),
+        "cf_rows": len(body.get("cf", [])),
+    }
+
+
+@router.delete("/financials/{company_id}", status_code=204)
+def delete_financials(
+    company_id: str,
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    from database import engine as _engine
+    _ensure_fin_uploads_table(_engine)
+    from models.rentals.models import RentalFinancialUpload
+    row = db.query(RentalFinancialUpload).filter(
+        RentalFinancialUpload.tenant_id == current_user.tenant_id,
+        RentalFinancialUpload.company_id == uuid.UUID(company_id),
+    ).first()
+    if row:
+        db.delete(row)
+        db.commit()
+

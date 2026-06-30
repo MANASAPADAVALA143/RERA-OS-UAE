@@ -5,6 +5,7 @@ import {
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid,
 } from 'recharts';
 import { Upload, Building2, FileSpreadsheet, TrendingUp } from 'lucide-react';
+import { api } from '../services/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -25,6 +26,12 @@ interface ParsedFinancials {
   years: number[];
   pl: FinItem[];
   bs: FinItem[];
+  cf: FinItem[];
+}
+
+interface CompanyOption {
+  id: string;
+  company_name: string;
 }
 
 interface KpiData {
@@ -38,27 +45,10 @@ interface KpiData {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const RENTAL_COMPANIES = [
-  'All Companies',
-  'ABC LLC',
-  'Sunstone Rentals LLC',
-  'Meridian Residential LLC',
-  'Cornerstone Housing LLC',
-  'Pinnacle Rentals I LLC',
-  'Summit Living LLC',
-  'Heritage Residential LLC',
-  'Riverview Rentals LLC',
-  'Landmark Housing LLC',
-  'Horizon Rentals LLC',
-  'Crestview Living LLC',
-];
-
-const TABS = ['P&L Statement', 'Balance Sheet', 'KPI Dashboard', 'CFO Dashboard'] as const;
+const TABS = ['P&L Statement', 'Balance Sheet', 'Cash Flow', 'KPI Dashboard', 'CFO Dashboard'] as const;
 type FinTab = typeof TABS[number];
 
 const CC = ['#2E75B6','#70AD47','#ED7D31','#FFC000','#5A2D82','#C00000','#00B0F0','#FF0066'];
-
-const lsKey = (c: string) => `rental_financials_${c.replace(/\s+/g, '_')}`;
 
 // ── Parser ────────────────────────────────────────────────────────────────────
 
@@ -75,12 +65,15 @@ function detectYearHeaders(raw: unknown[][]): { headerRowIdx: number; yearCols: 
   return null;
 }
 
-function detectSheetType(raw: unknown[][]): 'pl' | 'bs' | 'unknown' {
+function detectSheetType(raw: unknown[][]): 'pl' | 'bs' | 'cf' | 'unknown' {
   for (let r = 0; r < Math.min(6, raw.length); r++) {
     const joined = (raw[r] as unknown[]).map(c => String(c ?? '').toLowerCase()).join(' ');
     if (joined.includes('profit and loss') || joined.includes('income statement')) return 'pl';
     if (joined.includes('balance sheet')) return 'bs';
+    if (joined.includes('cash flow') || joined.includes('statement of cash') || joined.includes('cashflow')) return 'cf';
   }
+  const sheetNameHints = (raw[0] as unknown[] ?? []).map(c => String(c ?? '').toLowerCase()).join(' ');
+  if (/cash\s*flow/.test(sheetNameHints)) return 'cf';
   return 'unknown';
 }
 
@@ -134,6 +127,7 @@ function parseExcel(file: File, companyName: string): Promise<ParsedFinancials> 
         const wb = XLSX.read(data, { type: 'array', cellFormula: false, cellHTML: false });
         let plItems: FinItem[] = [];
         let bsItems: FinItem[] = [];
+        let cfItems: FinItem[] = [];
         let detectedYears: number[] = [];
         let detectedName = companyName;
         let dateRange = '';
@@ -141,7 +135,9 @@ function parseExcel(file: File, companyName: string): Promise<ParsedFinancials> 
           const ws = wb.Sheets[sheetName];
           if (!ws) continue;
           const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' });
-          const sheetType = detectSheetType(raw);
+          // Inject sheet name as first row hint for CF detection
+          const rawWithHint = [[sheetName, ...((raw[0] as unknown[]) || [])], ...raw.slice(1)] as unknown[][];
+          const sheetType = detectSheetType(rawWithHint);
           const yearInfo = detectYearHeaders(raw);
           if (!yearInfo) continue;
           const name = getCompanyName(raw);
@@ -151,12 +147,14 @@ function parseExcel(file: File, companyName: string): Promise<ParsedFinancials> 
           const items = parseSheetRows(raw, yearInfo.headerRowIdx, yearInfo.yearCols);
           if (sheetType === 'pl') { plItems = items; detectedYears = years; }
           else if (sheetType === 'bs') { bsItems = items; if (!detectedYears.length) detectedYears = years; }
+          else if (sheetType === 'cf') { cfItems = items; if (!detectedYears.length) detectedYears = years; }
           else {
             if (!plItems.length) { plItems = items; detectedYears = years; }
             else if (!bsItems.length) { bsItems = items; }
+            else if (!cfItems.length) { cfItems = items; }
           }
         }
-        resolve({ companyName: detectedName || companyName, dateRange, fileName: file.name, uploadedAt: new Date().toISOString(), years: detectedYears, pl: plItems, bs: bsItems });
+        resolve({ companyName: detectedName || companyName, dateRange, fileName: file.name, uploadedAt: new Date().toISOString(), years: detectedYears, pl: plItems, bs: bsItems, cf: cfItems });
       } catch (err) { reject(err); }
     };
     reader.onerror = reject;
@@ -313,6 +311,77 @@ function BSTable({ fin }: { fin: ParsedFinancials }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// ── Cash Flow Table ───────────────────────────────────────────────────────────
+
+function CFTable({ fin }: { fin: ParsedFinancials }) {
+  if (!fin.cf.length) return (
+    <div className="text-center py-12">
+      <p className="text-gray-400 text-sm mb-2">No Cash Flow data found in the uploaded file.</p>
+      <p className="text-xs text-gray-300">Ensure the Excel has a sheet named "Cash Flow" or containing "Statement of Cash Flows".</p>
+    </div>
+  );
+  const years = fin.years;
+  const rowBg = (item: FinItem) => {
+    if (item.isNetIncome) return 'bg-blue-900 text-white font-bold';
+    if (item.isTotal) return 'bg-blue-50 font-semibold text-blue-900 border-t border-blue-200';
+    if (item.isSectionHeader) return 'bg-teal-50 text-teal-800 font-semibold text-xs uppercase tracking-wide';
+    return 'hover:bg-gray-50 text-gray-700';
+  };
+  const padCls = (item: FinItem) => item.isTotal || item.isSectionHeader ? 'px-4' : item.indent > 4 ? 'pl-12 pr-4' : item.indent > 1 ? 'pl-8 pr-4' : 'pl-5 pr-4';
+
+  const netCFByYear = years.map(y => {
+    const totals = fin.cf.filter(i => i.isTotal || i.isNetIncome);
+    const last = totals[totals.length - 1];
+    return { year: String(y), value: last?.values[y] ?? 0 };
+  });
+
+  return (
+    <div className="space-y-6">
+      {/* Summary bar chart */}
+      {netCFByYear.some(d => d.value !== 0) && (
+        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+          <p className="text-sm font-semibold text-gray-700 mb-3">Net Cash Flow by Year</p>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={netCFByYear} margin={{ left: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="year" tick={{ fontSize: 11 }} />
+              <YAxis tickFormatter={v => fmt(v as number)} tick={{ fontSize: 10 }} />
+              <Tooltip formatter={(v: number) => fmtFull(v)} />
+              <Bar dataKey="value" name="Net Cash Flow">
+                {netCFByYear.map((d, i) => <Cell key={i} fill={d.value >= 0 ? '#22c55e' : '#ef4444'} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Detail table */}
+      <div className="overflow-x-auto rounded-lg border border-gray-200">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-gray-900 text-white">
+              <th className="text-left px-4 py-2.5 w-72">Line Item</th>
+              {years.map(y => <th key={y} className="text-right px-3 py-2.5 min-w-[110px]">{y}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {fin.cf.map((item, i) => (
+              <tr key={i} className={`border-t border-gray-100 ${rowBg(item)}`}>
+                <td className={`py-1.5 ${padCls(item)}`}>{item.label}</td>
+                {years.map(y => (
+                  <td key={y} className={`py-1.5 px-3 text-right font-mono ${item.isNetIncome ? 'text-white' : item.values[y] < 0 ? 'text-red-600' : ''}`}>
+                    {item.values[y] === 0 ? '—' : fmtFull(item.values[y])}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -575,48 +644,91 @@ function AllCompaniesSummary({ all }: { all: Record<string, ParsedFinancials> })
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function RentalFinancials() {
-  const [selectedCompany, setSelectedCompany] = useState('All Companies');
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<FinTab>('P&L Statement');
-  const [allFinancials, setAllFinancials] = useState<Record<string,ParsedFinancials>>({});
+  const [allFinancials, setAllFinancials] = useState<Record<string, ParsedFinancials>>({});
   const [uploading, setUploading] = useState(false);
+  const [loadingFin, setLoadingFin] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Load company list from backend
   useEffect(() => {
-    const loaded: Record<string,ParsedFinancials> = {};
-    for (const co of RENTAL_COMPANIES) {
-      if (co === 'All Companies') continue;
-      try {
-        const stored = localStorage.getItem(lsKey(co));
-        if (stored) loaded[co] = JSON.parse(stored);
-      } catch {}
-    }
-    if (Object.keys(loaded).length) setAllFinancials(loaded);
+    api.get<{ id: string; company_name: string }[]>('/api/rentals/companies')
+      .then(res => {
+        const list = Array.isArray(res.data) ? res.data : [];
+        setCompanies(list.map(c => ({ id: c.id, company_name: c.company_name })));
+      })
+      .catch(() => {});
   }, []);
 
-  const isAll = selectedCompany === 'All Companies';
-  const currentFin = !isAll ? allFinancials[selectedCompany] : null;
+  // Load financials from backend when company changes
+  useEffect(() => {
+    if (!selectedCompanyId) return;
+    if (allFinancials[selectedCompanyId]) return; // already cached
+    setLoadingFin(true);
+    api.get<{
+      company_name: string; filename: string; date_range: string;
+      years: number[]; pl: FinItem[]; bs: FinItem[]; cf: FinItem[]; uploaded_at: string;
+    }>(`/api/rentals/financials/${selectedCompanyId}`)
+      .then(res => {
+        const d = res.data;
+        setAllFinancials(prev => ({
+          ...prev,
+          [selectedCompanyId]: {
+            companyName: d.company_name,
+            fileName: d.filename,
+            dateRange: d.date_range,
+            uploadedAt: d.uploaded_at,
+            years: d.years,
+            pl: d.pl,
+            bs: d.bs,
+            cf: d.cf ?? [],
+          },
+        }));
+      })
+      .catch(() => {}) // 404 = no upload yet — leave as undefined
+      .finally(() => setLoadingFin(false));
+  }, [selectedCompanyId]);
+
+  const isAll = !selectedCompanyId;
+  const currentFin = selectedCompanyId ? allFinancials[selectedCompanyId] : null;
+  const selectedCompanyName = companies.find(c => c.id === selectedCompanyId)?.company_name ?? '';
 
   const triggerUpload = useCallback(() => {
-    if (isAll) { alert('Please select a specific company before uploading.'); return; }
+    if (!selectedCompanyId) { alert('Please select a specific company before uploading.'); return; }
     fileRef.current?.click();
-  }, [isAll]);
+  }, [selectedCompanyId]);
 
   const handleFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || isAll) return;
+    if (!file || !selectedCompanyId) return;
     setUploading(true);
     try {
-      const fin = await parseExcel(file, selectedCompany);
-      setAllFinancials(prev => {
-        const existing = prev[selectedCompany];
-        const merged = existing ? {
-          ...fin,
-          pl:    fin.pl.length    ? fin.pl    : existing.pl,
-          bs:    fin.bs.length    ? fin.bs    : existing.bs,
-          years: Array.from(new Set([...existing.years, ...fin.years])).sort((a,b)=>a-b),
-        } : fin;
-        localStorage.setItem(lsKey(selectedCompany), JSON.stringify(merged));
-        return { ...prev, [selectedCompany]: merged };
+      const fin = await parseExcel(file, selectedCompanyName);
+
+      // Merge with existing if present
+      const existing = allFinancials[selectedCompanyId];
+      const merged: ParsedFinancials = existing ? {
+        ...fin,
+        pl:    fin.pl.length  ? fin.pl    : existing.pl,
+        bs:    fin.bs.length  ? fin.bs    : existing.bs,
+        cf:    fin.cf.length  ? fin.cf    : existing.cf,
+        years: Array.from(new Set([...existing.years, ...fin.years])).sort((a, b) => a - b),
+      } : fin;
+
+      setAllFinancials(prev => ({ ...prev, [selectedCompanyId]: merged }));
+
+      // Persist to backend
+      await api.post('/api/rentals/financials/save', {
+        company_id: selectedCompanyId,
+        company_name: merged.companyName,
+        filename: merged.fileName,
+        date_range: merged.dateRange,
+        years: merged.years,
+        pl: merged.pl,
+        bs: merged.bs,
+        cf: merged.cf,
       });
     } catch {
       alert('Failed to parse the Excel file. Please check the format and try again.');
@@ -624,13 +736,15 @@ export default function RentalFinancials() {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = '';
     }
-  }, [isAll, selectedCompany]);
+  }, [selectedCompanyId, selectedCompanyName, allFinancials]);
 
-  const clearData = useCallback(() => {
-    if (!currentFin) return;
-    localStorage.removeItem(lsKey(selectedCompany));
-    setAllFinancials(prev => { const n={...prev}; delete n[selectedCompany]; return n; });
-  }, [selectedCompany, currentFin]);
+  const clearData = useCallback(async () => {
+    if (!currentFin || !selectedCompanyId) return;
+    try {
+      await api.delete(`/api/rentals/financials/${selectedCompanyId}`);
+    } catch {}
+    setAllFinancials(prev => { const n = { ...prev }; delete n[selectedCompanyId]; return n; });
+  }, [selectedCompanyId, currentFin]);
 
   return (
     <div className="space-y-6">
@@ -639,17 +753,21 @@ export default function RentalFinancials() {
         <div className="flex flex-wrap items-center gap-3">
           <Building2 size={15} className="text-gray-400 shrink-0" />
           <select
-            value={selectedCompany}
-            onChange={e => { setSelectedCompany(e.target.value); setActiveTab('P&L Statement'); }}
+            value={selectedCompanyId ?? ''}
+            onChange={e => {
+              setSelectedCompanyId(e.target.value || null);
+              setActiveTab('P&L Statement');
+            }}
             className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
           >
-            {RENTAL_COMPANIES.map(c => <option key={c}>{c}</option>)}
+            <option value="">All Companies</option>
+            {companies.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
           </select>
           <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFile} />
-          {!isAll && (
-            <button onClick={triggerUpload} disabled={uploading}
+          {selectedCompanyId && (
+            <button onClick={triggerUpload} disabled={uploading || loadingFin}
               className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors">
-              <Upload size={14} />{uploading ? 'Parsing…' : 'Upload Excel'}
+              <Upload size={14} />{uploading ? 'Uploading…' : 'Upload Excel'}
             </button>
           )}
           {currentFin && (
@@ -674,6 +792,8 @@ export default function RentalFinancials() {
             : <AllCompaniesSummary all={allFinancials} />
           }
         </div>
+      ) : loadingFin ? (
+        <div className="flex items-center justify-center py-24 text-gray-400 text-sm">Loading financials…</div>
       ) : currentFin ? (
         <div className="space-y-4">
           {/* Header */}
@@ -681,7 +801,7 @@ export default function RentalFinancials() {
             <div>
               <h1 className="text-lg font-bold text-gray-900">{currentFin.companyName}</h1>
               <p className="text-gray-400 text-xs mt-0.5">
-                {currentFin.dateRange || `Financial Statements`} · Years: {currentFin.years.join(', ')}
+                {currentFin.dateRange || 'Financial Statements'} · Years: {currentFin.years.join(', ')}
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -692,10 +812,10 @@ export default function RentalFinancials() {
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit flex-wrap">
             {TABS.map(t => (
               <button key={t} onClick={() => setActiveTab(t)}
-                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab===t?'bg-emerald-600 text-white shadow-sm':'text-gray-600 hover:bg-white hover:text-gray-800'}`}>
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab === t ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-800'}`}>
                 {t}
               </button>
             ))}
@@ -705,12 +825,13 @@ export default function RentalFinancials() {
           <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
             {activeTab === 'P&L Statement' && <PLTable fin={currentFin} />}
             {activeTab === 'Balance Sheet'  && <BSTable fin={currentFin} />}
+            {activeTab === 'Cash Flow'      && <CFTable fin={currentFin} />}
             {activeTab === 'KPI Dashboard'  && <KPITab  fin={currentFin} />}
             {activeTab === 'CFO Dashboard'  && <CFOTab  fin={currentFin} />}
           </div>
         </div>
       ) : (
-        <EmptyUpload onUpload={triggerUpload} company={selectedCompany} />
+        <EmptyUpload onUpload={triggerUpload} company={selectedCompanyName || 'the selected company'} />
       )}
     </div>
   );

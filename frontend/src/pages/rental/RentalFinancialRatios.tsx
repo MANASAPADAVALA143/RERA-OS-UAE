@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, CartesianGrid, Legend, ReferenceLine, Cell,
   ComposedChart,
 } from 'recharts';
+import { api } from '../../services/api';
 
 type RatioTab = 'Profitability' | 'Liquidity' | 'Solvency' | 'Rental KPIs' | 'Cost of Capital';
 type StatusType = 'good' | 'watch' | 'critical' | 'monitor' | 'info';
@@ -27,11 +28,109 @@ const S: Record<StatusType, { border: string; bg: string; pill: string }> = {
   info:     { border: 'border-l-blue-500',   bg: 'bg-blue-50',   pill: 'bg-blue-100 text-blue-800'     },
 };
 
-const COMPANIES_FULL = [
-  'Sunstone Rentals LLC','Meridian Residential LLC','Cornerstone Housing LLC',
-  'Pinnacle Rentals I LLC','Summit Living LLC','Heritage Residential LLC',
-  'Riverview Rentals LLC','Landmark Housing LLC','Horizon Rentals LLC','Crestview Living LLC',
-];
+interface FinItem { label: string; values: Record<number, number>; indent: number; isTotal: boolean; isSectionHeader: boolean; isNetIncome: boolean; }
+interface LiveFin { company_name: string; filename: string; date_range: string; years: number[]; pl: FinItem[]; bs: FinItem[]; cf: FinItem[]; uploaded_at: string; }
+interface CoOption { id: string; company_name: string; }
+
+function getYV(items: FinItem[], pat: RegExp, year: number): number {
+  return items.find(i => pat.test(i.label))?.values[year] ?? 0;
+}
+function sumI(items: FinItem[], pat: RegExp, year: number): number {
+  return items.filter(i => !i.isSectionHeader && !i.isTotal && pat.test(i.label)).reduce((s, i) => s + (i.values[year] ?? 0), 0);
+}
+function fmtV(n: number) { if (n === 0) return '—'; const a = Math.abs(n); const s = a >= 1_000_000 ? `$${(a/1_000_000).toFixed(2)}M` : a >= 1_000 ? `$${(a/1_000).toFixed(0)}K` : `$${a.toFixed(0)}`; return n < 0 ? `(${s})` : s; }
+
+function LiveDataPanel({ fin }: { fin: LiveFin }) {
+  const lastY = fin.years[fin.years.length - 1];
+  const prevY = fin.years.length >= 2 ? fin.years[fin.years.length - 2] : null;
+  const pl = fin.pl; const bs = fin.bs;
+  const totalRevenue = getYV(pl,/^total\s+(for\s+)?income$/i,lastY) || sumI(pl,/income|revenue|rent/i,lastY);
+  const totalExpenses = getYV(pl,/^total\s+(for\s+)?expenses?$/i,lastY);
+  const netIncome = getYV(pl,/^net\s+income$/i,lastY);
+  const interestExpense = Math.abs(sumI(pl,/interest/i,lastY));
+  const noi = totalRevenue - totalExpenses + interestExpense;
+  const totalAssets = getYV(bs,/^total\s+(for\s+)?assets$/i,lastY);
+  const totalLiabilities = getYV(bs,/^total\s+(for\s+)?liabilities$/i,lastY);
+  const equity = getYV(bs,/^total\s+(for\s+)?equity$/i,lastY);
+  const cash = getYV(bs,/^total\s+(for\s+)?bank/i,lastY) || sumI(bs,/^bank|checking|savings/i,lastY);
+  const buildings = Math.abs(getYV(bs,/^buildings$/i,lastY));
+  const loans = Math.abs(getYV(bs,/^total\s+for\s+long.term/i,lastY) || sumI(bs,/long.term.*loan/i,lastY));
+  const noiM = totalRevenue > 0 ? noi / totalRevenue * 100 : 0;
+  const netM = totalRevenue > 0 ? netIncome / totalRevenue * 100 : 0;
+  const ltv = buildings > 0 ? loans / buildings * 100 : 0;
+  const dte = equity > 0 ? totalLiabilities / equity : 0;
+  const iCov = interestExpense > 0 ? noi / interestExpense : 0;
+  const expR = totalRevenue > 0 ? totalExpenses / totalRevenue * 100 : 0;
+
+  const trendRows = fin.years.map(y => {
+    const rev = getYV(pl,/^total\s+(for\s+)?income$/i,y) || sumI(pl,/income|revenue|rent/i,y);
+    const exp = getYV(pl,/^total\s+(for\s+)?expenses?$/i,y);
+    const ni = getYV(pl,/^net\s+income$/i,y);
+    const ie = Math.abs(sumI(pl,/interest/i,y));
+    const n = rev - exp + ie;
+    return { year: String(y), NOI: n, Revenue: rev, 'Net Income': ni, 'NOI Margin %': rev > 0 ? +(n/rev*100).toFixed(1) : 0 };
+  });
+
+  const prevRevenue = prevY ? (getYV(pl,/^total\s+(for\s+)?income$/i,prevY) || sumI(pl,/income|revenue|rent/i,prevY)) : null;
+  const revGrowth = prevRevenue && prevRevenue > 0 ? ((totalRevenue - prevRevenue)/prevRevenue*100) : null;
+
+  const metrics = [
+    { label: 'NOI Margin', value: noiM > 0 ? `${noiM.toFixed(1)}%` : '—', status: noiM>=35?'good':noiM>=20?'watch':'critical' as const },
+    { label: 'Net Margin', value: `${netM.toFixed(1)}%`, status: netM>=10?'good':netM>=0?'watch':'monitor' as const },
+    { label: 'Revenue', value: fmtV(totalRevenue), status: 'info' as const },
+    { label: 'NOI', value: fmtV(noi), status: noi>=0?'good':'critical' as const },
+    { label: 'LTV', value: ltv > 0 ? `${ltv.toFixed(1)}%` : '—', status: ltv<=75?'good':ltv<=85?'watch':'monitor' as const },
+    { label: 'Int. Coverage', value: iCov > 0 ? `${iCov.toFixed(2)}x` : '—', status: iCov>=2?'good':iCov>=1.2?'watch':'critical' as const },
+    { label: 'D/E Ratio', value: dte > 0 ? `${dte.toFixed(1)}x` : '—', status: dte<=3?'good':dte<=6?'watch':'monitor' as const },
+    { label: 'Expense Ratio', value: expR > 0 ? `${expR.toFixed(1)}%` : '—', status: expR<=70?'good':expR<=85?'watch':'critical' as const },
+    { label: 'Cash', value: fmtV(cash), status: cash>10000?'good':cash>0?'watch':'critical' as const },
+    { label: 'Total Assets', value: fmtV(totalAssets), status: 'info' as const },
+    { label: 'Equity', value: fmtV(equity), status: equity>0?'good':'critical' as const },
+    { label: 'Revenue Growth', value: revGrowth !== null ? `${revGrowth>=0?'+':''}${revGrowth.toFixed(1)}%` : 'N/A', status: revGrowth===null?'info':revGrowth>=3?'good':revGrowth>=0?'watch':'critical' as const },
+  ];
+  const colors: Record<string,string> = { good:'border-green-500 bg-green-50 text-green-800', watch:'border-amber-500 bg-amber-50 text-amber-800', critical:'border-red-500 bg-red-50 text-red-800', monitor:'border-orange-500 bg-orange-50 text-orange-800', info:'border-blue-500 bg-blue-50 text-blue-800' };
+
+  return (
+    <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <span className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Live Data — {fin.company_name}</span>
+          <p className="text-xs text-gray-400 mt-0.5">{fin.filename} · Latest year: <strong>{lastY}</strong> · {fin.years.length} years of data</p>
+        </div>
+        <div className="flex gap-1 flex-wrap">
+          {fin.years.map(y => <span key={y} className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">{y}</span>)}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+        {metrics.map(m => (
+          <div key={m.label} className={`border-l-4 rounded-lg px-3 py-2 ${colors[m.status]}`}>
+            <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">{m.label}</p>
+            <p className="text-sm font-bold font-mono mt-0.5">{m.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {trendRows.length >= 2 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 mb-2">Multi-Year P&amp;L Trend</p>
+          <ResponsiveContainer width="100%" height={160}>
+            <LineChart data={trendRows} margin={{ left: 20, right: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="year" tick={{ fontSize: 10 }} />
+              <YAxis tickFormatter={v => fmtV(v as number)} tick={{ fontSize: 9 }} />
+              <Tooltip formatter={(v: number) => fmtV(v)} />
+              <Legend wrapperStyle={{ fontSize: 10 }} />
+              <Line type="monotone" dataKey="Revenue" stroke="#2E75B6" strokeWidth={2} dot />
+              <Line type="monotone" dataKey="NOI" stroke="#70AD47" strokeWidth={2} dot />
+              <Line type="monotone" dataKey="Net Income" stroke="#ED7D31" strokeWidth={1.5} strokeDasharray="5 3" dot />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const CO_DATA = [
   { name: 'Sunstone',    occ: 83.3, revUnit: 1507, expUnit: 1370, dscr: 0.82, icr: 0.31, currRatio: 2.8, noiMargin: 1.7  },
@@ -366,12 +465,29 @@ function CostOfCapitalTab() {
   );
 }
 
-const TABS: RatioTab[] = ['Profitability', 'Liquidity', 'Solvency', 'Rental KPIs', 'Cost of Capital'];
+const RATIO_TABS: RatioTab[] = ['Profitability', 'Liquidity', 'Solvency', 'Rental KPIs', 'Cost of Capital'];
 
 export default function RentalFinancialRatios() {
   const [activeTab, setActiveTab] = useState<RatioTab>('Profitability');
-  const [company, setCompany] = useState('All Companies');
-  const [period, setPeriod] = useState('2025');
+  const [companies, setCompanies] = useState<CoOption[]>([]);
+  const [selectedId, setSelectedId] = useState<string>('');
+  const [liveData, setLiveData] = useState<LiveFin | null>(null);
+  const [loadingLive, setLoadingLive] = useState(false);
+
+  useEffect(() => {
+    api.get<CoOption[]>('/api/rentals/companies')
+      .then(res => setCompanies(Array.isArray(res.data) ? res.data : []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!selectedId) { setLiveData(null); return; }
+    setLoadingLive(true);
+    api.get<LiveFin>(`/api/rentals/financials/${selectedId}`)
+      .then(res => setLiveData(res.data))
+      .catch(() => setLiveData(null))
+      .finally(() => setLoadingLive(false));
+  }, [selectedId]);
 
   return (
     <div className="space-y-6">
@@ -382,32 +498,30 @@ export default function RentalFinancialRatios() {
         <p className="text-sm text-gray-500 mt-1">Rental Portfolio — Solvency, Profitability, Liquidity &amp; Rental KPIs</p>
       </div>
 
-      {/* Selectors */}
-      <div className="flex gap-3 flex-wrap">
+      {/* Company selector */}
+      <div className="flex gap-3 flex-wrap items-center">
         <select
-          value={company}
-          onChange={e => setCompany(e.target.value)}
+          value={selectedId}
+          onChange={e => setSelectedId(e.target.value)}
           className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
         >
-          <option value="All Companies">All Companies</option>
-          {COMPANIES_FULL.map(c => <option key={c} value={c}>{c}</option>)}
+          <option value="">All Companies (Portfolio Benchmarks)</option>
+          {companies.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
         </select>
-        <div className="flex rounded-lg border border-gray-300 overflow-hidden">
-          {['2022','2023','2024','2025'].map(y => (
-            <button
-              key={y}
-              onClick={() => setPeriod(y)}
-              className={`px-4 py-1.5 text-sm transition-colors ${period === y ? 'bg-[#1a3a2a] text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-            >
-              {y}
-            </button>
-          ))}
-        </div>
+        {selectedId && !liveData && !loadingLive && (
+          <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+            No financials uploaded for this company — go to Financials to upload P&amp;L/BS/CF
+          </span>
+        )}
+        {loadingLive && <span className="text-xs text-gray-400">Loading live data…</span>}
       </div>
 
-      {/* Tab switcher */}
+      {/* Live data panel — shown when company has uploaded financials */}
+      {liveData && <LiveDataPanel fin={liveData} />}
+
+      {/* Portfolio benchmark tabs */}
       <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
-        {TABS.map(tab => (
+        {RATIO_TABS.map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
