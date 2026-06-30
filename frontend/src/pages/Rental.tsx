@@ -23,6 +23,7 @@ import RentalEntityRollup from './RentalEntityRollup';
 import RentalCompliance from './RentalCompliance';
 import RentalFinancials from './RentalFinancials';
 import RentalDiscounts from './RentalDiscounts';
+import RentalPortfolio from './RentalPortfolio';
 import RentalFinancialRatios from './rental/RentalFinancialRatios';
 import RentalBuildingExpenses from './rental/RentalBuildingExpenses';
 import RentalLoanTracker from './rental/RentalLoanTracker';
@@ -40,6 +41,7 @@ export default function Rental() {
   return (
     <div className="space-y-6">
       {tab === 'overview'     && <ErrorBoundary><RentalOverview /></ErrorBoundary>}
+      {tab === 'portfolio'    && <ErrorBoundary><RentalPortfolio /></ErrorBoundary>}
       {tab === 'companies'    && <ErrorBoundary><RentalCompanies /></ErrorBoundary>}
       {tab === 'units'        && <ErrorBoundary><RentalUnits /></ErrorBoundary>}
       {tab === 'discounts'    && <ErrorBoundary><RentalDiscounts /></ErrorBoundary>}

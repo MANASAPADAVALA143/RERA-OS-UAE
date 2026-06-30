@@ -40,6 +40,7 @@ export default function App() {
             <Route path="/reit" element={<Reit />} />
             <Route path="/reit/:propertyId" element={<ReitPropertyDetail />} />
             <Route path="/rental" element={<Rental />} />
+            <Route path="/rental/portfolio" element={<Rental />} />
             <Route path="/rental/building-expenses" element={<Rental />} />
             <Route path="/rental/loan-tracker" element={<Rental />} />
             <Route path="/rental/cfo-portfolio" element={<Rental />} />
