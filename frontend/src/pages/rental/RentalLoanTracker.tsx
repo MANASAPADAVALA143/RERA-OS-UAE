@@ -350,13 +350,13 @@ export default function RentalLoanTracker() {
           return (
             <div key={k.label} className="rounded-xl border p-5" style={{ background: '#FFFFFF', borderColor: '#E5E7EB', borderLeft: `4px solid ${k.border}` }}>
               <div className="flex items-start justify-between mb-3">
-                <p className="text-xs text-gray-600 uppercase font-semibold tracking-wider">{k.label}</p>
+                <p style={{ fontSize: '12px', color: '#666666', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>{k.label}</p>
                 <div style={{ background: k.color, width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <Icon size={18} style={{ color: k.border }} />
                 </div>
               </div>
-              <p className="text-2xl font-bold font-mono text-gray-900" style={{ minHeight: '32px' }}>{k.value}</p>
-              {k.sub && <p className="text-xs text-gray-500 mt-2 truncate">{k.sub}</p>}
+              <p style={{ fontSize: '24px', fontWeight: 'bold', fontFamily: 'monospace', color: '#1F2937', minHeight: '32px' }}>{k.value}</p>
+              {k.sub && <p style={{ fontSize: '12px', color: '#888888', marginTop: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.sub}</p>}
             </div>
           );
         })}
