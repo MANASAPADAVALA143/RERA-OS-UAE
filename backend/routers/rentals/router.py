@@ -1028,10 +1028,24 @@ def create_expense(
     current_user: CurrentUser = Depends(require_write_access()),
     db: Session = Depends(get_db),
 ):
+    company_id = uuid.UUID(body["company_id"])
+
+    # If property_id is empty/missing, get the first property for this company
+    property_id = body.get("property_id") or ""
+    if not property_id or property_id == "":
+        prop = db.query(RentalProp).filter(
+            RentalProp.tenant_id == current_user.tenant_id,
+            RentalProp.company_id == company_id
+        ).first()
+        if prop:
+            property_id = str(prop.id)
+        else:
+            raise HTTPException(status_code=400, detail="No properties found for this company")
+
     e = RentalExpense(
         tenant_id=current_user.tenant_id,
-        property_id=uuid.UUID(body["property_id"]),
-        company_id=uuid.UUID(body["company_id"]),
+        property_id=uuid.UUID(property_id),
+        company_id=company_id,
         expense_date=date.fromisoformat(body["expense_date"]),
         category=RentalExpenseCategory(body["category"]),
         amount=float(body["amount"]),
