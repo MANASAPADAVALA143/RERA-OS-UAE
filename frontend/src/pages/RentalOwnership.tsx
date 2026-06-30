@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import api from '../services/api';
 import { LoadingSkeleton } from '../components/ui/Table';
 import { fmtUSD } from '../components/ProtectedRoute';
@@ -222,6 +222,7 @@ export default function RentalOwnership() {
   const [partnerForm, setPartnerForm]       = useState<AddPartnerForm>(BLANK_PARTNER);
   const [showAddContrib, setShowAddContrib] = useState(false);
   const [contribForm, setContribForm]       = useState({ ...BLANK_CONTRIB });
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true); setError('');
@@ -371,6 +372,28 @@ export default function RentalOwnership() {
     setContribForm({ ...BLANK_CONTRIB });
   }
 
+  async function handleImportPartners(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || companyFilter === 'all') {
+      alert('Please select a specific company first');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('company_id', companyFilter);
+    formData.append('file', file);
+
+    try {
+      const response = await api.post('/api/rentals/ownership/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      alert(`Imported ${(response.data as any).imported_count} partners successfully`);
+      loadData();
+    } catch (err) {
+      alert('Failed to import partners');
+    }
+  }
+
   // ── Render ───────────────────────────────────────────────────────────────────
   if (loading) return <LoadingSkeleton rows={8} />;
   if (error)   return <div className="text-red-600 p-4">{error}<button className="ml-3 underline" onClick={loadData}>Retry</button></div>;
@@ -407,6 +430,12 @@ export default function RentalOwnership() {
           <button className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg text-xs text-gray-700 hover:bg-gray-50">
             <Download size={13} /> Export PDF
           </button>
+          <button onClick={() => importFileRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg text-xs text-gray-700 hover:bg-gray-50"
+            disabled={companyFilter === 'all'}>
+            <Download size={13} /> Import Partners
+          </button>
+          <input ref={importFileRef} type="file" accept=".xlsx" onChange={handleImportPartners} style={{ display: 'none' }} />
           <button className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs hover:bg-indigo-700">
             <Zap size={13} /> AI Insights
           </button>
