@@ -214,24 +214,29 @@ function calcKpis(fin: ParsedFinancials, year: number): KpiData {
 
 // ── Empty State ───────────────────────────────────────────────────────────────
 
-function EmptyUpload({ onUpload, company }: { onUpload: () => void; company: string }) {
+function EmptyUpload({ onUpload, company, onAddMetrics }: { onUpload: () => void; onAddMetrics: () => void; company: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
-      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-        <FileSpreadsheet className="w-8 h-8 text-gray-400" />
+      <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ background: '#1E2A4A' }}>
+        <FileSpreadsheet className="w-8 h-8" style={{ color: '#60A5FA' }} />
       </div>
-      <h3 className="text-lg font-semibold text-gray-700 mb-2">No Financial Data Uploaded</h3>
-      <p className="text-sm text-gray-500 mb-6 max-w-sm">
+      <h3 className="text-lg font-semibold mb-2" style={{ color: '#F1F5F9' }}>No Financial Data Uploaded</h3>
+      <p className="text-sm mb-6 max-w-sm" style={{ color: '#94A3B8' }}>
         {company === 'All Companies'
           ? 'Select a specific company from the dropdown above to upload their financials.'
-          : `Upload ${company}'s Excel financial statements (P&L and Balance Sheet).`}
+          : `Upload ${company}'s Excel financial statements (P&L and Balance Sheet) or enter metrics manually.`}
       </p>
       {company !== 'All Companies' && (
-        <button onClick={onUpload} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors">
-          <Upload size={16} /> Upload Excel File
-        </button>
+        <div className="flex gap-3 flex-wrap justify-center">
+          <button onClick={onUpload} className="flex items-center gap-2 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors" style={{ background: 'linear-gradient(135deg,#3B82F6,#1D4ED8)' }}>
+            <Upload size={16} /> Upload Excel File
+          </button>
+          <button onClick={onAddMetrics} className="flex items-center gap-2 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors" style={{ background: 'linear-gradient(135deg,#10B981,#059669)' }}>
+            <TrendingUp size={16} /> Add Metrics Manually
+          </button>
+        </div>
       )}
-      <p className="text-xs text-gray-400 mt-4">Supported format: Excel (.xlsx) with P&L and Balance Sheet data</p>
+      <p className="text-xs mt-4" style={{ color: '#64748B' }}>Supported format: Excel (.xlsx) with P&L and Balance Sheet data</p>
     </div>
   );
 }
@@ -940,7 +945,7 @@ export default function RentalFinancials() {
           </div>
           <p className="text-gray-400 text-sm mb-6">{Object.keys(allFinancials).length} companies with uploaded data</p>
           {Object.keys(allFinancials).length === 0
-            ? <EmptyUpload onUpload={triggerUpload} company="All Companies" />
+            ? <EmptyUpload onUpload={triggerUpload} onAddMetrics={() => {}} company="All Companies" />
             : <AllCompaniesSummary all={allFinancials} />
           }
         </div>
@@ -984,7 +989,7 @@ export default function RentalFinancials() {
           </div>
         </div>
       ) : (
-        <EmptyUpload onUpload={triggerUpload} company={selectedCompanyName || 'the selected company'} />
+        <EmptyUpload onUpload={triggerUpload} onAddMetrics={() => setActiveTab('Financial Metrics')} company={selectedCompanyName || 'the selected company'} />
       )}
     </div>
   );
