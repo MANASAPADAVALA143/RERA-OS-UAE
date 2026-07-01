@@ -70,7 +70,7 @@ def morning_briefing(
         "No markdown, no bullet points, conversational but precise, always state the actual numbers given, "
         f"never invent numbers not present in the input JSON.\n\n{payload}"
     )
-    result = invoke_narrative(prompt)
+    result = invoke_narrative(prompt, task_type="cfo_insight")
     _log_ai_call(db, current_user.tenant_id, current_user.user_id, "ai_morning_briefing", "/api/real-estate/ai/morning-briefing", result["success"])
 
     if result["success"]:
@@ -110,7 +110,7 @@ def explain_overrun(
         return {"explanation": fallback, "fallback_used": True}
 
     prompt = f"Explain this construction cost variance in 2-3 sentences with a suggested next action. Data: {payload}"
-    result = invoke_narrative(prompt, max_tokens=200)
+    result = invoke_narrative(prompt, task_type="variance_label", max_tokens=200)
     _log_ai_call(db, current_user.tenant_id, current_user.user_id, "ai_explain_overrun", "/api/real-estate/ai/explain-overrun", result["success"])
 
     return {"explanation": result["text"] if result["success"] else fallback, "fallback_used": not result["success"]}
@@ -153,7 +153,7 @@ def compare_parcels(
         "'if I had to pick one to prioritize, here's the trade-off'. Present as one input to the decision, "
         f"not a final answer. Flag missing IRR data.\n\n{parcels}"
     )
-    result = invoke_narrative(prompt, max_tokens=250)
+    result = invoke_narrative(prompt, task_type="deal_analysis", max_tokens=250)
     _log_ai_call(db, current_user.tenant_id, current_user.user_id, "ai_compare_parcels", "/api/real-estate/ai/compare-parcels", result["success"])
 
     return {"narrative": result["text"] if result["success"] else fallback, "fallback_used": not result["success"]}

@@ -222,6 +222,7 @@ User question: {req.message}"""
 
     result = invoke_narrative(
         prompt=user_message,
+        task_type="chat_query",
         max_tokens=500,
     )
 
