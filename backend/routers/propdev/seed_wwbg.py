@@ -17,8 +17,6 @@ from middleware.auth import CurrentUser, require_write_access
 from models.propdev.company import PropDevCompany
 from models.propdev.loan import PropDevLoan
 from models.propdev.partner import PropDevPartner
-from models.tenancy import TenantUser
-
 router = APIRouter(prefix="/api/propdev", tags=["propdev"])
 
 
