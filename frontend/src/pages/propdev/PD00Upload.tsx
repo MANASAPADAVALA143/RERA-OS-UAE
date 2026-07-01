@@ -34,6 +34,9 @@ function detectSheetType(name: string, rows: Record<string, string | number>[]):
   // Company-named sheets (e.g. "JKL LLC", "MNO LLC") with capital call data
   if (/\b(llc|lp|inc|ltd|corp|holdings|ventures|development|group|partners|land|realty|properties|estate)\b/i.test(name))
     return 'Company Capital Call';
+  // QuickBooks / accounting P&L export (sheet content has "profit and loss" text)
+  if (allText.includes('profit and loss') || (allText.includes('net income') && allText.includes('expenses') && allText.includes('income')))
+    return 'QuickBooks P&L';
   return 'Unknown';
 }
 
@@ -237,6 +240,7 @@ const EXPECTED_SHEETS = [
   { name: 'Capital Call Sheet',         cols: 'Partner Name, % Share, Balance Due, Call Amount (6 months), Received Date, Amount'    },
   { name: 'Loan Sheet',                 cols: 'Company, Property, Bank, Loan Date, Account No, Amount, Rate %, EMI, Maturity Date'   },
   { name: 'Expense Dashboard',          cols: 'Expense Type, Amount, Category (Plumbing/Electrical/Materials etc.)'                  },
+  { name: 'QuickBooks P&L Export',      cols: 'Company name in A1, "Profit and Loss" in A2, year columns (2021–2026), expense line items' },
 ];
 
 // ── Imported data summary ────────────────────────────────────────────────────
@@ -329,17 +333,11 @@ export default function PD00Upload() {
         ? '/api/propdev/import-capital-contributions'
         : '/api/propdev/import-excel';
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || 'Import failed');
-      }
-
-      const data = await res.json();
+      const response = await api.post<{ companies: Array<{ id: string; name: string; property?: string; total_lots?: number }> }>(
+        endpoint,
+        formData,
+      );
+      const data = response.data;
       setSummary({
         dealPL: true,
         partners: data.companies.length,

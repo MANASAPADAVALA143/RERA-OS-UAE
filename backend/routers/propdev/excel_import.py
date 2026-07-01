@@ -260,6 +260,138 @@ def extract_lot_data(rows: list) -> dict:
     return lots
 
 
+def parse_quickbooks_pl(content: bytes) -> dict:
+    """Parse a QuickBooks Profit & Loss Excel export (company name in A1, 'Profit and Loss' in A2)."""
+    try:
+        wb = openpyxl.load_workbook(BytesIO(content), data_only=True)
+    except Exception:
+        return {}
+
+    for sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+        rows = list(ws.iter_rows(values_only=True))
+        if len(rows) < 5:
+            continue
+
+        # Check for P&L signature: "Profit and Loss" text in first 5 rows
+        pl_found = any(
+            any(str(cell or '').strip() == 'Profit and Loss' for cell in row)
+            for row in rows[:5]
+        )
+        if not pl_found:
+            continue
+
+        # Company name is in the first cell of the first row
+        company_name = str(rows[0][0] or '').strip()
+        if not company_name:
+            continue
+
+        # Find the year header row: row containing 3+ 4-digit years
+        year_row_idx = None
+        year_col_map = {}   # year -> column index
+        total_col_idx = None
+        for i, row in enumerate(rows):
+            year_cols = {
+                int(str(v)): j
+                for j, v in enumerate(row)
+                if v is not None and str(v).isdigit() and 1990 <= int(str(v)) <= 2099
+            }
+            if len(year_cols) >= 3:
+                year_row_idx = i
+                year_col_map = year_cols
+                # "Total" column is often right after the last year
+                for j, v in enumerate(row):
+                    if str(v or '').strip().lower() == 'total':
+                        total_col_idx = j
+                break
+
+        if year_row_idx is None:
+            continue
+
+        # Expense category → model field mapping
+        CATEGORY_MAP = {
+            'management fee':          'other_charges',
+            'interest paid':           'interest_on_loan',
+            'interest expense':        'interest_on_loan',
+            'professional service fee': 'professional_charges',
+            'book keeping':            'professional_charges',
+            'bookkeeping':             'professional_charges',
+            'legal':                   'legal_fees',
+            'property tax':            'property_tax',
+            'property taxes':          'property_tax',
+            'engineering cost':        'hard_cost',
+            'appraisal fee':           'soft_cost',
+            'loan processing':         'loan_processing',
+            'title':                   'title_charges',
+        }
+
+        expense_totals: dict[str, float] = {}
+        net_income_total = 0.0
+        total_expenses = 0.0
+        in_expenses = False
+
+        for row in rows[year_row_idx + 1:]:
+            if not row or not any(cell is not None for cell in row):
+                continue
+            label = str(row[0] or '').strip()
+            if not label:
+                continue
+
+            if label == 'Expenses':
+                in_expenses = True
+                continue
+            if label in ('Income', 'Other Income', 'Other Expense'):
+                in_expenses = False
+                continue
+
+            # Use Total column if available, otherwise sum all year columns
+            def get_total_val() -> float:
+                if total_col_idx is not None and total_col_idx < len(row) and row[total_col_idx] is not None:
+                    try:
+                        return float(row[total_col_idx])
+                    except (TypeError, ValueError):
+                        return 0.0
+                # Fall back: sum year columns
+                s = 0.0
+                for col_idx in year_col_map.values():
+                    if col_idx < len(row) and row[col_idx] is not None:
+                        try:
+                            s += float(row[col_idx])
+                        except (TypeError, ValueError):
+                            pass
+                return s
+
+            label_lower = label.lower()
+
+            if label_lower.startswith('total for expenses') or label_lower == 'total expenses':
+                total_expenses = abs(get_total_val())
+                continue
+
+            if label_lower == 'net income':
+                net_income_total = get_total_val()
+                continue
+
+            if in_expenses:
+                for kw, field in CATEGORY_MAP.items():
+                    if kw in label_lower:
+                        expense_totals[field] = expense_totals.get(field, 0.0) + abs(get_total_val())
+                        break
+                else:
+                    # Uncategorised expense → other_charges
+                    val = abs(get_total_val())
+                    if val > 0:
+                        expense_totals['other_charges'] = expense_totals.get('other_charges', 0.0) + val
+
+        return {
+            'company_name': company_name,
+            'net_income': net_income_total,
+            'total_expenses': total_expenses,
+            'expense_totals': expense_totals,
+        }
+
+    return {}
+
+
 @router.post("/import-excel")
 async def import_excel(
     file: UploadFile = File(...),
@@ -459,6 +591,66 @@ async def import_excel(
                 continue
 
         print(f"[IMPORT] Complete! Created {len(created_companies)} companies")
+
+        # If no companies were recognised by the Annexure format, try QuickBooks P&L format
+        if not created_companies:
+            print("[IMPORT] No Annexure data found — attempting QuickBooks P&L parse...")
+            pl = parse_quickbooks_pl(content)
+            if pl:
+                raw_name = pl['company_name']
+                print(f"[IMPORT] P&L detected for company: {raw_name}")
+                try:
+                    # Match existing company by name (fuzzy — "WWBG" matches "WWBG LLC")
+                    company = (
+                        db.query(PropDevCompany)
+                        .filter(
+                            PropDevCompany.tenant_id == current_user.tenant_id,
+                            PropDevCompany.name.ilike(f'%{raw_name}%'),
+                        )
+                        .first()
+                    )
+                    exp = pl['expense_totals']
+                    if company:
+                        company.interest_on_loan     = exp.get('interest_on_loan',     0) or company.interest_on_loan
+                        company.professional_charges = exp.get('professional_charges', 0) or company.professional_charges
+                        company.legal_fees           = exp.get('legal_fees',           0) or company.legal_fees
+                        company.property_tax         = exp.get('property_tax',         0) or company.property_tax
+                        company.hard_cost            = exp.get('hard_cost',            0) or company.hard_cost
+                        company.soft_cost            = exp.get('soft_cost',            0) or company.soft_cost
+                        company.loan_processing      = exp.get('loan_processing',      0) or company.loan_processing
+                        company.title_charges        = exp.get('title_charges',        0) or company.title_charges
+                        company.other_charges        = exp.get('other_charges',        0) or company.other_charges
+                        db.commit()
+                        print(f"[IMPORT] P&L updated existing company: {company.name}")
+                        created_companies.append({'id': str(company.id), 'name': company.name, 'property': company.property_name, 'total_lots': company.total_lots})
+                    else:
+                        # Create a new PropDevCompany record from P&L data
+                        company = PropDevCompany(
+                            tenant_id=current_user.tenant_id,
+                            name=raw_name,
+                            property_name='',
+                            address='',
+                            total_lots=0,
+                            sale_consideration=0,
+                            land_cost=exp.get('hard_cost', 0),
+                            hard_cost=exp.get('hard_cost', 0),
+                            soft_cost=exp.get('soft_cost', 0),
+                            title_charges=exp.get('title_charges', 0),
+                            other_charges=exp.get('other_charges', 0),
+                            property_tax=exp.get('property_tax', 0),
+                            loan_processing=exp.get('loan_processing', 0),
+                            professional_charges=exp.get('professional_charges', 0),
+                            legal_fees=exp.get('legal_fees', 0),
+                            interest_on_loan=exp.get('interest_on_loan', 0),
+                            cash_available=0,
+                        )
+                        db.add(company)
+                        db.commit()
+                        print(f"[IMPORT] P&L created new company: {raw_name}")
+                        created_companies.append({'id': str(company.id), 'name': raw_name, 'property': '', 'total_lots': 0})
+                except Exception as pl_err:
+                    print(f"[IMPORT] P&L processing error: {pl_err}")
+                    db.rollback()
 
         return {
             'status': 'success',
