@@ -135,7 +135,7 @@ function buildHistory(instances: Partner[], allCalls: CapitalCall[], companiesMa
       const prefPaid = Math.min(p.distributionsReceived, prefAmount);
       if (prefPaid > 0) txns.push({ date: '2025-05-01', type: 'Preferred Return Payment', company: companyName, amount: prefPaid, cumulativeCapital: cumulative, profitShare: 0, status: 'Completed', notes: `${p.preferredReturn}% preferred return` });
       const remainder = p.distributionsReceived - prefPaid;
-      if (remainder > 0) txns.push({ date: '2025-05-15', type: 'Profit Distribution', company: companyName, amount: remainder, cumulativeCapital: cumulative, profitShare: remainder, status: 'Completed', notes: `${p.sharePercent}% equity split` });
+      if (remainder > 0) txns.push({ date: '2025-05-15', type: 'Profit Distribution', company: companyName, amount: remainder, cumulativeCapital: cumulative, profitShare: remainder, status: 'Completed', notes: `${(p.sharePercent / 100).toFixed(2)}% equity split` });
     }
   });
   return txns.sort((a, b) => a.date.localeCompare(b.date));
@@ -169,9 +169,9 @@ function TreemapContent(props: Partial<TreemapNode> & { onSelect?: (name: string
   return (
     <g onClick={() => onSelect?.(name)} style={{ cursor: 'pointer' }}>
       <rect x={x} y={y} width={width} height={height} fill={fill} stroke="#fff" strokeWidth={2} rx={4} />
-      <text x={x + 6} y={y + 16} fill="#fff" fontSize={11} fontWeight={600}>{short}</text>
-      <text x={x + 6} y={y + 30} fill="#ffffffcc" fontSize={9}>{avgEquity.toFixed(0)}% · {fmtK(size)}</text>
-      <text x={x + 6} y={y + 42} fill="#ffffffaa" fontSize={9}>ROI {roi.toFixed(1)}%</text>
+      <text x={x + 6} y={y + 16} fill="#fff" fontSize={12} fontWeight={600}>{short}</text>
+      <text x={x + 6} y={y + 30} fill="#ffffffcc" fontSize={11}>{(avgEquity / 100).toFixed(2)}% · {fmtK(size)}</text>
+      <text x={x + 6} y={y + 44} fill="#ffffffaa" fontSize={11}>ROI {roi.toFixed(1)}%</text>
     </g>
   );
 }
@@ -203,7 +203,7 @@ function PartnerListPanel({
   return (
     <div className="flex flex-col h-full bg-[#F8F9FA] border-r border-gray-200">
       <div className="p-3 border-b border-gray-200 bg-white sticky top-0 z-10">
-        <p className="text-xs font-semibold text-gray-700 mb-2">Partners ({summaries.length})</p>
+        <p className="sidebar-name font-semibold mb-2">Partners ({summaries.length})</p>
         <div className="relative">
           <Search size={14} className="absolute left-2.5 top-2.5 text-gray-400" />
           <input
@@ -246,8 +246,8 @@ function PartnerListPanel({
                   {s.name.charAt(0)}
                 </span>
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-gray-900 truncate">{s.name}</p>
-                  <p className="text-[10px] text-gray-500 truncate">{s.avgEquity.toFixed(0)}% · {s.primaryCompany}</p>
+                  <p className="sidebar-name truncate">{s.name}</p>
+                  <p className="sidebar-meta truncate">{(s.avgEquity / 100).toFixed(2)}% · {s.primaryCompany}</p>
                 </div>
               </div>
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${s.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{s.status}</span>
@@ -298,8 +298,8 @@ function CenterAllView({
   return (
     <div className="space-y-5 p-4">
       <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-        <h3 className="font-semibold text-gray-800 text-sm">Capital Contribution — All Partners</h3>
-        <p className="text-xs text-gray-400 mb-3">Size = capital · Color = ROI performance · Click to select partner</p>
+        <h3 className="section-header">Capital Contribution — All Partners</h3>
+        <p className="body-text mb-3">Size = capital · Color = ROI performance · Click to select partner</p>
         <ResponsiveContainer width="100%" height={280}>
           {treemapData.length > 0 ? (
             <Treemap
@@ -324,8 +324,8 @@ function CenterAllView({
       <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h3 className="font-semibold text-gray-800 text-sm">Capital vs Distributions vs Pending</h3>
-            <p className="text-xs text-gray-400">Grouped bars per partner</p>
+            <h3 className="section-header">Capital vs Distributions vs Pending</h3>
+            <p className="body-text">Grouped bars per partner</p>
           </div>
           {summaries.length > 10 && (
             <button onClick={onToggleBars} className="text-xs text-blue-600 hover:underline">
@@ -336,7 +336,7 @@ function CenterAllView({
         <ResponsiveContainer width="100%" height={260}>
           <BarChart data={barData} barGap={2} barCategoryGap="20%">
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="name" tick={{ fontSize: 9 }} interval={0} angle={-25} textAnchor="end" height={50} />
+            <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-30} textAnchor="end" height={60} />
             <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10 }} />
             <Tooltip formatter={(v: number) => fmt(v)} labelFormatter={(_l, payload) => (payload?.[0]?.payload as { fullName?: string })?.fullName ?? _l} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -408,10 +408,10 @@ function CenterPartnerView({
           <div className="w-11 h-11 rounded-full bg-gray-900 text-white flex items-center justify-center text-lg font-bold">{name.charAt(0)}</div>
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-lg font-bold text-gray-900">{name}</h2>
+              <h2 className="page-title">{name}</h2>
               <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">{summary.status}</span>
             </div>
-            <p className="text-sm text-gray-500">{summary.partnerType} · {pct(summary.avgEquity)} equity · {summary.avgPref.toFixed(0)}% pref</p>
+            <p className="text-sm text-gray-500">{summary.partnerType} · {pct(summary.avgEquity / 100)} equity · {summary.avgPref.toFixed(0)}% pref</p>
             {primaryCompany && <p className="text-sm text-gray-600">{primaryCompany}</p>}
           </div>
         </div>
@@ -431,7 +431,7 @@ function CenterPartnerView({
 
       {/* Timeline */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-        <h3 className="font-semibold text-gray-800 text-sm mb-3">Capital & Distribution History</h3>
+        <h3 className="section-header mb-3">Capital & Distribution History</h3>
         <ResponsiveContainer width="100%" height={220}>
           <ComposedChart data={timeline}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -448,7 +448,7 @@ function CenterPartnerView({
 
       {/* Waterfall */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-        <h3 className="font-semibold text-gray-800 text-sm mb-3">How Profit Is Calculated</h3>
+        <h3 className="section-header mb-3">How Profit Is Calculated</h3>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={waterfall} layout="vertical" margin={{ left: 8 }}>
             <XAxis type="number" tickFormatter={v => `$${(Math.abs(v) / 1000).toFixed(0)}k`} tick={{ fontSize: 9 }} />
@@ -464,9 +464,9 @@ function CenterPartnerView({
       {/* Company breakdown */}
       {instances.length > 1 && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-          <div className="px-4 py-2 border-b bg-gray-50"><h3 className="text-sm font-semibold text-gray-800">Company Breakdown</h3></div>
+          <div className="px-4 py-2 border-b bg-gray-50"><h3 className="section-header">Company Breakdown</h3></div>
           <table className="w-full text-xs">
-            <thead className="text-gray-500 uppercase">
+            <thead className="table-header">
               <tr>{['Company', 'Capital', 'Profit Share', 'Status'].map(h => <th key={h} className="px-3 py-2 text-right first:text-left">{h}</th>)}</tr>
             </thead>
             <tbody className="divide-y">
@@ -485,10 +485,10 @@ function CenterPartnerView({
 
       {/* History table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-        <div className="px-4 py-2 border-b bg-gray-50"><h3 className="text-sm font-semibold text-gray-800">Ownership History</h3></div>
+        <div className="px-4 py-2 border-b bg-gray-50"><h3 className="section-header">Ownership History</h3></div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="text-gray-500 uppercase">
+            <thead className="table-header">
               <tr>{['Date', 'Event', 'Amount', 'Balance', 'Notes'].map(h => <th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr>
             </thead>
             <tbody className="divide-y">
@@ -542,11 +542,11 @@ function CenterPartnerView({
 
       {/* Profit position */}
       <div className="bg-white rounded-xl border-2 border-amber-200 p-4 shadow-sm">
-        <h3 className="font-semibold text-gray-800 text-sm mb-3">Current Profit Position</h3>
+        <h3 className="section-header mb-3">Current Profit Position</h3>
         <div className="space-y-2 text-sm font-mono">
           {[
             ['Net Profit Available', fmt(netProfitAvailable)],
-            [`${name} Share (${summary.avgEquity.toFixed(0)}%)`, fmt(partnerShare)],
+            [`${name} Share (${(summary.avgEquity / 100).toFixed(2)}%)`, fmt(partnerShare)],
             [`Preferred Return (${summary.avgPref.toFixed(0)}%)`, fmt(totalPrefReturn)],
             ['Total Entitled', fmt(totalEntitled)],
             ['Less: Distributed', `(${fmt(summary.totalDistributed)})`],
@@ -607,8 +607,8 @@ function RightPanel({
   return (
     <div className="flex flex-col h-full bg-white border-l border-gray-200 overflow-y-auto">
       <div className="p-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-        <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Portfolio Summary</p>
-        <div className="space-y-2 text-sm">
+        <p className="card-label mb-3">Portfolio Summary</p>
+        <div className="space-y-2">
           {[
             ['Total Partners', String(summaries.length)],
             ['Total Capital', fmtK(totalCapital)],
@@ -617,8 +617,8 @@ function RightPanel({
             ['Avg ROI', pct(avgROI)],
           ].map(([l, v]) => (
             <div key={l} className="flex justify-between">
-              <span className="text-gray-500 text-xs">{l}</span>
-              <span className="font-mono font-semibold text-gray-900 text-xs">{v}</span>
+              <span className="body-text">{l}</span>
+              <span className="font-mono font-semibold text-gray-900 text-[13px]">{v}</span>
             </div>
           ))}
         </div>
@@ -656,7 +656,7 @@ function RightPanel({
             {calcResult.perPartner.slice(0, 8).map((p, i) => (
               <div key={i} className="flex justify-between text-[10px]">
                 <span className="text-gray-600 truncate max-w-[120px]">{p.name}</span>
-                <span className="font-mono font-semibold">{p.pct}% · {fmtK(p.amount)}</span>
+                <span className="font-mono font-semibold">{(p.pct / 100).toFixed(2)}% · {fmtK(p.amount)}</span>
               </div>
             ))}
             {calcResult.perPartner.length > 8 && <p className="text-[10px] text-gray-400">+ {calcResult.perPartner.length - 8} more</p>}
@@ -726,8 +726,8 @@ export default function PD05Partners() {
       <div className="bg-white border border-gray-200 rounded-xl p-3 mb-3 shadow-sm">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Partners / JV Ledger</h2>
-            <p className="text-xs text-gray-500">Equity · contributions · distributions · settlement</p>
+            <h2 className="page-title">Partners / JV Ledger</h2>
+            <p className="body-text">Equity · contributions · distributions · settlement</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <select value={localCompanyId} onChange={e => handleCompanyChange(e.target.value)}
@@ -762,8 +762,8 @@ export default function PD05Partners() {
           { label: 'Avg ROI', value: pct(avgROI) },
         ].map(k => (
           <div key={k.label} className="bg-white rounded-lg border border-gray-200 px-3 py-2 shadow-sm">
-            <p className="text-[10px] text-gray-400 uppercase">{k.label}</p>
-            <p className="text-sm font-bold font-mono text-gray-900">{k.value}</p>
+            <p className="card-label">{k.label}</p>
+            <p className="card-value font-mono">{k.value}</p>
           </div>
         ))}
       </div>

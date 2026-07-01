@@ -156,6 +156,70 @@ body {
 .dark-app ::-webkit-scrollbar-thumb  { background: #C8C2B7; border-radius: 3px; }
 .dark-app ::-webkit-scrollbar-thumb:hover { background: #D4AF37; }
 
+/* ── Font hierarchy ────────────────────────────────────────────────────── */
+/* Page titles */
+.page-title {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #1C1917;
+}
+/* Section headers (card titles, panel headers) */
+.section-header {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: #292524;
+}
+/* Card label (metric name above the big number) */
+.card-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #78716C;
+}
+/* Card value (the big number on KPI tiles) */
+.card-value {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: #1C1917;
+}
+/* Sidebar item name */
+.sidebar-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1C1917;
+}
+/* Sidebar secondary text */
+.sidebar-meta {
+  font-size: 11px;
+  font-weight: 400;
+  color: #78716C;
+}
+/* Table header */
+.table-header {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #78716C;
+}
+/* Table cell */
+.table-cell {
+  font-size: 13px;
+  font-weight: 400;
+  color: #292524;
+}
+/* Body / description text */
+.body-text {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #57534E;
+}
+
 /* ── KPI gradient card utilities ─────────────────────────────────────── */
 /* Hero card: dark bg with gold border — defined in component via inline style */
 .kpi-hero    { background: #161310; border: 1px solid #D4AF37; color: white; }
