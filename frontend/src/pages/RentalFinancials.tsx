@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useCallback, useEffect } from 'react';
+﻿import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
@@ -6,6 +6,8 @@ import {
 } from 'recharts';
 import { Upload, Building2, FileSpreadsheet, TrendingUp, TrendingDown, DollarSign, Home, Vault, BarChart3, CheckCircle2, AlertCircle } from 'lucide-react';
 import { api } from '../services/api';
+import PeriodToggle from '../components/shared/PeriodToggle';
+import { type Period, getPeriodKeys } from '../utils/periodWindow';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -323,6 +325,98 @@ function sumI(items: FinItem[], pattern: RegExp, year: number): number {
     .reduce((s,i) => s + (i.values[year] ?? 0), 0);
 }
 
+// ── Monthly helpers (parallel to getYV/sumI but for monthlyValues) ────────────
+
+function getMV(pl: FinItem[], pattern: RegExp, key: string): number {
+  return pl.find(i => pattern.test(i.label))?.monthlyValues?.[key] ?? 0;
+}
+
+function sumMV(pl: FinItem[], pattern: RegExp, key: string): number {
+  return pl.filter(i => !i.isSectionHeader && !i.isTotal && pattern.test(i.label))
+    .reduce((s, i) => s + (i.monthlyValues?.[key] ?? 0), 0);
+}
+
+interface MonthlyKpis {
+  totalRevenue: number; totalExpenses: number; netIncome: number;
+  interest: number; depreciation: number; noi: number;
+  rentIncome: number; otherIncome: number;
+  repairs: number; utilities: number; hoa: number;
+  propertyTax: number; management: number; legal: number; insurance: number;
+}
+
+function calcMonthlyKpis(pl: FinItem[], key: string): MonthlyKpis {
+  const totalRevenue =
+    getMV(pl, /^total\s+for\s+income$/i, key) ||
+    getMV(pl, /^total\s+income$/i, key) ||
+    getMV(pl, /^gross\s+profit$/i, key) ||
+    sumMV(pl, /income|revenue|rent/i, key);
+  const totalExpenses =
+    getMV(pl, /^total\s+for\s+expenses?$/i, key) ||
+    getMV(pl, /^total\s+expenses?$/i, key);
+  const netIncome = getMV(pl, /^net\s+income$/i, key);
+  const interest = Math.abs(
+    getMV(pl, /^total\s+for\s+interest\s+paid$/i, key) ||
+    sumMV(pl, /^interest\s+on\s+loan|^interest\s+paid$/i, key),
+  );
+  const depreciation = Math.abs(sumMV(pl, /depreciation|amortization/i, key));
+  const rentIncome =
+    getMV(pl, /^total\s+for\s+rental\s+income$/i, key) ||
+    getMV(pl, /^total\s+for\s+services$/i, key) ||
+    sumMV(pl, /^rent\s+-|^rental\s+income$/i, key);
+  const otherIncome = getMV(pl, /^other\s+income$/i, key) || 0;
+  const repairs = Math.abs(sumMV(pl, /repair|maintenance|cleaning/i, key));
+  const utilities = Math.abs(
+    getMV(pl, /^total\s+for\s+utilities$/i, key) ||
+    sumMV(pl, /electricity|internet|utilities|water/i, key),
+  );
+  const hoa = Math.abs(
+    getMV(pl, /^total\s+for\s+hoa\s+expenses$/i, key) ||
+    sumMV(pl, /^hoa/i, key),
+  );
+  const propertyTax = Math.abs(
+    getMV(pl, /^total\s+for\s+rates\s+&\s+taxes$/i, key) ||
+    sumMV(pl, /property\s+tax/i, key),
+  );
+  const management = Math.abs(sumMV(pl, /management\s+fee/i, key));
+  const legal = Math.abs(
+    getMV(pl, /^total\s+for\s+legal/i, key) ||
+    sumMV(pl, /legal|accounting\s+fee/i, key),
+  );
+  const insurance = Math.abs(sumMV(pl, /insurance/i, key));
+  const noi = totalRevenue - totalExpenses + interest;
+  return { totalRevenue, totalExpenses, netIncome, interest, depreciation, noi,
+           rentIncome, otherIncome, repairs, utilities, hoa, propertyTax, management, legal, insurance };
+}
+
+interface PeriodAggregate extends MonthlyKpis { otherOpex: number }
+
+function sumKpisOverKeys(pl: FinItem[], keys: string[]): PeriodAggregate {
+  let totalRevenue = 0, totalExpenses = 0, netIncome = 0, interest = 0, depreciation = 0;
+  let rentIncome = 0, otherIncome = 0, repairs = 0, utilities = 0, hoa = 0;
+  let propertyTax = 0, management = 0, legal = 0, insurance = 0;
+  for (const k of keys) {
+    const m = calcMonthlyKpis(pl, k);
+    totalRevenue   += m.totalRevenue;
+    totalExpenses  += m.totalExpenses;
+    netIncome      += m.netIncome;
+    interest       += m.interest;
+    depreciation   += m.depreciation;
+    rentIncome     += m.rentIncome;
+    otherIncome    += m.otherIncome;
+    repairs        += m.repairs;
+    utilities      += m.utilities;
+    hoa            += m.hoa;
+    propertyTax    += m.propertyTax;
+    management     += m.management;
+    legal          += m.legal;
+    insurance      += m.insurance;
+  }
+  const noi = totalRevenue - totalExpenses + interest;
+  const otherOpex = Math.max(0, totalExpenses - interest - depreciation - repairs - utilities - hoa - propertyTax - management - legal - insurance);
+  return { totalRevenue, totalExpenses, netIncome, interest, depreciation, noi,
+           rentIncome, otherIncome, repairs, utilities, hoa, propertyTax, management, legal, insurance, otherOpex };
+}
+
 function calcKpis(fin: ParsedFinancials, year: number): KpiData {
   const pl = fin.pl; const bs = fin.bs;
   // Revenue — try Total for Income, Gross Profit (QBO), or sum all income lines
@@ -428,18 +522,22 @@ function EmptyUpload({ onUpload, company, onAddMetrics }: { onUpload: () => void
 
 const FIN_FONT = "'Inter', 'Segoe UI', sans-serif";
 
-function FinTable({ items, years, labelCol = 'Line Item', selectedYear, periods }: {
+function FinTable({ items, years, labelCol = 'Line Item', selectedYear, periods, periodKeys }: {
   items: FinItem[];
   years: number[];
   labelCol?: string;
   selectedYear?: number | null;
   periods?: string[];
+  periodKeys?: string[] | null;  // explicit period window — overrides selectedYear monthly display
 }) {
-  // When a year is selected, show its monthly periods; otherwise show annual columns
+  // periodKeys override takes highest precedence, then selectedYear monthly, then annual
   const showMonthly = !!(selectedYear && periods && periods.length > 0);
   const monthlyPeriods = showMonthly
     ? periods!.filter(p => p.endsWith(` ${selectedYear}`))
     : [];
+  const displayCols: string[] | null = (periodKeys && periodKeys.length > 0)
+    ? periodKeys
+    : showMonthly ? monthlyPeriods : null;
 
   // Determine grand-total rows — isNetIncome or "Total for Assets/Liabilities and Equity"
   const isGrandTotal = (item: FinItem) =>
@@ -506,8 +604,8 @@ function FinTable({ items, years, labelCol = 'Line Item', selectedYear, periods 
             <th style={{ position: 'sticky', left: 0, zIndex: 2, background: '#DDD5C4', textAlign: 'left', padding: '10px 12px', fontSize: 13, fontWeight: 600, color: '#5C5043', letterSpacing: '0.03em', whiteSpace: 'nowrap', minWidth: 240, fontFamily: FIN_FONT }}>
               {labelCol}
             </th>
-            {showMonthly
-              ? monthlyPeriods.map(p => (
+            {displayCols
+              ? displayCols.map(p => (
                   <th key={p} style={{ textAlign: 'right', padding: '10px 10px', fontSize: 12, fontWeight: 600, color: '#5C5043', letterSpacing: '0.03em', minWidth: 110, whiteSpace: 'nowrap', fontFamily: FIN_FONT }}>
                     {p}
                   </th>
@@ -526,8 +624,8 @@ function FinTable({ items, years, labelCol = 'Line Item', selectedYear, periods 
             return (
               <tr key={i} style={{ borderTop: rowBorderTop(item), background: bg }}>
                 <td style={labelStyle(item, bg)}>{item.label}</td>
-                {showMonthly
-                  ? monthlyPeriods.map(p => {
+                {displayCols
+                  ? displayCols.map(p => {
                       const val = item.monthlyValues?.[p] ?? 0;
                       return <td key={p} style={valueStyle(item, val)}>{fmtVal(val)}</td>;
                     })
@@ -547,8 +645,37 @@ function FinTable({ items, years, labelCol = 'Line Item', selectedYear, periods 
 }
 
 function PLTable({ fin, selectedYear }: { fin: ParsedFinancials; selectedYear?: number | null }) {
+  const [period, setPeriod] = useState<Period | null>(null);
+  const [pMonth, setPMonth] = useState(new Date().getMonth() + 1);
+  const [pYear, setPYear] = useState(new Date().getFullYear());
+
+  const periodKeys = useMemo(
+    () => period ? getPeriodKeys(period, pMonth, pYear) : null,
+    [period, pMonth, pYear],
+  );
+
+  const availableKeys = fin.periods ?? [];
+
   if (!fin.pl.length) return <p className="text-center text-gray-400 py-12 text-sm">No P&amp;L data found in the uploaded file. Ensure the Excel contains a "Profit and Loss" sheet or section.</p>;
-  return <FinTable items={fin.pl} years={fin.years} labelCol="Line Item" selectedYear={selectedYear} periods={fin.periods} />;
+  return (
+    <div className="space-y-4">
+      <PeriodToggle
+        period={period}
+        month={pMonth}
+        year={pYear}
+        onChange={(p, m, y) => { setPeriod(p); setPMonth(m); setPYear(y); }}
+        availableKeys={availableKeys}
+      />
+      <FinTable
+        items={fin.pl}
+        years={fin.years}
+        labelCol="Line Item"
+        selectedYear={period ? null : selectedYear}
+        periods={fin.periods}
+        periodKeys={periodKeys}
+      />
+    </div>
+  );
 }
 
 // ── Balance Sheet Table ───────────────────────────────────────────────────────
@@ -873,8 +1000,210 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
   if (revGrowth !== null) insights.push({ color: 'bg-green-50 border-green-200', text: `✅ Revenue grew from ${fmt(firstK.totalRevenue)} (${fin.years[0]}) to ${fmt(k.totalRevenue)} (${lastY}) — ${revGrowth}% over ${fin.years.length - 1} years. Average annual revenue: ${fmt(avgRev)}/year.` });
   if (k.buildings > 0) insights.push({ color: 'bg-gray-50 border-gray-200', text: `📋 Property value (Buildings): ${fmt(k.buildings)} | Outstanding loans: ${fmt(k.longTermLoans)} | LTV: ${ltv.toFixed(1)}% — ${ltvLabel}` });
 
+  // ── Period toggle state ────────────────────────────────────────────────────
+  const [period, setPeriod] = useState<Period | null>(null);
+  const [pMonth, setPMonth] = useState(new Date().getMonth() + 1);
+  const [pYear, setPYear] = useState(new Date().getFullYear());
+
+  const periodKeys = useMemo(
+    () => period ? getPeriodKeys(period, pMonth, pYear) : [],
+    [period, pMonth, pYear],
+  );
+
+  const periodAgg = useMemo(
+    () => periodKeys.length ? sumKpisOverKeys(fin.pl, periodKeys) : null,
+    [fin.pl, periodKeys],
+  );
+
+  const periodTrend = useMemo(() => {
+    if (!periodKeys.length) return [];
+    return periodKeys.map(key => {
+      const m = calcMonthlyKpis(fin.pl, key);
+      const grossMargin = m.totalRevenue > 0
+        ? (m.rentIncome + m.otherIncome - m.repairs - m.utilities - m.hoa) / m.totalRevenue * 100 : 0;
+      const operatingMargin = m.totalRevenue > 0 ? m.noi / m.totalRevenue * 100 : 0;
+      const netMargin = m.totalRevenue > 0 ? m.netIncome / m.totalRevenue * 100 : 0;
+      return { month: key, grossMargin, operatingMargin, netMargin };
+    });
+  }, [fin.pl, periodKeys]);
+
+  const periodRevByMonth = useMemo(() => {
+    if (!periodKeys.length) return [];
+    return periodKeys.map(key => {
+      const m = calcMonthlyKpis(fin.pl, key);
+      return { month: key, rentIncome: m.rentIncome, otherIncome: m.otherIncome };
+    });
+  }, [fin.pl, periodKeys]);
+
+  const availableKeys = fin.periods ?? [];
+
+  const OPEX_PALETTE = ['#D4AF37','#F2994A','#2F80ED','#22A06B','#D9534F','#9B59B6','#F2C94C','#E8DEC8'];
+
   return (
     <div className="space-y-6">
+
+      {/* Period Toggle */}
+      <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: '14px 16px' }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: '#6B6B6B', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Income Analysis Period</div>
+        <PeriodToggle
+          period={period}
+          month={pMonth}
+          year={pYear}
+          onChange={(p, m, y) => { setPeriod(p); setPMonth(m); setPYear(y); }}
+          availableKeys={availableKeys}
+        />
+      </div>
+
+      {/* Period Panels — shown when a period is active */}
+      {period && periodAgg && (
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#5C5043', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>
+            Income Statement — {period === 'MoM' ? `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][pMonth-1]} ${pYear}` : period === 'YTD' ? `YTD Jan–${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][pMonth-1]} ${pYear}` : `TTM (${periodKeys[0]}–${periodKeys[11]})`}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+
+            {/* Panel 1 — Revenue Mix Donut */}
+            <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+              <p style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 12 }}>Revenue Mix</p>
+              {periodAgg.totalRevenue > 0 ? (
+                <>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <PieChart>
+                      <Pie data={[
+                        { name: 'Rent Income',  value: periodAgg.rentIncome  },
+                        { name: 'Other Income', value: periodAgg.otherIncome },
+                      ].filter(d => d.value > 0)} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value">
+                        <Cell fill="#D4AF37" />
+                        <Cell fill="#2F80ED" />
+                      </Pie>
+                      <Tooltip formatter={(v: number) => fmtFull(v)} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
+                    {[
+                      { name: 'Rent Income',  val: periodAgg.rentIncome,  color: '#D4AF37' },
+                      { name: 'Other Income', val: periodAgg.otherIncome, color: '#2F80ED' },
+                    ].map(s => (
+                      <div key={s.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ width: 10, height: 10, borderRadius: 2, background: s.color, display: 'inline-block' }} />
+                          <span style={{ fontSize: 11, color: '#6B6B6B' }}>{s.name}</span>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#262626', fontFamily: 'monospace' }}>{fmtFull(s.val)}</span>
+                          <span style={{ fontSize: 10, color: '#9CA3AF', marginLeft: 6 }}>
+                            {periodAgg.totalRevenue > 0 ? `${(s.val / periodAgg.totalRevenue * 100).toFixed(1)}%` : '—'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    <div style={{ borderTop: '1px solid #E8DEC8', paddingTop: 6, display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#5C5043' }}>Total Revenue</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#1C1917', fontFamily: 'monospace' }}>{fmtFull(periodAgg.totalRevenue)}</span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <p style={{ fontSize: 12, color: '#9CA3AF', textAlign: 'center', paddingTop: 40 }}>No revenue data for this period</p>
+              )}
+            </div>
+
+            {/* Panel 2 — Opex Breakdown */}
+            <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+              <p style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 12 }}>Opex Breakdown</p>
+              {(() => {
+                const cats = [
+                  { name: 'Management Fee', val: periodAgg.management },
+                  { name: 'Interest',       val: periodAgg.interest },
+                  { name: 'Property Tax',   val: periodAgg.propertyTax },
+                  { name: 'Repairs',        val: periodAgg.repairs },
+                  { name: 'Utilities',      val: periodAgg.utilities },
+                  { name: 'HOA Fees',       val: periodAgg.hoa },
+                  { name: 'Legal Fees',     val: periodAgg.legal },
+                  { name: 'Insurance',      val: periodAgg.insurance },
+                  { name: 'Depreciation',   val: periodAgg.depreciation },
+                  { name: 'Other',          val: periodAgg.otherOpex },
+                ].filter(c => c.val > 0).sort((a, b) => b.val - a.val);
+                if (!cats.length) return <p style={{ fontSize: 12, color: '#9CA3AF', textAlign: 'center', paddingTop: 40 }}>No expense data for this period</p>;
+                const totalOpex = cats.reduce((s, c) => s + c.val, 0);
+                return (
+                  <>
+                    <ResponsiveContainer width="100%" height={Math.max(160, cats.length * 28)}>
+                      <BarChart data={cats} layout="vertical" margin={{ left: 0, right: 60, top: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E8DEC8" />
+                        <XAxis type="number" tick={{ fontSize: 9 }} tickFormatter={v => fmt(v as number)} axisLine={false} tickLine={false} />
+                        <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fill: '#374151' }} axisLine={false} tickLine={false} width={90} />
+                        <Tooltip formatter={(v: number) => fmtFull(v)} />
+                        <Bar dataKey="val" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 9, fill: '#6b7280', formatter: (v: number) => fmt(v) }}>
+                          {cats.map((_, i) => <Cell key={i} fill={OPEX_PALETTE[i % OPEX_PALETTE.length]} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <div style={{ marginTop: 8 }}>
+                      {cats.map((c, i) => (
+                        <div key={c.name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '2px 0', borderBottom: '1px solid #EEE8DF' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: 2, background: OPEX_PALETTE[i % OPEX_PALETTE.length], display: 'inline-block', flexShrink: 0 }} />
+                            <span style={{ color: '#374151' }}>{c.name}</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: 10, fontFamily: 'monospace' }}>
+                            <span style={{ color: '#262626' }}>{fmt(c.val)}</span>
+                            <span style={{ color: '#9CA3AF', minWidth: 36, textAlign: 'right' }}>{totalOpex > 0 ? `${(c.val / totalOpex * 100).toFixed(0)}%` : '—'}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Panel 3 — Profitability Trend */}
+            <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+              <p style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 12 }}>Profitability Trend</p>
+              {periodTrend.some(d => d.grossMargin !== 0 || d.operatingMargin !== 0 || d.netMargin !== 0) ? (
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={periodTrend} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+                    <XAxis dataKey="month" tick={{ fontSize: 9 }} />
+                    <YAxis tick={{ fontSize: 9 }} tickFormatter={v => `${(v as number).toFixed(0)}%`} />
+                    <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} />
+                    <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
+                    <Line type="monotone" dataKey="grossMargin"     stroke="#22A06B" strokeWidth={2} dot={false} name="Gross Margin"     />
+                    <Line type="monotone" dataKey="operatingMargin" stroke="#F2994A" strokeWidth={2} dot={false} name="Operating Margin" />
+                    <Line type="monotone" dataKey="netMargin"       stroke="#D9534F" strokeWidth={2} dot={false} name="Net Margin"       />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <p style={{ fontSize: 12, color: '#9CA3AF', textAlign: 'center', paddingTop: 40 }}>No margin data for this period</p>
+              )}
+            </div>
+
+            {/* Panel 4 — Revenue by Month */}
+            <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+              <p style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 12 }}>Revenue by Month</p>
+              {periodRevByMonth.some(d => d.rentIncome > 0 || d.otherIncome > 0) ? (
+                <>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={periodRevByMonth} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+                      <XAxis dataKey="month" tick={{ fontSize: 9 }} />
+                      <YAxis tick={{ fontSize: 9 }} tickFormatter={v => fmt(v as number)} />
+                      <Tooltip formatter={(v: number) => fmtFull(v)} />
+                      <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
+                      <Bar dataKey="rentIncome"  stackId="rev" fill="#D4AF37" name="Rent Income"  radius={[0,0,0,0]} />
+                      <Bar dataKey="otherIncome" stackId="rev" fill="#2F80ED" name="Other Income" radius={[4,4,0,0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </>
+              ) : (
+                <p style={{ fontSize: 12, color: '#9CA3AF', textAlign: 'center', paddingTop: 40 }}>No revenue data for this period</p>
+              )}
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* Year Selector */}
       <div className="flex flex-wrap items-center gap-2">
