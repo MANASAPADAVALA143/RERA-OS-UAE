@@ -45,6 +45,10 @@ export interface ComplianceDoc {
   fileUrl: string | null;
 }
 export interface DevExpense { particulars: string; amount: number; category: string; }
+export interface YearlyPL  { net_income: number; total_expenses: number; revenue: number; other_income?: number; }
+export interface YearlyBS  { cash: number; land: number; improvements: number; interest_capitalised: number; total_assets: number; loan_balance: number; total_liabilities: number; }
+export interface YearlyCF  { operating: number; investing: number; financing: number; net_change: number; partner_investments?: number; }
+
 export interface Property {
   id: string; companyId: string; name: string; address: string;
   totalLots: number; totalAcres: number; saleConsideration: number;
@@ -54,6 +58,11 @@ export interface Property {
   managementFeeRate: number; commissionRate: number;
   commission?: number;  // explicit commission amount; overrides commissionRate when set
   cashAvailable: number;
+  interestCapitalised?: number;
+  improvements?: number;
+  yearlyPL?: Record<string, YearlyPL>;
+  yearlyBS?: Record<string, YearlyBS>;
+  yearlyCF?: Record<string, YearlyCF>;
   monthlyData: { month: string; lotsSold: number; revenue: number }[];
 }
 export interface CompanyData {
@@ -433,6 +442,11 @@ export function PropertyDevProvider({ children }: { children: ReactNode }) {
               commissionRate: c.commission_rate,
               commission: c.commission,
               cashAvailable: c.cash_available,
+              interestCapitalised: c.interest_capitalised ?? 0,
+              improvements: c.improvements ?? 0,
+              yearlyPL: c.yearly_pl ?? undefined,
+              yearlyBS: c.yearly_bs ?? undefined,
+              yearlyCF: c.yearly_cf ?? undefined,
               monthlyData: (() => {
                 const map: Record<string, { lotsSold: number; revenue: number }> = {};
                 (c.lots || []).forEach((l: any) => {

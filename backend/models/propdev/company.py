@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String, Uuid, func
+from sqlalchemy import DateTime, ForeignKey, Index, JSON, Numeric, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -43,6 +43,15 @@ class PropDevCompany(Base):
 
     # Cash position
     cash_available: Mapped[float] = mapped_column(Numeric(16, 2), default=0, nullable=False)
+
+    # Balance-sheet extras (single-property land dev)
+    interest_capitalised: Mapped[float] = mapped_column(Numeric(16, 2), default=0, nullable=False)
+    improvements: Mapped[float] = mapped_column(Numeric(16, 2), default=0, nullable=False)
+
+    # Yearly financial history as JSON dicts keyed by year string
+    yearly_pl: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    yearly_bs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    yearly_cf: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     status: Mapped[str | None] = mapped_column(String(20), nullable=True, server_default="active")
 

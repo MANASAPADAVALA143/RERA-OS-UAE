@@ -117,6 +117,11 @@ class CompanyResponse:
         self.commission_rate = float(company.commission_rate)
         self.commission = float(company.commission) if company.commission else None
         self.cash_available = float(company.cash_available)
+        self.interest_capitalised = float(company.interest_capitalised) if hasattr(company, 'interest_capitalised') and company.interest_capitalised else 0.0
+        self.improvements = float(company.improvements) if hasattr(company, 'improvements') and company.improvements else 0.0
+        self.yearly_pl = company.yearly_pl if hasattr(company, 'yearly_pl') else None
+        self.yearly_bs = company.yearly_bs if hasattr(company, 'yearly_bs') else None
+        self.yearly_cf = company.yearly_cf if hasattr(company, 'yearly_cf') else None
         self.lots = lots or []
         self.partners = partners or []
         self.loans = loans or []
@@ -137,6 +142,11 @@ class CompanyResponse:
             'management_fee_rate': self.management_fee_rate,
             'commission_rate': self.commission_rate, 'commission': self.commission,
             'cash_available': self.cash_available,
+            'interest_capitalised': self.interest_capitalised,
+            'improvements': self.improvements,
+            'yearly_pl': self.yearly_pl,
+            'yearly_bs': self.yearly_bs,
+            'yearly_cf': self.yearly_cf,
             'lots': self.lots, 'partners': self.partners,
             'loans': self.loans, 'capital_calls': self.capital_calls,
             'expenses': self.expenses,

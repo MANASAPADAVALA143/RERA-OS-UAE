@@ -267,7 +267,25 @@ export default function PD00Upload() {
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState('');
   const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [seeding, setSeeding] = useState(false);
+  const [seedResult, setSeedResult] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
+
+  async function handleSeedWWBG() {
+    setSeeding(true);
+    setSeedResult('');
+    try {
+      const res = await api.post<{ status: string; company: string; total_invested: number; loan_balance: number; ltv_pct: number; cash: number; partners_added: number }>('/api/propdev/seed-wwbg');
+      const d = res.data;
+      setSeedResult(`✅ ${d.company} seeded — Total invested $${d.total_invested.toLocaleString('en-US',{maximumFractionDigits:0})} · Loan $${d.loan_balance.toLocaleString('en-US',{maximumFractionDigits:0})} · LTV ${d.ltv_pct}% · ${d.partners_added} partners`);
+      setTimeout(() => window.location.reload(), 2000);
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setSeedResult(`❌ ${detail || 'Seeding failed'}`);
+    } finally {
+      setSeeding(false);
+    }
+  }
 
   const targetCompany = selectedCompanyId === 'all'
     ? companies[0]
@@ -515,6 +533,32 @@ export default function PD00Upload() {
           </button>
         </div>
       )}
+
+      {/* WWBG Quick Seed */}
+      <div className="rounded-xl border p-4 max-w-2xl" style={{ background: 'rgba(212,175,55,0.06)', borderColor: 'rgba(212,175,55,0.30)' }}>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm font-semibold" style={{ color: '#92400E' }}>WWBG Land Dev — Quick Load</div>
+            <div className="text-xs text-gray-500 mt-0.5">
+              Loads WWBG data from 4 pre-parsed Excel files (BS, P&L, Loans, Cash Flows) directly into the database.
+              Populates CFO Dashboard, Deal P&L, Loan Tracker, and Cash Flow sections.
+            </div>
+            {seedResult && (
+              <div className={`text-xs mt-2 font-medium ${seedResult.startsWith('✅') ? 'text-green-700' : 'text-red-700'}`}>
+                {seedResult}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={handleSeedWWBG}
+            disabled={seeding}
+            className="flex-shrink-0 text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50"
+            style={{ background: '#D4AF37', color: '#161310' }}
+          >
+            {seeding ? 'Loading...' : '⚡ Load WWBG Data'}
+          </button>
+        </div>
+      </div>
 
       {/* Expected format guide */}
       <div className="bg-white rounded-xl border border-gray-200">

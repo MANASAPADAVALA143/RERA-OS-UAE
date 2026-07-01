@@ -575,6 +575,79 @@ export default function PD11CashFlow() {
         </ResponsiveContainer>
       </div>
 
+      {/* Historical CF Statement — shows when real yearly data exists */}
+      {p?.yearlyCF && (() => {
+        const cfYears = Object.keys(p.yearlyCF).sort();
+        return (
+          <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'rgba(212,175,55,0.25)' }}>
+            <div className="px-4 py-2 flex items-center gap-2 border-b" style={{ background: '#F0EDE5', borderColor: 'rgba(212,175,55,0.20)' }}>
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Historical Cash Flow Statement · {p.name} · {cfYears[0]}–{cfYears[cfYears.length - 1]}</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr style={{ background: '#F7F5F0' }}>
+                    <th className="px-4 py-2 text-left text-gray-500 font-medium">Activity</th>
+                    {cfYears.map(y => <th key={y} className="px-3 py-2 text-right text-gray-500 font-medium">{y}</th>)}
+                    <th className="px-3 py-2 text-right text-gray-500 font-medium">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {([
+                    { label: 'Operating Activities', key: 'operating' as const, bold: false },
+                    { label: 'Investing Activities',  key: 'investing'  as const, bold: false },
+                    { label: 'Financing Activities',  key: 'financing'  as const, bold: false },
+                    { label: 'Net Cash Change',       key: 'net_change' as const, bold: true  },
+                  ] as const).map(({ label, key, bold }) => {
+                    const total = cfYears.reduce((s, y) => s + (p.yearlyCF![y]?.[key] ?? 0), 0);
+                    return (
+                      <tr key={label} className={bold ? 'font-bold' : ''} style={bold ? { background: '#F0EDE5' } : {}}>
+                        <td className="px-4 py-1.5 text-gray-700">{label}</td>
+                        {cfYears.map(y => {
+                          const v = p.yearlyCF![y]?.[key] ?? 0;
+                          return (
+                            <td key={y} className={`px-3 py-1.5 text-right font-mono ${v >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                              {v === 0 ? '—' : v >= 0 ? `$${v.toLocaleString('en-US',{maximumFractionDigits:0})}` : `($${Math.abs(v).toLocaleString('en-US',{maximumFractionDigits:0})})`}
+                            </td>
+                          );
+                        })}
+                        <td className={`px-3 py-1.5 text-right font-mono font-semibold ${total >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                          {total >= 0 ? `$${total.toLocaleString('en-US',{maximumFractionDigits:0})}` : `($${Math.abs(total).toLocaleString('en-US',{maximumFractionDigits:0})})`}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* CF Waterfall Chart */}
+            <div className="p-4 border-t" style={{ borderColor: 'rgba(212,175,55,0.15)' }}>
+              <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Annual Cash Flows</p>
+              <ResponsiveContainer width="100%" height={160}>
+                <BarChart data={cfYears.map(y => ({
+                  year: y,
+                  operating: p.yearlyCF![y]?.operating ?? 0,
+                  investing: p.yearlyCF![y]?.investing ?? 0,
+                  financing: p.yearlyCF![y]?.financing ?? 0,
+                }))} barSize={18}>
+                  <XAxis dataKey="year" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} tickFormatter={v => v >= 0 ? `$${(v/1000).toFixed(0)}K` : `($${(-v/1000).toFixed(0)}K)`} />
+                  <Tooltip formatter={(v: number, name: string) => [
+                    v >= 0 ? `$${v.toLocaleString()}` : `($${Math.abs(v).toLocaleString()})`,
+                    name.charAt(0).toUpperCase() + name.slice(1),
+                  ]} />
+                  <Legend wrapperStyle={{ fontSize: 10 }} />
+                  <Bar dataKey="operating" fill="#059669" radius={[2,2,0,0]} />
+                  <Bar dataKey="investing"  fill="#DC2626" radius={[2,2,0,0]} />
+                  <Bar dataKey="financing"  fill="#2563EB" radius={[2,2,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Cash Flow Statement */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">

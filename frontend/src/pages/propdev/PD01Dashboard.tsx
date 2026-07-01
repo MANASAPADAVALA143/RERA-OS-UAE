@@ -4,6 +4,8 @@ import CompanyComparisonPanel from '../../components/propdev/CompanyComparisonPa
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  CartesianGrid,
 } from 'recharts';
 import { ArrowUp, ArrowDown, AlertCircle, Clock, CheckCircle2 } from 'lucide-react';
 
@@ -189,15 +191,168 @@ export default function PD01Dashboard() {
     );
   };
 
+  // ── Land Dev CFO Command Center (single-lot company with yearly data) ─────────
+  const landDevYBS  = p?.yearlyBS;
+  const landDevYPL  = p?.yearlyPL;
+  const landDevYCF  = p?.yearlyCF;
+  const isLandDev   = !!landDevYBS && (p?.totalLots ?? 0) <= 1;
+  const LD_YEARS    = landDevYBS ? Object.keys(landDevYBS).sort() : [];
+  const latestYear  = LD_YEARS[LD_YEARS.length - 1];
+  const ldBS        = landDevYBS?.[latestYear];
+  const landValue   = ldBS?.land ?? p?.landCost ?? 0;
+  const improvements = ldBS?.improvements ?? p?.improvements ?? 0;
+  const intCap      = ldBS?.interest_capitalised ?? p?.interestCapitalised ?? 0;
+  const totalInvested = landValue + improvements + intCap;
+  const loanBalance = ldBS?.loan_balance ?? totalLoanBalance;
+  const cashOnHand  = ldBS?.cash ?? p?.cashAvailable ?? 0;
+  const ltv         = landValue > 0 ? (loanBalance / landValue * 100) : 0;
+
+  // Net income trend for bar chart
+  const niChartData = LD_YEARS.map(y => ({
+    year: y,
+    net_income: landDevYPL?.[y]?.net_income ?? 0,
+    expenses:   landDevYPL?.[y]?.total_expenses ?? 0,
+  }));
+  // Cash flow trend
+  const cfChartData = LD_YEARS.map(y => ({
+    year: y,
+    operating: landDevYCF?.[y]?.operating ?? 0,
+    investing: landDevYCF?.[y]?.investing ?? 0,
+    financing: landDevYCF?.[y]?.financing ?? 0,
+  }));
+
   return (
     <div className="space-y-5">
       {/* Header */}
       <div>
         <h2 className="text-2xl font-bold text-gray-900">{p?.name ?? 'Portfolio'}</h2>
         <p className="text-sm text-gray-500 mt-0.5">
-          {p?.address} · {lots.length} lots · {p?.totalAcres?.toFixed(1)} acres
+          {p?.address} · {lots.length <= 1 ? (p?.name ? `${p.name} — single-lot land holding` : '') : `${lots.length} lots`}
+          {p?.totalAcres && p.totalAcres > 0 ? ` · ${p.totalAcres?.toFixed(1)} acres` : ''}
         </p>
       </div>
+
+      {/* ── Land Dev CFO Command Center ── */}
+      {isLandDev && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="h-px flex-1 bg-gray-200" />
+            <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider px-2">
+              CFO Command Center · {p?.name} · {latestYear}
+            </span>
+            <div className="h-px flex-1 bg-gray-200" />
+          </div>
+
+          {/* 6-KPI row */}
+          <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
+            {[
+              { label: 'Land Value',           value: `$${(landValue/1e6).toFixed(3)}M`,   sub: 'WWBL',                color: 'text-amber-700'  },
+              { label: 'Total Invested',        value: `$${(totalInvested/1e6).toFixed(3)}M`, sub: 'Land+Impr+Int Cap', color: 'text-blue-700'   },
+              { label: 'Outstanding Loan',      value: `$${(loanBalance/1e6).toFixed(3)}M`, sub: 'Great Plains Bank',  color: 'text-red-600'    },
+              { label: 'LTV',                  value: `${ltv.toFixed(1)}%`,                sub: 'Loan / Land Value',  color: ltv < 60 ? 'text-green-700' : 'text-red-600' },
+              { label: 'Interest Capitalised',  value: `$${(intCap/1000).toFixed(0)}K`,    sub: 'Added to basis',     color: 'text-purple-700' },
+              { label: 'Cash on Hand',          value: `$${cashOnHand.toLocaleString('en-US',{maximumFractionDigits:0})}`, sub: `${latestYear} BS`, color: 'text-green-700' },
+            ].map(({ label, value, sub, color }) => (
+              <div key={label} className="rounded-xl border p-3 text-center"
+                style={{ background: '#F7F5F0', borderColor: 'rgba(212,175,55,0.30)' }}>
+                <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">{label}</p>
+                <p className={`text-lg font-bold font-mono ${color}`}>{value}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Cost Basis Breakdown */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="rounded-xl border p-4" style={{ borderColor: 'rgba(212,175,55,0.25)', background: '#F7F5F0' }}>
+              <h4 className="text-sm font-semibold text-gray-800 mb-3">Cost Basis Breakdown</h4>
+              <div className="space-y-2">
+                {[
+                  { label: 'Land (WWBL)',           val: landValue,   pct: landValue/totalInvested,    color: '#D4AF37' },
+                  { label: 'Improvements',          val: improvements, pct: improvements/totalInvested, color: '#2563EB' },
+                  { label: 'Interest Capitalised',  val: intCap,      pct: intCap/totalInvested,       color: '#7C3AED' },
+                ].map(({ label, val, pct, color }) => (
+                  <div key={label}>
+                    <div className="flex justify-between text-xs text-gray-600 mb-0.5">
+                      <span>{label}</span>
+                      <span className="font-mono font-semibold">${val.toLocaleString('en-US',{maximumFractionDigits:0})} ({(pct*100).toFixed(1)}%)</span>
+                    </div>
+                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${pct*100}%`, background: color }} />
+                    </div>
+                  </div>
+                ))}
+                <div className="pt-1 border-t border-gray-200 flex justify-between text-xs font-bold">
+                  <span>Total Invested</span>
+                  <span className="font-mono">${totalInvested.toLocaleString('en-US',{maximumFractionDigits:0})}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Net Income by Year */}
+            <div className="rounded-xl border p-4" style={{ borderColor: 'rgba(212,175,55,0.25)', background: '#F7F5F0' }}>
+              <h4 className="text-sm font-semibold text-gray-800 mb-3">Net Income by Year</h4>
+              <ResponsiveContainer width="100%" height={150}>
+                <BarChart data={niChartData} barSize={20}>
+                  <XAxis dataKey="year" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} tickFormatter={v => v >= 0 ? `$${(v/1000).toFixed(0)}K` : `-$${(-v/1000).toFixed(0)}K`} />
+                  <Tooltip formatter={(v: number, name: string) => [`$${v.toLocaleString()}`, name === 'net_income' ? 'Net Income' : 'Expenses']} />
+                  <Bar dataKey="net_income" radius={[3,3,0,0]}
+                    fill="#059669"
+                    label={false}
+                  >
+                    {niChartData.map((d, i) => (
+                      <Cell key={i} fill={d.net_income >= 0 ? '#059669' : '#DC2626'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Yearly BS/PL table */}
+          <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'rgba(212,175,55,0.25)' }}>
+            <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide border-b"
+              style={{ background: '#F0EDE5', borderColor: 'rgba(212,175,55,0.20)' }}>
+              Balance Sheet · Year-by-Year
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr style={{ background: '#F7F5F0' }}>
+                    <th className="text-left px-4 py-2 text-gray-500 font-medium">Item</th>
+                    {LD_YEARS.map(y => <th key={y} className="text-right px-3 py-2 text-gray-500 font-medium">{y}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {[
+                    { label: 'Cash (Bank)',           key: 'cash' as const },
+                    { label: 'Land (WWBL)',           key: 'land' as const },
+                    { label: 'Improvements',         key: 'improvements' as const },
+                    { label: 'Interest Capitalised', key: 'interest_capitalised' as const },
+                    { label: 'Total Assets',         key: 'total_assets' as const },
+                    { label: 'Loan Balance (GBT)',   key: 'loan_balance' as const },
+                  ].map(({ label, key }) => (
+                    <tr key={label} className={key === 'total_assets' || key === 'loan_balance' ? 'font-semibold' : ''}>
+                      <td className="px-4 py-1.5 text-gray-700">{label}</td>
+                      {LD_YEARS.map(y => {
+                        const v = landDevYBS?.[y]?.[key] ?? 0;
+                        return (
+                          <td key={y} className="px-3 py-1.5 text-right font-mono text-gray-800">
+                            {v === 0 ? '—' : `$${v.toLocaleString('en-US',{maximumFractionDigits:0})}`}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="h-px bg-gray-200" />
+        </div>
+      )}
 
       {/* 8-KPI Pills */}
       <div className="grid grid-cols-4 lg:grid-cols-8 gap-2">

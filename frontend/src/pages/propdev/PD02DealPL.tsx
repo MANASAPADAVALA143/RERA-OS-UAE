@@ -128,6 +128,7 @@ export default function PD02DealPL() {
     professionalCharges: prop?.professionalCharges ?? 9000,
     legalFees: prop?.legalFees ?? 15000,
     interestOnLoan: prop?.interestOnLoan ?? 108000,
+    interestCapitalised: prop?.interestCapitalised ?? 0,
   });
 
   const [costs, setCosts] = useState(() => costsFromProperty(p));
@@ -330,6 +331,24 @@ export default function PD02DealPL() {
         </div>
       </div>
 
+      {/* Pre-sale / Development Phase banner for single-lot land dev */}
+      {p.totalLots <= 1 && p.saleConsideration === 0 && (
+        <div className="rounded-xl border px-4 py-3" style={{ background: 'rgba(212,175,55,0.08)', borderColor: 'rgba(212,175,55,0.35)' }}>
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#92400E' }}>Pre-sale · Development Phase</span>
+            <span className="text-xs text-gray-500">Land not yet sold — showing cost basis only.</span>
+            <div className="flex gap-4 ml-auto text-xs font-mono">
+              <span>Land: <strong>${p.landCost.toLocaleString('en-US',{maximumFractionDigits:0})}</strong></span>
+              <span>Improvements: <strong>${(p.hardCost).toLocaleString('en-US',{maximumFractionDigits:0})}</strong></span>
+              {p.interestCapitalised ? <span>Int. Cap.: <strong>${p.interestCapitalised.toLocaleString('en-US',{maximumFractionDigits:0})}</strong></span> : null}
+              <span className="font-bold" style={{ color: '#D4AF37' }}>
+                Total: ${(p.landCost + p.hardCost + (p.interestCapitalised ?? 0)).toLocaleString('en-US',{maximumFractionDigits:0})}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Provisional badge */}
       {viewMode !== 'actual' && (
         <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5">
@@ -451,6 +470,7 @@ export default function PD02DealPL() {
                 ['professionalCharges', 'Professional Charges'],
                 ['legalFees', 'Legal Fees'],
                 ['interestOnLoan', 'Interest on Mortgage Loan'],
+                ['interestCapitalised', 'Interest Capitalised (added to basis)'],
               ] as [CostKey, string][]).map(([key, label]) => (
                 <EditableRow
                   key={key}

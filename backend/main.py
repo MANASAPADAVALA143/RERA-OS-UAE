@@ -147,12 +147,14 @@ from routers.propdev.deal_advisor import router as deal_advisor_router  # noqa: 
 from routers.propdev.companies import router as propdev_companies_router  # noqa: E402
 from routers.propdev.excel_import import router as propdev_excel_router  # noqa: E402
 from routers.propdev.capital_import import router as propdev_capital_router  # noqa: E402
+from routers.propdev.seed_wwbg import router as propdev_seed_wwbg_router  # noqa: E402
 from routers.reit.companies import router as reit_companies_router  # noqa: E402
 from routers.real_estate.construction_companies import router as construction_companies_router  # noqa: E402
 app.include_router(deal_advisor_router)
 app.include_router(propdev_companies_router)
 app.include_router(propdev_excel_router)
 app.include_router(propdev_capital_router)
+app.include_router(propdev_seed_wwbg_router)
 app.include_router(reit_companies_router)
 app.include_router(construction_companies_router)
 
