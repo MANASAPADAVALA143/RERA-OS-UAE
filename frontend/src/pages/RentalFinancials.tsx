@@ -1390,6 +1390,7 @@ export default function RentalFinancials() {
         filename:     merged.fileName,
         date_range:   merged.dateRange,
         years:        merged.years,
+        periods:      merged.periods,
         pl:           merged.pl,
         bs:           merged.bs,
         cf:           merged.cf,

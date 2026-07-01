@@ -1888,6 +1888,17 @@ def seed_portfolio(
 def _ensure_fin_uploads_table(engine) -> None:
     from models.rentals.models import RentalFinancialUpload
     RentalFinancialUpload.__table__.create(bind=engine, checkfirst=True)
+    # Add periods column if it doesn't exist yet (safe migration)
+    try:
+        with engine.connect() as conn:
+            conn.execute(
+                __import__('sqlalchemy').text(
+                    "ALTER TABLE r_financial_uploads ADD COLUMN IF NOT EXISTS periods JSON"
+                )
+            )
+            conn.commit()
+    except Exception:
+        pass
 
 
 @router.get("/financials")
@@ -1934,6 +1945,7 @@ def get_financials(
         "filename": row.filename,
         "date_range": row.date_range,
         "years": row.years or [],
+        "periods": row.periods or [],
         "pl": row.pl_data or [],
         "bs": row.bs_data or [],
         "cf": row.cf_data or [],
@@ -1962,6 +1974,7 @@ def save_financials(
         existing.filename = body.get("filename", existing.filename)
         existing.date_range = body.get("date_range", existing.date_range)
         existing.years = body.get("years", existing.years)
+        existing.periods = body.get("periods", existing.periods)
         existing.pl_data = body.get("pl", existing.pl_data)
         existing.bs_data = body.get("bs", existing.bs_data)
         existing.cf_data = body.get("cf", existing.cf_data)
@@ -1974,6 +1987,7 @@ def save_financials(
             filename=body.get("filename", ""),
             date_range=body.get("date_range", ""),
             years=body.get("years", []),
+            periods=body.get("periods", []),
             pl_data=body.get("pl", []),
             bs_data=body.get("bs", []),
             cf_data=body.get("cf", []),

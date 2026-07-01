@@ -244,11 +244,122 @@ const COST_RATIOS: RatioCard[] = [
   { name: 'Balloon Risk',          formula: 'Loans maturing <3 years',      value: '2 loans', benchmark: 'None',         status: 'monitor', statusLabel: '⚠️ Monitor',       note: 'Review loan maturity schedule — begin refi planning 3 years prior to maturity' },
 ];
 
-function ProfitabilityTab({ coData, trendData }: { coData: any[]; trendData: any[] }) {
+// ── Dynamic ratio builder from uploaded financial data ─────────────────────────
+
+function fmtPct(n: number, dec = 1) { return `${n.toFixed(dec)}%`; }
+function fmtX(n: number, dec = 2)   { return `${n.toFixed(dec)}x`; }
+function fmtDollar(n: number) {
+  const a = Math.abs(n); const s = a >= 1_000_000 ? `$${(a/1_000_000).toFixed(2)}M` : a >= 1_000 ? `$${(a/1_000).toFixed(0)}K` : `$${a.toFixed(0)}`;
+  return n < 0 ? `(${s})` : s;
+}
+
+function calcAllRatios(fin: LiveFin): { profitability: RatioCard[]; liquidity: RatioCard[]; solvency: RatioCard[] } {
+  const pl = fin.pl; const bs = fin.bs; const cf = fin.cf;
+  const lastY = fin.years[fin.years.length - 1];
+
+  // Helpers
+  const yv = (items: FinItem[], pat: RegExp, y: number) =>
+    items.find(i => pat.test(i.label))?.values[y] ?? 0;
+  const si = (items: FinItem[], pat: RegExp, y: number) =>
+    items.filter(i => !i.isSectionHeader && !i.isTotal && pat.test(i.label)).reduce((s, i) => s + (i.values[y] ?? 0), 0);
+
+  // P&L figures (last year)
+  const rev   = yv(pl,/^total\s+(for\s+)?income$/i,lastY) || yv(pl,/^gross\s+profit$/i,lastY) || si(pl,/income|revenue|rent/i,lastY);
+  const exp   = yv(pl,/^total\s+(for\s+)?expenses?$/i,lastY) || Math.abs(si(pl,/^total\s+expenses/i,lastY));
+  const ni    = yv(pl,/^net\s+income$/i,lastY);
+  const intEx = Math.abs(yv(pl,/^total\s+for\s+interest\s+paid$/i,lastY) || si(pl,/interest/i,lastY));
+  const depAm = Math.abs(si(pl,/depreciation|amortization/i,lastY));
+  const noi   = yv(pl,/^net\s+operating\s+income$/i,lastY) || (rev - exp + intEx);
+  const ebitda = noi + depAm;
+
+  // BS figures
+  const totalAssets = yv(bs,/^total\s+(for\s+)?assets$/i,lastY);
+  const totalLiab   = yv(bs,/^total\s+(for\s+)?liabilities$/i,lastY) || yv(bs,/^total\s+for\s+liabilities\s+and\s+equity$/i,lastY);
+  const equity      = yv(bs,/^total\s+(for\s+)?equity$/i,lastY);
+  const cash        = yv(bs,/^total\s+(for\s+)?bank/i,lastY) || si(bs,/^bank|checking|savings|prosperity/i,lastY);
+  const currAssets  = yv(bs,/^total\s+for\s+current\s+assets$/i,lastY) || yv(bs,/^total\s+current\s+assets$/i,lastY) || (cash + Math.abs(si(bs,/receivable/i,lastY)));
+  const currLiab    = yv(bs,/^total\s+for\s+current\s+liabilities$/i,lastY) || yv(bs,/^total\s+current\s+liabilities$/i,lastY) || Math.abs(si(bs,/payable/i,lastY));
+  const buildings   = Math.abs(yv(bs,/^buildings$/i,lastY));
+  const loans       = Math.abs(yv(bs,/^total\s+for\s+long.term\s+liabilities$/i,lastY) || si(bs,/long.term.*loan|loan\s+from|independent\s+bank/i,lastY));
+
+  // CF figures
+  const ocf = yv(cf,/^net\s+cash.*operating/i,lastY) || yv(cf,/^net\s+income$/i,lastY);
+
+  // Sparklines across years
+  const spark = (fn: (y: number) => number) => fin.years.slice(-4).map(fn);
+
+  // Ratios
+  const noiM   = rev > 0 ? noi / rev * 100 : 0;
+  const netM   = rev > 0 ? ni / rev * 100 : 0;
+  const expR   = rev > 0 ? exp / rev * 100 : 0;
+  const ebitdaM = rev > 0 ? ebitda / rev * 100 : 0;
+  const roa    = totalAssets > 0 ? ni / totalAssets * 100 : 0;
+  const roe    = equity > 0 ? ni / equity * 100 : 0;
+  const grm    = rev > 0 ? (totalAssets > 0 ? totalAssets / rev : 0) : 0;
+
+  const currR  = currLiab > 0 ? currAssets / currLiab : 0;
+  const cashR  = currLiab > 0 ? cash / currLiab : 0;
+  const ocfR   = currLiab > 0 ? Math.abs(ocf) / currLiab : 0;
+  const wc     = currAssets - currLiab;
+  const daysOp = exp > 0 ? (cash / (exp / 365)) : 0;
+
+  const dte    = equity > 0 ? totalLiab / equity : 0;
+  const dta    = totalAssets > 0 ? totalLiab / totalAssets * 100 : 0;
+  const equR   = totalAssets > 0 ? equity / totalAssets * 100 : 0;
+  const iCov   = intEx > 0 ? noi / intEx : 0;
+  const ltv    = buildings > 0 ? loans / buildings * 100 : 0;
+  const netDebt = loans - cash;
+  const dscr   = (intEx > 0 || loans > 0) ? noi / (intEx * 1.2) : 0;
+
+  const pill = (good: boolean, watch: boolean): { status: RatioCard['status']; label: string } => ({
+    status: good ? 'good' : watch ? 'watch' : 'critical',
+    label: good ? '✓ Good' : watch ? '⚠ Watch' : '✗ Review',
+  });
+
+  const profitability: RatioCard[] = [
+    { name: 'NOI Margin',              formula: 'NOI / Revenue',             value: noiM ? fmtPct(noiM) : '—',    benchmark: '>35%',   ...pill(noiM>=35, noiM>=20),   spark: spark(y => { const r = yv(pl,/^total\s+(for\s+)?income$/i,y)||si(pl,/income|revenue|rent/i,y); const e = yv(pl,/^total\s+(for\s+)?expenses?$/i,y); const ie = Math.abs(si(pl,/interest/i,y)); const n = r-e+ie; return r>0?n/r*100:0; }) },
+    { name: 'Net Profit Margin',       formula: 'Net Income / Revenue',      value: rev>0 ? fmtPct(netM) : '—',   benchmark: '>10%',   ...pill(netM>=10, netM>=0) },
+    { name: 'Operating Expense Ratio', formula: 'Total OpEx / Revenue',      value: rev>0 ? fmtPct(expR) : '—',   benchmark: '<60%',   ...pill(expR<=60, expR<=85) },
+    { name: 'EBITDA Margin',           formula: 'EBITDA / Revenue',          value: rev>0 ? fmtPct(ebitdaM) : '—',benchmark: '>45%',   ...pill(ebitdaM>=45, ebitdaM>=30) },
+    { name: 'Return on Assets',        formula: 'Net Income / Total Assets', value: totalAssets>0 ? fmtPct(roa) : '—', benchmark: '>4%', ...pill(roa>=4, roa>=2) },
+    { name: 'Return on Equity',        formula: 'Net Income / Equity',       value: equity>0 ? fmtPct(roe) : '—', benchmark: '>8%',   ...pill(roe>=8, roe>=4) },
+    { name: 'Revenue',                 formula: 'Total Income',              value: fmtDollar(rev),                benchmark: 'Trend',  status: 'info', statusLabel: 'ℹ Info', spark: spark(y => yv(pl,/^total\s+(for\s+)?income$/i,y)||si(pl,/income|revenue|rent/i,y)) },
+    { name: 'Net Income',              formula: 'Revenue − Expenses',        value: fmtDollar(ni),                 benchmark: 'Positive', ...pill(ni>0, ni>-5000) },
+    { name: 'Gross Rent Multiple',     formula: 'Asset Value / Ann. Revenue',value: grm > 0 ? fmtX(grm,1) : '—', benchmark: '<14x',   ...pill(grm>0&&grm<14, grm<18) },
+  ];
+
+  const liquidity: RatioCard[] = [
+    { name: 'Current Ratio',             formula: 'Current Assets / CL',        value: currR>0 ? fmtX(currR) : '—',  benchmark: '>1.5x',    ...pill(currR>=1.5, currR>=1.0),  spark: spark(y => { const ca = yv(bs,/^total\s+for\s+current\s+assets/i,y)||yv(bs,/^total\s+current\s+assets/i,y); const cl = yv(bs,/^total\s+for\s+current\s+liab/i,y)||yv(bs,/^total\s+current\s+liab/i,y); return cl>0?ca/cl:0; }) },
+    { name: 'Cash Ratio',                formula: 'Cash / Current Liabilities', value: cashR>0 ? fmtX(cashR) : '—',  benchmark: '>0.2x',    ...pill(cashR>=0.2, cashR>=0.1) },
+    { name: 'Operating CF Ratio',        formula: 'OCF / Current Liabilities',  value: ocfR>0 ? fmtX(ocfR) : '—',   benchmark: '>1.0x',    ...pill(ocfR>=1.0, ocfR>=0.5) },
+    { name: 'Working Capital',           formula: 'Current Assets − CL',        value: fmtDollar(wc),                 benchmark: 'Positive', ...pill(wc>0, wc>-10000), spark: spark(y => { const ca = yv(bs,/^total\s+for\s+current\s+assets/i,y)||yv(bs,/^total\s+current\s+assets/i,y); const cl = yv(bs,/^total\s+for\s+current\s+liab/i,y)||yv(bs,/^total\s+current\s+liab/i,y); return ca-cl; }) },
+    { name: 'Cash & Bank Balance',       formula: 'Total Bank Accounts',        value: fmtDollar(cash),               benchmark: 'Positive', ...pill(cash>50000, cash>10000), spark: spark(y => yv(bs,/^total\s+(for\s+)?bank/i,y)||si(bs,/^bank|checking|savings|prosperity/i,y)) },
+    { name: 'Days Cash on Hand',         formula: 'Cash / Daily OpEx',          value: daysOp>0 ? `${daysOp.toFixed(0)} days` : '—', benchmark: '>60 days', ...pill(daysOp>=60, daysOp>=30) },
+  ];
+
+  const solvency: RatioCard[] = [
+    { name: 'Debt-to-Equity',     formula: 'Total Liabilities / Equity',    value: equity>0 ? fmtX(dte,1) : '—',  benchmark: '<5x RE',  ...pill(dte<=3, dte<=6), spark: spark(y => { const tl = yv(bs,/^total\s+(for\s+)?liabilities$/i,y); const eq = yv(bs,/^total\s+(for\s+)?equity$/i,y); return eq>0?tl/eq:0; }) },
+    { name: 'Debt-to-Asset',      formula: 'Total Liabilities / Assets',    value: totalAssets>0 ? fmtPct(dta) : '—', benchmark: '<80%', ...pill(dta<=70, dta<=85) },
+    { name: 'Equity Ratio',       formula: 'Equity / Total Assets',         value: totalAssets>0 ? fmtPct(equR) : '—', benchmark: '>20%', ...pill(equR>=20, equR>=10) },
+    { name: 'Interest Coverage',  formula: 'NOI / Interest Expense',        value: intEx>0 ? fmtX(iCov) : '—',    benchmark: '>1.5x',   ...pill(iCov>=1.5, iCov>=1.0), spark: spark(y => { const r = yv(pl,/^total\s+(for\s+)?income$/i,y)||si(pl,/income|revenue|rent/i,y); const e = yv(pl,/^total\s+(for\s+)?expenses?$/i,y); const ie = Math.abs(si(pl,/interest/i,y)); return ie>0?(r-e+ie)/ie:0; }) },
+    { name: 'LTV',                formula: 'Mortgage / Property Value',     value: buildings>0 ? fmtPct(ltv) : '—', benchmark: '<80%',  ...pill(ltv<=70, ltv<=85), spark: spark(y => { const b = Math.abs(yv(bs,/^buildings$/i,y)); const l = Math.abs(yv(bs,/^total\s+for\s+long.term/i,y)||si(bs,/long.term.*loan|loan\s+from|independent\s+bank/i,y)); return b>0?l/b*100:0; }) },
+    { name: 'Net Debt',           formula: 'Long-term Loans − Cash',       value: fmtDollar(netDebt),              benchmark: 'Monitor', status: 'info', statusLabel: 'ℹ Info' },
+    { name: 'DSCR (Est.)',        formula: 'NOI / (Interest × 1.2)',        value: dscr>0 ? fmtX(dscr) : '—',     benchmark: '>1.25x',  ...pill(dscr>=1.25, dscr>=1.0) },
+    { name: 'Total Assets',       formula: 'Balance Sheet Total',           value: fmtDollar(totalAssets),          benchmark: 'Trend',   status: 'info', statusLabel: 'ℹ Info' },
+    { name: 'Equity',             formula: "Owner's Net Worth",             value: fmtDollar(equity),               benchmark: 'Positive', ...pill(equity>0, equity>-10000) },
+  ];
+
+  return { profitability, liquidity, solvency };
+}
+
+// ── Tab components ─────────────────────────────────────────────────────────────
+
+function ProfitabilityTab({ coData, trendData, liveCards }: { coData: any[]; trendData: any[]; liveCards?: RatioCard[] }) {
+  const cards = liveCards ?? PROFITABILITY;
   const displayTrend = trendData.length > 0 ? trendData : [{ year: 'No data', noiMargin: 0, netProfitMargin: 0 }];
   return (
     <div className="space-y-6">
-      <CardGrid cards={PROFITABILITY} />
+      <CardGrid cards={cards} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
           <h3 style={{ fontSize: 13, color: '#262626', fontWeight: 600, marginBottom: 16 }}>Portfolio Margin Trend</h3>
@@ -291,10 +402,11 @@ function ProfitabilityTab({ coData, trendData }: { coData: any[]; trendData: any
   );
 }
 
-function LiquidityTab({ coData }: { coData: any[] }) {
+function LiquidityTab({ coData, liveCards }: { coData: any[]; liveCards?: RatioCard[] }) {
+  const cards = liveCards ?? LIQUIDITY;
   return (
     <div className="space-y-6">
-      <CardGrid cards={LIQUIDITY} />
+      <CardGrid cards={cards} />
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
         <h3 style={{ fontSize: 13, color: '#262626', fontWeight: 600, marginBottom: 16 }}>Current Ratio by Company — benchmark 1.5x</h3>
         {coData.length === 0 ? (
@@ -317,10 +429,11 @@ function LiquidityTab({ coData }: { coData: any[] }) {
   );
 }
 
-function SolvencyTab({ coData }: { coData: any[] }) {
+function SolvencyTab({ coData, liveCards }: { coData: any[]; liveCards?: RatioCard[] }) {
+  const cards = liveCards ?? SOLVENCY;
   return (
     <div className="space-y-6">
-      <CardGrid cards={SOLVENCY} />
+      <CardGrid cards={cards} />
 
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
         <div className="flex gap-2 items-start">
@@ -594,6 +707,19 @@ export default function RentalFinancialRatios() {
       {/* Live data panel — shown when company has uploaded financials */}
       {liveData && <LiveDataPanel fin={liveData} />}
 
+      {/* Live data badge */}
+      {liveData && (
+        <div style={{ background: '#F4FFF3', border: '1px solid #22A06B', borderRadius: 8, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 11, color: '#22A06B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>● Live Data Active</span>
+          <span style={{ fontSize: 12, color: '#262626' }}>Ratio cards below are calculated from <strong>{liveData.company_name}</strong>'s uploaded financial statements ({liveData.years.join(', ')})</span>
+        </div>
+      )}
+      {!selectedId && (
+        <div style={{ background: '#FFF7EE', border: '1px solid #F2994A', borderRadius: 8, padding: '8px 14px' }}>
+          <span style={{ fontSize: 12, color: '#92400E' }}>Select a company above to show ratio cards calculated from their actual uploaded P&L + Balance Sheet data.</span>
+        </div>
+      )}
+
       {/* Portfolio benchmark tabs */}
       <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
         {RATIO_TABS.map(tab => (
@@ -614,13 +740,18 @@ export default function RentalFinancialRatios() {
       </div>
 
       {/* Tab content */}
-      <div>
-        {activeTab === 'Profitability'    && <ProfitabilityTab coData={coData} trendData={trendData} />}
-        {activeTab === 'Liquidity'        && <LiquidityTab coData={coData} />}
-        {activeTab === 'Solvency'         && <SolvencyTab coData={coData} />}
-        {activeTab === 'Rental KPIs'      && <RentalKPIsTab coData={coData} />}
-        {activeTab === 'Cost of Capital'  && <CostOfCapitalTab loanData={loanData} />}
-      </div>
+      {(() => {
+        const liveRatios = liveData ? calcAllRatios(liveData) : null;
+        return (
+          <div>
+            {activeTab === 'Profitability'   && <ProfitabilityTab coData={coData} trendData={trendData} liveCards={liveRatios?.profitability} />}
+            {activeTab === 'Liquidity'       && <LiquidityTab coData={coData} liveCards={liveRatios?.liquidity} />}
+            {activeTab === 'Solvency'        && <SolvencyTab coData={coData} liveCards={liveRatios?.solvency} />}
+            {activeTab === 'Rental KPIs'     && <RentalKPIsTab coData={coData} />}
+            {activeTab === 'Cost of Capital' && <CostOfCapitalTab loanData={loanData} />}
+          </div>
+        );
+      })()}
     </div>
   );
 }

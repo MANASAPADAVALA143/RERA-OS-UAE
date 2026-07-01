@@ -222,6 +222,7 @@ class RentalFinancialUpload(Base):
     filename: Mapped[str | None] = mapped_column(String(500), nullable=True)
     date_range: Mapped[str | None] = mapped_column(String(500), nullable=True)
     years: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    periods: Mapped[list | None] = mapped_column(JSON, nullable=True)
     pl_data: Mapped[list | None] = mapped_column(JSON, nullable=True)
     bs_data: Mapped[list | None] = mapped_column(JSON, nullable=True)
     cf_data: Mapped[list | None] = mapped_column(JSON, nullable=True)
