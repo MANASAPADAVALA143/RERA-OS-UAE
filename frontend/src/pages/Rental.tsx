@@ -41,7 +41,6 @@ export default function Rental() {
   return (
     <div className="space-y-6">
       {tab === 'overview'     && <ErrorBoundary><RentalOverview /></ErrorBoundary>}
-      {tab === 'portfolio'    && <ErrorBoundary><RentalPortfolio /></ErrorBoundary>}
       {tab === 'companies'    && <ErrorBoundary><RentalCompanies /></ErrorBoundary>}
       {tab === 'units'        && <ErrorBoundary><RentalUnits /></ErrorBoundary>}
       {tab === 'discounts'    && <ErrorBoundary><RentalDiscounts /></ErrorBoundary>}

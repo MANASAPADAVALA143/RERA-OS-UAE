@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 
 export type RentalTab =
-  | "overview" | "portfolio" | "companies" | "units" | "leases"
+  | "overview" | "companies" | "units" | "leases"
   | "maintenance" | "vendor-risk"
   | "collections" | "vacancy" | "expenses" | "ar-dashboard"
   | "ap-dashboard" | "vendor-management"
@@ -31,7 +31,6 @@ export interface RentalNavItem {
 export const RENTAL_TABS: RentalNavItem[] = [
   // ── RENTAL & LEASE ────────────────────────────────────────────────────────
   { id: "overview",          label: "Overview",          Icon: LayoutDashboard, groupLabel: "RENTAL & LEASE" },
-  { id: "portfolio",         label: "Rental Portfolio",  Icon: BarChart2       },
   { id: "companies",         label: "Companies",         Icon: Building2       },
   { id: "units",             label: "Units",             Icon: Home            },
   { id: "discounts",         label: "Discounts",         Icon: Tag             },
@@ -61,7 +60,6 @@ export const RENTAL_TABS: RentalNavItem[] = [
 ];
 
 const TAB_PATHS: Partial<Record<RentalTab, string>> = {
-  "portfolio":         "/rental/portfolio",
   "building-expenses": "/rental/building-expenses",
   "loan-tracker":      "/rental/loan-tracker",
   "cfo-portfolio":     "/rental/cfo-portfolio",
@@ -70,7 +68,6 @@ const TAB_PATHS: Partial<Record<RentalTab, string>> = {
 };
 
 const PATH_TO_TAB: Record<string, RentalTab> = {
-  "/rental/portfolio":         "portfolio",
   "/rental/building-expenses": "building-expenses",
   "/rental/loan-tracker":      "loan-tracker",
   "/rental/cfo-portfolio":     "cfo-portfolio",
