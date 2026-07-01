@@ -3,7 +3,7 @@ import api from '../../services/api';
 import * as XLSX from 'xlsx';
 import {
   Upload, FileSpreadsheet, CheckCircle2, AlertCircle, X,
-  ChevronDown, ChevronRight, ArrowRight,
+  ChevronDown, ChevronRight, ArrowRight, Zap,
 } from 'lucide-react';
 import { usePropDev } from '../../contexts/PropertyDevContext';
 import type { Loan, Partner, CapitalCall, Property } from '../../contexts/PropertyDevContext';
@@ -271,6 +271,66 @@ export default function PD00Upload() {
   const [seedResult, setSeedResult] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // ── QuickBooks multi-file uploader state ──────────────────────────────────
+  const qbInputRef = useRef<HTMLInputElement>(null);
+  const [qbFiles, setQbFiles] = useState<File[]>([]);
+  const [qbDragOver, setQbDragOver] = useState(false);
+  const [qbUploading, setQbUploading] = useState(false);
+  const [qbResult, setQbResult] = useState<{
+    status: string;
+    company: string;
+    files_processed: Array<{ file: string; type: string; status: string; detail: string }>;
+    kpis: Record<string, number>;
+  } | null>(null);
+  const [qbError, setQbError] = useState('');
+
+  const QB_TYPE_COLORS: Record<string, string> = {
+    'Balance Sheet': 'bg-blue-100 text-blue-700',
+    'P&L':          'bg-green-100 text-green-700',
+    'Cash Flow':    'bg-purple-100 text-purple-700',
+    'Loans':        'bg-amber-100 text-amber-800',
+    'Unknown':      'bg-gray-100 text-gray-500',
+  };
+
+  function guessFileType(name: string): string {
+    const n = name.toLowerCase();
+    if (n.includes('bs') || n.includes('balance')) return 'Balance Sheet';
+    if (n.includes('p_l') || n.includes('pl') || n.includes('profit')) return 'P&L';
+    if (n.includes('loan')) return 'Loans';
+    if (n.includes('cash') || n.includes('cf')) return 'Cash Flow';
+    return 'Auto-detect';
+  }
+
+  function addQbFiles(incoming: FileList | null) {
+    if (!incoming) return;
+    const valid = Array.from(incoming).filter(f => /\.(xlsx|xls|xlsm)$/i.test(f.name));
+    setQbFiles(prev => {
+      const names = new Set(prev.map(f => f.name));
+      return [...prev, ...valid.filter(f => !names.has(f.name))];
+    });
+    setQbResult(null);
+    setQbError('');
+  }
+
+  async function handleQbUpload() {
+    if (qbFiles.length === 0) return;
+    setQbUploading(true);
+    setQbError('');
+    setQbResult(null);
+    try {
+      const fd = new FormData();
+      qbFiles.forEach(f => fd.append('files', f));
+      const res = await api.post<typeof qbResult>('/api/propdev/import-quickbooks', fd);
+      setQbResult(res.data);
+      setTimeout(() => window.location.reload(), 3000);
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setQbError(detail || 'Upload failed');
+    } finally {
+      setQbUploading(false);
+    }
+  }
+
   async function handleSeedWWBG() {
     setSeeding(true);
     setSeedResult('');
@@ -533,6 +593,152 @@ export default function PD00Upload() {
           </button>
         </div>
       )}
+
+      {/* ── QuickBooks Multi-File Upload ────────────────────────────────────── */}
+      <div className="rounded-2xl border-2 overflow-hidden" style={{ borderColor: 'rgba(212,175,55,0.40)', background: '#FDFCF8' }}>
+        {/* Header */}
+        <div className="px-5 py-4 border-b flex items-center gap-3" style={{ borderColor: 'rgba(212,175,55,0.20)', background: 'rgba(212,175,55,0.08)' }}>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#D4AF37' }}>
+            <Zap size={16} color="#161310" />
+          </div>
+          <div>
+            <p className="font-bold text-sm" style={{ color: '#78350F' }}>Upload QuickBooks Export Files</p>
+            <p className="text-xs text-gray-500">Auto-detect BS · P&amp;L · Loans · Cash Flow — upload all 4 together</p>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Drop zone */}
+          {!qbResult && (
+            <div
+              onDragOver={e => { e.preventDefault(); setQbDragOver(true); }}
+              onDragLeave={() => setQbDragOver(false)}
+              onDrop={e => { e.preventDefault(); setQbDragOver(false); addQbFiles(e.dataTransfer.files); }}
+              onClick={() => qbInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
+                qbDragOver ? 'border-amber-400 bg-amber-50' : 'border-gray-200 hover:border-amber-300 hover:bg-amber-50/30'
+              }`}
+            >
+              <input
+                ref={qbInputRef}
+                type="file"
+                multiple
+                accept=".xlsx,.xls,.xlsm"
+                className="hidden"
+                onChange={e => addQbFiles(e.target.files)}
+              />
+              <FileSpreadsheet size={28} className="mx-auto mb-2 text-amber-600" />
+              <p className="text-sm font-semibold text-gray-700">Drop 1–4 QuickBooks export files here</p>
+              <p className="text-xs text-gray-400 mt-0.5">or click to browse · .xlsx, .xls, .xlsm · multiple files OK</p>
+            </div>
+          )}
+
+          {/* File chips */}
+          {qbFiles.length > 0 && !qbResult && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Selected files</p>
+              <div className="flex flex-wrap gap-2">
+                {qbFiles.map((f, i) => {
+                  const guessed = guessFileType(f.name);
+                  const colorCls = QB_TYPE_COLORS[guessed] ?? 'bg-gray-100 text-gray-600';
+                  return (
+                    <div key={i} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm shadow-sm">
+                      <FileSpreadsheet size={14} className="text-green-600 shrink-0" />
+                      <span className="text-gray-700 max-w-[180px] truncate">{f.name}</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${colorCls}`}>{guessed}</span>
+                      <button
+                        onClick={() => setQbFiles(prev => prev.filter((_, j) => j !== i))}
+                        className="text-gray-300 hover:text-red-500 ml-1"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {qbError && (
+                <div className="flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  <AlertCircle size={14} /> {qbError}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={handleQbUpload}
+                  disabled={qbUploading}
+                  className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold disabled:opacity-50"
+                  style={{ background: '#D4AF37', color: '#161310' }}
+                >
+                  <Upload size={14} />
+                  {qbUploading ? 'Parsing & importing…' : `Parse & Import ${qbFiles.length} file${qbFiles.length !== 1 ? 's' : ''}`}
+                </button>
+                <button
+                  onClick={() => { setQbFiles([]); setQbError(''); }}
+                  className="px-4 py-2 border border-gray-200 rounded-xl text-sm text-gray-500 hover:bg-gray-50"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Success result */}
+          {qbResult && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-green-800 font-semibold text-sm">
+                <CheckCircle2 size={18} className="text-green-500" />
+                {qbResult.company} — data imported successfully
+              </div>
+
+              {/* Per-file breakdown */}
+              <div className="space-y-1.5">
+                {qbResult.files_processed.map((fp, i) => (
+                  <div key={i} className="flex items-start gap-2 text-sm">
+                    <span className="text-base leading-none mt-0.5">{fp.status}</span>
+                    <div>
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium mr-2 ${QB_TYPE_COLORS[fp.type] ?? 'bg-gray-100 text-gray-600'}`}>{fp.type}</span>
+                      <span className="text-gray-700">{fp.detail}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* KPI summary */}
+              {Object.keys(qbResult.kpis).length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
+                  {[
+                    { key: 'land',             label: 'Land Value' },
+                    { key: 'cash',             label: 'Cash (latest)' },
+                    { key: 'loan_balance',     label: 'Loan Balance' },
+                    { key: 'improvements',     label: 'Improvements' },
+                    { key: 'interest_capitalised', label: 'Int. Capitalised' },
+                    { key: 'ltv_pct',          label: 'LTV', suffix: '%' },
+                  ].filter(({ key }) => qbResult.kpis[key] !== undefined).map(({ key, label, suffix }) => (
+                    <div key={key} className="rounded-lg border bg-white px-3 py-2">
+                      <p className="text-xs text-gray-400">{label}</p>
+                      <p className="text-sm font-bold text-gray-800">
+                        {suffix
+                          ? `${qbResult.kpis[key]}${suffix}`
+                          : `$${qbResult.kpis[key].toLocaleString('en-US', { maximumFractionDigits: 0 })}`}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <p className="text-xs text-gray-400">Refreshing dashboard in 3 seconds…</p>
+
+              <button
+                onClick={() => { setQbFiles([]); setQbResult(null); setQbError(''); }}
+                className="text-sm text-amber-700 underline"
+              >
+                Upload more files
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* WWBG Quick Seed */}
       <div className="rounded-xl border p-4 max-w-2xl" style={{ background: 'rgba(212,175,55,0.06)', borderColor: 'rgba(212,175,55,0.30)' }}>
