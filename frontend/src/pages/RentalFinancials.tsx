@@ -316,6 +316,21 @@ const fmtFull = (n: number): string => {
   return n < 0 ? `(${abs})` : abs;
 };
 
+// Derive available period keys — use fin.periods if populated, else scan monthlyValues
+function getAvailableKeys(fin: ParsedFinancials): string[] {
+  if (fin.periods?.length) return fin.periods;
+  const _M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const keySet = new Set<string>();
+  for (const item of fin.pl) {
+    if (item.monthlyValues) Object.keys(item.monthlyValues).forEach(k => keySet.add(k));
+  }
+  return [...keySet].sort((a, b) => {
+    const [am, ay] = a.split(' ');
+    const [bm, by] = b.split(' ');
+    return (parseInt(ay) - parseInt(by)) || (_M.indexOf(am) - _M.indexOf(bm));
+  });
+}
+
 function getYV(items: FinItem[], pattern: RegExp, year: number): number {
   return items.find(i => pattern.test(i.label))?.values[year] ?? 0;
 }
@@ -644,19 +659,13 @@ function FinTable({ items, years, labelCol = 'Line Item', selectedYear, periods,
   );
 }
 
-function PLTable({ fin, selectedYear }: { fin: ParsedFinancials; selectedYear?: number | null }) {
-  const availableKeys = fin.periods ?? [];
-
-  // Default to the latest period in the uploaded data, not today's date
-  const _MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const latestKey = availableKeys[availableKeys.length - 1] ?? '';
-  const latestMonth = latestKey ? _MONTHS.indexOf(latestKey.split(' ')[0]) + 1 : new Date().getMonth() + 1;
-  const latestYear  = latestKey ? parseInt(latestKey.split(' ')[1]) : new Date().getFullYear();
-
-  const [period, setPeriod] = useState<Period | null>(null);
-  const [pMonth, setPMonth] = useState(latestMonth || new Date().getMonth() + 1);
-  const [pYear, setPYear] = useState(latestYear  || new Date().getFullYear());
-
+function PLTable({ fin, selectedYear, period, pMonth, pYear }: {
+  fin: ParsedFinancials;
+  selectedYear?: number | null;
+  period: Period | null;
+  pMonth: number;
+  pYear: number;
+}) {
   const periodKeys = useMemo(
     () => period ? getPeriodKeys(period, pMonth, pYear) : null,
     [period, pMonth, pYear],
@@ -664,23 +673,14 @@ function PLTable({ fin, selectedYear }: { fin: ParsedFinancials; selectedYear?: 
 
   if (!fin.pl.length) return <p className="text-center text-gray-400 py-12 text-sm">No P&amp;L data found in the uploaded file. Ensure the Excel contains a "Profit and Loss" sheet or section.</p>;
   return (
-    <div className="space-y-4">
-      <PeriodToggle
-        period={period}
-        month={pMonth}
-        year={pYear}
-        onChange={(p, m, y) => { setPeriod(p); setPMonth(m); setPYear(y); }}
-        availableKeys={availableKeys}
-      />
-      <FinTable
-        items={fin.pl}
-        years={fin.years}
-        labelCol="Line Item"
-        selectedYear={period ? null : selectedYear}
-        periods={fin.periods}
-        periodKeys={periodKeys}
-      />
-    </div>
+    <FinTable
+      items={fin.pl}
+      years={fin.years}
+      labelCol="Line Item"
+      selectedYear={period ? null : selectedYear}
+      periods={getAvailableKeys(fin)}
+      periodKeys={periodKeys}
+    />
   );
 }
 
@@ -1007,7 +1007,7 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
   if (k.buildings > 0) insights.push({ color: 'bg-gray-50 border-gray-200', text: `📋 Property value (Buildings): ${fmt(k.buildings)} | Outstanding loans: ${fmt(k.longTermLoans)} | LTV: ${ltv.toFixed(1)}% — ${ltvLabel}` });
 
   // ── Period toggle state — default to latest period in uploaded data ───────
-  const availableKeys = fin.periods ?? [];
+  const availableKeys = getAvailableKeys(fin);
   const _PMONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const _latestKey   = availableKeys[availableKeys.length - 1] ?? '';
   const _latestMonth = _latestKey ? _PMONTHS.indexOf(_latestKey.split(' ')[0]) + 1 : new Date().getMonth() + 1;
@@ -1610,6 +1610,30 @@ export default function RentalFinancials() {
   const [loadingFin, setLoadingFin] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Period toggle state (shared across P&L and CFO Dashboard)
+  const [period, setPeriod] = useState<Period | null>(null);
+  const [pMonth, setPMonth] = useState(new Date().getMonth() + 1);
+  const [pYear, setPYear] = useState(new Date().getFullYear());
+
+  // Reset period and default to latest available key when company changes
+  useEffect(() => {
+    setPeriod(null);
+    const fin = selectedCompanyId ? allFinancials[selectedCompanyId] : null;
+    if (fin) {
+      const keys = getAvailableKeys(fin);
+      const latestKey = keys[keys.length - 1] ?? '';
+      const _M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      if (latestKey) {
+        const parts = latestKey.split(' ');
+        const m = _M.indexOf(parts[0]) + 1;
+        const y = parseInt(parts[1]);
+        if (m > 0) setPMonth(m);
+        if (!isNaN(y)) setPYear(y);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCompanyId]);
+
   // Load company list from backend
   useEffect(() => {
     api.get<{ id: string; company_name: string }[]>('/api/rentals/companies')
@@ -1849,6 +1873,20 @@ export default function RentalFinancials() {
                   ✕ All Years
                 </button>
               )}
+
+              {/* Period toggle inline — only for P&L tab when monthly data exists */}
+              {activeTab === 'P&L Statement' && getAvailableKeys(currentFin).length > 0 && (
+                <>
+                  <span style={{ width: 1, height: 18, background: '#C8C0B0', margin: '0 6px', display: 'inline-block' }} />
+                  <PeriodToggle
+                    period={period}
+                    month={pMonth}
+                    year={pYear}
+                    onChange={(p, m, y) => { setPeriod(p); setPMonth(m); setPYear(y); }}
+                    availableKeys={getAvailableKeys(currentFin)}
+                  />
+                </>
+              )}
             </div>
           </div>
 
@@ -1867,7 +1905,7 @@ export default function RentalFinancials() {
 
           {/* Tab content */}
           <div className="border rounded-2xl shadow-sm p-6" style={{ background: '#F7F5F0', borderColor: '#DDD8CC' }}>
-            {activeTab === 'P&L Statement' && <PLTable fin={currentFin} selectedYear={selectedYear} />}
+            {activeTab === 'P&L Statement' && <PLTable fin={currentFin} selectedYear={selectedYear} period={period} pMonth={pMonth} pYear={pYear} />}
             {activeTab === 'Balance Sheet'  && <BSTable fin={currentFin} selectedYear={selectedYear} />}
             {activeTab === 'Cash Flow'      && <CFTable fin={currentFin} selectedYear={selectedYear} />}
             {activeTab === 'KPI Dashboard'  && <KPITab  fin={currentFin} />}
