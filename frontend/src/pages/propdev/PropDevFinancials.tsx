@@ -1,4 +1,5 @@
-﻿import { useState, useEffect, useRef, useCallback } from 'react';
+﻿import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { usePropDev } from '../../contexts/PropertyDevContext';
 import * as XLSX from 'xlsx';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
@@ -916,11 +917,107 @@ interface PDFinancials {
 }
 
 const PD_COMPANIES = [
+  'WWBG',
   'ABC LLC','Sunstone Development LLC','Meridian PropDev LLC','Cornerstone RE Ventures',
   'Pinnacle Land Holdings','Summit Development LLC','Heritage Land Partners',
   'Riverview PropDev LLC','Landmark Developers','Horizon Land Group','Crestview Development LLC',
 ];
 const PD_LS_KEY = (co: string) => `propdev_upload_${co.replace(/\s+/g,'_').toLowerCase()}`;
+
+// ── Convert DB yearly JSON → PDFinancials (no file upload required) ──────────
+function makeItem(label: string, values: Record<number,number>, opts?: Partial<PDFinItem>): PDFinItem {
+  return { label, values, indent: 0, isTotal: false, isSectionHeader: false, isNetIncome: false, ...opts };
+}
+
+function wwbgBuildPL(
+  yearlyPL: Record<string, { net_income: number; total_expenses: number; revenue?: number; other_income?: number; expenses_by_category?: Record<string,number> }>,
+  years: number[]
+): PDFinItem[] {
+  const yv = (key: string) => Object.fromEntries(years.map(y => [y, yearlyPL[String(y)]?.[key as keyof typeof yearlyPL[string]] as number ?? 0])) as Record<number,number>;
+  const items: PDFinItem[] = [
+    makeItem('Income', {}, { isSectionHeader: true }),
+    makeItem('Lot Sales Revenue', Object.fromEntries(years.map(y => [y, 0]))),
+    makeItem('Other Income', yv('other_income')),
+    makeItem('Total for Income', Object.fromEntries(years.map(y => [y, (yearlyPL[String(y)]?.other_income ?? 0)])), { isTotal: true }),
+    makeItem('Expenses', {}, { isSectionHeader: true }),
+  ];
+
+  // Add per-category expense lines from first year that has them
+  const firstWithCats = years.find(y => Object.keys(yearlyPL[String(y)]?.expenses_by_category ?? {}).length > 0);
+  const catLabels: Record<string,string> = {
+    interest_on_loan: 'Business Loan Interest',
+    property_tax: 'Property Tax',
+    hard_cost: 'Engineering Cost',
+    soft_cost: 'Appraisal Fee',
+    professional_charges: 'Book Keeping & Professional',
+    legal_fees: 'Legal & Professional',
+    title_charges: 'Escrow & Title Charges',
+    loan_processing: 'Loan Processing Fee',
+    other_charges: 'Management & Other',
+  };
+  if (firstWithCats !== undefined) {
+    const allCats = Object.keys(yearlyPL[String(firstWithCats)]?.expenses_by_category ?? {});
+    for (const cat of allCats) {
+      const catVals = Object.fromEntries(
+        years.map(y => [y, yearlyPL[String(y)]?.expenses_by_category?.[cat] ?? 0])
+      ) as Record<number,number>;
+      items.push(makeItem(catLabels[cat] ?? cat, catVals, { indent: 2 }));
+    }
+  }
+
+  items.push(makeItem('Total for Expenses', yv('total_expenses'), { isTotal: true }));
+  items.push(makeItem('Net Income', yv('net_income'), { isNetIncome: true }));
+  return items;
+}
+
+function wwbgBuildBS(
+  yearlyBS: Record<string, { cash: number; land: number; improvements: number; interest_capitalised: number; total_assets: number; loan_balance: number; total_liabilities: number }>,
+  years: number[]
+): PDFinItem[] {
+  const yv = (key: string) => Object.fromEntries(years.map(y => [y, yearlyBS[String(y)]?.[key as keyof typeof yearlyBS[string]] as number ?? 0])) as Record<number,number>;
+  const equityVals = Object.fromEntries(years.map(y => {
+    const bs = yearlyBS[String(y)];
+    return [y, bs ? bs.total_assets - bs.total_liabilities : 0];
+  })) as Record<number,number>;
+
+  return [
+    makeItem('Current Assets', {}, { isSectionHeader: true }),
+    makeItem('Total for Bank Accounts', yv('cash'), { isTotal: true }),
+    makeItem('Fixed Assets', {}, { isSectionHeader: true }),
+    makeItem('WWBL (Land)', yv('land'), { indent: 2 }),
+    makeItem('Improvements', yv('improvements'), { indent: 2 }),
+    makeItem('Interest Capitalised', yv('interest_capitalised'), { indent: 2 }),
+    makeItem('Total for Assets', yv('total_assets'), { isTotal: true }),
+    makeItem('Liabilities', {}, { isSectionHeader: true }),
+    makeItem('Long-term Business Loan (Greater Plains Bank)', yv('loan_balance'), { indent: 2 }),
+    makeItem('Total for Liabilities', yv('total_liabilities'), { isTotal: true }),
+    makeItem('Equity', {}, { isSectionHeader: true }),
+    makeItem('Total for Equity', equityVals, { isTotal: true }),
+  ];
+}
+
+function buildWWBGFinancials(
+  companyName: string,
+  yearlyPL: Record<string,unknown> | undefined,
+  yearlyBS: Record<string,unknown> | undefined,
+): PDFinancials | null {
+  if (!yearlyPL && !yearlyBS) return null;
+  const allYears = Array.from(new Set([
+    ...Object.keys(yearlyPL ?? {}),
+    ...Object.keys(yearlyBS ?? {}),
+  ])).map(Number).filter(n => !isNaN(n)).sort((a,b)=>a-b);
+  if (allYears.length === 0) return null;
+
+  return {
+    companyName,
+    years: allYears,
+    plFile: 'From database (WWBG seed)',
+    bsFile: 'From database (WWBG seed)',
+    uploadedAt: new Date().toISOString(),
+    pl: yearlyPL ? wwbgBuildPL(yearlyPL as Parameters<typeof wwbgBuildPL>[0], allYears) : [],
+    bs: yearlyBS ? wwbgBuildBS(yearlyBS as Parameters<typeof wwbgBuildBS>[0], allYears) : [],
+  };
+}
 
 function pdDetectYears(raw: unknown[][]): { idx:number; cols:{year:number;col:number}[] } | null {
   for (let r=0; r<Math.min(raw.length,15); r++) {
@@ -1551,6 +1648,7 @@ function PDCFOView({ fin }: { fin: PDFinancials }) {
 const PROPDEV_STORAGE_KEYS = ['propdev_cfo_checklist'];
 
 export default function PropDevFinancials() {
+  const { companies } = usePropDev();
   const [activeTab, setActiveTab] = useState<TabType>('P&L Statement');
   const [selectedPDCo, setSelectedPDCo] = useState(PD_COMPANIES[0]);
   const [uploadedFin, setUploadedFin] = useState<PDFinancials | null>(null);
@@ -1558,19 +1656,41 @@ export default function PropDevFinancials() {
   const plRef = useRef<HTMLInputElement>(null);
   const bsRef = useRef<HTMLInputElement>(null);
 
+  // All real PropDev companies from DB — put them first in the dropdown
+  const allCompanyNames = useMemo(() => {
+    const dbNames = companies.map(c => c.name);
+    const extras = PD_COMPANIES.filter(n => !dbNames.some(d => d.toUpperCase().includes(n.toUpperCase()) || n.toUpperCase().includes(d.toUpperCase())));
+    return [...dbNames, ...extras];
+  }, [companies]);
+
   useEffect(() => {
     PROPDEV_STORAGE_KEYS.forEach(k => localStorage.removeItem(k));
   }, []);
 
-  // Load stored data when company changes
+  // Load stored data when company changes; auto-populate WWBG from DB
   useEffect(() => {
+    // Check localStorage first (manually uploaded files override DB data)
     const raw = localStorage.getItem(PD_LS_KEY(selectedPDCo));
     if (raw) {
-      try { setUploadedFin(JSON.parse(raw)); } catch { setUploadedFin(null); }
+      try { setUploadedFin(JSON.parse(raw)); return; } catch { /* fall through */ }
+    }
+
+    // Auto-populate from DB for any company that has yearly_pl/yearly_bs in context
+    const dbCompany = companies.find(c =>
+      c.name.toUpperCase().includes(selectedPDCo.toUpperCase()) ||
+      selectedPDCo.toUpperCase().includes(c.name.toUpperCase())
+    );
+    if (dbCompany && (dbCompany.yearlyPL || dbCompany.yearlyBS)) {
+      const fin = buildWWBGFinancials(
+        dbCompany.name,
+        dbCompany.yearlyPL as Record<string,unknown> | undefined,
+        dbCompany.yearlyBS as Record<string,unknown> | undefined,
+      );
+      setUploadedFin(fin);
     } else {
       setUploadedFin(null);
     }
-  }, [selectedPDCo]);
+  }, [selectedPDCo, companies]);
 
   const handleFile = useCallback(async (file: File) => {
     setUploading(true);
@@ -1650,7 +1770,7 @@ export default function PropDevFinancials() {
               onChange={e => setSelectedPDCo(e.target.value)}
               className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
             >
-              {PD_COMPANIES.map(c => <option key={c} value={c}>{c}</option>)}
+              {allCompanyNames.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
         )}
