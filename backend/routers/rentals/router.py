@@ -2131,8 +2131,7 @@ def get_ar_summary(
 
     tid = current_user.tenant_id
     companies = db.query(RentalCompany).filter(RentalCompany.tenant_id == tid).all()
-    if company_id:
-        companies = [c for c in companies if str(c.id) == company_id]
+    # company_id filter is handled client-side so dropdowns stay populated
 
     all_units = db.query(RentalUnit).filter(RentalUnit.tenant_id == tid).all()
     units_by_co: dict[str, list] = defaultdict(list)
