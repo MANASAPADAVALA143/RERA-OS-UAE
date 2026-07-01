@@ -920,27 +920,27 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
       </div>
 
       {/* Multi-Year Snapshot Table */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
-        <div className="bg-gray-900 text-white px-4 py-2 text-sm font-bold">Multi-Year Financial Snapshot</div>
+      <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, overflow:'hidden' }}>
+        <div style={{ background:'#DDD5C4', color:'#5C5043', padding:'8px 16px', fontSize:12, fontWeight:700 }}>Multi-Year Financial Snapshot</div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
+              <tr style={{ background:'#DDD5C4' }}>
                 {['Year','Total Revenue','Total Expenses','Net Income','NOI','Cash','Net Margin %'].map(h => (
-                  <th key={h} className={`px-4 py-2 font-semibold text-gray-600 ${h==='Year'?'text-left':'text-right'}`}>{h}</th>
+                  <th key={h} style={{ fontSize:11, fontWeight:600, color:'#5C5043', textTransform:'uppercase', textAlign: h==='Year' ? 'left' : 'right', padding:'6px 16px' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {snapshotRows.map((r, i) => (
-                <tr key={i} style={{ background: r.year === selectedYear ? '#EFF6FF' : undefined }} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-2 font-bold">{r.year}{r.year === selectedYear ? ' ◀' : ''}</td>
-                  <td className="px-4 py-2 text-right font-mono">{fmt(r.revenue)}</td>
-                  <td className="px-4 py-2 text-right font-mono text-red-600">{fmt(r.expenses)}</td>
-                  <td className={`px-4 py-2 text-right font-mono font-semibold ${r.netIncome>=0?'text-green-700':'text-red-600'}`}>{fmt(r.netIncome)}</td>
-                  <td className={`px-4 py-2 text-right font-mono ${r.noi>=0?'text-blue-700':'text-red-600'}`}>{fmt(r.noi)}</td>
-                  <td className="px-4 py-2 text-right font-mono text-purple-700">{r.cash > 0 ? fmt(r.cash) : '—'}</td>
-                  <td className={`px-4 py-2 text-right font-mono ${r.margin>=0?'text-green-700':'text-red-600'}`}>{r.margin.toFixed(1)}%</td>
+                <tr key={i} style={{ background: r.year === selectedYear ? '#EDE5D8' : i % 2 === 0 ? '#F7F1E6' : '#FBF6EE', borderTop:'1px solid #E8DEC8' }}>
+                  <td style={{ padding:'6px 16px', fontSize:12, fontWeight: r.year === selectedYear ? 700 : 500, color:'#1C1917' }}>{r.year}{r.year === selectedYear ? ' ◀' : ''}</td>
+                  <td style={{ padding:'6px 16px', textAlign:'right', fontFamily:'monospace', fontSize:12, color:'#1C1917' }}>{fmt(r.revenue)}</td>
+                  <td style={{ padding:'6px 16px', textAlign:'right', fontFamily:'monospace', fontSize:12, color:'#D9534F' }}>{fmt(r.expenses)}</td>
+                  <td style={{ padding:'6px 16px', textAlign:'right', fontFamily:'monospace', fontSize:12, fontWeight:600, color: r.netIncome>=0 ? '#1baf7a' : '#D9534F' }}>{r.netIncome < 0 ? `(${fmt(Math.abs(r.netIncome))})` : fmt(r.netIncome)}</td>
+                  <td style={{ padding:'6px 16px', textAlign:'right', fontFamily:'monospace', fontSize:12, color: r.noi>=0 ? '#2F80ED' : '#D9534F' }}>{r.noi < 0 ? `(${fmt(Math.abs(r.noi))})` : fmt(r.noi)}</td>
+                  <td style={{ padding:'6px 16px', textAlign:'right', fontFamily:'monospace', fontSize:12, color:'#2F80ED' }}>{r.cash > 0 ? fmt(r.cash) : '—'}</td>
+                  <td style={{ padding:'6px 16px', textAlign:'right', fontFamily:'monospace', fontSize:12, color: r.margin>=0 ? '#1baf7a' : '#D9534F' }}>{r.margin.toFixed(1)}%</td>
                 </tr>
               ))}
             </tbody>
@@ -950,53 +950,53 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
 
       {/* Charts Grid 2×2 */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
-          <p className="text-sm font-semibold text-gray-700 mb-3">Net Income Trajectory</p>
+        <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
+          <p style={{ fontSize:13, fontWeight:600, color:'#262626', marginBottom:12 }}>Net Income Trajectory</p>
           <ResponsiveContainer width="100%" height={210}>
             <LineChart data={niTrajectory} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
               <XAxis dataKey="year" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 9 }} tickFormatter={v => fmt(v as number)} />
               <Tooltip formatter={(v: number) => fmtFull(v)} />
-              <Line type="monotone" dataKey="netIncome" stroke="#10B981" strokeWidth={2} dot={{ fill: '#10B981' }} name="Net Income" />
+              <Line type="monotone" dataKey="netIncome" stroke="#22A06B" strokeWidth={2} dot={{ fill: '#22A06B' }} name="Net Income" />
             </LineChart>
           </ResponsiveContainer>
         </div>
-        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
-          <p className="text-sm font-semibold text-gray-700 mb-3">Expense Ratio Trend</p>
+        <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
+          <p style={{ fontSize:13, fontWeight:600, color:'#262626', marginBottom:12 }}>Expense Ratio Trend</p>
           <ResponsiveContainer width="100%" height={210}>
             <LineChart data={expRatioTrend} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
               <XAxis dataKey="year" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 9 }} tickFormatter={v => `${(v as number).toFixed(0)}%`} />
               <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} />
-              <Line type="monotone" dataKey="ratio" stroke="#F59E0B" strokeWidth={2} dot={{ fill: '#F59E0B' }} name="Expense %" />
+              <Line type="monotone" dataKey="ratio" stroke="#F2994A" strokeWidth={2} dot={{ fill: '#F2994A' }} name="Expense %" />
             </LineChart>
           </ResponsiveContainer>
         </div>
-        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
-          <p className="text-sm font-semibold text-gray-700 mb-3">Revenue vs Expenses</p>
+        <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
+          <p style={{ fontSize:13, fontWeight:600, color:'#262626', marginBottom:12 }}>Revenue vs Expenses</p>
           <ResponsiveContainer width="100%" height={210}>
             <BarChart data={revExpCombo} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
               <XAxis dataKey="year" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 9 }} tickFormatter={v => fmt(v as number)} />
               <Tooltip formatter={(v: number) => fmtFull(v)} />
               <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
               <Bar dataKey="Revenue"  fill="#D4AF37" radius={[4,4,0,0]} />
-              <Bar dataKey="Expenses" fill="#EF4444" radius={[4,4,0,0]} />
+              <Bar dataKey="Expenses" fill="#D9534F" radius={[4,4,0,0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
-          <p className="text-sm font-semibold text-gray-700 mb-3">Cash Balance Trend (Bank Accounts)</p>
+        <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
+          <p style={{ fontSize:13, fontWeight:600, color:'#262626', marginBottom:12 }}>Cash Balance Trend (Bank Accounts)</p>
           <ResponsiveContainer width="100%" height={210}>
             <LineChart data={cashTrend} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
               <XAxis dataKey="year" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 9 }} tickFormatter={v => fmt(v as number)} />
               <Tooltip formatter={(v: number) => fmtFull(v)} />
-              <Line type="monotone" dataKey="cash" stroke="#8B5CF6" strokeWidth={2} dot={{ fill: '#8B5CF6' }} name="Cash" />
+              <Line type="monotone" dataKey="cash" stroke="#2F80ED" strokeWidth={2} dot={{ fill: '#2F80ED' }} name="Cash" />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -1004,8 +1004,8 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
 
       {/* Revenue Breakdown + Expense Pie for selected year */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
-          <p className="text-sm font-semibold text-gray-700 mb-3">Revenue Breakdown by Year</p>
+        <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
+          <p style={{ fontSize:13, fontWeight:600, color:'#262626', marginBottom:12 }}>Revenue Breakdown by Year</p>
           <ResponsiveContainer width="100%" height={210}>
             <BarChart data={revChart} margin={{ left: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -1019,8 +1019,8 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
-          <p className="text-sm font-semibold text-gray-700 mb-3">Expense Breakdown ({selectedYear})</p>
+        <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
+          <p style={{ fontSize:13, fontWeight:600, color:'#262626', marginBottom:12 }}>Expense Breakdown ({selectedYear})</p>
           <ResponsiveContainer width="100%" height={210}>
             <PieChart>
               <Pie data={expPie} cx="50%" cy="50%" outerRadius={75} dataKey="value">
@@ -1035,31 +1035,31 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
 
       {/* Summary Tiles */}
       <div className="grid grid-cols-3 gap-4">
-        <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: '12px', padding: '16px' }}>
-          <p style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Latest Net Income ({lastY})</p>
-          <p style={{ fontSize: '22px', fontWeight: 700, color: latestRow.netIncome >= 0 ? '#065F46' : '#991B1B', marginTop: '8px' }}>{fmtFull(latestRow.netIncome)}</p>
-          {prevRow && <p style={{ fontSize: '11px', color: niChange >= 0 ? '#059669' : '#DC2626', marginTop: '4px' }}>{niChange >= 0 ? '↑' : '↓'} {Math.abs(niChange).toFixed(1)}% vs {prevRow.year}</p>}
+        <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+          <p style={{ fontSize: 11, color: '#6B6B6B', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Latest Net Income ({lastY})</p>
+          <p style={{ fontSize: 20, fontWeight: 700, color: latestRow.netIncome >= 0 ? '#1C1917' : '#D9534F', marginTop: 8 }}>{latestRow.netIncome < 0 ? `(${fmtFull(Math.abs(latestRow.netIncome))})` : fmtFull(latestRow.netIncome)}</p>
+          {prevRow && <p style={{ fontSize: 11, color: niChange >= 0 ? '#22A06B' : '#D9534F', marginTop: 4 }}>{niChange >= 0 ? '↑' : '↓'} {Math.abs(niChange).toFixed(1)}% vs {prevRow.year}</p>}
         </div>
-        <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: '12px', padding: '16px' }}>
-          <p style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Avg Profit Margin</p>
-          <p style={{ fontSize: '22px', fontWeight: 700, color: avgMargin >= 0 ? '#B8962E' : '#991B1B', marginTop: '8px' }}>{avgMargin.toFixed(1)}%</p>
-          <p style={{ fontSize: '11px', color: '#6B7280', marginTop: '4px' }}>Across {fin.years.length} years</p>
+        <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+          <p style={{ fontSize: 11, color: '#6B6B6B', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Avg Profit Margin</p>
+          <p style={{ fontSize: 20, fontWeight: 700, color: avgMargin >= 0 ? '#1C1917' : '#D9534F', marginTop: 8 }}>{avgMargin.toFixed(1)}%</p>
+          <p style={{ fontSize: 11, color: '#6B6B6B', marginTop: 4 }}>Across {fin.years.length} years</p>
         </div>
-        <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: '12px', padding: '16px' }}>
-          <p style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Latest Cash Position</p>
-          <p style={{ fontSize: '22px', fontWeight: 700, color: '#5B21B6', marginTop: '8px' }}>{latestRow.cash > 0 ? fmtFull(latestRow.cash) : '—'}</p>
-          <p style={{ fontSize: '11px', color: '#6B7280', marginTop: '4px' }}>Bank accounts ({lastY})</p>
+        <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+          <p style={{ fontSize: 11, color: '#6B6B6B', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Latest Cash Position</p>
+          <p style={{ fontSize: 20, fontWeight: 700, color: '#2F80ED', marginTop: 8 }}>{latestRow.cash > 0 ? fmtFull(latestRow.cash) : '—'}</p>
+          <p style={{ fontSize: 11, color: '#6B6B6B', marginTop: 4 }}>Bank accounts ({lastY})</p>
         </div>
       </div>
 
       {/* CFO Insights */}
       <div className="space-y-3">
-        <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">CFO Insights</p>
+        <p style={{ fontSize:12, fontWeight:700, color:'#92400E', textTransform:'uppercase', letterSpacing:'0.05em' }}>CFO Insights</p>
         {insights.length === 0
-          ? <p className="text-sm text-gray-400">Upload complete financials to generate CFO insights.</p>
+          ? <p style={{ fontSize:13, color:'#9CA3AF' }}>Upload complete financials to generate CFO insights.</p>
           : insights.map((ins, i) => (
-              <div key={i} className={`border rounded-lg p-4 ${ins.color}`}>
-                <p className="text-sm text-gray-800">{ins.text}</p>
+              <div key={i} style={{ border:'1px solid #E8DEC8', borderRadius:8, padding:16, background:'#FBF6EE' }}>
+                <p style={{ fontSize:13, color:'#374151' }}>{ins.text}</p>
               </div>
             ))
         }

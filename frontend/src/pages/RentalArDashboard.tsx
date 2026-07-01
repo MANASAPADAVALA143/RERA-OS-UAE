@@ -40,7 +40,7 @@ const STATIC_AGING_DATA = [
   { bucket: '31–60d',  amount: 3742  },
   { bucket: '60d+',    amount: 2346  },
 ];
-const AGING_FILL = ['#22c55e', '#f59e0b', '#f97316', '#ef4444'];
+const AGING_FILL = ['#22A06B', '#F2C94C', '#F5A623', '#D9534F'];
 
 interface ArAgingDetail {
   portfolio_buckets: { current: number; '1_30': number; '31_60': number; '61_90': number; '90_plus': number };
@@ -209,23 +209,23 @@ export default function RentalArDashboard() {
 
   // KPI tiles (dynamic when synced)
   const kpiTiles = hasSyncedData ? [
-    { label: 'Total Billed (Month)',   value: fmtDollar(totalBilled),         sub: `${lastSyncMonth} · ${synced.length} companies`,         valueColor: 'text-blue-600',  subColor: 'text-gray-400',   accent: 'bg-blue-500'  },
-    { label: 'Collected (Month)',      value: fmtDollar(totalCollected),       sub: `↑ ${collectionRate.toFixed(1)}% collection rate`,        valueColor: 'text-green-600', subColor: 'text-green-500',  accent: 'bg-green-500' },
-    { label: 'Outstanding AR',         value: fmtDollar(totalOutstanding),     sub: `${outstandingData.length} companies with gaps`,          valueColor: 'text-red-500',   subColor: 'text-red-400',    accent: 'bg-red-500'   },
-    { label: 'Collection Rate',        value: `${collectionRate.toFixed(1)}%`, sub: `Target ≥ 95% · ${collectionRate >= 95 ? 'On Track' : 'Below Target'}`, valueColor: collectionRate >= 95 ? 'text-green-600' : 'text-amber-600', subColor: collectionRate >= 95 ? 'text-green-500' : 'text-amber-500', accent: collectionRate >= 95 ? 'bg-green-500' : 'bg-amber-400' },
-    { label: 'Vacancy Loss',           value: fmtDollar(synced.reduce((a, c) => a + (c.sync_vacancy_loss ?? 0), 0)), sub: 'Vacant units estimated rent',  valueColor: 'text-amber-600', subColor: 'text-amber-500',  accent: 'bg-amber-400' },
-    { label: 'Total Units (Synced)',   value: String(synced.reduce((a, c) => a + (c.sync_total_units ?? 0), 0)),     sub: `${synced.reduce((a, c) => a + (c.sync_occupied_units ?? 0), 0)} occupied`, valueColor: 'text-blue-600', subColor: 'text-gray-400', accent: 'bg-blue-500' },
-    { label: 'Avg Days Outstanding',   value: '38 days',                       sub: 'Based on prior data',            valueColor: 'text-red-500',   subColor: 'text-red-400',    accent: 'bg-red-500'   },
-    { label: 'Best Performer',         value: bestPerformer,                   sub: `${collectionRateData[0]?.pct ?? 0}% collection rate`,   valueColor: 'text-green-600', subColor: 'text-green-500',  accent: 'bg-green-500' },
+    { label: 'Total Billed (Month)',   value: fmtDollar(totalBilled),         sub: `${lastSyncMonth} · ${synced.length} companies`,         leftBorder: '#2F80ED' },
+    { label: 'Collected (Month)',      value: fmtDollar(totalCollected),       sub: `↑ ${collectionRate.toFixed(1)}% collection rate`,        leftBorder: '#22A06B' },
+    { label: 'Outstanding AR',         value: fmtDollar(totalOutstanding),     sub: `${outstandingData.length} companies with gaps`,          leftBorder: '#D9534F' },
+    { label: 'Collection Rate',        value: `${collectionRate.toFixed(1)}%`, sub: `Target ≥ 95% · ${collectionRate >= 95 ? 'On Track' : 'Below Target'}`, leftBorder: '#F2994A' },
+    { label: 'Vacancy Loss',           value: fmtDollar(synced.reduce((a, c) => a + (c.sync_vacancy_loss ?? 0), 0)), sub: 'Vacant units estimated rent', leftBorder: '#D9534F' },
+    { label: 'Total Units (Synced)',   value: String(synced.reduce((a, c) => a + (c.sync_total_units ?? 0), 0)),     sub: `${synced.reduce((a, c) => a + (c.sync_occupied_units ?? 0), 0)} occupied`, leftBorder: '#2F80ED' },
+    { label: 'Avg Days Outstanding',   value: '38 days',                       sub: 'Based on prior data',            leftBorder: '#F2994A' },
+    { label: 'Best Performer',         value: bestPerformer,                   sub: `${collectionRateData[0]?.pct ?? 0}% collection rate`,   leftBorder: '#22A06B' },
   ] : [
-    { label: 'Total Rent Billed YTD',  value: '$492,063', sub: 'Jan–Jun 2026 · All 10 companies',  valueColor: 'text-blue-600',  subColor: 'text-gray-400',   accent: 'bg-blue-500'  },
-    { label: 'Collected (Est.)',        value: '$468,660', sub: '↑ 95.2% collection rate',          valueColor: 'text-green-600', subColor: 'text-green-500',  accent: 'bg-green-500' },
-    { label: 'Outstanding AR',         value: '$23,403',  sub: '↑ 5 companies with gaps',          valueColor: 'text-red-500',   subColor: 'text-red-400',    accent: 'bg-red-500'   },
-    { label: 'Collection Rate',        value: '95.2%',    sub: 'Target ≥ 95% · Borderline',        valueColor: 'text-amber-600', subColor: 'text-amber-500',  accent: 'bg-amber-400' },
-    { label: 'Zero-Pay Units',         value: '5 Units',  sub: 'BNC LLC · B,C · K · Q · R',       valueColor: 'text-red-500',   subColor: 'text-red-400',    accent: 'bg-red-500'   },
-    { label: 'Security Deposits Held', value: '$6,900',   sub: 'Unit 402 S456 · 2 months',         valueColor: 'text-amber-600', subColor: 'text-amber-500',  accent: 'bg-amber-400' },
-    { label: 'Avg Days Outstanding',   value: '38 days',  sub: 'PPP LLC 60d+ · LPO LLC 60d+',     valueColor: 'text-red-500',   subColor: 'text-red-400',    accent: 'bg-red-500'   },
-    { label: 'Best Performer',         value: 'ZYC LLC',  sub: '$94,675 YTD · Lowest variance',   valueColor: 'text-green-600', subColor: 'text-green-500',  accent: 'bg-green-500' },
+    { label: 'Total Rent Billed YTD',  value: '$492,063', sub: 'Jan–Jun 2026 · All 10 companies',  leftBorder: '#2F80ED' },
+    { label: 'Collected (Est.)',        value: '$468,660', sub: '↑ 95.2% collection rate',          leftBorder: '#22A06B' },
+    { label: 'Outstanding AR',         value: '$23,403',  sub: '↑ 5 companies with gaps',          leftBorder: '#D9534F' },
+    { label: 'Collection Rate',        value: '95.2%',    sub: 'Target ≥ 95% · Borderline',        leftBorder: '#F2994A' },
+    { label: 'Zero-Pay Units',         value: '5 Units',  sub: 'BNC LLC · B,C · K · Q · R',       leftBorder: '#D9534F' },
+    { label: 'Security Deposits Held', value: '$6,900',   sub: 'Unit 402 S456 · 2 months',         leftBorder: '#2F80ED' },
+    { label: 'Avg Days Outstanding',   value: '38 days',  sub: 'PPP LLC 60d+ · LPO LLC 60d+',     leftBorder: '#F2994A' },
+    { label: 'Best Performer',         value: 'ZYC LLC',  sub: '$94,675 YTD · Lowest variance',   leftBorder: '#22A06B' },
   ];
 
   // Derive live exceptions from synced company data (post-upload)
@@ -276,7 +276,7 @@ export default function RentalArDashboard() {
 
       {/* 1 — FILTER BAR */}
       <div className="flex items-center gap-3 bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
-        <span className="text-xs text-gray-500 font-medium">Filter:</span>
+        <span style={{ fontSize:12, fontWeight:500, color:'#262626' }}>Filter:</span>
         <select className="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700">
           <option>All Months</option>
           {['Jan 2026','Feb 2026','Mar 2026','Apr 2026','May 2026','Jun 2026'].map(m => <option key={m}>{m}</option>)}
@@ -307,11 +307,10 @@ export default function RentalArDashboard() {
       {/* 2 — 8 KPI TILES */}
       <div className="grid grid-cols-8 gap-2">
         {kpiTiles.map((t, i) => (
-          <div key={i} className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm relative overflow-hidden">
-            <div className={`absolute top-0 left-0 right-0 h-[3px] ${t.accent}`} />
-            <div className="text-[10px] text-gray-400 leading-tight mb-1.5 mt-1">{t.label}</div>
-            <div className={`text-lg font-mono font-medium leading-none ${t.valueColor}`}>{t.value}</div>
-            <div className={`text-[9px] mt-1 leading-tight ${t.subColor}`}>{t.sub}</div>
+          <div key={i} style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:'10px 12px', borderLeft:`3px solid ${t.leftBorder}`, position:'relative', overflow:'hidden' }}>
+            <div style={{ fontSize:11, fontWeight:600, textTransform:'uppercase', color:'#6B6B6B', lineHeight:1.3, marginBottom:6 }}>{t.label}</div>
+            <div style={{ fontSize:18, fontWeight:700, color:'#262626', fontFamily:'monospace', lineHeight:1 }}>{t.value}</div>
+            <div style={{ fontSize:10, marginTop:4, lineHeight:1.3, color:'#6B6B6B' }}>{t.sub}</div>
           </div>
         ))}
       </div>
@@ -320,8 +319,8 @@ export default function RentalArDashboard() {
       <div className="grid grid-cols-2 gap-4">
 
         {/* Billed vs Collected Trend */}
-        <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
-          <div className="text-sm font-semibold text-gray-800 mb-0.5">Billed vs collected by month</div>
+        <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
+          <div style={{ fontSize:13, fontWeight:600, color:'#262626', marginBottom:2 }}>Billed vs collected by month</div>
           <div className="text-xs text-gray-400 mb-3">
             {hasSyncedData ? `Portfolio total · Last 6 months · ${lastSyncMonth} sync` : 'Portfolio total · Jan–Jun 2026'}
           </div>
@@ -335,7 +334,7 @@ export default function RentalArDashboard() {
                 formatter={(v: number, n: string) => [`$${v.toLocaleString()}`, n === 'billed' ? 'Billed' : 'Collected']}
               />
               <Bar dataKey="billed"    name="billed"    fill="#D4AF37" opacity={0.75} radius={[3, 3, 0, 0]} />
-              <Bar dataKey="collected" name="collected" fill="#22c55e" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="collected" name="collected" fill="#22A06B" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
           <div className="flex gap-4 mt-2">
@@ -343,14 +342,14 @@ export default function RentalArDashboard() {
               <span className="w-2.5 h-2.5 rounded-sm inline-block opacity-75" style={{ background: '#D4AF37' }} />Billed
             </span>
             <span className="flex items-center gap-1 text-[10px] text-gray-500">
-              <span className="w-2.5 h-2.5 rounded-sm bg-green-500 inline-block" />Collected
+              <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: '#22A06B' }} />Collected
             </span>
           </div>
         </div>
 
         {/* Aging Stacked Bar — Real data from backend */}
-        <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
-          <div className="text-sm font-semibold text-gray-800 mb-0.5">AR aging by bucket</div>
+        <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
+          <div style={{ fontSize:13, fontWeight:600, color:'#262626', marginBottom:2 }}>AR aging by bucket</div>
           <div className="text-xs text-gray-400 mb-3">Outstanding balance distribution {arAgingData ? `(Total: $${arAgingData.total_ar.toLocaleString()})` : ''}</div>
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={agingData} layout="vertical" margin={{ top: 0, right: 40, bottom: 0, left: 45 }}>
@@ -367,9 +366,9 @@ export default function RentalArDashboard() {
             </BarChart>
           </ResponsiveContainer>
           <div className="grid grid-cols-4 gap-1 mt-3">
-            {agingPercentages.map(a => (
+            {agingPercentages.map((a, idx) => (
               <div key={a.bucket} className="text-center">
-                <div className={`h-1 ${['bg-green-500', 'bg-amber-400', 'bg-orange-500', 'bg-red-500'][agingPercentages.indexOf(a)]} rounded-full mb-1`} />
+                <div className="h-1 rounded-full mb-1" style={{ background: AGING_FILL[idx] }} />
                 <div className="text-[9px] text-gray-500">{a.bucket}</div>
                 <div className="text-[10px] font-mono font-medium text-gray-700">{a.pct}</div>
               </div>
@@ -382,8 +381,8 @@ export default function RentalArDashboard() {
       <div className="grid grid-cols-2 gap-4">
 
         {/* Outstanding AR by Company */}
-        <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
-          <div className="text-sm font-semibold text-gray-800 mb-0.5">Outstanding AR by company</div>
+        <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
+          <div style={{ fontSize:13, fontWeight:600, color:'#262626', marginBottom:2 }}>Outstanding AR by company</div>
           <div className="text-xs text-gray-400 mb-3">
             {hasSyncedData ? `Gross potential − collected · ${lastSyncMonth}` : 'Sorted by balance owed'}
           </div>
@@ -399,7 +398,7 @@ export default function RentalArDashboard() {
               <Bar dataKey="ar" radius={[0, 4, 4, 0]}
                 label={{ position: 'right', fontSize: 9, fill: '#6b7280', formatter: (v: number) => `$${v.toLocaleString()}` }}>
                 {outstandingData.map((_, i) => (
-                  <Cell key={i} fill={i < 2 ? '#ef4444' : i < 4 ? '#f59e0b' : '#22c55e'} />
+                  <Cell key={i} fill={i < 2 ? '#D9534F' : i < 4 ? '#F5A623' : '#22A06B'} />
                 ))}
               </Bar>
             </BarChart>
@@ -407,8 +406,8 @@ export default function RentalArDashboard() {
         </div>
 
         {/* Collection Rate by Company */}
-        <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
-          <div className="text-sm font-semibold text-gray-800 mb-0.5">Collection rate by company</div>
+        <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
+          <div style={{ fontSize:13, fontWeight:600, color:'#262626', marginBottom:2 }}>Collection rate by company</div>
           <div className="text-xs text-gray-400 mb-4">
             {hasSyncedData ? `${lastSyncMonth} collected vs gross potential` : 'YTD collected vs billed'}
           </div>
@@ -419,22 +418,21 @@ export default function RentalArDashboard() {
                   <span className="text-xs text-gray-700 font-medium">{co.name}</span>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono text-gray-500">${co.collected.toLocaleString()}</span>
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
-                      co.pct >= 95 ? 'bg-green-100 text-green-700'
-                      : co.pct >= 85 ? 'bg-amber-100 text-amber-700'
-                      : 'bg-red-100 text-red-600'
-                    }`}>
+                    <span style={{
+                      fontSize:10, fontWeight:600, padding:'2px 6px', borderRadius:20,
+                      background: co.pct >= 95 ? '#DCFCE7' : co.pct >= 90 ? '#FEF9C3' : '#FEE2E2',
+                      color: co.pct >= 95 ? '#166534' : co.pct >= 90 ? '#92400E' : '#991B1B',
+                    }}>
                       {co.pct}%
                     </span>
                   </div>
                 </div>
-                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${
-                      co.pct >= 95 ? 'bg-green-500' : co.pct >= 85 ? 'bg-amber-400' : 'bg-red-500'
-                    }`}
-                    style={{ width: `${Math.min(100, co.pct)}%` }}
-                  />
+                <div style={{ height:10, background:'#E8DEC8', borderRadius:5, overflow:'hidden' }}>
+                  <div style={{
+                    height:'100%', borderRadius:5,
+                    background: co.pct >= 95 ? '#22A06B' : co.pct >= 85 ? '#F5A623' : '#D9534F',
+                    width: `${Math.min(100, co.pct)}%`,
+                  }} />
                 </div>
               </div>
             ))}
