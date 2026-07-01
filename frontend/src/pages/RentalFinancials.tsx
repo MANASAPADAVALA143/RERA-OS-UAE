@@ -645,16 +645,22 @@ function FinTable({ items, years, labelCol = 'Line Item', selectedYear, periods,
 }
 
 function PLTable({ fin, selectedYear }: { fin: ParsedFinancials; selectedYear?: number | null }) {
+  const availableKeys = fin.periods ?? [];
+
+  // Default to the latest period in the uploaded data, not today's date
+  const _MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const latestKey = availableKeys[availableKeys.length - 1] ?? '';
+  const latestMonth = latestKey ? _MONTHS.indexOf(latestKey.split(' ')[0]) + 1 : new Date().getMonth() + 1;
+  const latestYear  = latestKey ? parseInt(latestKey.split(' ')[1]) : new Date().getFullYear();
+
   const [period, setPeriod] = useState<Period | null>(null);
-  const [pMonth, setPMonth] = useState(new Date().getMonth() + 1);
-  const [pYear, setPYear] = useState(new Date().getFullYear());
+  const [pMonth, setPMonth] = useState(latestMonth || new Date().getMonth() + 1);
+  const [pYear, setPYear] = useState(latestYear  || new Date().getFullYear());
 
   const periodKeys = useMemo(
     () => period ? getPeriodKeys(period, pMonth, pYear) : null,
     [period, pMonth, pYear],
   );
-
-  const availableKeys = fin.periods ?? [];
 
   if (!fin.pl.length) return <p className="text-center text-gray-400 py-12 text-sm">No P&amp;L data found in the uploaded file. Ensure the Excel contains a "Profit and Loss" sheet or section.</p>;
   return (
@@ -1000,10 +1006,16 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
   if (revGrowth !== null) insights.push({ color: 'bg-green-50 border-green-200', text: `✅ Revenue grew from ${fmt(firstK.totalRevenue)} (${fin.years[0]}) to ${fmt(k.totalRevenue)} (${lastY}) — ${revGrowth}% over ${fin.years.length - 1} years. Average annual revenue: ${fmt(avgRev)}/year.` });
   if (k.buildings > 0) insights.push({ color: 'bg-gray-50 border-gray-200', text: `📋 Property value (Buildings): ${fmt(k.buildings)} | Outstanding loans: ${fmt(k.longTermLoans)} | LTV: ${ltv.toFixed(1)}% — ${ltvLabel}` });
 
-  // ── Period toggle state ────────────────────────────────────────────────────
+  // ── Period toggle state — default to latest period in uploaded data ───────
+  const availableKeys = fin.periods ?? [];
+  const _PMONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const _latestKey   = availableKeys[availableKeys.length - 1] ?? '';
+  const _latestMonth = _latestKey ? _PMONTHS.indexOf(_latestKey.split(' ')[0]) + 1 : new Date().getMonth() + 1;
+  const _latestYear  = _latestKey ? parseInt(_latestKey.split(' ')[1]) : new Date().getFullYear();
+
   const [period, setPeriod] = useState<Period | null>(null);
-  const [pMonth, setPMonth] = useState(new Date().getMonth() + 1);
-  const [pYear, setPYear] = useState(new Date().getFullYear());
+  const [pMonth, setPMonth] = useState(_latestMonth || new Date().getMonth() + 1);
+  const [pYear, setPYear] = useState(_latestYear  || new Date().getFullYear());
 
   const periodKeys = useMemo(
     () => period ? getPeriodKeys(period, pMonth, pYear) : [],
@@ -1034,8 +1046,6 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
       return { month: key, rentIncome: m.rentIncome, otherIncome: m.otherIncome };
     });
   }, [fin.pl, periodKeys]);
-
-  const availableKeys = fin.periods ?? [];
 
   const OPEX_PALETTE = ['#D4AF37','#F2994A','#2F80ED','#22A06B','#D9534F','#9B59B6','#F2C94C','#E8DEC8'];
 
