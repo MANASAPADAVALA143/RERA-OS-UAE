@@ -56,6 +56,18 @@ def get_db():
         db.close()
 
 
+def _flatten_pl_items(items: list) -> list:
+    """Recursively return leaf P&L items (nodes whose children list is empty)."""
+    result = []
+    for item in (items or []):
+        children = item.get("children") or []
+        if children:
+            result.extend(_flatten_pl_items(children))
+        else:
+            result.append(item)
+    return result
+
+
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def _inv_dict(inv: RentalInvoice) -> dict:
@@ -241,6 +253,64 @@ def get_portfolio_summary(
             if synced > 0.0:
                 summ["collected_this_month"] = synced
                 summ["noi_this_month"] = round(synced - summ["total_expense_this_month"], 2)
+                summ["collected_source"] = "excel_sync"
+
+        # ── P&L fallback (Source C) ───────────────────────────────────────────
+        # Fires when rent-receivable AND excel-sync data are both absent for the
+        # requested month (e.g. Jul-2026 when sync is only through Jun-2026).
+        if summ["collected_this_month"] == 0.0:
+            import re as _re
+            from models.rentals.models import RentalFinancialUpload as _RFU
+            _INCOME_RE = _re.compile(
+                r"rental\s+income|rent\s+income|^rent\s*[-–]|^other\s+income",
+                _re.IGNORECASE,
+            )
+            _EXP_SKIP = _re.compile(
+                r"^(total|subtotal|net\s|gross\s|\bincome\b|revenue|rental\s+income"
+                r"|rent\s+income|rent\s*-|operating\s+income|net\s+income|net\s+loss)",
+                _re.IGNORECASE,
+            )
+            _ONE_TIME = _re.compile(
+                r"sec\s*481|481\s*\(a\)|accounting\s*method\s*adjustment",
+                _re.IGNORECASE,
+            )
+            upload = (
+                db.query(_RFU)
+                .filter(_RFU.tenant_id == tid, _RFU.company_id == co.id)
+                .order_by(_RFU.uploaded_at.desc())
+                .first()
+            )
+            if upload and upload.pl_data:
+                mk_space = month_abbrev.replace("-", " ")   # "Jul 2026"
+                mk_dash  = month_abbrev                      # "Jul-2026"
+                pl_income  = 0.0
+                pl_expense = 0.0
+                for item in _flatten_pl_items(upload.pl_data):
+                    label = str(item.get("label", ""))
+                    mv    = item.get("monthlyValues") or {}
+                    val   = abs(float(mv.get(mk_space, mv.get(mk_dash, 0)) or 0))
+                    if val == 0:
+                        continue
+                    if _INCOME_RE.search(label):
+                        pl_income += val
+                    elif not _EXP_SKIP.match(label.strip()) and not _ONE_TIME.search(label):
+                        pl_expense += val
+
+                if pl_income > 0.0:
+                    summ["collected_this_month"] = pl_income
+                    summ["collected_source"]     = "pl_fallback"
+                    if pl_expense > 0.0 and summ["total_expense_this_month"] == 0.0:
+                        summ["total_expense_this_month"] = pl_expense
+                    summ["noi_this_month"] = round(
+                        summ["collected_this_month"] - summ["total_expense_this_month"], 2
+                    )
+                    # Use gross_potential_rent as billed proxy when no invoices exist
+                    if summ["billed_this_month"] == 0.0 and summ["gross_potential_rent"] > 0.0:
+                        summ["billed_this_month"] = summ["gross_potential_rent"]
+                    # Recompute arrears as billed - collected
+                    summ["arrears_total"] = round(
+                        max(0.0, summ["billed_this_month"] - summ["collected_this_month"]), 2
+                    )
 
         # Gross potential rent — use synced value when unit rents are all 0
         if summ["gross_potential_rent"] == 0.0 and co.gross_potential_rent:
@@ -273,11 +343,37 @@ def get_portfolio_summary(
         total_col = sum(c["collected_this_month"] for c in by_company)
         if total_col > 0:
             portfolio["collected_this_month"] = total_col
-            portfolio["noi_this_month"] = round(total_col - portfolio["total_expense_this_month"], 2)
+    if portfolio["total_expense_this_month"] == 0.0:
+        total_exp = sum(c["total_expense_this_month"] for c in by_company)
+        if total_exp > 0:
+            portfolio["total_expense_this_month"] = total_exp
+    # Recompute NOI from rolled-up collected and expenses
+    if portfolio["noi_this_month"] == 0.0 and portfolio["collected_this_month"] > 0.0:
+        portfolio["noi_this_month"] = round(
+            portfolio["collected_this_month"] - portfolio["total_expense_this_month"], 2
+        )
     if portfolio["gross_potential_rent"] == 0.0:
         portfolio["gross_potential_rent"] = round(sum(c["gross_potential_rent"] for c in by_company), 2)
     if portfolio["vacancy_loss"] == 0.0:
         portfolio["vacancy_loss"] = round(sum(c["vacancy_loss"] for c in by_company), 2)
+    # Roll up arrears when invoice-level arrears is zero (P&L fallback companies)
+    if portfolio["arrears_total"] == 0.0:
+        total_arr = sum(c.get("arrears_total", 0.0) for c in by_company)
+        if total_arr > 0:
+            portfolio["arrears_total"] = round(total_arr, 2)
+    # billed rollup — needed for Tile 1 sub-label
+    if portfolio["billed_this_month"] == 0.0:
+        total_billed = sum(c.get("billed_this_month", 0.0) for c in by_company)
+        if total_billed > 0:
+            portfolio["billed_this_month"] = round(total_billed, 2)
+
+    # Portfolio-level data-source flag for frontend badge
+    if any(c.get("collected_source") == "pl_fallback" for c in by_company):
+        portfolio_collected_source = "pl_fallback"
+    elif any(c.get("collected_source") == "excel_sync" for c in by_company):
+        portfolio_collected_source = "excel_sync"
+    else:
+        portfolio_collected_source = "rent_receivable"
 
     aging = arrears_aging(all_inv_dicts, today)
     trend = income_trend(all_inv_dicts, all_exp_dicts, months=6)
@@ -285,6 +381,7 @@ def get_portfolio_summary(
 
     # Partner share payable (limited/silent partners' cut of NOI)
     ownership_rows = db.query(RentalOwnership).filter(RentalOwnership.tenant_id == tid).all()
+    has_partner_data = len(ownership_rows) > 0
     noi_val = portfolio["noi_this_month"]
     partner_share_payable = round(sum(
         noi_val * float(o.ownership_pct)
@@ -314,6 +411,8 @@ def get_portfolio_summary(
     return {
         **portfolio,
         "partner_share_payable": partner_share_payable,
+        "has_partner_data": has_partner_data,
+        "collected_source": portfolio_collected_source,
         "by_company": by_company,
         "arrears_aging": aging,
         "income_trend": trend,

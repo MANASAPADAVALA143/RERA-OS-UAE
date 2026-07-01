@@ -54,6 +54,7 @@ interface CompanySummary {
   vacancy_loss: number;
   arrears_total: number;
   total_expense_this_month: number;
+  collected_source?: string;
 }
 
 interface PortfolioSummary {
@@ -69,6 +70,8 @@ interface PortfolioSummary {
   vacancy_loss: number;
   total_expense_this_month: number;
   partner_share_payable: number;
+  has_partner_data: boolean;
+  collected_source: string;
   by_company: CompanySummary[];
   arrears_aging: { '0_30': number; '31_60': number; '61_90': number; '90_plus': number };
   income_trend: { month: string; billed: number; collected: number; expense: number; noi: number }[];
@@ -183,6 +186,10 @@ export default function RentalOverview() {
   );
 
   const selectedCoName = selectedCo?.company_name ?? '';
+
+  // Data-source flag: respect per-company source when a company is filtered
+  const collectedSource = selectedCo?.collected_source ?? data?.collected_source ?? '';
+  const hasPartnerData  = data?.has_partner_data ?? true;
 
   // KPIs: company-filtered or portfolio-level
   const kpis = useMemo(() => {
@@ -451,13 +458,23 @@ export default function RentalOverview() {
           <KpiCard
             label="Collected This Month"
             value={fmtUSD(kpis.collected_this_month)}
-            sub={kpis.billed_this_month > 0 ? `of ${fmtUSD(kpis.billed_this_month)} billed` : monthLabel}
+            sub={
+              collectedSource === 'pl_fallback'
+                ? `from P&L · ${kpis.billed_this_month > 0 ? `of ${fmtUSD(kpis.billed_this_month)} billed` : monthLabel}`
+                : kpis.billed_this_month > 0
+                  ? `of ${fmtUSD(kpis.billed_this_month)} billed`
+                  : monthLabel
+            }
             gradient="teal"
           />
           <KpiCard
             label="NOI This Month"
             value={fmtUSD(kpis.noi_this_month)}
-            sub={`Expenses: ${fmtUSD(kpis.total_expense_this_month)}`}
+            sub={
+              collectedSource === 'pl_fallback'
+                ? `from P&L · Exp: ${fmtUSD(kpis.total_expense_this_month)}`
+                : `Expenses: ${fmtUSD(kpis.total_expense_this_month)}`
+            }
             gradient="blue"
           />
           <KpiCard
@@ -475,7 +492,8 @@ export default function RentalOverview() {
           />
           <KpiCard
             label="Partner Share Payable"
-            value={fmtUSD(kpis.partner_share_payable)}
+            value={hasPartnerData ? fmtUSD(kpis.partner_share_payable) : '—'}
+            sub={!hasPartnerData ? 'Partner data not yet configured' : undefined}
           />
         </div>
       )}
