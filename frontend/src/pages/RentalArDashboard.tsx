@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell,
+  ResponsiveContainer, Cell, LineChart, Line, Legend,
 } from 'recharts';
 import api from '../services/api';
 
@@ -48,392 +48,413 @@ interface ArSummaryResponse {
     total_units: number;
   };
   monthly_trend: { month: string; billed: number; collected: number }[];
+  available_months: string[];
   unmatched_lines: { company: string; label: string }[];
   generated_at: string;
 }
 
-interface ArAgingDetail {
-  portfolio_buckets: { current: number; '1_30': number; '31_60': number; '61_90': number; '90_plus': number };
-  total_ar: number;
-  unit_detail: Array<{
-    unit_id: string;
-    unit_number: string;
-    company_name: string;
-    billing_month: string;
-    amount_billed?: number;
-    amount_collected?: number;
-    owed: number;
-    days_past_due?: number;
-    bucket?: string;
-  }>;
-}
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const fmtK = (v: number) => `$${Math.round(Math.abs(v) / 1000)}K`;
-const fmtDollar = (v: number) => `$${Math.round(v).toLocaleString()}`;
-const shortMonth = (m: string) => m.replace(/-\d{4}$/, '');  // "Jan-2026" → "Jan"
+const fmtK   = (v: number) => `$${(Math.abs(v) / 1000).toFixed(0)}K`;
+const fmt$   = (v: number) => `$${Math.round(v).toLocaleString()}`;
+const pct    = (v: number) => `${v.toFixed(1)}%`;
+const short  = (m: string) => m.replace(/-\d{4}$/, '');   // "Jan-2026" → "Jan"
 
 const AGING_FILL = ['#22A06B', '#F2C94C', '#F5A623', '#D9534F'];
+const BAR_COLORS = ['#2F80ED','#22A06B','#F2C94C','#F5A623','#8B5CF6','#EC4899','#06B6D4','#D4AF37','#EF4444'];
+
+function statusPill(rate: number, collected: number) {
+  if (collected === 0) return { label: 'Zero-Pay', bg: '#FEE2E2', color: '#991B1B' };
+  if (rate >= 95)      return { label: 'Paid',     bg: '#DCFCE7', color: '#166534' };
+  if (rate >= 85)      return { label: 'Partial',  bg: '#FEF3C7', color: '#92400E' };
+  return                      { label: 'Low',      bg: '#FEE2E2', color: '#991B1B' };
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function RentalArDashboard() {
-  const [activeFilter, setActiveFilter] = useState('All');
-  const [arSummary, setArSummary]       = useState<ArSummaryResponse | null>(null);
-  const [arAgingData, setArAgingData]   = useState<ArAgingDetail | null>(null);
-  const [loading, setLoading]           = useState(true);
+  const [arData,   setArData]   = useState<ArSummaryResponse | null>(null);
+  const [loading,  setLoading]  = useState(true);
+  const [selMonth, setSelMonth] = useState('');          // '' = All Months
+  const [selCo,    setSelCo]    = useState('');          // '' = All Companies
+  const [statusFilter, setStatusFilter] = useState('All');
   const [showUnmatched, setShowUnmatched] = useState(false);
 
+  // Fetch whenever month or company filter changes
   useEffect(() => {
     setLoading(true);
-    api.get<ArSummaryResponse>('/api/rentals/ar-summary')
-      .then(r => setArSummary(r.data))
-      .catch(() => setArSummary(null))
+    const params = new URLSearchParams();
+    if (selMonth) params.set('month', selMonth);
+    if (selCo)    params.set('company_id', selCo);
+    api.get<ArSummaryResponse>(`/api/rentals/ar-summary?${params.toString()}`)
+      .then(r => setArData(r.data))
+      .catch(() => setArData(null))
       .finally(() => setLoading(false));
-  }, []);
+  }, [selMonth, selCo]);
 
-  useEffect(() => {
-    api.get<ArAgingDetail>('/api/rentals/ar-aging-detail')
-      .then(r => setArAgingData(r.data))
-      .catch(() => setArAgingData(null));
-  }, []);
+  const port      = arData?.portfolio;
+  const companies = arData?.companies ?? [];
+  const months    = arData?.available_months ?? [];
 
-  const port = arSummary?.portfolio;
-  const companies = arSummary?.companies ?? [];
-
-  // KPI tiles
-  const bestCo = useMemo(() => {
-    if (!companies.length) return null;
-    return [...companies].sort((a, b) => b.latest_rate - a.latest_rate)[0];
-  }, [companies]);
-
-  const zeroPay = useMemo(
-    () => companies.filter(c => c.billed_per_month > 0 && c.latest_collected === 0),
-    [companies],
-  );
-
-  const kpiTiles = port ? [
-    { label: 'Total Billed / Month',  value: fmtDollar(port.total_billed),       sub: `${port.occupied_units} occupied units · registry`,       leftBorder: '#2F80ED' },
-    { label: 'Collected (Latest Mo)', value: fmtDollar(port.total_collected),     sub: `↑ ${port.collection_rate.toFixed(1)}% collection rate`,  leftBorder: '#22A06B' },
-    { label: 'Outstanding AR',        value: fmtDollar(port.total_outstanding),   sub: `${companies.filter(c => c.latest_outstanding > 0).length} companies with gaps`, leftBorder: '#D9534F' },
-    { label: 'Collection Rate',       value: `${port.collection_rate.toFixed(1)}%`, sub: `Target ≥ 95% · ${port.collection_rate >= 95 ? 'On Track' : 'Below Target'}`, leftBorder: '#F2994A' },
-    { label: 'Vacancy Loss / Month',  value: fmtDollar(port.vacancy_loss),        sub: `${port.total_units - port.occupied_units} vacant / notice units`, leftBorder: '#D9534F' },
-    { label: 'Total Units',           value: String(port.total_units),             sub: `${port.occupied_units} occupied · ${port.total_units - port.occupied_units} vacant`, leftBorder: '#2F80ED' },
-    { label: 'Zero-Pay Companies',    value: String(zeroPay.length),               sub: zeroPay.map(c => c.company_name).join(', ') || 'None', leftBorder: '#D9534F' },
-    { label: 'Best Performer',        value: bestCo?.company_name ?? '—',          sub: bestCo ? `${bestCo.latest_rate.toFixed(1)}% · ${fmtDollar(bestCo.latest_collected)} collected` : '', leftBorder: '#22A06B' },
+  // KPI values — straight from filtered API response
+  const kpis = port ? [
+    {
+      label: 'Total Billed / Month',
+      value: fmt$(port.total_billed),
+      sub: `${port.occupied_units} occupied units · registry`,
+      border: '#2F80ED',
+    },
+    {
+      label: selMonth ? `Collected · ${short(selMonth)}` : 'Collected (Latest Mo)',
+      value: fmt$(port.total_collected),
+      sub: port.total_billed > 0 ? `${pct(port.collection_rate)} collection rate` : 'No data yet',
+      border: '#22A06B',
+    },
+    {
+      label: 'Outstanding AR',
+      value: fmt$(port.total_outstanding),
+      sub: `${companies.filter(c => c.latest_outstanding > 0).length} companies with gaps`,
+      border: '#D9534F',
+    },
+    {
+      label: 'Collection Rate',
+      value: pct(port.collection_rate),
+      sub: port.collection_rate >= 95 ? '✅ On Target' : '⚠️ Below 95% target',
+      border: port.collection_rate >= 95 ? '#22A06B' : '#F5A623',
+    },
+    {
+      label: 'Vacancy Loss / Month',
+      value: fmt$(port.vacancy_loss),
+      sub: `${port.total_units - port.occupied_units} vacant / notice units`,
+      border: '#D9534F',
+    },
+    {
+      label: 'Total Units',
+      value: String(port.total_units),
+      sub: `${port.occupied_units} occupied · ${port.total_units - port.occupied_units} vacant`,
+      border: '#2F80ED',
+    },
+    {
+      label: 'Zero-Pay Companies',
+      value: String(companies.filter(c => c.billed_per_month > 0 && c.latest_collected === 0).length),
+      sub: companies.filter(c => c.billed_per_month > 0 && c.latest_collected === 0).map(c => c.company_name).join(', ') || 'None',
+      border: '#D9534F',
+    },
+    {
+      label: 'Best Performer',
+      value: [...companies].sort((a,b) => b.latest_rate - a.latest_rate)[0]?.company_name ?? '—',
+      sub: (() => { const b = [...companies].sort((a,b) => b.latest_rate - a.latest_rate)[0]; return b ? `${pct(b.latest_rate)} · ${fmt$(b.latest_collected)}` : ''; })(),
+      border: '#22A06B',
+    },
   ] : [];
 
-  // Trend chart — last 6 months
-  const trendData = useMemo(() => {
-    const trend = arSummary?.monthly_trend ?? [];
-    return trend.slice(-6).map(d => ({ ...d, month: shortMonth(d.month) }));
-  }, [arSummary]);
+  // Trend chart
+  const trendData = useMemo(() =>
+    (arData?.monthly_trend ?? []).map(d => ({ ...d, month: short(d.month) })),
+    [arData],
+  );
 
-  // Outstanding AR by company (latest month)
+  // Outstanding AR bar chart
   const outstandingData = useMemo(() =>
     [...companies]
       .filter(c => c.latest_outstanding > 0)
       .sort((a, b) => b.latest_outstanding - a.latest_outstanding)
-      .slice(0, 8)
       .map(c => ({ company: c.company_name, ar: c.latest_outstanding })),
     [companies],
   );
 
-  // Collection rate by company
-  const collectionRateData = useMemo(() =>
-    [...companies]
-      .sort((a, b) => b.latest_rate - a.latest_rate)
-      .map(c => ({ name: c.company_name, collected: c.latest_collected, pct: c.latest_rate })),
-    [companies],
-  );
+  // Month-wise detail table rows: per company per month
+  const monthTableRows = useMemo(() => {
+    const rows: Array<{
+      company_name: string; month: string; billed: number;
+      collected: number; outstanding: number; rate: number;
+      data_source: string; has_data: boolean;
+    }> = [];
 
-  // Exception table — companies with outstanding > 0 or zero-pay
-  const exceptionRows = useMemo(() => {
-    const all = companies
-      .filter(c => c.billed_per_month > 0)
-      .map(c => {
-        const pct = c.latest_rate;
-        const status =
-          c.latest_collected === 0 ? 'Zero-Pay'
-          : pct >= 95  ? 'Paid'
-          : pct >= 85  ? 'Partial'
-          : pct < 50   ? 'Declining'
-          : 'Partial';
-        return { ...c, status };
-      });
-    if (activeFilter === 'All') return all;
-    return all.filter(r => r.status === activeFilter);
-  }, [companies, activeFilter]);
+    for (const co of companies) {
+      if (co.monthly.length === 0) {
+        // Company has no collected data — show one row per selected month or just a placeholder
+        rows.push({
+          company_name: co.company_name,
+          month: selMonth || '—',
+          billed: co.billed_per_month,
+          collected: 0,
+          outstanding: co.billed_per_month,
+          rate: 0,
+          data_source: 'none',
+          has_data: false,
+        });
+      } else {
+        for (const m of co.monthly) {
+          rows.push({
+            company_name: co.company_name,
+            month: m.month,
+            billed: m.billed,
+            collected: m.collected,
+            outstanding: m.outstanding,
+            rate: m.collection_rate,
+            data_source: m.data_source,
+            has_data: true,
+          });
+        }
+      }
+    }
+    return rows;
+  }, [companies, selMonth]);
 
-  // Reconciliation flags
+  // Filter the table rows
+  const filteredRows = useMemo(() => {
+    return monthTableRows.filter(r => {
+      if (selMonth && r.month !== selMonth && r.has_data) return false;
+      const pill = statusPill(r.rate, r.collected);
+      if (statusFilter !== 'All' && pill.label !== statusFilter) return false;
+      return true;
+    });
+  }, [monthTableRows, selMonth, statusFilter]);
+
+  // Recon flags
   const reconFlags = useMemo(() =>
     companies.flatMap(c =>
       c.monthly.flatMap(m =>
         m.recon_flag ? [{ company: c.company_name, month: m.month, ...m.recon_flag }] : [],
       ),
-    ),
-    [companies],
+    ), [companies],
   );
 
-  // Aging display
-  const agingData = useMemo(() => {
-    if (!arAgingData) return null;
-    const { portfolio_buckets: b } = arAgingData;
-    return [
-      { bucket: 'Current', amount: b.current },
-      { bucket: '1–30d',   amount: b['1_30'] },
-      { bucket: '31–60d',  amount: b['31_60'] },
-      { bucket: '60d+',    amount: b['61_90'] + b['90_plus'] },
-    ];
-  }, [arAgingData]);
+  const hasData = !!port;
 
-  const agingTotal = agingData?.reduce((s, d) => s + d.amount, 0) ?? 0;
-
-  const hasData = !!port && (port.total_billed > 0 || port.total_collected > 0);
-
-  // ── Data source legend ────────────────────────────────────────────────────
-
-  const sourceSummary = useMemo(() => {
-    const rr  = companies.filter(c => c.has_rent_receivable).length;
-    const pl  = companies.filter(c => !c.has_rent_receivable && c.has_pl_data).length;
-    const none = companies.filter(c => !c.has_rent_receivable && !c.has_pl_data).length;
-    return { rr, pl, none };
-  }, [companies]);
+  const sourceSummary = useMemo(() => ({
+    rr:   companies.filter(c => c.has_rent_receivable).length,
+    pl:   companies.filter(c => !c.has_rent_receivable && c.has_pl_data).length,
+    none: companies.filter(c => !c.has_rent_receivable && !c.has_pl_data).length,
+  }), [companies]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-5 bg-gray-50 min-h-screen space-y-4">
+    <div style={{ padding: '20px', background: '#F5F0E8', minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-      {/* Loading */}
+      {/* Loading spinner */}
       {loading && (
-        <div style={{ display:'flex', alignItems:'center', gap:10, padding:'12px 16px', background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8 }}>
-          <div style={{ width:18, height:18, border:'2px solid #E8DEC8', borderTopColor:'#D4AF37', borderRadius:'50%', animation:'spin 0.8s linear infinite', flexShrink:0 }} />
-          <span style={{ fontSize:13, color:'#78716C' }}>Loading AR data…</span>
-          <style>{`@keyframes spin { to { transform:rotate(360deg); } }`}</style>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8 }}>
+          <div style={{ width: 16, height: 16, border: '2px solid #E8DEC8', borderTopColor: '#D4AF37', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          <span style={{ fontSize: 12, color: '#78716C' }}>Loading AR data…</span>
+          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
         </div>
       )}
 
-      {/* Data source banner */}
+      {/* Source banner */}
       {!loading && hasData && (
-        <div style={{ background:'#F0FDF4', border:'1px solid #BBF7D0', borderRadius:10, padding:'10px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
-          <div style={{ fontSize:12, fontWeight:600, color:'#14532D' }}>
+        <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8, padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: '#14532D' }}>
             ✅ Live data from registry · Billed = occupied units monthly rent
-          </div>
-          <div style={{ display:'flex', gap:16, fontSize:11, color:'#166534' }}>
-            {sourceSummary.rr  > 0 && <span>🔵 {sourceSummary.rr} co. via Rent Receivable upload</span>}
-            {sourceSummary.pl  > 0 && <span>🟡 {sourceSummary.pl} co. via P&L fallback</span>}
-            {sourceSummary.none > 0 && <span style={{ color:'#9CA3AF' }}>⚪ {sourceSummary.none} co. no collection data yet</span>}
+          </span>
+          <div style={{ display: 'flex', gap: 14, fontSize: 11, color: '#166534' }}>
+            {sourceSummary.rr   > 0 && <span>🔵 {sourceSummary.rr} co. via Rent Receivable upload</span>}
+            {sourceSummary.pl   > 0 && <span>🟡 {sourceSummary.pl} co. via P&L fallback</span>}
+            {sourceSummary.none > 0 && <span style={{ color: '#9CA3AF' }}>⚪ {sourceSummary.none} co. no collection data yet</span>}
           </div>
         </div>
       )}
 
-      {/* No data state */}
+      {/* ── FILTER BAR ─────────────────────────────────────────────────── */}
+      <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: '#5C5043' }}>Filter:</span>
+
+        {/* Month dropdown — populated from API available_months */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 11, color: '#9CA3AF' }}>Month</span>
+          <select
+            value={selMonth}
+            onChange={e => setSelMonth(e.target.value)}
+            style={{ fontSize: 12, border: '1px solid #E8DEC8', borderRadius: 6, padding: '5px 10px', background: '#FBF6EE', color: '#374151', cursor: 'pointer' }}
+          >
+            <option value="">All Months</option>
+            {months.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+
+        {/* Company dropdown */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 11, color: '#9CA3AF' }}>Company</span>
+          <select
+            value={selCo}
+            onChange={e => setSelCo(e.target.value)}
+            style={{ fontSize: 12, border: '1px solid #E8DEC8', borderRadius: 6, padding: '5px 10px', background: '#FBF6EE', color: '#374151', cursor: 'pointer' }}
+          >
+            <option value="">All Companies</option>
+            {companies.map(c => <option key={c.company_id} value={c.company_id}>{c.company_name}</option>)}
+          </select>
+        </div>
+
+        {/* Active filter chips */}
+        {(selMonth || selCo) && (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {selMonth && (
+              <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 20, background: '#EFF6FF', color: '#1E40AF', border: '1px solid #BFDBFE' }}>
+                {selMonth} ×
+                <button onClick={() => setSelMonth('')} style={{ marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#1E40AF', fontSize: 10 }}>✕</button>
+              </span>
+            )}
+            {selCo && (
+              <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 20, background: '#EFF6FF', color: '#1E40AF', border: '1px solid #BFDBFE' }}>
+                {companies.find(c => c.company_id === selCo)?.company_name}
+                <button onClick={() => setSelCo('')} style={{ marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#1E40AF', fontSize: 10 }}>✕</button>
+              </span>
+            )}
+          </div>
+        )}
+
+        <div style={{ marginLeft: 'auto', fontSize: 11, color: '#9CA3AF' }}>
+          {companies.length} companies · {port?.total_units ?? 0} units · {port?.occupied_units ?? 0} occupied
+        </div>
+      </div>
+
+      {/* No data */}
       {!loading && !hasData && (
-        <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:10, padding:'40px 24px', textAlign:'center' }}>
-          <p style={{ fontSize:14, fontWeight:600, color:'#5C5043', marginBottom:8 }}>No AR data available yet</p>
-          <p style={{ fontSize:12, color:'#9CA3AF' }}>
-            Add units to companies in the Company Registry, then upload a Rent Receivable Excel or P&L financials to populate this dashboard.
+        <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 10, padding: '40px 24px', textAlign: 'center' }}>
+          <p style={{ fontSize: 14, fontWeight: 600, color: '#5C5043', marginBottom: 8 }}>No AR data available yet</p>
+          <p style={{ fontSize: 12, color: '#9CA3AF' }}>
+            Add units to companies in the Company Registry, then upload a Rent Receivable Excel to populate this dashboard.
           </p>
         </div>
       )}
 
-      {/* 1 — FILTER BAR */}
+      {/* ── 8 KPI TILES ─────────────────────────────────────────────────── */}
       {hasData && (
-        <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:'10px 14px', display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
-          <span style={{ fontSize:12, fontWeight:500, color:'#262626' }}>Filter:</span>
-          <select style={{ fontSize:12, border:'1px solid #E8DEC8', borderRadius:6, padding:'4px 8px', background:'#FBF6EE', color:'#374151' }}>
-            <option>All Months</option>
-            {[...new Set(companies.flatMap(c => c.monthly.map(m => m.month)))].sort().map(m => (
-              <option key={m}>{m}</option>
-            ))}
-          </select>
-          <select style={{ fontSize:12, border:'1px solid #E8DEC8', borderRadius:6, padding:'4px 8px', background:'#FBF6EE', color:'#374151' }}>
-            <option>All Companies</option>
-            {companies.map(c => <option key={c.company_id}>{c.company_name}</option>)}
-          </select>
-          <div style={{ marginLeft:'auto', fontSize:11, color:'#9CA3AF' }}>
-            {companies.length} companies · {port?.total_units ?? 0} total units · {port?.occupied_units ?? 0} occupied
-          </div>
-        </div>
-      )}
-
-      {/* 2 — 8 KPI TILES */}
-      {hasData && (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(8,1fr)', gap:8 }}>
-          {kpiTiles.map((t, i) => (
-            <div key={i} style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:'10px 12px', borderLeft:`3px solid ${t.leftBorder}` }}>
-              <div style={{ fontSize:11, fontWeight:600, textTransform:'uppercase', color:'#6B6B6B', lineHeight:1.3, marginBottom:6 }}>{t.label}</div>
-              <div style={{ fontSize:18, fontWeight:700, color:'#262626', fontFamily:'monospace', lineHeight:1 }}>{t.value}</div>
-              <div style={{ fontSize:10, marginTop:4, lineHeight:1.3, color:'#6B6B6B' }}>{t.sub}</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8,1fr)', gap: 8 }}>
+          {kpis.map((t, i) => (
+            <div key={i} style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, padding: '10px 12px', borderLeft: `3px solid ${t.border}` }}>
+              <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: '#6B6B6B', marginBottom: 6 }}>{t.label}</div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: '#262626', fontFamily: 'monospace' }}>{t.value}</div>
+              <div style={{ fontSize: 10, marginTop: 4, color: '#6B6B6B', lineHeight: 1.3 }}>{t.sub}</div>
             </div>
           ))}
         </div>
       )}
 
-      {/* 3 — TREND + AGING */}
+      {/* ── TREND + COMPANY COLLECTION RATE ─────────────────────────────── */}
       {hasData && (
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
 
-          {/* Billed vs Collected */}
-          <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
-            <div style={{ fontSize:13, fontWeight:600, color:'#262626', marginBottom:2 }}>Billed vs Collected by month</div>
-            <div style={{ fontSize:11, color:'#9CA3AF', marginBottom:12 }}>Portfolio total · last 6 months · billed from unit registry</div>
+          {/* Billed vs Collected trend */}
+          <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>
+              Billed vs Collected {selCo ? `— ${companies.find(c => c.company_id === selCo)?.company_name}` : '— Portfolio'}
+            </div>
+            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 12 }}>
+              {trendData.length > 0 ? `${trendData[0].month} → ${trendData[trendData.length-1].month}` : 'No data with actual collections yet'}
+            </div>
             {trendData.length > 0 ? (
-              <>
-                <ResponsiveContainer width="100%" height={180}>
-                  <BarChart data={trendData} margin={{ top:10, right:10, bottom:0, left:0 }} barCategoryGap="25%">
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E8DEC8" />
-                    <XAxis dataKey="month" tick={{ fontSize:9, fill:'#9ca3af' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize:9, fill:'#9ca3af' }} tickFormatter={fmtK} axisLine={false} tickLine={false} width={38} />
-                    <Tooltip
-                      contentStyle={{ fontSize:'11px', borderRadius:'8px', border:'0.5px solid #E8DEC8' }}
-                      formatter={(v: number, n: string) => [`$${v.toLocaleString()}`, n === 'billed' ? 'Billed' : 'Collected']}
-                    />
-                    <Bar dataKey="billed"    name="billed"    fill="#D4AF37" opacity={0.75} radius={[3,3,0,0]} />
-                    <Bar dataKey="collected" name="collected" fill="#22A06B" radius={[3,3,0,0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-                <div style={{ display:'flex', gap:16, marginTop:8 }}>
-                  <span style={{ display:'flex', alignItems:'center', gap:4, fontSize:10, color:'#6B6B6B' }}>
-                    <span style={{ width:10, height:10, borderRadius:2, background:'#D4AF37', opacity:0.75, display:'inline-block' }} />Billed
-                  </span>
-                  <span style={{ display:'flex', alignItems:'center', gap:4, fontSize:10, color:'#6B6B6B' }}>
-                    <span style={{ width:10, height:10, borderRadius:2, background:'#22A06B', display:'inline-block' }} />Collected
-                  </span>
-                </div>
-              </>
-            ) : (
-              <p style={{ fontSize:12, color:'#9CA3AF', textAlign:'center', paddingTop:40 }}>No monthly trend data yet</p>
-            )}
-          </div>
-
-          {/* AR Aging — placeholder until invoice data provided */}
-          <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
-            <div style={{ fontSize:13, fontWeight:600, color:'#262626', marginBottom:2 }}>AR Aging by bucket</div>
-            <div style={{ fontSize:11, color:'#9CA3AF', marginBottom:12 }}>Outstanding balance distribution</div>
-            {agingData && agingTotal > 0 ? (
-              <>
-                <ResponsiveContainer width="100%" height={180}>
-                  <BarChart data={agingData} layout="vertical" margin={{ top:0, right:40, bottom:0, left:45 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E8DEC8" />
-                    <XAxis type="number" tick={{ fontSize:9, fill:'#9ca3af' }} tickFormatter={fmtK} axisLine={false} tickLine={false} />
-                    <YAxis dataKey="bucket" type="category" tick={{ fontSize:10, fill:'#6b7280' }} axisLine={false} tickLine={false} />
-                    <Tooltip contentStyle={{ fontSize:'11px', borderRadius:'8px' }} formatter={(v: number) => [`$${v.toLocaleString()}`, 'Outstanding']} />
-                    <Bar dataKey="amount" radius={[0,4,4,0]}>
-                      {agingData.map((_, i) => <Cell key={i} fill={AGING_FILL[i]} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:4, marginTop:12 }}>
-                  {agingData.map((a, idx) => (
-                    <div key={a.bucket} style={{ textAlign:'center' }}>
-                      <div style={{ height:3, borderRadius:2, background:AGING_FILL[idx], marginBottom:4 }} />
-                      <div style={{ fontSize:9, color:'#9CA3AF' }}>{a.bucket}</div>
-                      <div style={{ fontSize:10, fontFamily:'monospace', fontWeight:500, color:'#374151' }}>
-                        {agingTotal > 0 ? `${(a.amount / agingTotal * 100).toFixed(0)}%` : '—'}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:180, gap:8 }}>
-                <div style={{ fontSize:28, opacity:0.3 }}>📋</div>
-                <p style={{ fontSize:12, color:'#B0A898', fontWeight:500 }}>Aging data not yet available</p>
-                <p style={{ fontSize:10, color:'#C8C0B0', textAlign:'center', maxWidth:200 }}>
-                  Invoice-level aging requires RentalInvoice records with due dates. Upload separately when ready.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 4 — OUTSTANDING AR + COLLECTION RATE */}
-      {hasData && (
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
-
-          {/* Outstanding AR by company */}
-          <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
-            <div style={{ fontSize:13, fontWeight:600, color:'#262626', marginBottom:2 }}>Outstanding AR by company</div>
-            <div style={{ fontSize:11, color:'#9CA3AF', marginBottom:12 }}>Billed (registry) − collected · latest month</div>
-            {outstandingData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={Math.max(180, outstandingData.length * 32)}>
-                <BarChart data={outstandingData} layout="vertical" margin={{ top:0, right:60, bottom:0, left:80 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E8DEC8" />
-                  <XAxis type="number" tick={{ fontSize:9, fill:'#9ca3af' }} tickFormatter={fmtK} axisLine={false} tickLine={false} />
-                  <YAxis dataKey="company" type="category" tick={{ fontSize:10, fill:'#374151' }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ fontSize:'11px', borderRadius:'8px' }} formatter={(v: number) => [`$${v.toLocaleString()}`, 'Outstanding AR']} />
-                  <Bar dataKey="ar" radius={[0,4,4,0]} label={{ position:'right', fontSize:9, fill:'#6b7280', formatter: (v: number) => `$${v.toLocaleString()}` }}>
-                    {outstandingData.map((_, i) => <Cell key={i} fill={i < 2 ? '#D9534F' : i < 4 ? '#F5A623' : '#22A06B'} />)}
-                  </Bar>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={trendData} barCategoryGap="25%">
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E8DEC8" />
+                  <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 9, fill: '#9ca3af' }} tickFormatter={fmtK} axisLine={false} tickLine={false} width={38} />
+                  <Tooltip
+                    contentStyle={{ fontSize: '11px', borderRadius: '8px', border: '1px solid #E8DEC8' }}
+                    formatter={(v: number, n: string) => [fmt$(v), n === 'billed' ? 'Billed' : 'Collected']}
+                  />
+                  <Bar dataKey="billed"    fill="#D4AF37" opacity={0.6} radius={[3,3,0,0]} name="billed" />
+                  <Bar dataKey="collected" fill="#22A06B" radius={[3,3,0,0]} name="collected" />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:180 }}>
-                <p style={{ fontSize:12, color:'#9CA3AF' }}>No outstanding AR — all companies current ✓</p>
+              <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <p style={{ fontSize: 12, color: '#9CA3AF' }}>
+                  Upload Rent Receivable data to see trend
+                </p>
               </div>
             )}
+            <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
+              <span style={{ fontSize: 10, color: '#6B6B6B', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#D4AF37', opacity: 0.6, display: 'inline-block' }} /> Billed
+              </span>
+              <span style={{ fontSize: 10, color: '#6B6B6B', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#22A06B', display: 'inline-block' }} /> Collected
+              </span>
+            </div>
           </div>
 
-          {/* Collection rate by company */}
-          <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
-            <div style={{ fontSize:13, fontWeight:600, color:'#262626', marginBottom:2 }}>Collection rate by company</div>
-            <div style={{ fontSize:11, color:'#9CA3AF', marginBottom:16 }}>Latest month collected vs billed</div>
-            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              {collectionRateData.map(co => (
-                <div key={co.name}>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
-                    <span style={{ fontSize:12, color:'#374151', fontWeight:500 }}>{co.name}</span>
-                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                      <span style={{ fontSize:11, fontFamily:'monospace', color:'#6B6B6B' }}>${co.collected.toLocaleString()}</span>
-                      <span style={{
-                        fontSize:10, fontWeight:600, padding:'2px 8px', borderRadius:20,
-                        background: co.pct >= 95 ? '#DCFCE7' : co.pct >= 90 ? '#FEF9C3' : '#FEE2E2',
-                        color:      co.pct >= 95 ? '#166534' : co.pct >= 90 ? '#92400E' : '#991B1B',
-                      }}>
-                        {co.pct.toFixed(1)}%
-                      </span>
+          {/* Collection rate bars per company */}
+          <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>Collection rate by company</div>
+            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 16 }}>
+              {selMonth ? selMonth : 'Latest available month'} · collected vs billed
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', maxHeight: 240 }}>
+              {companies.map(co => {
+                const pill = statusPill(co.latest_rate, co.latest_collected);
+                return (
+                  <div key={co.company_id}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontSize: 12, color: '#374151', fontWeight: 500 }}>{co.company_name}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#6B6B6B' }}>
+                          {fmt$(co.latest_collected)} / {fmt$(co.billed_per_month)}
+                        </span>
+                        <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: pill.bg, color: pill.color }}>
+                          {co.latest_rate > 0 ? pct(co.latest_rate) : pill.label}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ height: 7, background: '#E8DEC8', borderRadius: 4, overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%', borderRadius: 4, transition: 'width 0.4s',
+                        width: `${Math.min(100, co.latest_rate)}%`,
+                        background: co.latest_rate >= 95 ? '#22A06B' : co.latest_rate >= 85 ? '#F5A623' : '#D9534F',
+                      }} />
                     </div>
                   </div>
-                  <div style={{ height:8, background:'#E8DEC8', borderRadius:4, overflow:'hidden' }}>
-                    <div style={{
-                      height:'100%', borderRadius:4,
-                      background: co.pct >= 95 ? '#22A06B' : co.pct >= 85 ? '#F5A623' : '#D9534F',
-                      width:`${Math.min(100, co.pct)}%`,
-                      transition:'width 0.4s ease',
-                    }} />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
       )}
 
-      {/* 5 — EXCEPTION TABLE */}
+      {/* ── OUTSTANDING AR BY COMPANY ────────────────────────────────────── */}
+      {hasData && outstandingData.length > 0 && (
+        <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>Outstanding AR by company</div>
+          <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 12 }}>Billed (registry) − Collected · {selMonth || 'latest month'}</div>
+          <ResponsiveContainer width="100%" height={Math.max(160, outstandingData.length * 34)}>
+            <BarChart data={outstandingData} layout="vertical" margin={{ top: 0, right: 80, bottom: 0, left: 110 }}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E8DEC8" />
+              <XAxis type="number" tick={{ fontSize: 9, fill: '#9ca3af' }} tickFormatter={fmtK} axisLine={false} tickLine={false} />
+              <YAxis dataKey="company" type="category" tick={{ fontSize: 11, fill: '#374151' }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{ fontSize: '11px', borderRadius: '8px' }} formatter={(v: number) => [fmt$(v), 'Outstanding AR']} />
+              <Bar dataKey="ar" radius={[0,4,4,0]} label={{ position: 'right', fontSize: 10, fill: '#6b7280', formatter: (v: number) => fmt$(v) }}>
+                {outstandingData.map((_, i) => <Cell key={i} fill={AGING_FILL[Math.min(i, AGING_FILL.length - 1)]} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* ── MONTH × COMPANY DETAIL TABLE ────────────────────────────────── */}
       {hasData && (
-        <div style={{ background:'#fff', border:'1px solid #E8DEC8', borderRadius:10, padding:16 }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:8 }}>
+        <div style={{ background: '#fff', border: '1px solid #E8DEC8', borderRadius: 10, padding: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
             <div>
-              <div style={{ fontSize:13, fontWeight:600, color:'#1C1917' }}>Collection summary by company</div>
-              <div style={{ fontSize:11, color:'#9CA3AF', marginTop:2 }}>
-                Billed from unit registry · collected from {sourceSummary.rr > 0 ? 'Rent Receivable' : 'P&L'} · latest available month
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1917' }}>
+                Collection detail — {selCo ? companies.find(c => c.company_id === selCo)?.company_name : 'All Companies'} · {selMonth || 'All Months'}
+              </div>
+              <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>
+                Company × Month · billed from unit registry · collected from Rent Receivable or P&L
               </div>
             </div>
-            <div style={{ display:'flex', gap:6 }}>
-              {['All', 'Zero-Pay', 'Partial', 'Paid', 'Declining'].map(f => (
+            <div style={{ display: 'flex', gap: 6 }}>
+              {['All', 'Zero-Pay', 'Partial', 'Paid', 'Low'].map(f => (
                 <button
                   key={f}
-                  onClick={() => setActiveFilter(f)}
+                  onClick={() => setStatusFilter(f)}
                   style={{
-                    fontSize:10, padding:'4px 10px', borderRadius:6, border:'1px solid',
-                    borderColor: activeFilter === f ? '#1C1917' : '#E8DEC8',
-                    background:  activeFilter === f ? '#1C1917' : 'transparent',
-                    color:       activeFilter === f ? '#fff' : '#6B6B6B',
-                    cursor:'pointer',
+                    fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid',
+                    borderColor: statusFilter === f ? '#1C1917' : '#E8DEC8',
+                    background:  statusFilter === f ? '#1C1917' : 'transparent',
+                    color:       statusFilter === f ? '#fff' : '#6B6B6B',
+                    cursor: 'pointer',
                   }}
                 >
                   {f}
@@ -441,102 +462,133 @@ export default function RentalArDashboard() {
               ))}
             </div>
           </div>
-          <div style={{ overflowX:'auto' }}>
-            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
-                <tr style={{ background:'#F7F1E6' }}>
-                  {['Company','Month','Units','Billed/Mo','Collected','Outstanding','Rate','Source','Status'].map(h => (
-                    <th key={h} style={{ textAlign: h === 'Company' || h === 'Source' || h === 'Status' ? 'left' : 'right', padding:'8px 10px', fontSize:10, fontWeight:600, color:'#5C5043', textTransform:'uppercase', whiteSpace:'nowrap' }}>{h}</th>
+                <tr style={{ background: '#F7F1E6' }}>
+                  {['Company', 'Month', 'Occupied/Total', 'Billed/Mo', 'Collected', 'Outstanding', 'Rate', 'Source', 'Status'].map(h => (
+                    <th key={h} style={{
+                      textAlign: ['Company','Source','Status'].includes(h) ? 'left' : 'right',
+                      padding: '8px 10px', fontSize: 10, fontWeight: 600,
+                      color: '#5C5043', textTransform: 'uppercase', whiteSpace: 'nowrap',
+                    }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {exceptionRows.length === 0 ? (
-                  <tr><td colSpan={9} style={{ padding:'24px', textAlign:'center', color:'#9CA3AF', fontSize:12 }}>No exceptions for this filter</td></tr>
-                ) : exceptionRows.map((row, i) => (
-                  <tr key={i} style={{ borderTop:'1px solid #F0EBE3', background: i % 2 === 0 ? '#FDFAF6' : '#fff' }}>
-                    <td style={{ padding:'8px 10px', fontWeight:500, color:'#1C1917', whiteSpace:'nowrap' }}>{row.company_name}</td>
-                    <td style={{ padding:'8px 10px', textAlign:'right', color:'#6B6B6B' }}>{row.latest_month ?? '—'}</td>
-                    <td style={{ padding:'8px 10px', textAlign:'right', color:'#6B6B6B' }}>{row.occupied_units}/{row.total_units}</td>
-                    <td style={{ padding:'8px 10px', textAlign:'right', fontFamily:'monospace', color:'#374151' }}>{fmtDollar(row.billed_per_month)}</td>
-                    <td style={{ padding:'8px 10px', textAlign:'right', fontFamily:'monospace', color:'#166534' }}>{fmtDollar(row.latest_collected)}</td>
-                    <td style={{ padding:'8px 10px', textAlign:'right', fontFamily:'monospace', fontWeight:600, color: row.latest_outstanding > 0 ? '#991B1B' : '#166534' }}>
-                      {row.latest_outstanding > 0 ? fmtDollar(row.latest_outstanding) : '—'}
-                    </td>
-                    <td style={{ padding:'8px 10px', textAlign:'right', fontFamily:'monospace', color: row.latest_rate >= 95 ? '#166534' : row.latest_rate >= 85 ? '#92400E' : '#991B1B' }}>
-                      {row.latest_rate.toFixed(1)}%
-                    </td>
-                    <td style={{ padding:'8px 10px', whiteSpace:'nowrap' }}>
-                      <span style={{
-                        fontSize:9, padding:'2px 6px', borderRadius:20,
-                        background: row.has_rent_receivable ? '#EFF6FF' : row.has_pl_data ? '#FEFCE8' : '#F3F4F6',
-                        color:      row.has_rent_receivable ? '#1E40AF' : row.has_pl_data ? '#92400E' : '#6B7280',
-                      }}>
-                        {row.has_rent_receivable ? 'Rent Rcv' : row.has_pl_data ? 'P&L' : 'No data'}
-                      </span>
-                    </td>
-                    <td style={{ padding:'8px 10px' }}>
-                      <span style={{
-                        fontSize:9, fontWeight:600, padding:'3px 8px', borderRadius:20,
-                        background: row.status === 'Zero-Pay' ? '#FEE2E2' : row.status === 'Declining' ? '#FEF3C7' : row.status === 'Paid' ? '#DCFCE7' : '#FEF3C7',
-                        color:      row.status === 'Zero-Pay' ? '#991B1B' : row.status === 'Declining' ? '#92400E' : row.status === 'Paid' ? '#166534' : '#92400E',
-                      }}>
-                        {row.status}
-                      </span>
+                {filteredRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} style={{ padding: 28, textAlign: 'center', color: '#9CA3AF', fontSize: 12 }}>
+                      No data for this filter. Upload Rent Receivable Excel to populate collected figures.
                     </td>
                   </tr>
-                ))}
+                ) : filteredRows.map((row, i) => {
+                  const pill = statusPill(row.rate, row.collected);
+                  const co = companies.find(c => c.company_name === row.company_name);
+                  return (
+                    <tr key={i} style={{ borderTop: '1px solid #F0EBE3', background: i % 2 === 0 ? '#FDFAF6' : '#fff' }}>
+                      <td style={{ padding: '8px 10px', fontWeight: 500, color: '#1C1917', whiteSpace: 'nowrap' }}>{row.company_name}</td>
+                      <td style={{ padding: '8px 10px', textAlign: 'right', color: '#6B6B6B', fontFamily: 'monospace', fontSize: 11 }}>{row.month}</td>
+                      <td style={{ padding: '8px 10px', textAlign: 'right', color: '#6B6B6B' }}>
+                        {co ? `${co.occupied_units}/${co.total_units}` : '—'}
+                      </td>
+                      <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#374151' }}>{fmt$(row.billed)}</td>
+                      <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#166534', fontWeight: 500 }}>{fmt$(row.collected)}</td>
+                      <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: row.outstanding > 0 ? '#991B1B' : '#166534' }}>
+                        {row.outstanding > 0 ? fmt$(row.outstanding) : '—'}
+                      </td>
+                      <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', color: row.rate >= 95 ? '#166534' : row.rate >= 85 ? '#92400E' : '#991B1B' }}>
+                        {row.has_data ? pct(row.rate) : '—'}
+                      </td>
+                      <td style={{ padding: '8px 10px' }}>
+                        {row.has_data ? (
+                          <span style={{
+                            fontSize: 9, padding: '2px 6px', borderRadius: 20,
+                            background: row.data_source === 'rent_receivable' ? '#EFF6FF' : '#FEFCE8',
+                            color:      row.data_source === 'rent_receivable' ? '#1E40AF' : '#92400E',
+                          }}>
+                            {row.data_source === 'rent_receivable' ? 'Rent Rcv' : 'P&L'}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 20, background: '#F3F4F6', color: '#6B7280' }}>No data</span>
+                        )}
+                      </td>
+                      <td style={{ padding: '8px 10px' }}>
+                        <span style={{ fontSize: 9, fontWeight: 600, padding: '3px 8px', borderRadius: 20, background: pill.bg, color: pill.color }}>
+                          {pill.label}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
+              {filteredRows.length > 0 && (
+                <tfoot>
+                  <tr style={{ background: '#F7F1E6', borderTop: '2px solid #E8DEC8' }}>
+                    <td colSpan={3} style={{ padding: '8px 10px', fontWeight: 700, fontSize: 11, color: '#1C1917' }}>TOTAL</td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#374151' }}>
+                      {fmt$(filteredRows.reduce((s, r) => s + r.billed, 0))}
+                    </td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#166534' }}>
+                      {fmt$(filteredRows.reduce((s, r) => s + r.collected, 0))}
+                    </td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#991B1B' }}>
+                      {fmt$(filteredRows.reduce((s, r) => s + r.outstanding, 0))}
+                    </td>
+                    <td colSpan={3} style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#374151' }}>
+                      {(() => {
+                        const tb = filteredRows.reduce((s,r) => s+r.billed, 0);
+                        const tc = filteredRows.reduce((s,r) => s+r.collected, 0);
+                        return tb > 0 ? pct(tc/tb*100) : '—';
+                      })()}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         </div>
       )}
 
-      {/* 6 — RECONCILIATION FLAGS */}
+      {/* ── RECONCILIATION FLAGS ─────────────────────────────────────────── */}
       {reconFlags.length > 0 && (
-        <div style={{ background:'#FFFBEB', border:'1px solid #FCD34D', borderRadius:10, padding:16 }}>
-          <div style={{ fontSize:12, fontWeight:600, color:'#92400E', marginBottom:10 }}>
-            ⚠️ Reconciliation Flags — Rent Receivable vs P&L differ by {'>'} 2%
+        <div style={{ background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 10, padding: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#92400E', marginBottom: 10 }}>
+            ⚠️ Reconciliation Flags — Rent Receivable vs P&L differ by &gt; 2%
           </div>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 8 }}>
             {reconFlags.map((f, i) => (
-              <div key={i} style={{ background:'#fff', border:'1px solid #FCD34D', borderRadius:6, padding:'10px 12px', fontSize:11 }}>
-                <div style={{ fontWeight:600, color:'#1C1917', marginBottom:4 }}>{f.company} · {f.month}</div>
-                <div style={{ color:'#2F80ED' }}>Rent Receivable: ${f.rent_receivable.toLocaleString()}</div>
-                <div style={{ color:'#92400E' }}>P&L:             ${f.pl.toLocaleString()}</div>
-                <div style={{ color:'#D9534F', fontWeight:600, marginTop:2 }}>Δ {f.diff_pct}% difference</div>
+              <div key={i} style={{ background: '#fff', border: '1px solid #FCD34D', borderRadius: 6, padding: '10px 12px', fontSize: 11 }}>
+                <div style={{ fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>{f.company} · {f.month}</div>
+                <div style={{ color: '#2F80ED' }}>Rent Receivable: {fmt$(f.rent_receivable)}</div>
+                <div style={{ color: '#92400E' }}>P&L: {fmt$(f.pl)}</div>
+                <div style={{ color: '#D9534F', fontWeight: 600, marginTop: 2 }}>Δ {f.diff_pct}% difference</div>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* 7 — UNMATCHED P&L LINES */}
-      {(arSummary?.unmatched_lines?.length ?? 0) > 0 && (
-        <div style={{ background:'#FFF7ED', border:'1px solid #FDBA74', borderRadius:10, padding:16 }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:showUnmatched ? 12 : 0 }}>
-            <div style={{ fontSize:12, fontWeight:600, color:'#9A3412' }}>
-              ⚠️ {arSummary!.unmatched_lines.length} Unmatched P&L line{arSummary!.unmatched_lines.length !== 1 ? 's' : ''} — unit label not found in registry
+      {/* ── UNMATCHED P&L LINES ──────────────────────────────────────────── */}
+      {(arData?.unmatched_lines?.length ?? 0) > 0 && (
+        <div style={{ background: '#FFF7ED', border: '1px solid #FDBA74', borderRadius: 10, padding: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#9A3412' }}>
+              ⚠️ {arData!.unmatched_lines.length} Unmatched P&L line{arData!.unmatched_lines.length !== 1 ? 's' : ''} — unit label not found in registry
             </div>
-            <button
-              onClick={() => setShowUnmatched(v => !v)}
-              style={{ fontSize:11, color:'#9A3412', background:'none', border:'none', cursor:'pointer', textDecoration:'underline' }}
-            >
+            <button onClick={() => setShowUnmatched(v => !v)} style={{ fontSize: 11, color: '#9A3412', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
               {showUnmatched ? 'Hide' : 'Show all'}
             </button>
           </div>
           {showUnmatched && (
-            <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
-              {arSummary!.unmatched_lines.map((u, i) => (
-                <div key={i} style={{ display:'flex', gap:12, fontSize:11, background:'#fff', border:'1px solid #FDBA74', borderRadius:6, padding:'6px 10px' }}>
-                  <span style={{ fontWeight:600, color:'#7C3AED', minWidth:120 }}>{u.company}</span>
-                  <span style={{ color:'#374151', fontFamily:'monospace' }}>{u.label}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 10 }}>
+              {arData!.unmatched_lines.map((u, i) => (
+                <div key={i} style={{ display: 'flex', gap: 12, fontSize: 11, background: '#fff', border: '1px solid #FDBA74', borderRadius: 6, padding: '6px 10px' }}>
+                  <span style={{ fontWeight: 600, color: '#7C3AED', minWidth: 120 }}>{u.company}</span>
+                  <span style={{ color: '#374151', fontFamily: 'monospace' }}>{u.label}</span>
                 </div>
               ))}
-              <p style={{ fontSize:10, color:'#B45309', marginTop:4 }}>
-                These rent lines exist in P&L but couldn't be matched to a unit in the Company Registry.
-                Check unit names for typos or update the registry.
-              </p>
             </div>
           )}
         </div>

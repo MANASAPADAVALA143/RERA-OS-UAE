@@ -2111,6 +2111,8 @@ def get_ar_aging_detail(
 
 @router.get("/ar-summary")
 def get_ar_summary(
+    month: str = Query(None),        # "Jan-2026" — filter to a specific month
+    company_id: str = Query(None),   # UUID — filter to one company
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -2129,6 +2131,8 @@ def get_ar_summary(
 
     tid = current_user.tenant_id
     companies = db.query(RentalCompany).filter(RentalCompany.tenant_id == tid).all()
+    if company_id:
+        companies = [c for c in companies if str(c.id) == company_id]
 
     all_units = db.query(RentalUnit).filter(RentalUnit.tenant_id == tid).all()
     units_by_co: dict[str, list] = defaultdict(list)
@@ -2170,11 +2174,13 @@ def get_ar_summary(
         billed_mo      = sum(float(u.monthly_rent) for u in occupied)
         vacancy_loss_mo = sum(float(u.monthly_rent) for u in non_occ)
 
-        # Source A: Rent Receivable sync (monthly_rent_data JSON on company)
+        # Source A: Rent Receivable sync — only include months with actual data (> 0)
         src_a: dict[str, float] = {}
         if co.monthly_rent_data:
             for k, v in co.monthly_rent_data.items():
-                src_a[norm_month(k)] = float(v or 0)
+                val = float(v or 0)
+                if val > 0:
+                    src_a[norm_month(k)] = val
 
         # Source B: P&L financials fallback
         src_b: dict[str, float] = {}
@@ -2245,7 +2251,13 @@ def get_ar_summary(
                 'recon_flag': recon_flag,
             })
 
-        latest = monthly_detail[-1] if monthly_detail else None
+        # latest = last month that has actual collected data (> 0)
+        # If month filter is active, use that specific month's row instead
+        if month:
+            latest = next((d for d in reversed(monthly_detail) if d['month'] == month), None)
+        else:
+            with_data = [d for d in monthly_detail if d['collected'] > 0]
+            latest = with_data[-1] if with_data else (monthly_detail[-1] if monthly_detail else None)
 
         company_summaries.append({
             'company_id': cid,
@@ -2266,7 +2278,7 @@ def get_ar_summary(
             'pl_lines_unmatched': pl_unmatched,
         })
 
-    # Portfolio totals
+    # Portfolio totals — use month-filtered latest per company
     total_billed      = sum(c['billed_per_month'] for c in company_summaries)
     total_collected   = sum(c['latest_collected'] for c in company_summaries)
     total_outstanding = max(0.0, total_billed - total_collected)
@@ -2275,7 +2287,7 @@ def get_ar_summary(
     total_occupied    = sum(c['occupied_units'] for c in company_summaries)
     total_units_all   = sum(c['total_units'] for c in company_summaries)
 
-    # Monthly trend (portfolio-level)
+    # Monthly trend — only months where at least one company has collected > 0
     m_billed: dict[str, float] = {}
     m_collected: dict[str, float] = {}
     for cs in company_summaries:
@@ -2284,10 +2296,15 @@ def get_ar_summary(
             m_billed[mk]    = m_billed.get(mk, 0.0)    + md['billed']
             m_collected[mk] = m_collected.get(mk, 0.0) + md['collected']
 
+    # Only include months that have at least some collected data across portfolio
+    months_with_data = {mk for mk, v in m_collected.items() if v > 0}
     monthly_trend = [
         {'month': m, 'billed': round(m_billed[m], 2), 'collected': round(m_collected[m], 2)}
-        for m in sorted(all_months_set, key=month_sort_key)
+        for m in sorted(months_with_data, key=month_sort_key)
     ]
+
+    # Available months list (for frontend filter dropdown)
+    all_available_months = sorted(all_months_set, key=month_sort_key)
 
     all_unmatched = [
         {'company': c['company_name'], 'label': lbl}
@@ -2306,8 +2323,9 @@ def get_ar_summary(
             'occupied_units':    total_occupied,
             'total_units':       total_units_all,
         },
-        'monthly_trend':   monthly_trend,
-        'unmatched_lines': all_unmatched,
-        'generated_at':    datetime.utcnow().isoformat(),
+        'monthly_trend':      monthly_trend,
+        'available_months':   all_available_months,
+        'unmatched_lines':    all_unmatched,
+        'generated_at':       datetime.utcnow().isoformat(),
     }
 
