@@ -243,81 +243,93 @@ function EmptyUpload({ onUpload, company, onAddMetrics }: { onUpload: () => void
 
 // ── P&L Table ─────────────────────────────────────────────────────────────────
 
-function PLTable({ fin }: { fin: ParsedFinancials }) {
-  if (!fin.pl.length) return <p className="text-center text-gray-400 py-12 text-sm">No P&amp;L data found in the uploaded file. Ensure the Excel contains a "Profit and Loss" sheet or section.</p>;
-  const years = fin.years;
-  const rowBg = (item: FinItem) => {
-    if (item.isNetIncome) return 'bg-gray-900 text-white font-bold';
-    if (item.isTotal) return 'bg-blue-50 font-semibold text-blue-900 border-t border-blue-200';
-    if (item.isSectionHeader) return 'bg-amber-50 text-amber-800 font-semibold text-xs uppercase tracking-wide';
-    return 'hover:bg-gray-50 text-gray-700';
+function FinTable({ items, years, labelCol = 'Line Item' }: { items: FinItem[]; years: number[]; labelCol?: string }) {
+  const rowStyle = (item: FinItem, idx: number): React.CSSProperties => {
+    if (item.isNetIncome) return { background: '#1C1917', color: '#fff', fontWeight: 700 };
+    if (item.isTotal) {
+      const lbl = item.label.toLowerCase();
+      if (/total\s+(for\s+)?(liabilities\s+and\s+equity|assets$)/.test(lbl)) return { background: '#1C1917', color: '#fff', fontWeight: 700 };
+      if (/total\s+for\s+liabilities$/.test(lbl)) return { background: '#FEF3C7', color: '#92400E', fontWeight: 700, borderTop: '1px solid #D4AF37' };
+      if (/total\s+for\s+equity$/.test(lbl)) return { background: '#D1FAE5', color: '#065F46', fontWeight: 700, borderTop: '1px solid #059669' };
+      return { background: '#E8E3D8', color: '#1C1917', fontWeight: 700, borderTop: '1px solid #DDD8CC' };
+    }
+    if (item.isSectionHeader) return { background: '#F0EBE0', color: '#92400E', fontWeight: 700 };
+    return { background: idx % 2 === 0 ? '#FFFFFF' : '#FAF8F5', color: '#1C1917' };
   };
-  const padCls = (item: FinItem) => item.isTotal || item.isSectionHeader ? 'px-4' : item.indent > 4 ? 'pl-12 pr-4' : item.indent > 1 ? 'pl-8 pr-4' : 'pl-5 pr-4';
+
+  const labelCellStyle = (item: FinItem): React.CSSProperties => {
+    const base: React.CSSProperties = {
+      position: 'sticky', left: 0, zIndex: 1,
+      paddingTop: 10, paddingBottom: 10,
+      fontSize: item.isSectionHeader ? 11 : 13,
+      letterSpacing: item.isSectionHeader ? '0.05em' : undefined,
+      textTransform: item.isSectionHeader ? 'uppercase' : undefined,
+      fontWeight: (item.isTotal || item.isSectionHeader || item.isNetIncome) ? 700 : 400,
+      paddingLeft: (item.isTotal || item.isSectionHeader) ? 16 : item.indent > 4 ? 48 : item.indent > 1 ? 32 : 20,
+      paddingRight: 16,
+      whiteSpace: 'nowrap',
+    };
+    return base;
+  };
+
+  const valueCellStyle = (item: FinItem, val: number): React.CSSProperties => ({
+    paddingTop: 10, paddingBottom: 10,
+    paddingLeft: 12, paddingRight: 12,
+    fontSize: item.isNetIncome || (item.isTotal && /gross|total\s+income|total\s+for\s+income/i.test(item.label)) ? 14 : 13,
+    fontWeight: (item.isTotal || item.isNetIncome) ? 700 : 400,
+    textAlign: 'right',
+    fontFamily: 'ui-monospace, monospace',
+    color: item.isNetIncome ? '#fff' : val < 0 ? '#DC2626' : 'inherit',
+    whiteSpace: 'nowrap',
+  });
+
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200">
-      <table className="w-full text-xs">
+    <div className="overflow-x-auto rounded-lg border" style={{ borderColor: '#DDD8CC' }}>
+      <table className="w-full" style={{ borderCollapse: 'collapse' }}>
         <thead>
-          <tr className="bg-gray-900 text-white">
-            <th className="text-left px-4 py-2.5 w-72">Line Item</th>
-            {years.map(y => <th key={y} className="text-right px-3 py-2.5 min-w-[110px]">{y}</th>)}
+          <tr style={{ background: '#F0EBE0' }}>
+            <th style={{ position: 'sticky', left: 0, zIndex: 2, background: '#F0EBE0', textAlign: 'left', padding: '10px 16px', fontSize: 12, fontWeight: 700, color: '#92400E', whiteSpace: 'nowrap', minWidth: 240 }}>
+              {labelCol}
+            </th>
+            {years.map(y => (
+              <th key={y} style={{ textAlign: 'center', padding: '10px 12px', fontSize: 12, fontWeight: 700, color: '#92400E', minWidth: 120, whiteSpace: 'nowrap' }}>
+                {y}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {fin.pl.map((item, i) => (
-            <tr key={i} className={`border-t border-gray-100 ${rowBg(item)}`}>
-              <td className={`py-1.5 ${padCls(item)}`}>{item.label}</td>
-              {years.map(y => (
-                <td key={y} className={`py-1.5 px-3 text-right font-mono ${item.isNetIncome ? 'text-white' : item.values[y] < 0 ? 'text-red-600' : ''}`}>
-                  {item.values[y] === 0 ? '—' : fmtFull(item.values[y])}
+          {items.map((item, i) => {
+            const rs = rowStyle(item, i);
+            return (
+              <tr key={i} style={{ borderTop: '1px solid #EDE9E3', ...rs }}>
+                <td style={{ ...labelCellStyle(item), background: rs.background as string, color: rs.color as string }}>
+                  {item.label}
                 </td>
-              ))}
-            </tr>
-          ))}
+                {years.map(y => (
+                  <td key={y} style={valueCellStyle(item, item.values[y] ?? 0)}>
+                    {item.values[y] === 0 ? '—' : fmtFull(item.values[y])}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
 }
 
+function PLTable({ fin }: { fin: ParsedFinancials }) {
+  if (!fin.pl.length) return <p className="text-center text-gray-400 py-12 text-sm">No P&amp;L data found in the uploaded file. Ensure the Excel contains a "Profit and Loss" sheet or section.</p>;
+  return <FinTable items={fin.pl} years={fin.years} labelCol="Line Item" />;
+}
+
 // ── Balance Sheet Table ───────────────────────────────────────────────────────
 
 function BSTable({ fin }: { fin: ParsedFinancials }) {
   if (!fin.bs.length) return <p className="text-center text-gray-400 py-12 text-sm">No Balance Sheet data found. Ensure the Excel contains a "Balance Sheet" sheet or section.</p>;
-  const years = fin.years;
-  const rowBg = (item: FinItem) => {
-    const lbl = item.label.toLowerCase();
-    if (/total\s+(for\s+)?(liabilities\s+and\s+equity|assets$)/.test(lbl)) return 'bg-gray-900 text-white font-bold';
-    if (/total\s+for\s+liabilities$/.test(lbl)) return 'bg-orange-100 font-bold text-orange-900 border-t border-orange-300';
-    if (/total\s+for\s+equity$/.test(lbl)) return 'bg-green-100 font-bold text-green-900 border-t border-green-300';
-    if (item.isTotal) return 'bg-blue-50 font-semibold text-blue-900 border-t border-blue-200';
-    if (item.isSectionHeader) return 'bg-gray-50 text-gray-700 font-semibold text-xs uppercase tracking-wide';
-    return 'hover:bg-gray-50 text-gray-700';
-  };
-  const padCls = (item: FinItem) => item.isTotal || item.isSectionHeader ? 'px-4' : item.indent > 4 ? 'pl-12 pr-4' : item.indent > 1 ? 'pl-8 pr-4' : 'pl-5 pr-4';
-  return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200">
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="bg-gray-900 text-white">
-            <th className="text-left px-4 py-2.5 w-72">Item</th>
-            {years.map(y => <th key={y} className="text-right px-3 py-2.5 min-w-[120px]">Dec 31, {y}</th>)}
-          </tr>
-        </thead>
-        <tbody>
-          {fin.bs.map((item, i) => (
-            <tr key={i} className={`border-t border-gray-100 ${rowBg(item)}`}>
-              <td className={`py-1.5 ${padCls(item)}`}>{item.label}</td>
-              {years.map(y => (
-                <td key={y} className={`py-1.5 px-3 text-right font-mono ${item.values[y] < 0 ? 'text-red-500' : ''}`}>
-                  {item.values[y] === 0 ? '—' : fmtFull(item.values[y])}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+  return <FinTable items={fin.bs} years={fin.years} labelCol="Item" />;
 }
 
 // ── Cash Flow Table ───────────────────────────────────────────────────────────
@@ -330,14 +342,6 @@ function CFTable({ fin }: { fin: ParsedFinancials }) {
     </div>
   );
   const years = fin.years;
-  const rowBg = (item: FinItem) => {
-    if (item.isNetIncome) return 'bg-blue-900 text-white font-bold';
-    if (item.isTotal) return 'bg-blue-50 font-semibold text-blue-900 border-t border-blue-200';
-    if (item.isSectionHeader) return 'bg-teal-50 text-teal-800 font-semibold text-xs uppercase tracking-wide';
-    return 'hover:bg-gray-50 text-gray-700';
-  };
-  const padCls = (item: FinItem) => item.isTotal || item.isSectionHeader ? 'px-4' : item.indent > 4 ? 'pl-12 pr-4' : item.indent > 1 ? 'pl-8 pr-4' : 'pl-5 pr-4';
-
   const netCFByYear = years.map(y => {
     const totals = fin.cf.filter(i => i.isTotal || i.isNetIncome);
     const last = totals[totals.length - 1];
@@ -348,11 +352,11 @@ function CFTable({ fin }: { fin: ParsedFinancials }) {
     <div className="space-y-6">
       {/* Summary bar chart */}
       {netCFByYear.some(d => d.value !== 0) && (
-        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
-          <p className="text-sm font-semibold text-gray-700 mb-3">Net Cash Flow by Year</p>
+        <div className="rounded-lg p-4 shadow-sm border" style={{ background: '#F7F5F0', borderColor: '#DDD8CC' }}>
+          <p className="text-sm font-semibold mb-3" style={{ color: '#1C1917' }}>Net Cash Flow by Year</p>
           <ResponsiveContainer width="100%" height={160}>
             <BarChart data={netCFByYear} margin={{ left: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E8E4DC" />
               <XAxis dataKey="year" tick={{ fontSize: 11 }} />
               <YAxis tickFormatter={v => fmt(v as number)} tick={{ fontSize: 10 }} />
               <Tooltip formatter={(v: number) => fmtFull(v)} />
@@ -363,30 +367,7 @@ function CFTable({ fin }: { fin: ParsedFinancials }) {
           </ResponsiveContainer>
         </div>
       )}
-
-      {/* Detail table */}
-      <div className="overflow-x-auto rounded-lg border border-gray-200">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="bg-gray-900 text-white">
-              <th className="text-left px-4 py-2.5 w-72">Line Item</th>
-              {years.map(y => <th key={y} className="text-right px-3 py-2.5 min-w-[110px]">{y}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {fin.cf.map((item, i) => (
-              <tr key={i} className={`border-t border-gray-100 ${rowBg(item)}`}>
-                <td className={`py-1.5 ${padCls(item)}`}>{item.label}</td>
-                {years.map(y => (
-                  <td key={y} className={`py-1.5 px-3 text-right font-mono ${item.isNetIncome ? 'text-white' : item.values[y] < 0 ? 'text-red-600' : ''}`}>
-                    {item.values[y] === 0 ? '—' : fmtFull(item.values[y])}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <FinTable items={fin.cf} years={years} labelCol="Line Item" />
     </div>
   );
 }
@@ -1197,7 +1178,7 @@ export default function RentalFinancials() {
   return (
     <div className="space-y-6">
       {/* Controls bar */}
-      <div className="sticky top-0 z-10 bg-white border-b border-gray-100 shadow-sm -mx-6 px-6 py-3">
+      <div className="sticky top-0 z-10 border-b shadow-sm -mx-6 px-6 py-3" style={{ background: '#ECE9E3', borderColor: '#DDD8CC' }}>
         <div className="flex flex-wrap items-center gap-3">
           <Building2 size={15} className="text-gray-400 shrink-0" />
           <select
@@ -1229,7 +1210,7 @@ export default function RentalFinancials() {
 
       {/* Content */}
       {isAll ? (
-        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+        <div className="border rounded-2xl shadow-sm p-6" style={{ background: '#F7F5F0', borderColor: '#DDD8CC' }}>
           <div className="flex items-center gap-2 mb-1">
             <TrendingUp size={18} className="text-emerald-600" />
             <h2 className="text-lg font-bold text-gray-900">All Companies — Portfolio Overview</h2>
@@ -1245,7 +1226,7 @@ export default function RentalFinancials() {
       ) : currentFin ? (
         <div className="space-y-4">
           {/* Header */}
-          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-4 flex items-center justify-between gap-4 flex-wrap">
+          <div className="border rounded-2xl shadow-sm p-4 flex items-center justify-between gap-4 flex-wrap" style={{ background: '#F7F5F0', borderColor: '#DDD8CC' }}>
             <div>
               <h1 className="text-lg font-bold text-gray-900">{currentFin.companyName}</h1>
               <p className="text-gray-400 text-xs mt-0.5">
@@ -1260,17 +1241,20 @@ export default function RentalFinancials() {
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit flex-wrap">
+          <div className="flex gap-1 p-1 rounded-lg w-fit flex-wrap" style={{ background: '#E8E4DC' }}>
             {TABS.map(t => (
               <button key={t} onClick={() => setActiveTab(t)}
-                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab === t ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-800'}`}>
+                className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors"
+                style={activeTab === t
+                  ? { background: '#D4AF37', color: '#161310', boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }
+                  : { color: '#78716C', background: 'transparent' }}>
                 {t}
               </button>
             ))}
           </div>
 
           {/* Tab content */}
-          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+          <div className="border rounded-2xl shadow-sm p-6" style={{ background: '#F7F5F0', borderColor: '#DDD8CC' }}>
             {activeTab === 'P&L Statement' && <PLTable fin={currentFin} />}
             {activeTab === 'Balance Sheet'  && <BSTable fin={currentFin} />}
             {activeTab === 'Cash Flow'      && <CFTable fin={currentFin} />}
