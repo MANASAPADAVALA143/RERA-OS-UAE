@@ -243,56 +243,76 @@ function EmptyUpload({ onUpload, company, onAddMetrics }: { onUpload: () => void
 
 // ── P&L Table ─────────────────────────────────────────────────────────────────
 
+const FIN_FONT = "'Inter', 'Segoe UI', sans-serif";
+
 function FinTable({ items, years, labelCol = 'Line Item' }: { items: FinItem[]; years: number[]; labelCol?: string }) {
-  const rowStyle = (item: FinItem, idx: number): React.CSSProperties => {
-    if (item.isNetIncome) return { background: '#1C1917', color: '#fff', fontWeight: 700 };
-    if (item.isTotal) {
-      const lbl = item.label.toLowerCase();
-      if (/total\s+(for\s+)?(liabilities\s+and\s+equity|assets$)/.test(lbl)) return { background: '#1C1917', color: '#fff', fontWeight: 700 };
-      if (/total\s+for\s+liabilities$/.test(lbl)) return { background: '#FEF3C7', color: '#92400E', fontWeight: 700, borderTop: '1px solid #D4AF37' };
-      if (/total\s+for\s+equity$/.test(lbl)) return { background: '#D1FAE5', color: '#065F46', fontWeight: 700, borderTop: '1px solid #059669' };
-      return { background: '#E8E3D8', color: '#1C1917', fontWeight: 700, borderTop: '1px solid #DDD8CC' };
-    }
-    if (item.isSectionHeader) return { background: '#F0EBE0', color: '#92400E', fontWeight: 700 };
-    return { background: idx % 2 === 0 ? '#FFFFFF' : '#FAF8F5', color: '#1C1917' };
+  // Determine grand-total rows — isNetIncome or "Total for Assets/Liabilities and Equity"
+  const isGrandTotal = (item: FinItem) =>
+    item.isNetIncome || /total\s+(for\s+)?(liabilities\s+and\s+equity|assets$)/i.test(item.label);
+
+  const rowBg = (item: FinItem, idx: number): string => {
+    if (isGrandTotal(item)) return '#D4C4A8';
+    if (item.isTotal) return '#EDE5D8';
+    if (item.isSectionHeader) return '#E8E0CF';
+    return idx % 2 === 0 ? '#F7F1E6' : '#FBF6EE';
   };
 
-  const labelCellStyle = (item: FinItem): React.CSSProperties => {
-    const base: React.CSSProperties = {
-      position: 'sticky', left: 0, zIndex: 1,
-      paddingTop: 10, paddingBottom: 10,
-      fontSize: item.isSectionHeader ? 11 : 13,
-      letterSpacing: item.isSectionHeader ? '0.05em' : undefined,
-      textTransform: item.isSectionHeader ? 'uppercase' : undefined,
-      fontWeight: (item.isTotal || item.isSectionHeader || item.isNetIncome) ? 700 : 400,
-      paddingLeft: (item.isTotal || item.isSectionHeader) ? 16 : item.indent > 4 ? 48 : item.indent > 1 ? 32 : 20,
-      paddingRight: 16,
-      whiteSpace: 'nowrap',
-    };
-    return base;
+  const rowBorderTop = (item: FinItem): string => {
+    if (isGrandTotal(item)) return '2px solid #C4A87A';
+    if (item.isTotal) return '1px solid #DDD5C4';
+    return '1px solid #EEE8DF';
   };
 
-  const valueCellStyle = (item: FinItem, val: number): React.CSSProperties => ({
-    paddingTop: 10, paddingBottom: 10,
-    paddingLeft: 12, paddingRight: 12,
-    fontSize: item.isNetIncome || (item.isTotal && /gross|total\s+income|total\s+for\s+income/i.test(item.label)) ? 14 : 13,
-    fontWeight: (item.isTotal || item.isNetIncome) ? 700 : 400,
-    textAlign: 'right',
-    fontFamily: 'ui-monospace, monospace',
-    color: item.isNetIncome ? '#fff' : val < 0 ? '#DC2626' : 'inherit',
+  const labelStyle = (item: FinItem, bg: string): React.CSSProperties => ({
+    position: 'sticky', left: 0, zIndex: 1,
+    background: bg,
+    fontFamily: FIN_FONT,
+    fontSize: item.isSectionHeader ? 11 : isGrandTotal(item) ? 13 : item.isTotal ? 12 : 12,
+    fontWeight: (isGrandTotal(item) || item.isTotal) ? 500 : item.isSectionHeader ? 500 : 400,
+    letterSpacing: item.isSectionHeader ? '0.05em' : undefined,
+    textTransform: item.isSectionHeader ? 'uppercase' : undefined,
+    color: item.isSectionHeader ? '#92400E' : '#1C1917',
+    paddingTop: item.isSectionHeader ? 7 : 9,
+    paddingBottom: item.isSectionHeader ? 7 : 9,
+    paddingLeft: (item.isTotal || item.isSectionHeader || isGrandTotal(item)) ? 12 : item.indent > 4 ? 48 : item.indent > 1 ? 32 : 20,
+    paddingRight: 12,
     whiteSpace: 'nowrap',
   });
 
+  const valueStyle = (item: FinItem, val: number): React.CSSProperties => {
+    const isNeg = val < 0;
+    let color = '#262626';
+    if (isGrandTotal(item)) color = isNeg ? '#D9534F' : '#1baf7a';
+    else if (isNeg) color = '#D9534F';
+    else if (val === 0) color = '#B0B0B0';
+    return {
+      fontFamily: FIN_FONT,
+      fontSize: isGrandTotal(item) ? 13 : item.isTotal ? 12 : 12,
+      fontWeight: (isGrandTotal(item) || item.isTotal) ? 500 : 400,
+      textAlign: 'right',
+      paddingTop: item.isSectionHeader ? 7 : 9,
+      paddingBottom: item.isSectionHeader ? 7 : 9,
+      paddingLeft: 10, paddingRight: 10,
+      color,
+      whiteSpace: 'nowrap',
+    };
+  };
+
+  const fmtVal = (val: number): string => {
+    if (val === 0) return '—';
+    return fmtFull(val); // fmtFull already wraps negatives in ()
+  };
+
   return (
-    <div className="overflow-x-auto rounded-lg border" style={{ borderColor: '#DDD8CC' }}>
+    <div className="overflow-x-auto rounded-lg border" style={{ borderColor: '#DDD5C4', fontFamily: FIN_FONT }}>
       <table className="w-full" style={{ borderCollapse: 'collapse' }}>
         <thead>
-          <tr style={{ background: '#F0EBE0' }}>
-            <th style={{ position: 'sticky', left: 0, zIndex: 2, background: '#F0EBE0', textAlign: 'left', padding: '10px 16px', fontSize: 12, fontWeight: 700, color: '#92400E', whiteSpace: 'nowrap', minWidth: 240 }}>
+          <tr style={{ background: '#DDD5C4' }}>
+            <th style={{ position: 'sticky', left: 0, zIndex: 2, background: '#DDD5C4', textAlign: 'left', padding: '8px 12px', fontSize: 11, fontWeight: 500, color: '#5C5043', letterSpacing: '0.03em', whiteSpace: 'nowrap', minWidth: 240, fontFamily: FIN_FONT }}>
               {labelCol}
             </th>
             {years.map(y => (
-              <th key={y} style={{ textAlign: 'center', padding: '10px 12px', fontSize: 12, fontWeight: 700, color: '#92400E', minWidth: 120, whiteSpace: 'nowrap' }}>
+              <th key={y} style={{ textAlign: 'right', padding: '8px 10px', fontSize: 11, fontWeight: 500, color: '#5C5043', letterSpacing: '0.03em', minWidth: 120, whiteSpace: 'nowrap', fontFamily: FIN_FONT }}>
                 {y}
               </th>
             ))}
@@ -300,15 +320,13 @@ function FinTable({ items, years, labelCol = 'Line Item' }: { items: FinItem[]; 
         </thead>
         <tbody>
           {items.map((item, i) => {
-            const rs = rowStyle(item, i);
+            const bg = rowBg(item, i);
             return (
-              <tr key={i} style={{ borderTop: '1px solid #EDE9E3', ...rs }}>
-                <td style={{ ...labelCellStyle(item), background: rs.background as string, color: rs.color as string }}>
-                  {item.label}
-                </td>
+              <tr key={i} style={{ borderTop: rowBorderTop(item), background: bg }}>
+                <td style={labelStyle(item, bg)}>{item.label}</td>
                 {years.map(y => (
-                  <td key={y} style={valueCellStyle(item, item.values[y] ?? 0)}>
-                    {item.values[y] === 0 ? '—' : fmtFull(item.values[y])}
+                  <td key={y} style={valueStyle(item, item.values[y] ?? 0)}>
+                    {fmtVal(item.values[y] ?? 0)}
                   </td>
                 ))}
               </tr>
@@ -379,59 +397,59 @@ interface KCardProps {
   status: 'good'|'warn'|'bad'|'info';
   icon?: React.ReactNode;
   trendData?: number[];
-  category?: 'profitability'|'rental'|'balance';
+  category?: 'profitability'|'rental'|'balance'|'review';
 }
 
-function KCard({ label, value, sub, status, icon, trendData, category }: KCardProps) {
-  const iconBgColor = {
-    profitability: 'rgba(59, 130, 246, 0.15)',
-    rental: 'rgba(139, 92, 246, 0.15)',
-    balance: 'rgba(34, 197, 94, 0.15)',
-  }[category || 'profitability'];
-  const iconColor = {
-    profitability: '#D4AF37',
-    rental: '#8B5CF6',
-    balance: '#22C55E',
-  }[category || 'profitability'];
-  const borderColor = {
-    good:'border-l-green-500 bg-green-50/50 hover:bg-green-100/50',
-    warn:'border-l-amber-500 bg-amber-50/50 hover:bg-amber-100/50',
-    bad:'border-l-red-500 bg-red-50/50 hover:bg-red-100/50',
-    info:'border-l-blue-500 bg-blue-50/50 hover:bg-blue-100/50'
-  }[status];
-  const pill = {
-    good:'bg-green-100 text-green-700',
-    warn:'bg-amber-100 text-amber-700',
-    bad:'bg-red-100 text-red-700',
-    info:'bg-blue-100 text-blue-700'
-  }[status];
-  const pillTx = { good:'✓ Healthy', warn:'⚠ Monitor', bad:'✗ Review', info:'ℹ Info' }[status];
+// Section → card background and left-border accent colors
+const KCARD_SECTION_STYLE: Record<string, { bg: string; border: string; borderBox: string }> = {
+  profitability: { bg: '#FFF7E8', border: '#2F80ED', borderBox: '#E8DEC8' },
+  rental:        { bg: '#F4FFF3', border: '#27AE60', borderBox: '#C8E8C8' },
+  balance:       { bg: '#FFF7E8', border: '#F2994A', borderBox: '#E8DEC8' },
+  review:        { bg: '#FFECEC', border: '#EB5757', borderBox: '#F0D0D0' },
+};
+
+// Status → pill color
+const KCARD_PILL: Record<string, { bg: string; color: string; label: string }> = {
+  good: { bg: '#22A06B', color: '#fff', label: '✓ Healthy' },
+  warn: { bg: '#F5A623', color: '#fff', label: '⚠ Monitor' },
+  bad:  { bg: '#D9534F', color: '#fff', label: '✗ Review'  },
+  info: { bg: '#6B6B6B', color: '#fff', label: 'ℹ Info'    },
+};
+
+function KCard({ label, value, sub, status, trendData, category }: KCardProps) {
+  const sec = KCARD_SECTION_STYLE[category || 'profitability'];
+  const pill = KCARD_PILL[status];
+  const isNeg = value.startsWith('(') || (status === 'bad' && value !== 'N/A');
+  const valueColor = (status === 'bad' || isNeg) ? '#D9534F' : value === 'N/A' ? '#6B6B6B' : '#262626';
 
   return (
-    <div className={`border-l-4 ${borderColor} rounded-lg p-4 shadow-sm transition-all hover:shadow-md hover:scale-105 relative`}>
-      {/* Icon Badge */}
-      {icon && (
-        <div style={{ background: iconBgColor, width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px', color: iconColor }}>
-          {icon}
-        </div>
-      )}
+    <div style={{
+      background: sec.bg,
+      borderLeft: `3px solid ${sec.border}`,
+      border: `1px solid ${sec.borderBox}`,
+      borderLeftWidth: 3,
+      borderLeftColor: sec.border,
+      borderRadius: 8,
+      padding: '14px 14px 10px',
+      fontFamily: FIN_FONT,
+    }}>
+      <p style={{ fontSize: 12, fontWeight: 600, color: '#262626', marginBottom: 4 }}>{label}</p>
+      <p style={{ fontSize: 23, fontWeight: 700, color: valueColor, marginBottom: 2, lineHeight: 1.15 }}>{value}</p>
+      <p style={{ fontSize: 12, fontWeight: 400, color: '#6B6B6B', marginBottom: 8 }}>{sub}</p>
 
-      <p className="text-xs text-gray-500 mb-1 font-semibold">{label}</p>
-      <p className="text-2xl font-bold font-mono text-gray-900 mb-1">{value}</p>
-      <p className="text-xs text-gray-500 mb-3">{sub}</p>
-
-      {/* Sparkline (mini chart) */}
       {trendData && trendData.length > 0 && (
-        <div style={{ marginBottom: '12px', height: '40px', opacity: 0.8 }}>
+        <div style={{ height: 28, marginBottom: 8 }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={trendData.map((v, i) => ({ x: i, y: v }))}>
-              <Line type="monotone" dataKey="y" stroke={iconColor} dot={false} strokeWidth={2} isAnimationActive={false} />
+              <Line type="monotone" dataKey="y" stroke={sec.border} dot={false} strokeWidth={1.5} isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
       )}
 
-      <span className={`inline-block text-xs px-3 py-1 rounded-full font-medium ${pill} w-full text-center`}>{pillTx}</span>
+      <span style={{ display: 'inline-block', background: pill.bg, color: pill.color, fontSize: 11, fontWeight: 500, padding: '3px 10px', borderRadius: 20 }}>
+        {pill.label}
+      </span>
     </div>
   );
 }
@@ -485,32 +503,32 @@ function KPITab({ fin }: { fin: ParsedFinancials }) {
       <p className="text-xs text-gray-500">KPIs for latest year: <strong>{lastY}</strong></p>
 
       <div>
-        <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">Profitability</p>
+        <p style={{ fontSize: 11, fontWeight: 600, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Profitability</p>
         <div className="grid grid-cols-4 gap-4">
-          <KCard label="NOI Margin" value={`${noiM.toFixed(1)}%`} sub={`NOI: ${fmt(k.noi)}`} status={noiM>=40?'good':noiM>=20?'warn':'bad'} icon={<TrendingUp size={18} />} trendData={noiMTrend} category="profitability" />
-          <KCard label="Net Income Margin" value={`${netM.toFixed(1)}%`} sub={`Net: ${fmt(k.netIncome)}`} status={netM>=10?'good':netM>=0?'warn':'bad'} icon={<BarChart3 size={18} />} trendData={netMTrend} category="profitability" />
-          <KCard label="Revenue Growth YoY" value={revG!==null?`${revG>=0?'+':''}${revG.toFixed(1)}%`:'N/A'} sub={prevY?`${lastY} vs ${prevY}`:'Only 1 year'} status={revG===null?'info':revG>=3?'good':revG>=0?'warn':'bad'} icon={<TrendingUp size={18} />} trendData={revGTrend} category="profitability" />
-          <KCard label="Expense Ratio" value={`${expR.toFixed(1)}%`} sub={`Total exp: ${fmt(k.totalExpenses)}`} status={expR<=70?'good':expR<=85?'warn':'bad'} icon={<TrendingDown size={18} />} category="profitability" />
+          <KCard label="NOI Margin" value={`${noiM.toFixed(1)}%`} sub={`NOI: ${fmt(k.noi)}`} status={noiM>=40?'good':noiM>=20?'warn':'bad'} trendData={noiMTrend} category={noiM<20?'review':'profitability'} />
+          <KCard label="Net Income Margin" value={`${netM.toFixed(1)}%`} sub={`Net: ${fmt(k.netIncome)}`} status={netM>=10?'good':netM>=0?'warn':'bad'} trendData={netMTrend} category={netM<0?'review':'profitability'} />
+          <KCard label="Revenue Growth YoY" value={revG!==null?`${revG>=0?'+':''}${revG.toFixed(1)}%`:'N/A'} sub={prevY?`${lastY} vs ${prevY}`:'Only 1 year'} status={revG===null?'info':revG>=3?'good':revG>=0?'warn':'bad'} trendData={revGTrend} category="profitability" />
+          <KCard label="Expense Ratio" value={`${expR.toFixed(1)}%`} sub={`Total exp: ${fmt(k.totalExpenses)}`} status={expR<=70?'good':expR<=85?'warn':'bad'} category={expR>85?'review':'profitability'} />
         </div>
       </div>
 
       <div>
-        <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">Rental Performance</p>
+        <p style={{ fontSize: 11, fontWeight: 600, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Rental Performance</p>
         <div className="grid grid-cols-4 gap-4">
-          <KCard label="Rental Income %" value={`${rentP.toFixed(1)}%`} sub={`${fmt(k.rentalIncome)} of ${fmt(k.totalRevenue)}`} status={rentP>=80?'good':'info'} icon={<Home size={18} />} category="rental" />
-          <KCard label="Interest Coverage" value={iCov>0?`${iCov.toFixed(2)}x`:'N/A'} sub={`NOI ÷ Interest (${fmt(k.interestExpense)})`} status={iCov>=2?'good':iCov>=1.2?'warn':'bad'} icon={<BarChart3 size={18} />} category="rental" />
-          <KCard label="Mgmt Fee %" value={`${mgmtP.toFixed(1)}%`} sub={`${fmt(k.managementFee)} of revenue`} status={mgmtP<=10?'good':mgmtP<=15?'warn':'bad'} icon={<DollarSign size={18} />} category="rental" />
-          <KCard label="Repair % of Revenue" value={`${repP.toFixed(1)}%`} sub={`${fmt(k.repairs)} repairs/maint`} status={repP<=5?'good':repP<=10?'warn':'bad'} icon={<Building2 size={18} />} category="rental" />
+          <KCard label="Rental Income %" value={`${rentP.toFixed(1)}%`} sub={`${fmt(k.rentalIncome)} of ${fmt(k.totalRevenue)}`} status={rentP>=80?'good':'info'} category="rental" />
+          <KCard label="Interest Coverage" value={iCov>0?`${iCov.toFixed(2)}x`:'N/A'} sub={`NOI ÷ Interest (${fmt(k.interestExpense)})`} status={iCov>=2?'good':iCov>=1.2?'warn':'bad'} category={iCov<1.2?'review':'rental'} />
+          <KCard label="Mgmt Fee %" value={`${mgmtP.toFixed(1)}%`} sub={`${fmt(k.managementFee)} of revenue`} status={mgmtP<=10?'good':mgmtP<=15?'warn':'bad'} category="rental" />
+          <KCard label="Repair % of Revenue" value={`${repP.toFixed(1)}%`} sub={`${fmt(k.repairs)} repairs/maint`} status={repP<=5?'good':repP<=10?'warn':'bad'} category={repP>10?'review':'rental'} />
         </div>
       </div>
 
       <div>
-        <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">Balance Sheet</p>
+        <p style={{ fontSize: 11, fontWeight: 600, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Balance Sheet</p>
         <div className="grid grid-cols-4 gap-4">
-          <KCard label="LTV (Loans / Building)" value={ltv>0?`${ltv.toFixed(1)}%`:'N/A'} sub={`Loans: ${fmt(k.longTermLoans)}`} status={ltv>0&&ltv<=75?'good':ltv<=85?'warn':'bad'} icon={<Vault size={18} />} category="balance" />
-          <KCard label="Asset / Liability Ratio" value={alR>0?`${alR.toFixed(2)}x`:'N/A'} sub={`Assets: ${fmt(k.totalAssets)}`} status={alR>=1.5?'good':alR>=1?'warn':'bad'} icon={<DollarSign size={18} />} category="balance" />
-          <KCard label="Debt-to-Equity" value={dte>0?`${dte.toFixed(2)}x`:'N/A'} sub={`Equity: ${fmt(k.equity)}`} status={dte>0&&dte<=2?'good':dte<=4?'warn':'bad'} icon={<BarChart3 size={18} />} category="balance" />
-          <KCard label="Cash Balance" value={fmt(k.cash)} sub={`As of Dec 31, ${lastY}`} status={k.cash>10000?'good':k.cash>0?'warn':'bad'} icon={<Building2 size={18} />} trendData={cashTrend} category="balance" />
+          <KCard label="LTV (Loans / Building)" value={ltv>0?`${ltv.toFixed(1)}%`:'N/A'} sub={`Loans: ${fmt(k.longTermLoans)}`} status={ltv>0&&ltv<=75?'good':ltv<=85?'warn':'bad'} category={ltv>85?'review':'balance'} />
+          <KCard label="Asset / Liability Ratio" value={alR>0?`${alR.toFixed(2)}x`:'N/A'} sub={`Assets: ${fmt(k.totalAssets)}`} status={alR>=1.5?'good':alR>=1?'warn':'bad'} category={alR<1?'review':'balance'} />
+          <KCard label="Debt-to-Equity" value={dte>0?`${dte.toFixed(2)}x`:'N/A'} sub={`Equity: ${fmt(k.equity)}`} status={dte>0&&dte<=2?'good':dte<=4?'warn':'bad'} category={dte>4?'review':'balance'} />
+          <KCard label="Cash Balance" value={fmt(k.cash)} sub={`As of Dec 31, ${lastY}`} status={k.cash>10000?'good':k.cash>0?'warn':'bad'} trendData={cashTrend} category={k.cash<=0?'review':'balance'} />
         </div>
       </div>
 

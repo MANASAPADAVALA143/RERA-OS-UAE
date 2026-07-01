@@ -4,11 +4,27 @@ import { useRentalCfoData, dscrStatus } from '../../hooks/useRentalCfoData';
 import { LoadingSkeleton } from '../../components/ui/Table';
 import { fmtUSD } from '../../components/ProtectedRoute';
 import { api } from '../../services/api';
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, ReferenceLine, LabelList } from 'recharts';
 
 const MARKET_RATE = 0.065;
 
 const DSCR_STYLE = { green: 'bg-green-100 text-green-800', amber: 'bg-amber-100 text-amber-800', red: 'bg-red-100 text-red-800', grey: 'bg-gray-100 text-gray-600' };
+
+// Parchment theme tokens
+const PT = {
+  pageBg:   '#F7F1E6',
+  cardBg:   '#FBF6EE',
+  border:   '#E8DEC8',
+  hdrBg:    '#EFE0C8',
+  hdrText:  '#5C5043',
+  rowOdd:   '#F7F1E6',
+  rowEven:  '#FBF6EE',
+  text:     '#262626',
+  muted:    '#6B6B6B',
+};
+
+// Suite-specific palette for Debt by Building donut
+const SUITE_COLORS = ['#D4AF37', '#2F80ED', '#27AE60', '#F2994A', '#EB5757', '#9B51E0', '#56CCF2', '#F2C94C'];
 
 const EMPTY_FORM = {
   company_name: '', property_name: '', loan_bank_name: '',
@@ -290,7 +306,7 @@ export default function RentalLoanTracker() {
   if (error) return <div className="text-red-600 p-4">{error}<button className="ml-3 underline" onClick={reload}>Retry</button></div>;
 
   return (
-    <div className="space-y-6 -m-6 p-6" style={{ background: 'transparent' }}>
+    <div className="space-y-6 -m-6 p-6" style={{ background: PT.pageBg }}>
       <AddLoanDrawer
         open={showAdd}
         onClose={() => setShowAdd(false)}
@@ -340,60 +356,64 @@ export default function RentalLoanTracker() {
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
-          { label: 'Total Loan Portfolio', value: fmtUSD(kpis.portfolio ?? 0), icon: DollarSign, color: 'rgba(59, 130, 246, 0.15)', border: '#3B82F6' },
-          { label: 'Total Monthly EMI', value: fmtUSD(kpis.emi ?? 0), icon: TrendingUp, color: 'rgba(139, 92, 246, 0.15)', border: '#8B5CF6' },
-          { label: 'Weighted Avg Rate', value: `${((kpis.wAvg ?? 0) * 100).toFixed(2)}%`, icon: AlertCircle, color: 'rgba(251, 146, 60, 0.15)', border: '#FB923C' },
-          { label: 'Next Maturity', value: kpis.nextMat?.loan_maturity_date ?? '—', icon: Calendar, color: 'rgba(34, 197, 94, 0.15)', border: '#22C55E', sub: kpis.nextMat?.property_name },
-          { label: 'Total Outstanding', value: fmtUSD(filtered.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0) ?? 0), icon: Briefcase, color: 'rgba(168, 85, 247, 0.15)', border: '#A855F7' },
-        ].map(k => {
-          const Icon = k.icon;
-          return (
-            <div key={k.label} className="rounded-xl border p-5" style={{ background: '#FFFFFF', borderColor: '#E5E7EB', borderLeft: `4px solid ${k.border}` }}>
-              <div className="flex items-start justify-between mb-3">
-                <p style={{ fontSize: '12px', color: '#666666', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>{k.label}</p>
-                <div style={{ background: k.color, width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Icon size={18} style={{ color: k.border }} />
-                </div>
-              </div>
-              <p style={{ fontSize: '24px', fontWeight: 'bold', fontFamily: 'monospace', color: '#1F2937', minHeight: '32px' }}>{k.value}</p>
-              {k.sub && <p style={{ fontSize: '12px', color: '#888888', marginTop: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.sub}</p>}
-            </div>
-          );
-        })}
+          { label: 'Total Loan Portfolio', value: fmtUSD(kpis.portfolio ?? 0) },
+          { label: 'Total Monthly EMI', value: fmtUSD(kpis.emi ?? 0) },
+          { label: 'Weighted Avg Rate', value: `${((kpis.wAvg ?? 0) * 100).toFixed(2)}%` },
+          { label: 'Next Maturity', value: kpis.nextMat?.loan_maturity_date ?? '—', sub: kpis.nextMat?.property_name },
+          { label: 'Total Outstanding', value: fmtUSD(filtered.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0) ?? 0) },
+        ].map(k => (
+          <div key={k.label} style={{ background: PT.cardBg, border: `0.5px solid ${PT.border}`, borderRadius: 8, padding: '16px 16px 12px' }}>
+            <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: PT.muted, marginBottom: 8 }}>{k.label}</p>
+            <p style={{ fontSize: 22, fontWeight: 700, color: PT.text, lineHeight: 1.2 }}>{k.value}</p>
+            {k.sub && <p style={{ fontSize: 11, color: PT.muted, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.sub}</p>}
+          </div>
+        ))}
       </div>
 
-      <div className="bg-white rounded-xl border overflow-hidden">
-        <div className="px-4 py-3 border-b bg-gray-900 text-white"><h3 className="font-semibold">Loan Register</h3></div>
+      <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, overflow: 'hidden' }}>
+        <div style={{ padding: '12px 16px', borderBottom: `1px solid ${PT.border}` }}>
+          <h3 style={{ fontSize: 15, fontWeight: 600, color: PT.text }}>Loan Register</h3>
+        </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
-              <tr>
+          <table className="w-full" style={{ borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: PT.hdrBg }}>
                 {([
                   ['Company', 'left'], ['Building', 'left'], ['Bank', 'left'],
                   ['Loan Amount', 'right'], ['Rate', 'right'], ['EMI', 'right'],
                   ['Outstanding', 'right'], ['Maturity', 'right'], ['EMI Day', 'right'],
                   ['DSCR', 'right'], ['Status', 'right'],
                 ] as [string, string][]).map(([h, align]) => (
-                  <th key={h} className={`px-3 py-2.5 text-${align} whitespace-nowrap`}>{h}</th>
+                  <th key={h} style={{ padding: '9px 12px', textAlign: align as 'left' | 'right', fontSize: 11, fontWeight: 600, color: PT.hdrText, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', borderBottom: `1px solid ${PT.border}` }}>{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y">
-              {filtered.map(l => {
+            <tbody>
+              {filtered.map((l, idx) => {
                 const st = dscrStatus(l.dscr);
+                const rate = l.loan_interest_rate != null ? l.loan_interest_rate * 100 : null;
+                const rateColor = rate == null ? PT.muted : rate <= 6.5 ? '#22A06B' : '#F5A623';
+                const now = new Date();
+                const matColor = (() => {
+                  if (!l.loan_maturity_date) return PT.text;
+                  const mat = new Date(l.loan_maturity_date);
+                  const months = (mat.getFullYear() - now.getFullYear()) * 12 + mat.getMonth() - now.getMonth();
+                  return months < 12 ? '#D9534F' : PT.text;
+                })();
+                const dscrColor = l.dscr == null ? PT.muted : l.dscr < 1.0 ? '#D9534F' : l.dscr <= 1.25 ? '#F5A623' : '#22A06B';
                 return (
-                  <tr key={l.id} className="hover:bg-gray-50">
-                    <td className="px-3 py-2.5 text-left">{l.company_name}</td>
-                    <td className="px-3 py-2.5 text-left">{l.property_name}</td>
-                    <td className="px-3 py-2.5 text-left">{l.loan_bank_name}</td>
-                    <td className="px-3 py-2.5 text-right font-mono">{fmtUSD(l.loan_amount)}</td>
-                    <td className="px-3 py-2.5 text-right font-mono">{l.loan_interest_rate != null ? `${(l.loan_interest_rate * 100).toFixed(2)}%` : '—'}</td>
-                    <td className="px-3 py-2.5 text-right font-mono">{l.loan_emi != null ? fmtUSD(l.loan_emi) : '—'}</td>
-                    <td className="px-3 py-2.5 text-right font-mono">{fmtUSD(l.loan_balance_as_of ?? l.loan_amount)}</td>
-                    <td className="px-3 py-2.5 text-right text-xs">{l.loan_maturity_date ?? '—'}</td>
-                    <td className="px-3 py-2.5 text-right">{l.loan_emi_day ?? '—'}</td>
-                    <td className="px-3 py-2.5 text-right font-mono">{l.dscr != null ? `${l.dscr.toFixed(2)}x` : '—'}</td>
-                    <td className="px-3 py-2.5 text-right">
+                  <tr key={l.id} style={{ background: idx % 2 === 0 ? PT.rowOdd : PT.rowEven, borderBottom: `1px solid ${PT.border}` }}>
+                    <td style={{ padding: '9px 12px', fontSize: 12, color: PT.text }}>{l.company_name}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 12, color: PT.text }}>{l.property_name}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 12, color: PT.text }}>{l.loan_bank_name}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 12, color: PT.text, textAlign: 'right', fontFamily: 'monospace' }}>{fmtUSD(l.loan_amount)}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 12, color: rateColor, textAlign: 'right', fontFamily: 'monospace', fontWeight: 600 }}>{rate != null ? `${rate.toFixed(2)}%` : '—'}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 12, color: PT.text, textAlign: 'right', fontFamily: 'monospace' }}>{l.loan_emi != null ? fmtUSD(l.loan_emi) : '—'}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 12, color: PT.text, textAlign: 'right', fontFamily: 'monospace' }}>{fmtUSD(l.loan_balance_as_of ?? l.loan_amount)}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 12, color: matColor, textAlign: 'right', fontWeight: matColor === '#D9534F' ? 600 : 400 }}>{l.loan_maturity_date ?? '—'}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 12, color: PT.text, textAlign: 'right' }}>{l.loan_emi_day ?? '—'}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 12, color: dscrColor, textAlign: 'right', fontFamily: 'monospace', fontWeight: 600 }}>{l.dscr != null ? `${l.dscr.toFixed(2)}x` : '—'}</td>
+                    <td style={{ padding: '9px 12px', textAlign: 'right' }}>
                       <span className={`px-2 py-0.5 rounded-full text-xs ${DSCR_STYLE[st]}`}>{st}</span>
                     </td>
                   </tr>
@@ -401,23 +421,20 @@ export default function RentalLoanTracker() {
               })}
             </tbody>
           </table>
-          {filtered.length === 0 && <p className="text-center text-gray-400 py-8 text-sm">No loans found for rental portfolio</p>}
+          {filtered.length === 0 && <p className="text-center py-8 text-sm" style={{ color: PT.muted }}>No loans found for rental portfolio</p>}
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border p-4">
-        <h3 className="font-semibold text-gray-800 mb-3">EMI Calendar — {today.toLocaleString('default', { month: 'long', year: 'numeric' })}</h3>
+      <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, padding: 16 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 600, color: PT.text, marginBottom: 12 }}>EMI Calendar — {today.toLocaleString('default', { month: 'long', year: 'numeric' })}</h3>
         <div className="flex flex-wrap gap-1">
           {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
             const dueLoans = filtered.filter(l => l.loan_emi_day === d);
-            if (dueLoans.length === 0) return <div key={d} className="w-8 h-8 text-xs text-gray-300 flex items-center justify-center">{d}</div>;
-            const overdue = d < dayOfMonth;
-            const dueSoon = d >= dayOfMonth && d <= dayOfMonth + 3;
-            const color = overdue ? 'bg-red-500 text-white' : dueSoon ? 'bg-amber-400 text-white' : 'bg-green-600 text-white';
+            if (dueLoans.length === 0) return <div key={d} style={{ width: 28, height: 28, fontSize: 11, color: '#C5BDB0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{d}</div>;
             return (
               <div key={d} className="relative group">
-                <div className={`w-8 h-8 rounded-full text-xs font-bold flex items-center justify-center ${color}`}>{d}</div>
-                <div className="hidden group-hover:block absolute z-10 top-9 left-0 bg-gray-900 text-white text-xs rounded p-2 whitespace-nowrap">
+                <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#22A06B', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 3 }}>{d}</div>
+                <div className="hidden group-hover:block absolute z-10 top-7 left-0 bg-gray-900 text-white text-xs rounded p-2 whitespace-nowrap">
                   {dueLoans.map(l => <div key={l.id}>{l.loan_bank_name}: {fmtUSD(l.loan_emi ?? 0)}</div>)}
                 </div>
               </div>
@@ -426,167 +443,154 @@ export default function RentalLoanTracker() {
         </div>
       </div>
 
-      <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4" style={{ borderLeft: '4px solid #FB923C' }}>
-        <div className="flex items-start gap-3">
-          {highRateLoans.length > 0 ? (
-            <>
-              <AlertCircle size={20} className="text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <h4 className="font-semibold text-amber-900">Refinancing Opportunity</h4>
-                <p className="text-sm text-amber-800 mt-1">
-                  {highRateLoans.length} loan(s) above market rate ({(MARKET_RATE * 100).toFixed(1)}%).
-                  Est. monthly savings: <strong>{fmtUSD(monthlySavings)}</strong> ({fmtUSD(monthlySavings * 12)}/yr)
-                </p>
-              </div>
-            </>
-          ) : (
-            <>
-              <CheckCircle2 size={20} className="text-green-600 shrink-0 mt-0.5" />
-              <div>
-                <h4 className="font-semibold text-green-900">All Rates Optimized</h4>
-                <p className="text-sm text-green-800">All loans at or below market rate ({(MARKET_RATE * 100).toFixed(1)}%)</p>
-              </div>
-            </>
-          )}
-        </div>
+      <div className="space-y-3">
+        {/* Refinancing opportunity banner */}
+        {highRateLoans.length > 0 && (
+          <div style={{ background: '#FFF7E8', borderLeft: '4px solid #F2994A', borderRadius: '0 8px 8px 0', padding: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <AlertCircle size={18} style={{ color: '#F2994A', flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <h4 style={{ fontSize: 13, fontWeight: 600, color: '#7A4500', marginBottom: 2 }}>Refinancing Opportunity</h4>
+              <p style={{ fontSize: 12, color: '#7A4500' }}>
+                {highRateLoans.length} loan(s) above market rate ({(MARKET_RATE * 100).toFixed(1)}%).
+                Est. monthly savings: <strong>{fmtUSD(monthlySavings)}</strong> ({fmtUSD(monthlySavings * 12)}/yr)
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Cash / EMI alert banner */}
+        {kpis.emi > 0 && kpis.emi * 12 > kpis.portfolio * 0.12 && (
+          <div style={{ background: '#FFECEC', borderLeft: '4px solid #EB5757', borderRadius: '0 8px 8px 0', padding: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <TrendingDown size={18} style={{ color: '#EB5757', flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <h4 style={{ fontSize: 13, fontWeight: 600, color: '#7B0000', marginBottom: 2 }}>High Debt Service</h4>
+              <p style={{ fontSize: 12, color: '#7B0000' }}>
+                Annual EMI of <strong>{fmtUSD(kpis.emi * 12)}</strong> exceeds 12% of loan portfolio — review cash reserves.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Rate advantage banner */}
+        {highRateLoans.length === 0 && filtered.length > 0 && (
+          <div style={{ background: '#F4FFF3', borderLeft: '4px solid #27AE60', borderRadius: '0 8px 8px 0', padding: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <CheckCircle2 size={18} style={{ color: '#27AE60', flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <h4 style={{ fontSize: 13, fontWeight: 600, color: '#1A5C33', marginBottom: 2 }}>All Rates Optimized</h4>
+              <p style={{ fontSize: 12, color: '#1A5C33' }}>All loans at or below market rate ({(MARKET_RATE * 100).toFixed(1)}%). No refinancing action needed.</p>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl border p-5">
-          <h3 className="font-semibold text-gray-900 mb-4">Debt by Building</h3>
+        <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, padding: 20 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, color: PT.text, marginBottom: 16 }}>Debt by Building</h3>
           <ResponsiveContainer width="100%" height={250}>
             <PieChart>
-              <Pie
-                data={debtByBuildingData}
-                cx="50%" cy="50%"
-                outerRadius={80}
-                dataKey="value"
-                nameKey="name"
-              >
-                {['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#EF4444'].map((color, i) => <Cell key={i} fill={color} />)}
+              <Pie data={debtByBuildingData} cx="50%" cy="50%" outerRadius={80} innerRadius={36} dataKey="value" nameKey="name">
+                {debtByBuildingData.map((_, i) => <Cell key={i} fill={SUITE_COLORS[i % SUITE_COLORS.length]} />)}
               </Pie>
               <Tooltip formatter={(v: number) => fmtUSD(v)} />
-              <Legend iconSize={12} wrapperStyle={{ fontSize: 12 }} />
+              <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
             </PieChart>
           </ResponsiveContainer>
         </div>
 
-        <div className="bg-white rounded-xl border p-5">
-          <h3 className="font-semibold text-gray-900 mb-4">EMI Breakdown by Bank</h3>
+        <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, padding: 20 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, color: PT.text, marginBottom: 16 }}>EMI Breakdown by Bank</h3>
           <ResponsiveContainer width="100%" height={250}>
-            <BarChart
-              data={emiByBankData}
-              margin={{ left: 0, right: 10, top: 5, bottom: 40 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis dataKey="name" angle={-30} textAnchor="end" height={70} tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+            <BarChart data={emiByBankData} margin={{ left: 0, right: 10, top: 16, bottom: 40 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={PT.border} />
+              <XAxis dataKey="name" angle={-30} textAnchor="end" height={70} tick={{ fontSize: 11, fill: PT.muted }} />
+              <YAxis tick={{ fontSize: 11, fill: PT.muted }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
               <Tooltip formatter={(v: number) => fmtUSD(v)} />
-              <Bar dataKey="value" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="value" fill="#D4AF37" name="Monthly EMI" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="value" position="top" formatter={(v: number) => fmtUSD(v)} style={{ fontSize: 10, fill: PT.text }} />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl border p-5">
-          <h3 className="font-semibold text-gray-900 mb-4">Maturity Timeline</h3>
-          <div className="space-y-2">
-            {maturityTimelineData.map((l, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <div className="flex-1">
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="font-medium text-gray-900">{l.property_name}</span>
-                    <span className="text-gray-600">{l.monthsLeft}mo</span>
+        <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, padding: 20 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, color: PT.text, marginBottom: 16 }}>Maturity Timeline</h3>
+          <div className="space-y-3">
+            {maturityTimelineData.map((l, i) => {
+              const barColor = l.monthsLeft < 12 ? '#D9534F' : l.monthsLeft < 24 ? '#F5A623' : '#22A06B';
+              return (
+                <div key={i}>
+                  <div className="flex justify-between" style={{ marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, fontWeight: 500, color: PT.text }}>{l.property_name}</span>
+                    <span style={{ fontSize: 11, color: barColor, fontWeight: 600 }}>{l.monthsLeft}mo</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="h-2 rounded-full"
-                      style={{
-                        width: `${Math.min(100, (l.monthsLeft / 60) * 100)}%`,
-                        background: l.color
-                      }}
-                    />
+                  <div style={{ width: '100%', background: PT.border, borderRadius: 4, height: 6 }}>
+                    <div style={{ width: `${Math.min(100, (l.monthsLeft / 60) * 100)}%`, background: barColor, height: 6, borderRadius: 4 }} />
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">{l.loan_maturity_date}</p>
+                  <p style={{ fontSize: 11, color: PT.muted, marginTop: 2 }}>{l.loan_maturity_date}</p>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border p-5">
-          <h3 className="font-semibold text-gray-900 mb-4">Interest Rate Comparison vs Market</h3>
+        <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, padding: 20 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, color: PT.text, marginBottom: 16 }}>Interest Rate vs Market (6.5%)</h3>
           <ResponsiveContainer width="100%" height={250}>
-            <BarChart
-              data={rateComparisonData}
-              margin={{ left: 0, right: 10, top: 5, bottom: 40 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis dataKey="name" angle={-30} textAnchor="end" height={70} tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}%`} />
+            <BarChart data={rateComparisonData} margin={{ left: 0, right: 10, top: 5, bottom: 40 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={PT.border} />
+              <XAxis dataKey="name" angle={-30} textAnchor="end" height={70} tick={{ fontSize: 11, fill: PT.muted }} />
+              <YAxis tick={{ fontSize: 11, fill: PT.muted }} tickFormatter={v => `${v.toFixed(1)}%`} />
               <Tooltip formatter={(v: number) => `${v.toFixed(2)}%`} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="rate" fill="#D4AF37" name="Loan Rate" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="market" fill="#10B981" name="Market Rate" radius={[4, 4, 0, 0]} />
+              <ReferenceLine y={6.5} stroke="#D9534F" strokeDasharray="4 3" label={{ value: '6.5%', position: 'right', fontSize: 10, fill: '#D9534F' }} />
+              <Bar dataKey="rate" name="Loan Rate" radius={[4, 4, 0, 0]}>
+                {rateComparisonData.map((entry, i) => (
+                  <Cell key={i} fill={entry.rate <= 6.5 ? '#22A06B' : '#F5A623'} />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border overflow-hidden">
-        <div className="px-5 py-4 border-b bg-gradient-to-r from-slate-900 to-slate-800 text-white"><h3 className="font-semibold">Building DSCR Health</h3></div>
+      <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, overflow: 'hidden' }}>
+        <div style={{ padding: '12px 20px', borderBottom: `1px solid ${PT.border}` }}>
+          <h3 style={{ fontSize: 15, fontWeight: 600, color: PT.text }}>Building DSCR Health</h3>
+        </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gradient-to-r from-gray-50 to-gray-100 text-xs text-gray-600 uppercase font-semibold border-b border-gray-200">
-              <tr>
-                <th className="px-4 py-3 text-left">Building</th>
-                <th className="px-4 py-3 text-right">NOI (Annual)</th>
-                <th className="px-4 py-3 text-right">Debt Service</th>
-                <th className="px-4 py-3 text-right">DSCR Ratio</th>
-                <th className="px-4 py-3 text-center">Status</th>
-                <th className="px-4 py-3 text-left">Recommendation</th>
+          <table className="w-full" style={{ borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: PT.hdrBg }}>
+                {(['Building', 'NOI (Annual)', 'Debt Service', 'DSCR Ratio', 'Status', 'Recommendation'] as const).map((h, i) => (
+                  <th key={h} style={{ padding: '9px 16px', textAlign: i === 0 || i === 5 ? 'left' : i === 4 ? 'center' : 'right', fontSize: 11, fontWeight: 600, color: PT.hdrText, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', borderBottom: `1px solid ${PT.border}` }}>{h}</th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              {dscrHealth.map(row => {
-                const statusConfig = {
-                  green: { bg: 'bg-emerald-50', text: 'text-emerald-800', dot: 'bg-emerald-500' },
-                  amber: { bg: 'bg-amber-50', text: 'text-amber-800', dot: 'bg-amber-500' },
-                  red: { bg: 'bg-red-50', text: 'text-red-800', dot: 'bg-red-500' },
-                  grey: { bg: 'bg-gray-50', text: 'text-gray-700', dot: 'bg-gray-400' },
-                };
-                const config = statusConfig[row.status];
+            <tbody>
+              {dscrHealth.map((row, idx) => {
+                const dscrColor = row.dscr == null ? PT.muted : row.dscr < 1.0 ? '#D9534F' : row.dscr <= 1.25 ? '#F5A623' : '#22A06B';
                 return (
-                  <tr key={row.building} className={`${config.bg} hover:shadow-sm transition-all`}>
-                    <td className="px-4 py-3 font-semibold text-gray-900">{row.building}</td>
-                    <td className="px-4 py-3 text-right font-mono text-gray-900">{fmtUSD(row.noi)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-gray-900">{fmtUSD(row.debtService)}</td>
-                    <td className="px-4 py-3 text-right font-mono">
-                      {row.dscr != null ? (
-                        <span className={`font-bold text-lg ${row.status === 'green' ? 'text-emerald-600' : row.status === 'amber' ? 'text-amber-600' : 'text-red-600'}`}>
-                          {row.dscr.toFixed(2)}x
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
+                  <tr key={row.building} style={{ background: idx % 2 === 0 ? PT.rowOdd : PT.rowEven, borderBottom: `1px solid ${PT.border}` }}>
+                    <td style={{ padding: '9px 16px', fontSize: 12, fontWeight: 600, color: PT.text }}>{row.building}</td>
+                    <td style={{ padding: '9px 16px', fontSize: 12, color: PT.text, textAlign: 'right', fontFamily: 'monospace' }}>{fmtUSD(row.noi)}</td>
+                    <td style={{ padding: '9px 16px', fontSize: 12, color: PT.text, textAlign: 'right', fontFamily: 'monospace' }}>{fmtUSD(row.debtService)}</td>
+                    <td style={{ padding: '9px 16px', fontSize: 13, fontWeight: 700, color: dscrColor, textAlign: 'right', fontFamily: 'monospace' }}>
+                      {row.dscr != null ? `${row.dscr.toFixed(2)}x` : '—'}
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium capitalize ${DSCR_STYLE[row.status]}`}>
-                        <span className={`w-2 h-2 rounded-full ${config.dot}`} />
+                    <td style={{ padding: '9px 16px', textAlign: 'center' }}>
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium capitalize ${DSCR_STYLE[row.status]}`}>
                         {row.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{row.recommendation}</td>
+                    <td style={{ padding: '9px 16px', fontSize: 12, color: PT.muted }}>{row.recommendation}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
           {dscrHealth.length === 0 && (
-            <div className="px-4 py-8 text-center text-gray-500 text-sm">
-              <p>No buildings with loans found</p>
-            </div>
+            <div style={{ padding: '32px 16px', textAlign: 'center', color: PT.muted, fontSize: 13 }}>No buildings with loans found</div>
           )}
         </div>
       </div>
