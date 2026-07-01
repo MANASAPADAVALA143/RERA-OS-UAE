@@ -12,6 +12,7 @@ import { api } from '../services/api';
 interface FinItem {
   label: string;
   values: Record<number, number>;
+  monthlyValues?: Record<string, number>;  // "Jan 2022" → value
   indent: number;
   isTotal: boolean;
   isSectionHeader: boolean;
@@ -24,6 +25,7 @@ interface ParsedFinancials {
   fileName: string;
   uploadedAt: string;
   years: number[];
+  periods: string[];  // all "MMM YYYY" labels in chronological order
   pl: FinItem[];
   bs: FinItem[];
   cf: FinItem[];
@@ -53,6 +55,7 @@ const CC = ['#2E75B6','#70AD47','#ED7D31','#FFC000','#5A2D82','#C00000','#00B0F0
 // ── Parser ────────────────────────────────────────────────────────────────────
 
 const MONTH_ABBRS = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+const MONTH_DISPLAY = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 // Detects monthly headers like "Dec 2021", "Jan 2022" — QBO export format
 function detectMonthlyHeaders(raw: unknown[][]): {
@@ -137,28 +140,30 @@ function parseSheetRowsMonthly(
     const isNetIncome = /^net\s+income$/i.test(trimmed) || /^net\s+operating\s+income$/i.test(trimmed);
 
     const values: Record<number, number> = {};
+    const monthlyValues: Record<string, number> = {};
     let hasAny = false;
 
     for (const year of years) {
       const cols = byYear[year] ?? [];
       if (sheetType === 'bs') {
-        // Balance sheet — keep last non-null value in the year (end-of-period snapshot)
         let val = 0;
-        for (const { col } of cols) {
+        for (const { month, col } of cols) {
           const rv = row[col];
-          if (rv !== '' && rv !== null && rv !== undefined) {
-            const n = Number(rv);
-            if (!isNaN(n)) val = n;
-          }
+          const n = (rv !== '' && rv !== null && rv !== undefined) ? Number(rv) : NaN;
+          const periodKey = `${MONTH_DISPLAY[month]} ${year}`;
+          monthlyValues[periodKey] = isNaN(n) ? 0 : n;
+          if (!isNaN(n)) val = n;
         }
         values[year] = val;
       } else {
-        // P&L / CF — sum all months
         let sum = 0;
-        for (const { col } of cols) {
+        for (const { month, col } of cols) {
           const rv = row[col];
           const n = (rv === '' || rv === null || rv === undefined) ? 0 : Number(rv);
-          sum += isNaN(n) ? 0 : n;
+          const safe = isNaN(n) ? 0 : n;
+          const periodKey = `${MONTH_DISPLAY[month]} ${year}`;
+          monthlyValues[periodKey] = safe;
+          sum += safe;
         }
         values[year] = sum;
       }
@@ -167,7 +172,7 @@ function parseSheetRowsMonthly(
 
     const isSectionHeader = !hasAny && !isTotal && !isNetIncome;
     if (!hasAny && !isSectionHeader) continue;
-    items.push({ label: trimmed, indent, values, isTotal, isSectionHeader, isNetIncome });
+    items.push({ label: trimmed, indent, values, monthlyValues, isTotal, isSectionHeader, isNetIncome });
   }
   return items;
 }
@@ -230,6 +235,7 @@ function parseExcel(file: File, companyName: string): Promise<ParsedFinancials> 
         let bsItems: FinItem[] = [];
         let cfItems: FinItem[] = [];
         let detectedYears: number[] = [];
+        let detectedPeriods: string[] = [];
         let detectedName = companyName;
         let dateRange = '';
 
@@ -255,6 +261,10 @@ function parseExcel(file: File, companyName: string): Promise<ParsedFinancials> 
 
           if (monthInfo) {
             years = monthInfo.years;
+            // Build ordered period labels from monthCols sorted by year then month
+            const sortedMC = [...monthInfo.monthCols].sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
+            const allPeriods = sortedMC.map(mc => `${MONTH_DISPLAY[mc.month]} ${mc.year}`);
+            if (!detectedPeriods.length) detectedPeriods = allPeriods;
             items = parseSheetRowsMonthly(raw, monthInfo.headerRowIdx, monthInfo.monthCols, years, sheetType);
           } else {
             years = yearInfo!.yearCols.map(yc => yc.year).sort((a, b) => a - b);
@@ -277,6 +287,7 @@ function parseExcel(file: File, companyName: string): Promise<ParsedFinancials> 
           fileName: file.name,
           uploadedAt: new Date().toISOString(),
           years: detectedYears,
+          periods: detectedPeriods,
           pl: plItems,
           bs: bsItems,
           cf: cfItems,
@@ -417,7 +428,19 @@ function EmptyUpload({ onUpload, company, onAddMetrics }: { onUpload: () => void
 
 const FIN_FONT = "'Inter', 'Segoe UI', sans-serif";
 
-function FinTable({ items, years, labelCol = 'Line Item' }: { items: FinItem[]; years: number[]; labelCol?: string }) {
+function FinTable({ items, years, labelCol = 'Line Item', selectedYear, periods }: {
+  items: FinItem[];
+  years: number[];
+  labelCol?: string;
+  selectedYear?: number | null;
+  periods?: string[];
+}) {
+  // When a year is selected, show its monthly periods; otherwise show annual columns
+  const showMonthly = !!(selectedYear && periods && periods.length > 0);
+  const monthlyPeriods = showMonthly
+    ? periods!.filter(p => p.endsWith(` ${selectedYear}`))
+    : [];
+
   // Determine grand-total rows — isNetIncome or "Total for Assets/Liabilities and Equity"
   const isGrandTotal = (item: FinItem) =>
     item.isNetIncome || /total\s+(for\s+)?(liabilities\s+and\s+equity|assets$)/i.test(item.label);
@@ -483,11 +506,18 @@ function FinTable({ items, years, labelCol = 'Line Item' }: { items: FinItem[]; 
             <th style={{ position: 'sticky', left: 0, zIndex: 2, background: '#DDD5C4', textAlign: 'left', padding: '10px 12px', fontSize: 13, fontWeight: 600, color: '#5C5043', letterSpacing: '0.03em', whiteSpace: 'nowrap', minWidth: 240, fontFamily: FIN_FONT }}>
               {labelCol}
             </th>
-            {years.map(y => (
-              <th key={y} style={{ textAlign: 'right', padding: '10px 10px', fontSize: 13, fontWeight: 600, color: '#5C5043', letterSpacing: '0.03em', minWidth: 120, whiteSpace: 'nowrap', fontFamily: FIN_FONT }}>
-                {y}
-              </th>
-            ))}
+            {showMonthly
+              ? monthlyPeriods.map(p => (
+                  <th key={p} style={{ textAlign: 'right', padding: '10px 10px', fontSize: 12, fontWeight: 600, color: '#5C5043', letterSpacing: '0.03em', minWidth: 110, whiteSpace: 'nowrap', fontFamily: FIN_FONT }}>
+                    {p}
+                  </th>
+                ))
+              : years.map(y => (
+                  <th key={y} style={{ textAlign: 'right', padding: '10px 10px', fontSize: 13, fontWeight: 600, color: '#5C5043', letterSpacing: '0.03em', minWidth: 120, whiteSpace: 'nowrap', fontFamily: FIN_FONT }}>
+                    {y}
+                  </th>
+                ))
+            }
           </tr>
         </thead>
         <tbody>
@@ -496,11 +526,17 @@ function FinTable({ items, years, labelCol = 'Line Item' }: { items: FinItem[]; 
             return (
               <tr key={i} style={{ borderTop: rowBorderTop(item), background: bg }}>
                 <td style={labelStyle(item, bg)}>{item.label}</td>
-                {years.map(y => (
-                  <td key={y} style={valueStyle(item, item.values[y] ?? 0)}>
-                    {fmtVal(item.values[y] ?? 0)}
-                  </td>
-                ))}
+                {showMonthly
+                  ? monthlyPeriods.map(p => {
+                      const val = item.monthlyValues?.[p] ?? 0;
+                      return <td key={p} style={valueStyle(item, val)}>{fmtVal(val)}</td>;
+                    })
+                  : years.map(y => (
+                      <td key={y} style={valueStyle(item, item.values[y] ?? 0)}>
+                        {fmtVal(item.values[y] ?? 0)}
+                      </td>
+                    ))
+                }
               </tr>
             );
           })}
@@ -510,21 +546,21 @@ function FinTable({ items, years, labelCol = 'Line Item' }: { items: FinItem[]; 
   );
 }
 
-function PLTable({ fin }: { fin: ParsedFinancials }) {
+function PLTable({ fin, selectedYear }: { fin: ParsedFinancials; selectedYear?: number | null }) {
   if (!fin.pl.length) return <p className="text-center text-gray-400 py-12 text-sm">No P&amp;L data found in the uploaded file. Ensure the Excel contains a "Profit and Loss" sheet or section.</p>;
-  return <FinTable items={fin.pl} years={fin.years} labelCol="Line Item" />;
+  return <FinTable items={fin.pl} years={fin.years} labelCol="Line Item" selectedYear={selectedYear} periods={fin.periods} />;
 }
 
 // ── Balance Sheet Table ───────────────────────────────────────────────────────
 
-function BSTable({ fin }: { fin: ParsedFinancials }) {
+function BSTable({ fin, selectedYear }: { fin: ParsedFinancials; selectedYear?: number | null }) {
   if (!fin.bs.length) return <p className="text-center text-gray-400 py-12 text-sm">No Balance Sheet data found. Ensure the Excel contains a "Balance Sheet" sheet or section.</p>;
-  return <FinTable items={fin.bs} years={fin.years} labelCol="Item" />;
+  return <FinTable items={fin.bs} years={fin.years} labelCol="Item" selectedYear={selectedYear} periods={fin.periods} />;
 }
 
 // ── Cash Flow Table ───────────────────────────────────────────────────────────
 
-function CFTable({ fin }: { fin: ParsedFinancials }) {
+function CFTable({ fin, selectedYear }: { fin: ParsedFinancials; selectedYear?: number | null }) {
   if (!fin.cf.length) return (
     <div className="text-center py-12">
       <p className="text-gray-400 text-sm mb-2">No Cash Flow data found in the uploaded file.</p>
@@ -557,7 +593,7 @@ function CFTable({ fin }: { fin: ParsedFinancials }) {
           </ResponsiveContainer>
         </div>
       )}
-      <FinTable items={fin.cf} years={years} labelCol="Line Item" />
+      <FinTable items={fin.cf} years={years} labelCol="Line Item" selectedYear={selectedYear} periods={fin.periods} />
     </div>
   );
 }
@@ -1230,6 +1266,7 @@ export default function RentalFinancials() {
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<FinTab>('P&L Statement');
   const [allFinancials, setAllFinancials] = useState<Record<string, ParsedFinancials>>({});
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
   const [loadingFin, setLoadingFin] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -1263,6 +1300,7 @@ export default function RentalFinancials() {
             dateRange: d.date_range,
             uploadedAt: d.uploaded_at,
             years: d.years,
+            periods: d.periods ?? [],
             pl: d.pl,
             bs: d.bs,
             cf: d.cf ?? [],
@@ -1340,6 +1378,7 @@ export default function RentalFinancials() {
           bs:    fin.bs.length  ? fin.bs    : merged.bs,
           cf:    fin.cf.length  ? fin.cf    : merged.cf,
           years: Array.from(new Set([...merged.years, ...fin.years])).sort((a, b) => a - b),
+          periods: fin.periods.length ? fin.periods : merged.periods,
         };
       }
 
@@ -1382,6 +1421,7 @@ export default function RentalFinancials() {
             onChange={e => {
               setSelectedCompanyId(e.target.value || null);
               setActiveTab('P&L Statement');
+              setSelectedYear(null);
             }}
             className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
           >
@@ -1429,10 +1469,29 @@ export default function RentalFinancials() {
                 {currentFin.dateRange || 'Financial Statements'} · Years: {currentFin.years.join(', ')}
               </p>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span style={{ fontSize: 11, color: '#92400E', fontWeight: 600, marginRight: 4 }}>YEAR VIEW:</span>
               {currentFin.years.map(y => (
-                <span key={y} className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">{y}</span>
+                <button
+                  key={y}
+                  onClick={() => setSelectedYear(selectedYear === y ? null : y)}
+                  style={{
+                    fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 20,
+                    border: '1.5px solid',
+                    borderColor: selectedYear === y ? '#D4AF37' : '#C8C0B0',
+                    background: selectedYear === y ? '#D4AF37' : 'transparent',
+                    color: selectedYear === y ? '#161310' : '#78716C',
+                    cursor: 'pointer', transition: 'all 0.15s',
+                  }}
+                >
+                  {y}
+                </button>
               ))}
+              {selectedYear && (
+                <button onClick={() => setSelectedYear(null)} style={{ fontSize: 11, color: '#9CA3AF', marginLeft: 4, cursor: 'pointer', background: 'none', border: 'none' }}>
+                  ✕ All Years
+                </button>
+              )}
             </div>
           </div>
 
@@ -1451,9 +1510,9 @@ export default function RentalFinancials() {
 
           {/* Tab content */}
           <div className="border rounded-2xl shadow-sm p-6" style={{ background: '#F7F5F0', borderColor: '#DDD8CC' }}>
-            {activeTab === 'P&L Statement' && <PLTable fin={currentFin} />}
-            {activeTab === 'Balance Sheet'  && <BSTable fin={currentFin} />}
-            {activeTab === 'Cash Flow'      && <CFTable fin={currentFin} />}
+            {activeTab === 'P&L Statement' && <PLTable fin={currentFin} selectedYear={selectedYear} />}
+            {activeTab === 'Balance Sheet'  && <BSTable fin={currentFin} selectedYear={selectedYear} />}
+            {activeTab === 'Cash Flow'      && <CFTable fin={currentFin} selectedYear={selectedYear} />}
             {activeTab === 'KPI Dashboard'  && <KPITab  fin={currentFin} />}
             {activeTab === 'CFO Dashboard'  && <CFOTab  fin={currentFin} />}
             {activeTab === 'Financial Metrics' && <FinancialMetricsTab companyName={currentFin.companyName} />}
