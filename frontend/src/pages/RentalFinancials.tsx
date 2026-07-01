@@ -308,11 +308,11 @@ function FinTable({ items, years, labelCol = 'Line Item' }: { items: FinItem[]; 
       <table className="w-full" style={{ borderCollapse: 'collapse' }}>
         <thead>
           <tr style={{ background: '#DDD5C4' }}>
-            <th style={{ position: 'sticky', left: 0, zIndex: 2, background: '#DDD5C4', textAlign: 'left', padding: '8px 12px', fontSize: 11, fontWeight: 500, color: '#5C5043', letterSpacing: '0.03em', whiteSpace: 'nowrap', minWidth: 240, fontFamily: FIN_FONT }}>
+            <th style={{ position: 'sticky', left: 0, zIndex: 2, background: '#DDD5C4', textAlign: 'left', padding: '10px 12px', fontSize: 13, fontWeight: 600, color: '#5C5043', letterSpacing: '0.03em', whiteSpace: 'nowrap', minWidth: 240, fontFamily: FIN_FONT }}>
               {labelCol}
             </th>
             {years.map(y => (
-              <th key={y} style={{ textAlign: 'right', padding: '8px 10px', fontSize: 11, fontWeight: 500, color: '#5C5043', letterSpacing: '0.03em', minWidth: 120, whiteSpace: 'nowrap', fontFamily: FIN_FONT }}>
+              <th key={y} style={{ textAlign: 'right', padding: '10px 10px', fontSize: 13, fontWeight: 600, color: '#5C5043', letterSpacing: '0.03em', minWidth: 120, whiteSpace: 'nowrap', fontFamily: FIN_FONT }}>
                 {y}
               </th>
             ))}
