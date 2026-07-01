@@ -40,7 +40,7 @@ export const RENTAL_TABS: RentalNavItem[] = [
   { id: "ar-dashboard",      label: "AR Dashboard",      Icon: Activity,        groupLabel: "FINANCIALS & RISK" },
   { id: "ap-dashboard",      label: "AP Dashboard",      Icon: Landmark,        hidden: true },
   { id: "expenses",          label: "Expenses",          Icon: DollarSign      },
-  { id: "vendor-risk",       label: "Vendor Risk",       Icon: AlertTriangle,   hidden: true },
+  { id: "vendor-risk",       label: "Vendor Risk",       Icon: AlertTriangle   },
   { id: "collections",       label: "Collections",       Icon: CreditCard,      hidden: true },
   { id: "vacancy",           label: "Vacancy & Loss",    Icon: TrendingDown    },
   { id: "financials",        label: "Financials",        Icon: BookOpen        },
