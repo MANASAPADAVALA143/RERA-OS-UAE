@@ -20,12 +20,13 @@ interface RatioCard {
   spark?: number[];
 }
 
-const S: Record<StatusType, { border: string; bg: string; pill: string }> = {
-  good:     { border: 'border-l-green-500',  bg: 'bg-green-50',  pill: 'bg-green-100 text-green-800'   },
-  watch:    { border: 'border-l-amber-500',  bg: 'bg-amber-50',  pill: 'bg-amber-100 text-amber-800'   },
-  critical: { border: 'border-l-red-500',    bg: 'bg-red-50',    pill: 'bg-red-100 text-red-800'       },
-  monitor:  { border: 'border-l-orange-500', bg: 'bg-orange-50', pill: 'bg-orange-100 text-orange-800' },
-  info:     { border: 'border-l-blue-500',   bg: 'bg-blue-50',   pill: 'bg-blue-100 text-blue-800'     },
+// Parchment palette for ratio cards
+const S: Record<StatusType, { borderColor: string; bg: string; pillBg: string; pillColor: string }> = {
+  good:     { borderColor: '#22A06B', bg: '#F4FFF3', pillBg: '#22A06B', pillColor: '#fff' },
+  watch:    { borderColor: '#F5A623', bg: '#FFFBF0', pillBg: '#F5A623', pillColor: '#fff' },
+  critical: { borderColor: '#D9534F', bg: '#FFF0F0', pillBg: '#D9534F', pillColor: '#fff' },
+  monitor:  { borderColor: '#F2994A', bg: '#FFF7EE', pillBg: '#F2994A', pillColor: '#fff' },
+  info:     { borderColor: '#2F80ED', bg: '#F0F6FF', pillBg: '#2F80ED', pillColor: '#fff' },
 };
 
 interface FinItem { label: string; values: Record<number, number>; indent: number; isTotal: boolean; isSectionHeader: boolean; isNetIncome: boolean; }
@@ -158,23 +159,26 @@ function Spark({ data, color = '#B8860B' }: { data: number[]; color?: string }) 
 function RatioCardComp({ card }: { card: RatioCard }) {
   const st = S[card.status];
   return (
-    <div className={`rounded-lg p-4 shadow-sm border-l-4 ${st.border} ${st.bg}`}>
-      <div className="text-xs text-gray-600 uppercase tracking-wide font-semibold leading-tight">{card.name}</div>
-      <div className="text-[10px] text-gray-400 font-mono mt-0.5 mb-2 leading-tight">{card.formula}</div>
-      <div className="text-xl font-bold font-mono text-gray-900">{card.value}</div>
-      <div className="flex items-center justify-between mt-2 gap-1 flex-wrap">
-        <span className="text-[10px] text-gray-500">Benchmark: {card.benchmark}</span>
-        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${st.pill}`}>{card.statusLabel}</span>
+    <div style={{
+      background: st.bg,
+      borderLeft: `4px solid ${st.borderColor}`,
+      borderRadius: 6,
+      padding: '10px 12px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.07)',
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: '#262626', textTransform: 'uppercase', letterSpacing: '0.04em', lineHeight: 1.2 }}>{card.name}</div>
+      <div style={{ fontSize: 20, fontWeight: 700, color: '#262626', fontFamily: 'monospace', margin: '4px 0 4px' }}>{card.value}</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+        <span style={{ fontSize: 10, color: '#6B6B6B' }}>Benchmark: {card.benchmark}</span>
+        <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: st.pillBg, color: st.pillColor }}>{card.statusLabel}</span>
       </div>
-      {card.spark && <Spark data={card.spark} />}
-      {card.note && <div className="text-[10px] text-gray-400 mt-1 italic leading-tight">{card.note}</div>}
     </div>
   );
 }
 
 function CardGrid({ cards }: { cards: RatioCard[] }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
       {cards.map(c => <RatioCardComp key={c.name} card={c} />)}
     </div>
   );
@@ -303,7 +307,7 @@ function LiquidityTab({ coData }: { coData: any[] }) {
               <Tooltip formatter={(v: number) => [`${v.toFixed(2)}x`, 'Current Ratio']} />
               <ReferenceLine x={1.5} stroke="#dc2626" strokeDasharray="4 2" label={{ value: '1.5x min', position: 'top', fontSize: 9, fill: '#dc2626' }} />
               <Bar dataKey="currRatio" name="Current Ratio" radius={[0, 3, 3, 0]}>
-                {coData.map((d, i) => <Cell key={i} fill={d.currRatio >= 1.5 ? '#1a3a2a' : '#dc2626'} />)}
+                {coData.map((d, i) => <Cell key={i} fill={d.currRatio >= 1.5 ? '#22A06B' : d.currRatio >= 1.0 ? '#F5A623' : '#D9534F'} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -337,17 +341,22 @@ function SolvencyTab({ coData }: { coData: any[] }) {
           <div className="h-[240px] flex items-center justify-center text-gray-500">No company data available</div>
         ) : (
           <ResponsiveContainer width="100%" height={240}>
-            <ComposedChart data={coData} margin={{ left: 0, right: 5, top: 5, bottom: 40 }}>
+            {(() => { const dscrData = coData.filter(d => d.dscr > 0 || d.icr > 0); return (
+            <ComposedChart data={dscrData} margin={{ left: 0, right: 5, top: 5, bottom: 40 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
               <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-35} textAnchor="end" interval={0} />
               <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}x`} />
               <Tooltip formatter={(v: number) => [`${v.toFixed(2)}x`]} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <ReferenceLine y={1.25} stroke="#16a34a" strokeDasharray="4 2" label={{ value: '1.25x DSCR floor', position: 'right', fontSize: 9, fill: '#16a34a' }} />
+              <ReferenceLine y={1.25} stroke="#22A06B" strokeDasharray="4 2" label={{ value: '1.25x DSCR floor', position: 'right', fontSize: 9, fill: '#22A06B' }} />
               <ReferenceLine y={1.5}  stroke="#B8860B" strokeDasharray="4 2" label={{ value: '1.5x ICR benchmark', position: 'right', fontSize: 9, fill: '#B8860B' }} />
-              <Bar dataKey="dscr" name="DSCR"             fill="#1a3a2a" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="dscr" name="DSCR" radius={[3, 3, 0, 0]}>
+                {dscrData.map((d, i) => (
+                  <Cell key={i} fill={d.dscr >= 1.25 ? '#22A06B' : d.dscr >= 1.0 ? '#F5A623' : '#D9534F'} />
+                ))}
+              </Bar>
               <Bar dataKey="icr"  name="Interest Coverage" fill="#B8860B" radius={[3, 3, 0, 0]} />
-            </ComposedChart>
+            </ComposedChart>); })()}
           </ResponsiveContainer>
         )}
       </div>
@@ -366,13 +375,18 @@ function RentalKPIsTab({ coData }: { coData: any[] }) {
             <div className="h-[220px] flex items-center justify-center text-gray-500">No company data available</div>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={coData} margin={{ left: 0, right: 5, top: 5, bottom: 40 }}>
+              {(() => { const occData = coData.filter(d => d.occ > 0); return (
+              <BarChart data={occData} margin={{ left: 0, right: 5, top: 5, bottom: 40 }}>
                 <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-35} textAnchor="end" interval={0} />
                 <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} domain={[60, 100]} />
                 <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'Occupancy']} />
-                <ReferenceLine y={90} stroke="#dc2626" strokeDasharray="4 2" label={{ value: '90% target', position: 'right', fontSize: 9, fill: '#dc2626' }} />
-                <Bar dataKey="occ" name="Occupancy %" fill="#1a3a2a" radius={[3, 3, 0, 0]} />
-              </BarChart>
+                <ReferenceLine y={90} stroke="#D9534F" strokeDasharray="4 2" label={{ value: '90% target', position: 'right', fontSize: 9, fill: '#D9534F' }} />
+                <Bar dataKey="occ" name="Occupancy %" radius={[3, 3, 0, 0]}>
+                  {occData.map((d, i) => (
+                    <Cell key={i} fill={d.occ >= 90 ? '#22A06B' : d.occ >= 75 ? '#F5A623' : '#D9534F'} />
+                  ))}
+                </Bar>
+              </BarChart>); })()}
             </ResponsiveContainer>
           )}
         </div>
@@ -382,13 +396,13 @@ function RentalKPIsTab({ coData }: { coData: any[] }) {
             <div className="h-[220px] flex items-center justify-center text-gray-500">No company data available</div>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={coData} margin={{ left: 0, right: 5, top: 5, bottom: 40 }}>
+              <BarChart data={coData.filter(d => d.revUnit > 0 || d.expUnit > 0)} margin={{ left: 0, right: 5, top: 5, bottom: 40 }}>
                 <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-35} textAnchor="end" interval={0} />
                 <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `$${v}`} />
                 <Tooltip formatter={(v: number) => [fmt$(v)]} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="revUnit" name="Revenue / Unit"  fill="#1a3a2a" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="expUnit" name="Expense / Unit"  fill="#B8860B" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="revUnit" name="Revenue / Unit"  fill="#2F80ED" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="expUnit" name="Expense / Unit"  fill="#F2994A" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -433,8 +447,8 @@ function CostOfCapitalTab({ loanData }: { loanData: any[] }) {
                     <td className="px-3 py-3 text-center font-mono text-xs">{l.rate.toFixed(2)}%</td>
                     <td className="px-3 py-3 text-right font-mono text-xs">{fmt$(l.payment)}</td>
                     <td className="px-3 py-3 text-right font-mono text-xs">{fmt$(l.balance)}</td>
-                    <td className={`px-3 py-3 text-center font-mono text-xs font-semibold ${l.ltv > 86 ? 'text-amber-700' : 'text-green-700'}`}>
-                      {l.ltv.toFixed(1)}%
+                    <td className={`px-3 py-3 text-center font-mono text-xs font-semibold ${l.ltv === null ? 'text-gray-400' : l.ltv > 80 ? 'text-red-700' : l.ltv > 60 ? 'text-amber-700' : 'text-green-700'}`}>
+                      {l.ltv === null ? 'N/A' : `${l.ltv.toFixed(1)}%`}
                     </td>
                     <td className="px-3 py-3 text-center text-gray-600 text-xs">{l.maturity}</td>
                     <td className="px-3 py-3 text-center">
@@ -521,12 +535,14 @@ export default function RentalFinancialRatios() {
           .map((l: any) => ({
             company: l.company_name,
             amount: l.loan_amount || 0,
-            rate: l.loan_interest_rate || 0,
+            rate: ((l.loan_interest_rate || 0) < 1 ? (l.loan_interest_rate || 0) * 100 : (l.loan_interest_rate || 0)),
             payment: l.loan_emi || 0,
             balance: l.loan_balance_as_of || 0,
-            ltv: l.ltv_current || 0,
+            ltv: l.loan_balance_as_of && l.current_property_value
+              ? (l.loan_balance_as_of / l.current_property_value) * 100
+              : (l.ltv_current ? ((l.ltv_current < 1 ? l.ltv_current * 100 : l.ltv_current)) : null),
             maturity: l.loan_maturity_date ? new Date(l.loan_maturity_date).getFullYear() : '—',
-            highLtv: (l.ltv_current || 0) > 86,
+            highLtv: (l.ltv_current || 0) > 0.8,
           }));
         setLoanData(newLoanData);
 
