@@ -316,19 +316,28 @@ const fmtFull = (n: number): string => {
   return n < 0 ? `(${abs})` : abs;
 };
 
-// Derive available period keys — use fin.periods if populated, else scan monthlyValues
-function getAvailableKeys(fin: ParsedFinancials): string[] {
-  if (fin.periods?.length) return fin.periods;
-  const _M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const _MNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function sortPeriodKeys(keys: string[]): string[] {
+  return [...keys].sort((a, b) => {
+    const [am, ay] = a.split(' '); const [bm, by] = b.split(' ');
+    return (parseInt(ay) - parseInt(by)) || (_MNAMES.indexOf(am) - _MNAMES.indexOf(bm));
+  });
+}
+
+// Scan any FinItem array for monthlyValues keys → sorted period strings
+function getItemKeys(items: FinItem[]): string[] {
   const keySet = new Set<string>();
-  for (const item of fin.pl) {
+  for (const item of items) {
     if (item.monthlyValues) Object.keys(item.monthlyValues).forEach(k => keySet.add(k));
   }
-  return [...keySet].sort((a, b) => {
-    const [am, ay] = a.split(' ');
-    const [bm, by] = b.split(' ');
-    return (parseInt(ay) - parseInt(by)) || (_M.indexOf(am) - _M.indexOf(bm));
-  });
+  return sortPeriodKeys([...keySet]);
+}
+
+// Derive available period keys — use fin.periods if populated, else scan P&L monthlyValues
+function getAvailableKeys(fin: ParsedFinancials): string[] {
+  if (fin.periods?.length) return fin.periods;
+  return getItemKeys(fin.pl);
 }
 
 function getYV(items: FinItem[], pattern: RegExp, year: number): number {
@@ -686,14 +695,26 @@ function PLTable({ fin, selectedYear, period, pMonth, pYear }: {
 
 // ── Balance Sheet Table ───────────────────────────────────────────────────────
 
-function BSTable({ fin, selectedYear }: { fin: ParsedFinancials; selectedYear?: number | null }) {
+function BSTable({ fin, selectedYear, period, pMonth, pYear }: {
+  fin: ParsedFinancials; selectedYear?: number | null;
+  period: Period | null; pMonth: number; pYear: number;
+}) {
+  const bsKeys    = useMemo(() => getItemKeys(fin.bs), [fin.bs]);
+  const periodKeys = useMemo(() => period ? getPeriodKeys(period, pMonth, pYear) : null, [period, pMonth, pYear]);
   if (!fin.bs.length) return <p className="text-center text-gray-400 py-12 text-sm">No Balance Sheet data found. Ensure the Excel contains a "Balance Sheet" sheet or section.</p>;
-  return <FinTable items={fin.bs} years={fin.years} labelCol="Item" selectedYear={selectedYear} periods={fin.periods} />;
+  return <FinTable items={fin.bs} years={fin.years} labelCol="Item"
+    selectedYear={period ? null : selectedYear} periods={bsKeys} periodKeys={periodKeys} />;
 }
 
 // ── Cash Flow Table ───────────────────────────────────────────────────────────
 
-function CFTable({ fin, selectedYear }: { fin: ParsedFinancials; selectedYear?: number | null }) {
+function CFTable({ fin, selectedYear, period, pMonth, pYear }: {
+  fin: ParsedFinancials; selectedYear?: number | null;
+  period: Period | null; pMonth: number; pYear: number;
+}) {
+  const cfKeys     = useMemo(() => getItemKeys(fin.cf), [fin.cf]);
+  const periodKeys = useMemo(() => period ? getPeriodKeys(period, pMonth, pYear) : null, [period, pMonth, pYear]);
+
   if (!fin.cf.length) return (
     <div className="text-center py-12">
       <p className="text-gray-400 text-sm mb-2">No Cash Flow data found in the uploaded file.</p>
@@ -709,8 +730,8 @@ function CFTable({ fin, selectedYear }: { fin: ParsedFinancials; selectedYear?: 
 
   return (
     <div className="space-y-6">
-      {/* Summary bar chart */}
-      {netCFByYear.some(d => d.value !== 0) && (
+      {/* Summary bar chart — only in Annual Summary mode */}
+      {!selectedYear && !period && netCFByYear.some(d => d.value !== 0) && (
         <div className="rounded-lg p-4 shadow-sm border" style={{ background: '#F7F5F0', borderColor: '#DDD8CC' }}>
           <p className="text-sm font-semibold mb-3" style={{ color: '#1C1917' }}>Net Cash Flow by Year</p>
           <ResponsiveContainer width="100%" height={160}>
@@ -726,7 +747,8 @@ function CFTable({ fin, selectedYear }: { fin: ParsedFinancials; selectedYear?: 
           </ResponsiveContainer>
         </div>
       )}
-      <FinTable items={fin.cf} years={years} labelCol="Line Item" selectedYear={selectedYear} periods={fin.periods} />
+      <FinTable items={fin.cf} years={years} labelCol="Line Item"
+        selectedYear={period ? null : selectedYear} periods={cfKeys} periodKeys={periodKeys} />
     </div>
   );
 }
@@ -1851,49 +1873,80 @@ export default function RentalFinancials() {
               </p>
             </div>
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span style={{ fontSize: 11, color: '#92400E', fontWeight: 600, marginRight: 4 }}>YEAR VIEW:</span>
-              {currentFin.years.map(y => (
-                <button
-                  key={y}
-                  onClick={() => setSelectedYear(selectedYear === y ? null : y)}
-                  style={{
-                    fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 20,
-                    border: '1.5px solid',
-                    borderColor: selectedYear === y ? '#D4AF37' : '#C8C0B0',
-                    background: selectedYear === y ? '#D4AF37' : 'transparent',
-                    color: selectedYear === y ? '#161310' : '#78716C',
-                    cursor: 'pointer', transition: 'all 0.15s',
-                  }}
-                >
-                  {y}
-                </button>
-              ))}
-              {selectedYear && (
-                <button onClick={() => setSelectedYear(null)} style={{ fontSize: 11, color: '#9CA3AF', marginLeft: 4, cursor: 'pointer', background: 'none', border: 'none' }}>
-                  ✕ All Years
-                </button>
+              {/* YEAR VIEW — clicking drills into Monthly Detail for that year */}
+              {!selectedYear && (
+                <span style={{ fontSize: 11, color: '#92400E', fontWeight: 600, marginRight: 4 }}>YEAR VIEW:</span>
+              )}
+              {selectedYear ? (
+                /* In Monthly Detail mode — show back link + active year label */
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button
+                    onClick={() => { setSelectedYear(null); setPeriod(null); }}
+                    style={{ fontSize: 11, color: '#2F80ED', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}
+                  >
+                    ← Annual Summary
+                  </button>
+                  <span style={{ color: '#C8C0B0', fontSize: 13 }}>|</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#D4AF37', padding: '3px 10px', borderRadius: 20, background: '#FDF3D7', border: '1.5px solid #D4AF37' }}>
+                    {selectedYear} — Monthly Detail
+                  </span>
+                  {/* Quick-jump to other years */}
+                  <span style={{ fontSize: 11, color: '#9CA3AF' }}>Jump:</span>
+                  {currentFin.years.filter(y => y !== selectedYear).map(y => (
+                    <button key={y} onClick={() => { setSelectedYear(y); setPeriod(null); }}
+                      style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 20, border: '1px solid #C8C0B0', background: 'transparent', color: '#78716C', cursor: 'pointer' }}>
+                      {y}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                /* Annual Summary mode — show all year buttons */
+                currentFin.years.map(y => (
+                  <button
+                    key={y}
+                    onClick={() => { setSelectedYear(y); setPeriod(null); }}
+                    style={{
+                      fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 20,
+                      border: '1.5px solid #C8C0B0',
+                      background: 'transparent', color: '#78716C',
+                      cursor: 'pointer', transition: 'all 0.15s',
+                    }}
+                  >
+                    {y}
+                  </button>
+                ))
               )}
 
-              {/* Period toggle inline — only for P&L tab when monthly data exists */}
-              {activeTab === 'P&L Statement' && getAvailableKeys(currentFin).length > 0 && (
-                <>
-                  <span style={{ width: 1, height: 18, background: '#C8C0B0', margin: '0 6px', display: 'inline-block' }} />
-                  <PeriodToggle
-                    period={period}
-                    month={pMonth}
-                    year={pYear}
-                    onChange={(p, m, y) => { setPeriod(p); setPMonth(m); setPYear(y); }}
-                    availableKeys={getAvailableKeys(currentFin)}
-                  />
-                </>
-              )}
+              {/* MoM/YTD/TTM — shows on P&L always when monthly data exists;
+                  shows on BS/CF only when drilled into a year */}
+              {(() => {
+                const showForPL  = activeTab === 'P&L Statement' && getAvailableKeys(currentFin).length > 0;
+                const showForBS  = activeTab === 'Balance Sheet'  && !!selectedYear && getItemKeys(currentFin.bs).length > 0;
+                const showForCF  = activeTab === 'Cash Flow'      && !!selectedYear && getItemKeys(currentFin.cf).length > 0;
+                if (!showForPL && !showForBS && !showForCF) return null;
+                const keys = showForPL ? getAvailableKeys(currentFin)
+                           : showForBS ? getItemKeys(currentFin.bs)
+                           : getItemKeys(currentFin.cf);
+                return (
+                  <>
+                    <span style={{ width: 1, height: 18, background: '#C8C0B0', margin: '0 6px', display: 'inline-block' }} />
+                    <PeriodToggle
+                      period={period}
+                      month={pMonth}
+                      year={pYear}
+                      onChange={(p, m, y) => { setPeriod(p); setPMonth(m); setPYear(y); }}
+                      availableKeys={keys}
+                    />
+                  </>
+                );
+              })()}
             </div>
           </div>
 
           {/* Tabs */}
           <div className="flex gap-1 p-1 rounded-lg w-fit flex-wrap" style={{ background: '#E8E4DC' }}>
             {TABS.map(t => (
-              <button key={t} onClick={() => setActiveTab(t)}
+              <button key={t} onClick={() => { setActiveTab(t); setSelectedYear(null); setPeriod(null); }}
                 className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors"
                 style={activeTab === t
                   ? { background: '#D4AF37', color: '#161310', boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }
@@ -1906,8 +1959,8 @@ export default function RentalFinancials() {
           {/* Tab content */}
           <div className="border rounded-2xl shadow-sm p-6" style={{ background: '#F7F5F0', borderColor: '#DDD8CC' }}>
             {activeTab === 'P&L Statement' && <PLTable fin={currentFin} selectedYear={selectedYear} period={period} pMonth={pMonth} pYear={pYear} />}
-            {activeTab === 'Balance Sheet'  && <BSTable fin={currentFin} selectedYear={selectedYear} />}
-            {activeTab === 'Cash Flow'      && <CFTable fin={currentFin} selectedYear={selectedYear} />}
+            {activeTab === 'Balance Sheet'  && <BSTable fin={currentFin} selectedYear={selectedYear} period={period} pMonth={pMonth} pYear={pYear} />}
+            {activeTab === 'Cash Flow'      && <CFTable fin={currentFin} selectedYear={selectedYear} period={period} pMonth={pMonth} pYear={pYear} />}
             {activeTab === 'KPI Dashboard'  && <KPITab  fin={currentFin} />}
             {activeTab === 'CFO Dashboard'  && <CFOTab  fin={currentFin} />}
             {activeTab === 'Financial Metrics' && <FinancialMetricsTab companyName={currentFin.companyName} />}
