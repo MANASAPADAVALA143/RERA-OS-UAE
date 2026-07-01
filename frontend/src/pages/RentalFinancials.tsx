@@ -52,13 +52,44 @@ const CC = ['#2E75B6','#70AD47','#ED7D31','#FFC000','#5A2D82','#C00000','#00B0F0
 
 // ── Parser ────────────────────────────────────────────────────────────────────
 
+const MONTH_ABBRS = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+
+// Detects monthly headers like "Dec 2021", "Jan 2022" — QBO export format
+function detectMonthlyHeaders(raw: unknown[][]): {
+  headerRowIdx: number;
+  monthCols: Array<{ year: number; month: number; col: number }>;
+  years: number[];
+} | null {
+  for (let r = 0; r < Math.min(raw.length, 15); r++) {
+    const row = raw[r] as unknown[];
+    const monthCols: Array<{ year: number; month: number; col: number }> = [];
+    for (let c = 0; c < row.length; c++) {
+      const cell = String(row[c] ?? '').trim();
+      const m = cell.match(/^([A-Za-z]{3})\s+(\d{4})$/);
+      if (m) {
+        const monthIdx = MONTH_ABBRS.indexOf(m[1].toLowerCase());
+        const year = parseInt(m[2]);
+        if (monthIdx >= 0 && year >= 2018 && year <= 2032) {
+          monthCols.push({ year, month: monthIdx, col: c });
+        }
+      }
+    }
+    if (monthCols.length >= 2) {
+      const years = [...new Set(monthCols.map(mc => mc.year))].sort((a, b) => a - b);
+      return { headerRowIdx: r, monthCols, years };
+    }
+  }
+  return null;
+}
+
+// Detects integer year columns (legacy / annual format)
 function detectYearHeaders(raw: unknown[][]): { headerRowIdx: number; yearCols: Array<{year:number;col:number}> } | null {
   for (let r = 0; r < Math.min(raw.length, 15); r++) {
     const row = raw[r] as unknown[];
     const yearCols: Array<{year:number;col:number}> = [];
     for (let c = 0; c < row.length; c++) {
       const v = Number(row[c]);
-      if (Number.isInteger(v) && v >= 2018 && v <= 2030) yearCols.push({ year: v, col: c });
+      if (Number.isInteger(v) && v >= 2018 && v <= 2032) yearCols.push({ year: v, col: c });
     }
     if (yearCols.length >= 2) return { headerRowIdx: r, yearCols };
   }
@@ -77,6 +108,71 @@ function detectSheetType(raw: unknown[][]): 'pl' | 'bs' | 'cf' | 'unknown' {
   return 'unknown';
 }
 
+// Parse rows from a QBO monthly export — aggregates months → annual
+// P&L / CF: SUM monthly values per year
+// BS:       LAST available month value per year (end-of-period snapshot)
+function parseSheetRowsMonthly(
+  raw: unknown[][],
+  headerRowIdx: number,
+  monthCols: Array<{ year: number; month: number; col: number }>,
+  years: number[],
+  sheetType: 'pl' | 'bs' | 'cf' | 'unknown',
+): FinItem[] {
+  // Group columns by year, sorted by month
+  const byYear: Record<number, Array<{ month: number; col: number }>> = {};
+  for (const mc of monthCols) {
+    if (!byYear[mc.year]) byYear[mc.year] = [];
+    byYear[mc.year].push({ month: mc.month, col: mc.col });
+  }
+  for (const y of years) byYear[y].sort((a, b) => a.month - b.month);
+
+  const items: FinItem[] = [];
+  for (let r = headerRowIdx + 1; r < raw.length; r++) {
+    const row = raw[r] as unknown[];
+    const rawLabel = String(row[0] ?? '');
+    const trimmed = rawLabel.trim();
+    if (!trimmed) continue;
+    const indent = rawLabel.length - rawLabel.trimStart().length;
+    const isTotal = /^total\s+for\s+/i.test(trimmed) || /^total\s+(assets|liabilities|equity)/i.test(trimmed);
+    const isNetIncome = /^net\s+income$/i.test(trimmed) || /^net\s+operating\s+income$/i.test(trimmed);
+
+    const values: Record<number, number> = {};
+    let hasAny = false;
+
+    for (const year of years) {
+      const cols = byYear[year] ?? [];
+      if (sheetType === 'bs') {
+        // Balance sheet — keep last non-null value in the year (end-of-period snapshot)
+        let val = 0;
+        for (const { col } of cols) {
+          const rv = row[col];
+          if (rv !== '' && rv !== null && rv !== undefined) {
+            const n = Number(rv);
+            if (!isNaN(n)) val = n;
+          }
+        }
+        values[year] = val;
+      } else {
+        // P&L / CF — sum all months
+        let sum = 0;
+        for (const { col } of cols) {
+          const rv = row[col];
+          const n = (rv === '' || rv === null || rv === undefined) ? 0 : Number(rv);
+          sum += isNaN(n) ? 0 : n;
+        }
+        values[year] = sum;
+      }
+      if (values[year] !== 0) hasAny = true;
+    }
+
+    const isSectionHeader = !hasAny && !isTotal && !isNetIncome;
+    if (!hasAny && !isSectionHeader) continue;
+    items.push({ label: trimmed, indent, values, isTotal, isSectionHeader, isNetIncome });
+  }
+  return items;
+}
+
+// Parse rows from an annual-column file (legacy format with integer year headers)
 function parseSheetRows(raw: unknown[][], headerRowIdx: number, yearCols: Array<{year:number;col:number}>): FinItem[] {
   const items: FinItem[] = [];
   for (let r = headerRowIdx + 1; r < raw.length; r++) {
@@ -86,7 +182,7 @@ function parseSheetRows(raw: unknown[][], headerRowIdx: number, yearCols: Array<
     if (!trimmed) continue;
     const indent = rawLabel.length - rawLabel.trimStart().length;
     const isTotal = /^total\s+for\s+/i.test(trimmed) || /^total\s+(assets|liabilities|equity)/i.test(trimmed);
-    const isNetIncome = /^net\s+income$/i.test(trimmed);
+    const isNetIncome = /^net\s+income$/i.test(trimmed) || /^net\s+operating\s+income$/i.test(trimmed);
     const values: Record<number,number> = {};
     let hasAny = false;
     for (const { year, col } of yearCols) {
@@ -105,15 +201,20 @@ function parseSheetRows(raw: unknown[][], headerRowIdx: number, yearCols: Array<
 function getCompanyName(raw: unknown[][]): string {
   for (let r = 0; r < Math.min(3, raw.length); r++) {
     const val = String((raw[r] as unknown[])[0] ?? '').trim();
-    if (val && val.length > 2 && !/profit|loss|balance|sheet/i.test(val)) return val;
+    if (val && val.length > 2 && !/profit|loss|balance|sheet|cash\s*flow|statement/i.test(val)) return val;
   }
   return '';
 }
 
 function getDateRange(raw: unknown[][]): string {
-  for (let r = 0; r < Math.min(6, raw.length); r++) {
+  for (let r = 0; r < Math.min(8, raw.length); r++) {
     const joined = (raw[r] as unknown[]).join(' ').trim();
-    if (/\d{4}/.test(joined) && /jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(joined)) return joined;
+    if (/\d{4}/.test(joined) && /jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(joined)) {
+      // Build a clean "MMM YYYY – MMM YYYY" summary from first/last month cells
+      const months = (raw[r] as unknown[]).map(c => String(c ?? '').trim()).filter(c => /^[A-Za-z]{3}\s+\d{4}$/.test(c));
+      if (months.length >= 2) return `${months[0]} – ${months[months.length - 1]}`;
+      return joined.slice(0, 60);
+    }
   }
   return '';
 }
@@ -131,20 +232,35 @@ function parseExcel(file: File, companyName: string): Promise<ParsedFinancials> 
         let detectedYears: number[] = [];
         let detectedName = companyName;
         let dateRange = '';
+
         for (const sheetName of wb.SheetNames) {
           const ws = wb.Sheets[sheetName];
           if (!ws) continue;
           const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' });
-          // Inject sheet name as first row hint for CF detection
+          // Prepend sheet name as hint so CF sheets are detected even without title row
           const rawWithHint = [[sheetName, ...((raw[0] as unknown[]) || [])], ...raw.slice(1)] as unknown[][];
           const sheetType = detectSheetType(rawWithHint);
-          const yearInfo = detectYearHeaders(raw);
-          if (!yearInfo) continue;
+
+          // Prefer monthly detection (QBO format), fall back to annual columns
+          const monthInfo = detectMonthlyHeaders(raw);
+          const yearInfo = monthInfo ? null : detectYearHeaders(raw);
+          if (!monthInfo && !yearInfo) continue;
+
           const name = getCompanyName(raw);
           if (name && !detectedName) detectedName = name;
           if (!dateRange) dateRange = getDateRange(raw);
-          const years = yearInfo.yearCols.map(yc => yc.year).sort((a,b) => a-b);
-          const items = parseSheetRows(raw, yearInfo.headerRowIdx, yearInfo.yearCols);
+
+          let items: FinItem[];
+          let years: number[];
+
+          if (monthInfo) {
+            years = monthInfo.years;
+            items = parseSheetRowsMonthly(raw, monthInfo.headerRowIdx, monthInfo.monthCols, years, sheetType);
+          } else {
+            years = yearInfo!.yearCols.map(yc => yc.year).sort((a, b) => a - b);
+            items = parseSheetRows(raw, yearInfo!.headerRowIdx, yearInfo!.yearCols);
+          }
+
           if (sheetType === 'pl') { plItems = items; detectedYears = years; }
           else if (sheetType === 'bs') { bsItems = items; if (!detectedYears.length) detectedYears = years; }
           else if (sheetType === 'cf') { cfItems = items; if (!detectedYears.length) detectedYears = years; }
@@ -154,7 +270,17 @@ function parseExcel(file: File, companyName: string): Promise<ParsedFinancials> 
             else if (!cfItems.length) { cfItems = items; }
           }
         }
-        resolve({ companyName: detectedName || companyName, dateRange, fileName: file.name, uploadedAt: new Date().toISOString(), years: detectedYears, pl: plItems, bs: bsItems, cf: cfItems });
+
+        resolve({
+          companyName: detectedName || companyName,
+          dateRange,
+          fileName: file.name,
+          uploadedAt: new Date().toISOString(),
+          years: detectedYears,
+          pl: plItems,
+          bs: bsItems,
+          cf: cfItems,
+        });
       } catch (err) { reject(err); }
     };
     reader.onerror = reject;
@@ -188,27 +314,73 @@ function sumI(items: FinItem[], pattern: RegExp, year: number): number {
 
 function calcKpis(fin: ParsedFinancials, year: number): KpiData {
   const pl = fin.pl; const bs = fin.bs;
-  const totalRevenue = getYV(pl,/^total\s+for\s+income$/i,year) || getYV(pl,/^total\s+income$/i,year) || sumI(pl,/income|revenue|rent/i,year);
-  const totalExpenses = getYV(pl,/^total\s+for\s+expenses?$/i,year) || getYV(pl,/^total\s+expenses?$/i,year);
+  // Revenue — try Total for Income, Gross Profit (QBO), or sum all income lines
+  const totalRevenue =
+    getYV(pl,/^total\s+for\s+income$/i,year) ||
+    getYV(pl,/^total\s+income$/i,year) ||
+    getYV(pl,/^gross\s+profit$/i,year) ||
+    sumI(pl,/income|revenue|rent/i,year);
+  // Expenses — try Total for Expenses, or Net Operating Income derivation
+  const totalExpenses =
+    getYV(pl,/^total\s+for\s+expenses?$/i,year) ||
+    getYV(pl,/^total\s+expenses?$/i,year);
+  // Net income — "Net Income" or QBO "Net Income" row
   const netIncome = getYV(pl,/^net\s+income$/i,year);
-  const interestExpense = Math.abs(sumI(pl,/interest/i,year)) || Math.abs(getYV(pl,/interest\s+paid/i,year));
-  const noi = totalRevenue - totalExpenses + interestExpense;
-  const rentalIncome = getYV(pl,/^total\s+for\s+rental\s+income$/i,year) || sumI(pl,/^rent\s+suit|^rental\s+income$/i,year);
-  const otherIncome = sumI(pl,/^other\s+income$|^services$/i,year);
-  const propertyTax = Math.abs(sumI(pl,/property\s+tax/i,year));
+  // NOI — try QBO row first, then derive
+  const noiRow = getYV(pl,/^net\s+operating\s+income$/i,year);
+  const interestExpense = Math.abs(
+    getYV(pl,/^total\s+for\s+interest\s+paid$/i,year) ||
+    sumI(pl,/^interest\s+on\s+loan|^interest\s+paid$/i,year)
+  );
+  const noi = noiRow || (totalRevenue - totalExpenses + interestExpense);
+  // Rental income
+  const rentalIncome =
+    getYV(pl,/^total\s+for\s+rental\s+income$/i,year) ||
+    getYV(pl,/^total\s+for\s+services$/i,year) ||
+    sumI(pl,/^rent\s+-|^rental\s+income$/i,year);
+  const otherIncome = getYV(pl,/^other\s+income$/i,year) || 0;
+  const propertyTax = Math.abs(
+    getYV(pl,/^total\s+for\s+rates\s+&\s+taxes$/i,year) ||
+    sumI(pl,/property\s+tax/i,year)
+  );
   const managementFee = Math.abs(sumI(pl,/management\s+fee/i,year));
-  const hoaFees = Math.abs(sumI(pl,/^hoa$/i,year));
-  const legalFees = Math.abs(sumI(pl,/legal/i,year));
-  const utilities = Math.abs(sumI(pl,/electricity|internet|utilities/i,year));
-  const repairs = Math.abs(sumI(pl,/repair|maintenance/i,year));
-  const totalAssets = getYV(bs,/^total\s+for\s+assets$/i,year) || getYV(bs,/^total\s+assets$/i,year);
-  const totalLiabilities = getYV(bs,/^total\s+for\s+liabilities$/i,year) || getYV(bs,/^total\s+liabilities$/i,year);
-  const equity = getYV(bs,/^total\s+for\s+equity$/i,year) || getYV(bs,/^total\s+equity$/i,year);
-  const cash = getYV(bs,/^total\s+for\s+bank\s+accounts$/i,year) || sumI(bs,/^bank|checking|savings/i,year);
+  const hoaFees = Math.abs(
+    getYV(pl,/^total\s+for\s+hoa\s+expenses$/i,year) ||
+    sumI(pl,/^hoa/i,year)
+  );
+  const legalFees = Math.abs(
+    getYV(pl,/^total\s+for\s+legal/i,year) ||
+    sumI(pl,/legal|accounting\s+fee/i,year)
+  );
+  const utilities = Math.abs(
+    getYV(pl,/^total\s+for\s+utilities$/i,year) ||
+    sumI(pl,/electricity|internet|utilities|water/i,year)
+  );
+  const repairs = Math.abs(sumI(pl,/repair|maintenance|cleaning/i,year));
+  // Balance sheet
+  const totalAssets =
+    getYV(bs,/^total\s+for\s+assets$/i,year) ||
+    getYV(bs,/^total\s+assets$/i,year);
+  const totalLiabilities =
+    getYV(bs,/^total\s+for\s+liabilities$/i,year) ||
+    getYV(bs,/^total\s+liabilities$/i,year) ||
+    getYV(bs,/^total\s+for\s+liabilities\s+and\s+equity$/i,year);
+  const equity =
+    getYV(bs,/^total\s+for\s+equity$/i,year) ||
+    getYV(bs,/^total\s+equity$/i,year);
+  const cash =
+    getYV(bs,/^total\s+for\s+bank\s+accounts$/i,year) ||
+    sumI(bs,/^bank\s+of\s+america|^great\s+plains|^prosperity|checking|savings/i,year);
   const buildings = Math.abs(getYV(bs,/^buildings$/i,year));
   const accumDep = getYV(bs,/accumulated\s+dep/i,year);
-  const longTermLoans = Math.abs(getYV(bs,/^total\s+for\s+long.term/i,year) || sumI(bs,/long.term\s+(business\s+)?loan/i,year));
-  const securityDeposits = Math.abs(getYV(bs,/security\s+deposit/i,year));
+  const longTermLoans = Math.abs(
+    getYV(bs,/^total\s+for\s+long.term\s+liabilities$/i,year) ||
+    sumI(bs,/^loan\s+from\s+gpb|^independent\s+bank|^loan\s+a\/c/i,year)
+  );
+  const securityDeposits = Math.abs(
+    getYV(bs,/^total\s+for\s+security\s+deposit$/i,year) ||
+    sumI(bs,/security\s+deposit/i,year)
+  );
   return { totalRevenue, totalExpenses, netIncome, noi, rentalIncome, otherIncome, interestExpense, propertyTax, managementFee, hoaFees, legalFees, utilities, repairs, totalAssets, totalLiabilities, equity, cash, buildings, accumDep, longTermLoans, securityDeposits };
 }
 
@@ -1148,37 +1320,43 @@ export default function RentalFinancials() {
   }, [selectedCompanyId]);
 
   const handleFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedCompanyId) return;
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length || !selectedCompanyId) return;
     setUploading(true);
     try {
-      const fin = await parseExcel(file, selectedCompanyName);
+      // Parse all uploaded files (P&L, BS, CF may be separate files)
+      let merged: ParsedFinancials = allFinancials[selectedCompanyId] ?? {
+        companyName: selectedCompanyName, dateRange: '', fileName: '', uploadedAt: new Date().toISOString(), years: [], pl: [], bs: [], cf: [],
+      };
 
-      // Merge with existing if present
-      const existing = allFinancials[selectedCompanyId];
-      const merged: ParsedFinancials = existing ? {
-        ...fin,
-        pl:    fin.pl.length  ? fin.pl    : existing.pl,
-        bs:    fin.bs.length  ? fin.bs    : existing.bs,
-        cf:    fin.cf.length  ? fin.cf    : existing.cf,
-        years: Array.from(new Set([...existing.years, ...fin.years])).sort((a, b) => a - b),
-      } : fin;
+      for (const file of files) {
+        const fin = await parseExcel(file, selectedCompanyName);
+        merged = {
+          companyName: fin.companyName || merged.companyName,
+          dateRange:   fin.dateRange   || merged.dateRange,
+          fileName:    files.map(f => f.name).join(' + '),
+          uploadedAt:  new Date().toISOString(),
+          pl:    fin.pl.length  ? fin.pl    : merged.pl,
+          bs:    fin.bs.length  ? fin.bs    : merged.bs,
+          cf:    fin.cf.length  ? fin.cf    : merged.cf,
+          years: Array.from(new Set([...merged.years, ...fin.years])).sort((a, b) => a - b),
+        };
+      }
 
       setAllFinancials(prev => ({ ...prev, [selectedCompanyId]: merged }));
 
-      // Persist to backend
       await api.post('/api/rentals/financials/save', {
-        company_id: selectedCompanyId,
+        company_id:   selectedCompanyId,
         company_name: merged.companyName,
-        filename: merged.fileName,
-        date_range: merged.dateRange,
-        years: merged.years,
-        pl: merged.pl,
-        bs: merged.bs,
-        cf: merged.cf,
+        filename:     merged.fileName,
+        date_range:   merged.dateRange,
+        years:        merged.years,
+        pl:           merged.pl,
+        bs:           merged.bs,
+        cf:           merged.cf,
       });
     } catch {
-      alert('Failed to parse the Excel file. Please check the format and try again.');
+      alert('Failed to parse one or more Excel files. Make sure the files are QBO-exported P&L, Balance Sheet, or Cash Flow exports.');
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = '';
@@ -1210,7 +1388,7 @@ export default function RentalFinancials() {
             <option value="">All Companies</option>
             {companies.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
           </select>
-          <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFile} />
+          <input ref={fileRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleFile} />
           {selectedCompanyId && (
             <button onClick={triggerUpload} disabled={uploading || loadingFin}
               className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors">
