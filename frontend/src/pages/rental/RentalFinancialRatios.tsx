@@ -251,7 +251,7 @@ function ProfitabilityTab({ coData, trendData }: { coData: any[]; trendData: any
       <CardGrid cards={PROFITABILITY} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 className="text-sm font-bold text-gray-900 mb-4">Portfolio Margin Trend</h3>
+          <h3 className="font-semibold mb-4" style={{ fontSize: 13, color: '#262626', fontWeight: 600 }}">Portfolio Margin Trend</h3>
           {displayTrend[0].year === 'No data' ? (
             <div className="h-[200px] flex items-center justify-center text-gray-500">No historical data available</div>
           ) : (
@@ -269,7 +269,7 @@ function ProfitabilityTab({ coData, trendData }: { coData: any[]; trendData: any
           )}
         </div>
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 className="text-sm font-bold text-gray-900 mb-4">NOI Margin by Company</h3>
+          <h3 className="font-semibold mb-4" style={{ fontSize: 13, color: '#262626', fontWeight: 600 }}">NOI Margin by Company</h3>
           {coData.length === 0 ? (
             <div className="h-[200px] flex items-center justify-center text-gray-500">No company data available</div>
           ) : (
@@ -296,7 +296,7 @@ function LiquidityTab({ coData }: { coData: any[] }) {
     <div className="space-y-6">
       <CardGrid cards={LIQUIDITY} />
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-        <h3 className="text-sm font-bold text-gray-900 mb-4">Current Ratio by Company — benchmark 1.5x</h3>
+        <h3 className="font-semibold mb-4" style={{ fontSize: 13, color: '#262626', fontWeight: 600 }}">Current Ratio by Company — benchmark 1.5x</h3>
         {coData.length === 0 ? (
           <div className="h-[220px] flex items-center justify-center text-gray-500">No company data available</div>
         ) : (
@@ -336,7 +336,7 @@ function SolvencyTab({ coData }: { coData: any[] }) {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-        <h3 className="text-sm font-bold text-gray-900 mb-4">DSCR vs Interest Coverage by Company</h3>
+        <h3 className="font-semibold mb-4" style={{ fontSize: 13, color: '#262626', fontWeight: 600 }}">DSCR vs Interest Coverage by Company</h3>
         {coData.length === 0 ? (
           <div className="h-[240px] flex items-center justify-center text-gray-500">No company data available</div>
         ) : (
@@ -370,7 +370,7 @@ function RentalKPIsTab({ coData }: { coData: any[] }) {
       <CardGrid cards={RENTAL_KPIS} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 className="text-sm font-bold text-gray-900 mb-4">Occupancy Rate by Company vs 90% Target</h3>
+          <h3 className="font-semibold mb-4" style={{ fontSize: 13, color: '#262626', fontWeight: 600 }}">Occupancy Rate by Company vs 90% Target</h3>
           {coData.length === 0 ? (
             <div className="h-[220px] flex items-center justify-center text-gray-500">No company data available</div>
           ) : (
@@ -391,7 +391,7 @@ function RentalKPIsTab({ coData }: { coData: any[] }) {
           )}
         </div>
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 className="text-sm font-bold text-gray-900 mb-4">Revenue per Unit vs Expense per Unit</h3>
+          <h3 className="font-semibold mb-4" style={{ fontSize: 13, color: '#262626', fontWeight: 600 }}">Revenue per Unit vs Expense per Unit</h3>
           {coData.length === 0 ? (
             <div className="h-[220px] flex items-center justify-center text-gray-500">No company data available</div>
           ) : (
@@ -420,40 +420,35 @@ function CostOfCapitalTab({ loanData }: { loanData: any[] }) {
       {/* Loan Schedule Table */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100">
-          <h3 className="text-sm font-bold text-gray-900">Loan Schedule — All Rental Companies</h3>
+          <h3 style={{ fontSize: 13, fontWeight: 600, color: '#262626' }}>Loan Schedule — All Rental Companies</h3>
         </div>
         {loanData.length === 0 ? (
           <div className="px-5 py-8 text-center text-gray-500">No loans found for rental companies</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full">
               <thead>
-                <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
-                  <th className="text-left px-4 py-3">Company</th>
-                  <th className="text-right px-3 py-3">Loan Amount</th>
-                  <th className="text-center px-3 py-3">Rate</th>
-                  <th className="text-right px-3 py-3">Monthly Pmt</th>
-                  <th className="text-right px-3 py-3">Balance</th>
-                  <th className="text-center px-3 py-3">LTV</th>
-                  <th className="text-center px-3 py-3">Maturity</th>
-                  <th className="text-center px-3 py-3">Status</th>
+                <tr style={{ background: '#EFE0C8' }}>
+                  {['Company','Loan Amount','Rate','Monthly Pmt','Balance','LTV','Maturity','Status'].map(h => (
+                    <th key={h} style={{ fontSize: 11, fontWeight: 600, color: '#5C5043', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '8px 12px', textAlign: h === 'Company' ? 'left' : 'center' }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loanData.map(l => (
                   <tr key={l.company} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-xs font-medium text-gray-900 whitespace-nowrap">{l.company}</td>
-                    <td className="px-3 py-3 text-right font-mono text-xs">{fmt$(l.amount)}</td>
-                    <td className="px-3 py-3 text-center font-mono text-xs">{l.rate.toFixed(2)}%</td>
-                    <td className="px-3 py-3 text-right font-mono text-xs">{fmt$(l.payment)}</td>
-                    <td className="px-3 py-3 text-right font-mono text-xs">{fmt$(l.balance)}</td>
-                    <td className={`px-3 py-3 text-center font-mono text-xs font-semibold ${l.ltv === null ? 'text-gray-400' : l.ltv > 80 ? 'text-red-700' : l.ltv > 60 ? 'text-amber-700' : 'text-green-700'}`}>
+                    <td style={{ fontSize: 12, fontWeight: 500, color: '#262626', padding: '8px 12px', whiteSpace: 'nowrap' }}>{l.company}</td>
+                    <td style={{ fontSize: 12, color: '#262626', fontFamily: 'monospace', padding: '8px 12px', textAlign: 'right' }}>{fmt$(l.amount)}</td>
+                    <td style={{ fontSize: 12, color: l.rate > 7 ? '#D9534F' : l.rate > 5.5 ? '#F5A623' : '#22A06B', fontFamily: 'monospace', fontWeight: 600, padding: '8px 12px', textAlign: 'center' }}>{l.rate.toFixed(2)}%</td>
+                    <td style={{ fontSize: 12, color: '#262626', fontFamily: 'monospace', padding: '8px 12px', textAlign: 'right' }}>{fmt$(l.payment)}</td>
+                    <td style={{ fontSize: 12, color: '#262626', fontFamily: 'monospace', padding: '8px 12px', textAlign: 'right' }}>{fmt$(l.balance)}</td>
+                    <td style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 600, padding: '8px 12px', textAlign: 'center', color: l.ltv === null ? '#B0B0B0' : l.ltv > 80 ? '#D9534F' : l.ltv > 60 ? '#F5A623' : '#22A06B' }}>
                       {l.ltv === null ? 'N/A' : `${l.ltv.toFixed(1)}%`}
                     </td>
-                    <td className="px-3 py-3 text-center text-gray-600 text-xs">{l.maturity}</td>
-                    <td className="px-3 py-3 text-center">
-                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${l.highLtv ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'}`}>
-                        {l.highLtv ? '🟡 High LTV' : '🟢 Acceptable'}
+                    <td style={{ fontSize: 12, color: '#262626', padding: '8px 12px', textAlign: 'center' }}>{l.maturity}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                      <span style={{ fontSize: 10, fontWeight: 500, padding: '2px 8px', borderRadius: 20, background: l.highLtv ? '#FFF3CD' : '#D4EDDA', color: l.highLtv ? '#92400E' : '#155724' }}>
+                        {l.highLtv ? 'High LTV' : 'Acceptable'}
                       </span>
                     </td>
                   </tr>
@@ -605,11 +600,13 @@ export default function RentalFinancialRatios() {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${
-              activeTab === tab
-                ? 'border-amber-500 text-amber-700'
-                : 'border-transparent text-gray-500 hover:text-gray-800'
-            }`}
+            style={{
+              fontSize: 13, fontWeight: activeTab === tab ? 600 : 500,
+              color: activeTab === tab ? '#92400E' : '#6B6B6B',
+              borderBottom: activeTab === tab ? '2px solid #92400E' : '2px solid transparent',
+              padding: '8px 16px', marginBottom: -1, background: 'none',
+              whiteSpace: 'nowrap', transition: 'color 0.15s',
+            }}
           >
             {tab}
           </button>
