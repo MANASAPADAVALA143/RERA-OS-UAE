@@ -237,7 +237,7 @@ const COST_RATIOS: RatioCard[] = [
   { name: 'Spread (Cap−WACC)',     formula: 'Cap Rate − WACC',              value: '-2.12%',  benchmark: 'Positive',    status: 'monitor', statusLabel: '⚠️ Negative Sprd',  note: 'Positive spread = value creation over cost of capital' },
   { name: 'Avg Mortgage Rate',     formula: 'Wtd avg fixed rate',           value: '5.84%',   benchmark: 'Market',      status: 'good',    statusLabel: '🟢 Fixed',         note: 'All loans on fixed rates — insulated from rate rises' },
   { name: 'Avg Remaining Term',    formula: 'Avg years to maturity',        value: '22 years',benchmark: '>15 yrs',     status: 'good',    statusLabel: '🟢 Long-term' },
-  { name: 'Balloon Risk',          formula: 'Loans maturing <3 years',      value: '2 loans', benchmark: 'None',         status: 'monitor', statusLabel: '⚠️ Monitor',       note: 'Pinnacle I (2046) and Riverview (2046) — begin refi planning 2043' },
+  { name: 'Balloon Risk',          formula: 'Loans maturing <3 years',      value: '2 loans', benchmark: 'None',         status: 'monitor', statusLabel: '⚠️ Monitor',       note: 'Review loan maturity schedule — begin refi planning 3 years prior to maturity' },
 ];
 
 function ProfitabilityTab({ coData, trendData }: { coData: any[]; trendData: any[] }) {

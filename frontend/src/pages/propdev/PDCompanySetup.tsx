@@ -131,7 +131,7 @@ export default function PDCompanySetup() {
             value={newName}
             onChange={e => setNewName(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') setAdding(false); }}
-            placeholder="Company name (e.g. Sunstone Land Group LLC)"
+            placeholder="Company name (e.g. WWBG Land Group LLC)"
             className="flex-1 px-3 py-2 border border-blue-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
           />
           <input
