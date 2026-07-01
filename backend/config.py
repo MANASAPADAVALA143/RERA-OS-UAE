@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     # ── AWS ───────────────────────────────────────────────────────────────────
     aws_access_key_id: str = ""      # Leave empty in production — IAM role is used instead
     aws_secret_access_key: str = ""  # Leave empty in production — IAM role is used instead
-    aws_region: str = "us-east-1"
+    aws_region: str = "us-west-1"
 
     # ── Anthropic ─────────────────────────────────────────────────────────────
     anthropic_api_key: str = ""
