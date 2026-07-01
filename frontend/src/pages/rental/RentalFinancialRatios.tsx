@@ -251,7 +251,7 @@ function ProfitabilityTab({ coData, trendData }: { coData: any[]; trendData: any
       <CardGrid cards={PROFITABILITY} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 className="font-semibold mb-4" style={{ fontSize: 13, color: '#262626', fontWeight: 600 }}">Portfolio Margin Trend</h3>
+          <h3 style={{ fontSize: 13, color: '#262626', fontWeight: 600, marginBottom: 16 }}>Portfolio Margin Trend</h3>
           {displayTrend[0].year === 'No data' ? (
             <div className="h-[200px] flex items-center justify-center text-gray-500">No historical data available</div>
           ) : (
@@ -269,7 +269,7 @@ function ProfitabilityTab({ coData, trendData }: { coData: any[]; trendData: any
           )}
         </div>
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 className="font-semibold mb-4" style={{ fontSize: 13, color: '#262626', fontWeight: 600 }}">NOI Margin by Company</h3>
+          <h3 style={{ fontSize: 13, color: '#262626', fontWeight: 600, marginBottom: 16 }}>NOI Margin by Company</h3>
           {coData.length === 0 ? (
             <div className="h-[200px] flex items-center justify-center text-gray-500">No company data available</div>
           ) : (
@@ -296,7 +296,7 @@ function LiquidityTab({ coData }: { coData: any[] }) {
     <div className="space-y-6">
       <CardGrid cards={LIQUIDITY} />
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-        <h3 className="font-semibold mb-4" style={{ fontSize: 13, color: '#262626', fontWeight: 600 }}">Current Ratio by Company — benchmark 1.5x</h3>
+        <h3 style={{ fontSize: 13, color: '#262626', fontWeight: 600, marginBottom: 16 }}>Current Ratio by Company — benchmark 1.5x</h3>
         {coData.length === 0 ? (
           <div className="h-[220px] flex items-center justify-center text-gray-500">No company data available</div>
         ) : (
@@ -336,7 +336,7 @@ function SolvencyTab({ coData }: { coData: any[] }) {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-        <h3 className="font-semibold mb-4" style={{ fontSize: 13, color: '#262626', fontWeight: 600 }}">DSCR vs Interest Coverage by Company</h3>
+        <h3 style={{ fontSize: 13, color: '#262626', fontWeight: 600, marginBottom: 16 }}>DSCR vs Interest Coverage by Company</h3>
         {coData.length === 0 ? (
           <div className="h-[240px] flex items-center justify-center text-gray-500">No company data available</div>
         ) : (
@@ -370,7 +370,7 @@ function RentalKPIsTab({ coData }: { coData: any[] }) {
       <CardGrid cards={RENTAL_KPIS} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 className="font-semibold mb-4" style={{ fontSize: 13, color: '#262626', fontWeight: 600 }}">Occupancy Rate by Company vs 90% Target</h3>
+          <h3 style={{ fontSize: 13, color: '#262626', fontWeight: 600, marginBottom: 16 }}>Occupancy Rate by Company vs 90% Target</h3>
           {coData.length === 0 ? (
             <div className="h-[220px] flex items-center justify-center text-gray-500">No company data available</div>
           ) : (
@@ -391,7 +391,7 @@ function RentalKPIsTab({ coData }: { coData: any[] }) {
           )}
         </div>
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 className="font-semibold mb-4" style={{ fontSize: 13, color: '#262626', fontWeight: 600 }}">Revenue per Unit vs Expense per Unit</h3>
+          <h3 style={{ fontSize: 13, color: '#262626', fontWeight: 600, marginBottom: 16 }}>Revenue per Unit vs Expense per Unit</h3>
           {coData.length === 0 ? (
             <div className="h-[220px] flex items-center justify-center text-gray-500">No company data available</div>
           ) : (
