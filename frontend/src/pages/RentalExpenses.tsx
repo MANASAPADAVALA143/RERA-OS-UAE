@@ -20,7 +20,11 @@ interface FinItem {
 
 interface CompanyOption { id: string; company_name: string }
 
+// Set to true in dev to log every line item being classified (per company, to console)
+const DEBUG_EXPENSES = false;
+
 // ── category matchers (in priority order) ────────────────────────────────────
+// No catch-all here — unclassified non-revenue leaf items fall into "Other" via classifyLabel fallback
 const EXPENSE_CATS: { label: string; re: RegExp }[] = [
   { label: 'Management Fee',           re: /management\s*fee/i },
   { label: 'Insurance',                re: /insurance/i },
@@ -47,18 +51,20 @@ const EXPENSE_CATS: { label: string; re: RegExp }[] = [
   { label: 'Donation',                 re: /donat/i },
   { label: 'Engineering',              re: /engineer/i },
   { label: 'Fire Safety',              re: /fire.*safe|fire.*protect/i },
-  { label: 'Other',                    re: /expense/i },
 ];
 
-// Revenue / total lines to skip
-const SKIP_RE = /^(total|subtotal|net\s|gross\s|rental\s+income|rent\s+income|other\s+income|total\s+revenue|total\s+income|total\s+rent|operating\s+income|net\s+income|net\s+loss)/i;
+// Lines to skip: totals/subtotals and revenue/income items.
+// Only applied to LEAF nodes (parent group nodes are skipped by buildExpRows, not here).
+const SKIP_RE = /^(total|subtotal|net\s|gross\s|\bincome\b|^revenue|rental\s+income|rent\s+income|rent\s*-|other\s+income|total\s+revenue|total\s+income|total\s+rent|operating\s+income|net\s+income|net\s+loss)/i;
 
+// Returns the expense category for a leaf P&L label, or null to skip revenue/total lines.
+// Unrecognised non-revenue leaves → "Other" (not null) so nothing is silently dropped.
 function classifyLabel(label: string): string | null {
-  if (SKIP_RE.test(label.trim())) return null;
+  if (SKIP_RE.test(label.trim())) return null; // revenue or total line — skip
   for (const { label: cat, re } of EXPENSE_CATS) {
     if (re.test(label)) return cat;
   }
-  return null;
+  return 'Other'; // unclassified expense leaf (e.g. "Contract Expenses", "Loss on investments")
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -93,15 +99,36 @@ interface ExpRow { company: string; category: string; month: string; amount: num
 
 function buildExpRows(companyName: string, pl: FinItem[]): ExpRow[] {
   const rows: ExpRow[] = [];
+  const debugTotals: Record<string, number> = {};
+
   for (const item of flattenItems(pl)) {
+    // Skip parent/group nodes — their monthlyValues are rollups of their children.
+    // Summing both parent and children would double-count. Leaf nodes only.
+    if (item.children?.length) continue;
+
     const cat = classifyLabel(item.label);
-    if (!cat) continue;
+    if (!cat) continue; // revenue or total line
+
     const mv = item.monthlyValues ?? {};
     for (const [month, val] of Object.entries(mv)) {
       const amount = Math.abs(val);
-      if (amount > 0) rows.push({ company: companyName, category: cat, month, amount });
+      if (amount > 0) {
+        rows.push({ company: companyName, category: cat, month, amount });
+        if (DEBUG_EXPENSES) debugTotals[`${cat} | ${item.label}`] = (debugTotals[`${cat} | ${item.label}`] ?? 0) + amount;
+      }
     }
   }
+
+  if (DEBUG_EXPENSES) {
+    console.group(`[ExpenseDebug] ${companyName}`);
+    const grandTotal = Object.values(debugTotals).reduce((s, v) => s + v, 0);
+    Object.entries(debugTotals).sort((a, b) => b[1] - a[1]).forEach(([k, v]) =>
+      console.log(`  ${k}: $${v.toLocaleString('en-US', { minimumFractionDigits: 2 })}`)
+    );
+    console.log(`  ── TOTAL: $${grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}`);
+    console.groupEnd();
+  }
+
   return rows;
 }
 
@@ -174,19 +201,24 @@ export default function RentalExpenses() {
     return allRows.filter(r => keys.has(r.month));
   }, [allRows, period, pMonth, pYear]);
 
-  // This Month KPI
+  // "This Month" tile: when a period is active, shows the period total instead (same scope as donut)
   const currentMonthKey = `${MNAMES[new Date().getMonth()]} ${new Date().getFullYear()}`;
-  const totalThisMonth = useMemo(() =>
-    allRows.filter(r => r.month === currentMonthKey).reduce((s, r) => s + r.amount, 0),
-  [allRows, currentMonthKey]);
+  const periodLabel = period ? period : 'This Month';
+  const periodTotal = useMemo(() =>
+    period
+      ? filteredRows.reduce((s, r) => s + r.amount, 0)
+      : allRows.filter(r => r.month === currentMonthKey).reduce((s, r) => s + r.amount, 0),
+  [period, filteredRows, allRows, currentMonthKey]);
 
+  // All Time is always full history regardless of period — labelled clearly
   const totalAllTime = useMemo(() => allRows.reduce((s, r) => s + r.amount, 0), [allRows]);
 
+  // Top Category respects the period toggle (same window as the donut below it)
   const topCategory = useMemo(() => {
     const byCat: Record<string, number> = {};
-    allRows.forEach(r => { byCat[r.category] = (byCat[r.category] ?? 0) + r.amount; });
+    filteredRows.forEach(r => { byCat[r.category] = (byCat[r.category] ?? 0) + r.amount; });
     return Object.entries(byCat).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—';
-  }, [allRows]);
+  }, [filteredRows]);
 
   const allCats = useMemo(() => [...new Set(filteredRows.map(r => r.category))].sort(), [filteredRows]);
 
@@ -271,9 +303,9 @@ export default function RentalExpenses() {
         <>
           {/* KPI Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <KpiCard label="This Month"   value={fmtUSD(totalThisMonth)} accent />
-            <KpiCard label="All Time"     value={fmtUSD(totalAllTime)} />
-            <KpiCard label="Top Category" value={topCategory} />
+            <KpiCard label={periodLabel}           value={fmtUSD(periodTotal)} accent />
+            <KpiCard label="All Time (all years)"  value={fmtUSD(totalAllTime)} />
+            <KpiCard label="Top Category"          value={topCategory} />
           </div>
 
           {/* Charts row */}
