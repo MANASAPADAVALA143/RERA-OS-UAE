@@ -1650,17 +1650,19 @@ export default function RentalFinancials() {
       .finally(() => setLoadingFin(false));
   }, [selectedCompanyId]);
 
-  // Load ALL companies' financials when "All Companies" is selected
+  // Load ALL companies' financials on mount (and when company list first arrives)
+  // Skip companies already cached in allFinancials to avoid redundant fetches
   useEffect(() => {
-    if (selectedCompanyId) return; // only for "All Companies" view
     if (!companies.length) return;
+    const missing = companies.filter(co => !allFinancials[co.id]);
+    if (!missing.length) return; // everything already cached
 
     setLoadingFin(true);
     Promise.all(
-      companies.map(co =>
+      missing.map(co =>
         api.get<{
           company_name: string; filename: string; date_range: string;
-          years: number[]; pl: FinItem[]; bs: FinItem[]; cf: FinItem[]; uploaded_at: string;
+          years: number[]; periods?: string[]; pl: FinItem[]; bs: FinItem[]; cf: FinItem[]; uploaded_at: string;
         }>(`/api/rentals/financials/${co.id}`)
           .then(res => {
             const d = res.data;
@@ -1670,22 +1672,24 @@ export default function RentalFinancials() {
                 fileName: d.filename,
                 dateRange: d.date_range,
                 uploadedAt: d.uploaded_at,
-                years: d.years,
-                pl: d.pl,
-                bs: d.bs,
+                years: d.years ?? [],
+                periods: d.periods ?? [],
+                pl: d.pl ?? [],
+                bs: d.bs ?? [],
                 cf: d.cf ?? [],
-              }
+              } as ParsedFinancials,
             };
           })
-          .catch(() => ({})) // 404 = no upload for this company
+          .catch(() => ({}))
       )
     )
     .then(results => {
-      const merged = results.reduce((acc, obj) => ({ ...acc, ...obj }), {});
+      const merged = Object.assign({}, ...results) as Record<string, ParsedFinancials>;
       setAllFinancials(prev => ({ ...prev, ...merged }));
     })
     .finally(() => setLoadingFin(false));
-  }, [selectedCompanyId, companies]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companies]);
 
   const isAll = !selectedCompanyId;
   const currentFin = selectedCompanyId ? allFinancials[selectedCompanyId] : null;
@@ -1792,13 +1796,26 @@ export default function RentalFinancials() {
             <h2 className="text-lg font-bold text-gray-900">All Companies — Portfolio Overview</h2>
           </div>
           <p className="text-gray-400 text-sm mb-6">{Object.keys(allFinancials).length} companies with uploaded data</p>
-          {Object.keys(allFinancials).length === 0
-            ? <EmptyUpload onUpload={triggerUpload} onAddMetrics={() => {}} company="All Companies" />
-            : <AllCompaniesSummary all={allFinancials} />
-          }
+          {loadingFin && Object.keys(allFinancials).length === 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 0', gap: 12 }}>
+              <div style={{ width: 32, height: 32, border: '3px solid #E8DEC8', borderTopColor: '#D4AF37', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+              <p style={{ fontSize: 13, color: '#78716C' }}>Loading financials…</p>
+              <p style={{ fontSize: 11, color: '#B0A898' }}>First load may take ~30s while the server wakes up</p>
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            </div>
+          ) : Object.keys(allFinancials).length === 0 ? (
+            <EmptyUpload onUpload={triggerUpload} onAddMetrics={() => {}} company="All Companies" />
+          ) : (
+            <AllCompaniesSummary all={allFinancials} />
+          )}
         </div>
       ) : loadingFin ? (
-        <div className="flex items-center justify-center py-24 text-gray-400 text-sm">Loading financials…</div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '64px 0', gap: 12 }}>
+          <div style={{ width: 32, height: 32, border: '3px solid #E8DEC8', borderTopColor: '#D4AF37', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          <p style={{ fontSize: 13, color: '#78716C' }}>Loading financials…</p>
+          <p style={{ fontSize: 11, color: '#B0A898' }}>First load may take ~30s while the server wakes up</p>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
       ) : currentFin ? (
         <div className="space-y-4">
           {/* Header */}
