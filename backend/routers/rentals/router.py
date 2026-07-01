@@ -2106,3 +2106,208 @@ def get_ar_aging_detail(
         "generated_at": today.isoformat(),
     }
 
+
+# ── AR summary — registry-driven billed vs collected ─────────────────────────
+
+@router.get("/ar-summary")
+def get_ar_summary(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    AR summary per company per month.
+
+    Billed     = SUM(r_units.monthly_rent) for occupied units only (registry).
+    Collected  = PRIMARY: r_companies.monthly_rent_data (from Rent Receivable upload).
+                 FALLBACK: r_financial_uploads.pl_data monthlyValues on "Rent -" lines.
+    Vacancy    = SUM(r_units.monthly_rent) for vacant/notice/other units.
+    AR         = Billed - Collected per company per month.
+    Unmatched  = P&L "Rent -" lines whose unit label doesn't match any registry unit.
+    """
+    import re
+    from models.rentals.models import RentalFinancialUpload
+
+    tid = current_user.tenant_id
+    companies = db.query(RentalCompany).filter(RentalCompany.tenant_id == tid).all()
+
+    all_units = db.query(RentalUnit).filter(RentalUnit.tenant_id == tid).all()
+    units_by_co: dict[str, list] = defaultdict(list)
+    for u in all_units:
+        units_by_co[str(u.company_id)].append(u)
+
+    all_uploads = db.query(RentalFinancialUpload).filter(RentalFinancialUpload.tenant_id == tid).all()
+    uploads_by_co: dict[str, object] = {}
+    for up in all_uploads:
+        cid = str(up.company_id)
+        if cid not in uploads_by_co or up.uploaded_at > uploads_by_co[cid].uploaded_at:
+            uploads_by_co[cid] = up
+
+    RENT_RE = re.compile(r'^rent\s*[-–]|^total\s+for\s+(rental\s+income|services)', re.IGNORECASE)
+
+    def norm_month(m: str) -> str:
+        # "Jan 2026" → "Jan-2026"; "Jan-2026" → "Jan-2026"
+        return m.replace(' ', '-') if ' ' in m else m
+
+    def month_sort_key(m: str) -> tuple:
+        MNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+        parts = m.replace('-', ' ').split()
+        if len(parts) == 2:
+            try:
+                return (int(parts[1]), MNAMES.index(parts[0]))
+            except (ValueError, IndexError):
+                pass
+        return (9999, 0)
+
+    company_summaries = []
+    all_months_set: set[str] = set()
+
+    for co in companies:
+        cid = str(co.id)
+        units = units_by_co.get(cid, [])
+        occupied  = [u for u in units if u.status.value == 'occupied']
+        non_occ   = [u for u in units if u.status.value != 'occupied']
+
+        billed_mo      = sum(float(u.monthly_rent) for u in occupied)
+        vacancy_loss_mo = sum(float(u.monthly_rent) for u in non_occ)
+
+        # Source A: Rent Receivable sync (monthly_rent_data JSON on company)
+        src_a: dict[str, float] = {}
+        if co.monthly_rent_data:
+            for k, v in co.monthly_rent_data.items():
+                src_a[norm_month(k)] = float(v or 0)
+
+        # Source B: P&L financials fallback
+        src_b: dict[str, float] = {}
+        pl_unmatched: list[str] = []
+        registry_norm = {u.unit_number.strip().lower() for u in units}
+
+        upload = uploads_by_co.get(cid)
+        if upload and upload.pl_data:
+            for item in upload.pl_data:
+                label = str(item.get('label', ''))
+                if not RENT_RE.match(label):
+                    continue
+                if item.get('isSectionHeader') or item.get('isTotal'):
+                    continue
+                mv: dict = item.get('monthlyValues') or {}
+                for raw_k, v in mv.items():
+                    mk = norm_month(raw_k)
+                    src_b[mk] = src_b.get(mk, 0.0) + float(v or 0)
+
+                # Flag unmatched unit labels
+                unit_m = re.search(r'(Unit\s+\S.*?)$', label, re.IGNORECASE)
+                if unit_m:
+                    extracted = unit_m.group(1).strip().lower()
+                    matched = any(
+                        extracted == reg or extracted in reg or reg in extracted
+                        for reg in registry_norm
+                    )
+                    if not matched:
+                        pl_unmatched.append(label)
+
+        # Build per-month detail — union of both sources
+        all_months = sorted(set(list(src_a.keys()) + list(src_b.keys())), key=month_sort_key)
+        all_months_set.update(all_months)
+
+        monthly_detail = []
+        for m in all_months:
+            has_a, has_b = m in src_a, m in src_b
+
+            if has_a:
+                collected   = src_a[m]
+                data_source = 'rent_receivable'
+            elif has_b:
+                collected   = src_b[m]
+                data_source = 'pl_fallback'
+            else:
+                continue
+
+            outstanding = max(0.0, billed_mo - collected)
+            rate = (collected / billed_mo * 100) if billed_mo > 0 else 0.0
+
+            recon_flag = None
+            if has_a and has_b and billed_mo > 0:
+                diff_pct = abs(src_a[m] - src_b[m]) / billed_mo * 100
+                if diff_pct > 2:
+                    recon_flag = {
+                        'rent_receivable': round(src_a[m], 2),
+                        'pl': round(src_b[m], 2),
+                        'diff_pct': round(diff_pct, 1),
+                    }
+
+            monthly_detail.append({
+                'month': m,
+                'billed': round(billed_mo, 2),
+                'collected': round(collected, 2),
+                'outstanding': round(outstanding, 2),
+                'collection_rate': round(rate, 1),
+                'data_source': data_source,
+                'recon_flag': recon_flag,
+            })
+
+        latest = monthly_detail[-1] if monthly_detail else None
+
+        company_summaries.append({
+            'company_id': cid,
+            'company_name': co.company_name,
+            'total_units': len(units),
+            'occupied_units': len(occupied),
+            'vacant_units': len(non_occ),
+            'billed_per_month': round(billed_mo, 2),
+            'vacancy_loss_per_month': round(vacancy_loss_mo, 2),
+            'last_sync_month': co.last_sync_month,
+            'has_rent_receivable': bool(src_a),
+            'has_pl_data': bool(src_b),
+            'monthly': monthly_detail,
+            'latest_month': latest['month'] if latest else None,
+            'latest_collected': latest['collected'] if latest else 0.0,
+            'latest_outstanding': latest['outstanding'] if latest else 0.0,
+            'latest_rate': latest['collection_rate'] if latest else 0.0,
+            'pl_lines_unmatched': pl_unmatched,
+        })
+
+    # Portfolio totals
+    total_billed      = sum(c['billed_per_month'] for c in company_summaries)
+    total_collected   = sum(c['latest_collected'] for c in company_summaries)
+    total_outstanding = max(0.0, total_billed - total_collected)
+    port_rate         = (total_collected / total_billed * 100) if total_billed > 0 else 0.0
+    total_vac_loss    = sum(c['vacancy_loss_per_month'] for c in company_summaries)
+    total_occupied    = sum(c['occupied_units'] for c in company_summaries)
+    total_units_all   = sum(c['total_units'] for c in company_summaries)
+
+    # Monthly trend (portfolio-level)
+    m_billed: dict[str, float] = {}
+    m_collected: dict[str, float] = {}
+    for cs in company_summaries:
+        for md in cs['monthly']:
+            mk = md['month']
+            m_billed[mk]    = m_billed.get(mk, 0.0)    + md['billed']
+            m_collected[mk] = m_collected.get(mk, 0.0) + md['collected']
+
+    monthly_trend = [
+        {'month': m, 'billed': round(m_billed[m], 2), 'collected': round(m_collected[m], 2)}
+        for m in sorted(all_months_set, key=month_sort_key)
+    ]
+
+    all_unmatched = [
+        {'company': c['company_name'], 'label': lbl}
+        for c in company_summaries
+        for lbl in c['pl_lines_unmatched']
+    ]
+
+    return {
+        'companies': company_summaries,
+        'portfolio': {
+            'total_billed':      round(total_billed, 2),
+            'total_collected':   round(total_collected, 2),
+            'total_outstanding': round(total_outstanding, 2),
+            'collection_rate':   round(port_rate, 1),
+            'vacancy_loss':      round(total_vac_loss, 2),
+            'occupied_units':    total_occupied,
+            'total_units':       total_units_all,
+        },
+        'monthly_trend':   monthly_trend,
+        'unmatched_lines': all_unmatched,
+        'generated_at':    datetime.utcnow().isoformat(),
+    }
+
