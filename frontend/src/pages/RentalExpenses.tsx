@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -23,8 +23,15 @@ interface CompanyOption { id: string; company_name: string }
 // Set to true in dev to log every line item being classified (per company, to console)
 const DEBUG_EXPENSES = false;
 
+// ── one-time adjustment detection ────────────────────────────────────────────
+// Sec 481(a) adjustments are one-time accounting-method catch-up entries, not recurring opex.
+// Any company may have them — matched by label pattern, not hardcoded to a single entity.
+const ONE_TIME_CAT = 'OneTimeAdjustment';
+const ONE_TIME_RE  = /sec\s*481|481\s*\(a\)|accounting\s*method\s*adjustment/i;
+
 // ── category matchers (in priority order) ────────────────────────────────────
-// No catch-all here — unclassified non-revenue leaf items fall into "Other" via classifyLabel fallback
+// ONE_TIME_RE is checked BEFORE this list so Sec 481(a) lines never fall into Depreciation.
+// No catch-all here — unclassified non-revenue leaf items fall into "Other" via classifyLabel fallback.
 const EXPENSE_CATS: { label: string; re: RegExp }[] = [
   { label: 'Management Fee',           re: /management\s*fee/i },
   { label: 'Insurance',                re: /insurance/i },
@@ -58,9 +65,12 @@ const EXPENSE_CATS: { label: string; re: RegExp }[] = [
 const SKIP_RE = /^(total|subtotal|net\s|gross\s|\bincome\b|^revenue|rental\s+income|rent\s+income|rent\s*-|other\s+income|total\s+revenue|total\s+income|total\s+rent|operating\s+income|net\s+income|net\s+loss)/i;
 
 // Returns the expense category for a leaf P&L label, or null to skip revenue/total lines.
-// Unrecognised non-revenue leaves → "Other" (not null) so nothing is silently dropped.
+// ONE_TIME_CAT is checked first so Sec 481(a) never merges into Depreciation.
+// Unrecognised non-revenue leaves → "Other" so nothing is silently dropped.
 function classifyLabel(label: string): string | null {
-  if (SKIP_RE.test(label.trim())) return null; // revenue or total line — skip
+  const t = label.trim();
+  if (SKIP_RE.test(t)) return null;           // revenue or total line — skip
+  if (ONE_TIME_RE.test(t)) return ONE_TIME_CAT; // one-time adjustment — flagged separately
   for (const { label: cat, re } of EXPENSE_CATS) {
     if (re.test(label)) return cat;
   }
@@ -153,6 +163,8 @@ export default function RentalExpenses() {
   const [period, setPeriod]               = useState<Period | null>(null);
   const [pMonth, setPMonth]               = useState(new Date().getMonth() + 1);
   const [pYear, setPYear]                 = useState(new Date().getFullYear());
+  const [showOneTime, setShowOneTime]     = useState(false);
+  const oneTimePanelRef                   = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     api.get<CompanyOption[]>('/api/rentals/companies')
@@ -194,60 +206,68 @@ export default function RentalExpenses() {
     return Array.from(keys).sort((a, b) => monthSortKey(a) - monthSortKey(b));
   }, [allPl]);
 
-  // Period-filtered rows
+  // Period-filtered rows (includes OneTimeAdjustment — split below)
   const filteredRows = useMemo<ExpRow[]>(() => {
     if (!period) return allRows;
     const keys = new Set(getPeriodKeys(period, pMonth, pYear));
     return allRows.filter(r => keys.has(r.month));
   }, [allRows, period, pMonth, pYear]);
 
-  // "This Month" tile: when a period is active, shows the period total instead (same scope as donut)
+  // Operating rows = exclude one-time adjustments from all metrics/charts
+  const operatingRows         = useMemo(() => allRows.filter(r => r.category !== ONE_TIME_CAT), [allRows]);
+  const filteredOperatingRows = useMemo(() => filteredRows.filter(r => r.category !== ONE_TIME_CAT), [filteredRows]);
+
+  // One-time rows — always full history (not period-filtered) for the disclosure note
+  const oneTimeAllRows = useMemo(() => allRows.filter(r => r.category === ONE_TIME_CAT), [allRows]);
+  const oneTimeTotal   = useMemo(() => oneTimeAllRows.reduce((s, r) => s + r.amount, 0), [oneTimeAllRows]);
+
+  // "This Month" / period tile — operating expenses only (excludes one-time adjustments)
   const currentMonthKey = `${MNAMES[new Date().getMonth()]} ${new Date().getFullYear()}`;
   const periodLabel = period ? period : 'This Month';
   const periodTotal = useMemo(() =>
     period
-      ? filteredRows.reduce((s, r) => s + r.amount, 0)
-      : allRows.filter(r => r.month === currentMonthKey).reduce((s, r) => s + r.amount, 0),
-  [period, filteredRows, allRows, currentMonthKey]);
+      ? filteredOperatingRows.reduce((s, r) => s + r.amount, 0)
+      : operatingRows.filter(r => r.month === currentMonthKey).reduce((s, r) => s + r.amount, 0),
+  [period, filteredOperatingRows, operatingRows, currentMonthKey]);
 
-  // All Time is always full history regardless of period — labelled clearly
-  const totalAllTime = useMemo(() => allRows.reduce((s, r) => s + r.amount, 0), [allRows]);
+  // All Time — operating only, full history, clearly labelled
+  const totalAllTime = useMemo(() => operatingRows.reduce((s, r) => s + r.amount, 0), [operatingRows]);
 
-  // Top Category respects the period toggle (same window as the donut below it)
+  // Top Category — operating only, respects period toggle (same window as the donut)
   const topCategory = useMemo(() => {
     const byCat: Record<string, number> = {};
-    filteredRows.forEach(r => { byCat[r.category] = (byCat[r.category] ?? 0) + r.amount; });
+    filteredOperatingRows.forEach(r => { byCat[r.category] = (byCat[r.category] ?? 0) + r.amount; });
     return Object.entries(byCat).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—';
-  }, [filteredRows]);
+  }, [filteredOperatingRows]);
 
-  const allCats = useMemo(() => [...new Set(filteredRows.map(r => r.category))].sort(), [filteredRows]);
+  const allCats = useMemo(() => [...new Set(filteredOperatingRows.map(r => r.category))].sort(), [filteredOperatingRows]);
 
   const byCategory = useMemo(() => {
     const byCat: Record<string, number> = {};
-    filteredRows.forEach(r => { byCat[r.category] = (byCat[r.category] ?? 0) + r.amount; });
+    filteredOperatingRows.forEach(r => { byCat[r.category] = (byCat[r.category] ?? 0) + r.amount; });
     return Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([category, amount]) => ({ category, amount }));
-  }, [filteredRows]);
+  }, [filteredOperatingRows]);
 
   const byCompany = useMemo(() => {
     const byCo: Record<string, number> = {};
-    filteredRows.forEach(r => { byCo[r.company] = (byCo[r.company] ?? 0) + r.amount; });
+    filteredOperatingRows.forEach(r => { byCo[r.company] = (byCo[r.company] ?? 0) + r.amount; });
     return Object.entries(byCo).sort((a, b) => b[1] - a[1]).map(([name, amount]) => ({ name, amount }));
-  }, [filteredRows]);
+  }, [filteredOperatingRows]);
 
-  // Trend uses all-time (not period-filtered) to always show 6-month history
+  // Trend — operating only, always last 6 months of full history (not period-filtered)
   const trendData = useMemo(() => {
     const byMonth: Record<string, number> = {};
-    allRows.forEach(r => { byMonth[r.month] = (byMonth[r.month] ?? 0) + r.amount; });
+    operatingRows.forEach(r => { byMonth[r.month] = (byMonth[r.month] ?? 0) + r.amount; });
     return Object.entries(byMonth)
       .sort((a, b) => monthSortKey(a[0]) - monthSortKey(b[0]))
       .slice(-6)
       .map(([month, amount]) => ({ month, amount: parseFloat(amount.toFixed(2)) }));
-  }, [allRows]);
+  }, [operatingRows]);
 
-  // Deduplicated table rows (company × category × month)
+  // Deduplicated table rows — operating only (company × category × month)
   const tableRows = useMemo(() => {
     const agg: Record<string, ExpRow> = {};
-    filteredRows.forEach(r => {
+    filteredOperatingRows.forEach(r => {
       const key = `${r.company}|${r.category}|${r.month}`;
       if (agg[key]) agg[key] = { ...agg[key], amount: agg[key].amount + r.amount };
       else agg[key] = { ...r };
@@ -257,9 +277,9 @@ export default function RentalExpenses() {
       a.category.localeCompare(b.category) ||
       monthSortKey(a.month) - monthSortKey(b.month)
     );
-  }, [filteredRows]);
+  }, [filteredOperatingRows]);
 
-  const noData = !loading && allRows.length === 0;
+  const noData = !loading && operatingRows.length === 0;
 
   return (
     <div className="space-y-6">
@@ -307,6 +327,57 @@ export default function RentalExpenses() {
             <KpiCard label="All Time (all years)"  value={fmtUSD(totalAllTime)} />
             <KpiCard label="Top Category"          value={topCategory} />
           </div>
+
+          {/* One-time adjustment disclosure banner */}
+          {oneTimeTotal > 0 && (
+            <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 rounded-lg text-xs"
+              style={{ background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E' }}>
+              <span style={{ fontWeight: 600 }}>Note:</span>
+              <span>
+                All Time and trend figures exclude {fmtUSD(oneTimeTotal)} in one-time Sec&nbsp;481(a)
+                accounting-method adjustments (not recurring operating expenses).
+              </span>
+              <button
+                onClick={() => {
+                  setShowOneTime(v => !v);
+                  setTimeout(() => oneTimePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 80);
+                }}
+                style={{ color: '#D4AF37', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+              >
+                {showOneTime ? 'hide' : 'view'}
+              </button>
+
+              {showOneTime && (
+                <div ref={oneTimePanelRef} className="w-full mt-2 overflow-x-auto">
+                  <table className="w-full text-xs" style={{ borderTop: '1px solid #FDE68A' }}>
+                    <thead>
+                      <tr>
+                        {['Company', 'Label', 'Month', 'Amount'].map(h => (
+                          <th key={h} className="py-1.5 px-3 text-left font-medium" style={{ color: '#B45309' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {oneTimeAllRows.map((r, i) => (
+                        <tr key={i} style={{ borderTop: '1px solid #FEF3C7' }}>
+                          <td className="py-1.5 px-3" style={{ color: '#92400E' }}>{r.company}</td>
+                          <td className="py-1.5 px-3" style={{ color: '#78716C' }}>Sec 481(a) Adjustment</td>
+                          <td className="py-1.5 px-3" style={{ color: '#78716C' }}>{r.month}</td>
+                          <td className="py-1.5 px-3 font-semibold" style={{ color: '#92400E' }}>{fmtUSD(r.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop: '1px solid #FDE68A' }}>
+                        <td colSpan={3} className="py-1.5 px-3 font-semibold" style={{ color: '#92400E' }}>Total excluded</td>
+                        <td className="py-1.5 px-3 font-bold" style={{ color: '#92400E' }}>{fmtUSD(oneTimeTotal)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Charts row */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
