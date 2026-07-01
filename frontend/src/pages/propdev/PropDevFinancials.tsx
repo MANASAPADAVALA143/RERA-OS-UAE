@@ -79,25 +79,21 @@ const CASH_13 = Array.from({length:13}, (_, i) => ({
 // ── Strategic insights ────────────────────────────────────────────────────────
 interface Insight { id: number; priority: 'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'; category: string; title: string; text: string; action: string; quad: string; }
 const INSIGHTS: Insight[] = [
-  { id:1,  priority:'CRITICAL', category:'Partner Relations',  title:'Capital Calls Overdue',          text:'6 capital calls totalling $75,500 overdue across Cascade, Keystone, Apex, Vanguard, Monarch, Skyline.',   action:'Immediate outreach — email + call. Late fee per op agreement.',                         quad:'UH' },
-  { id:2,  priority:'HIGH',     category:'Revenue',            title:'Revenue Optimization — Summit',  text:'Summit RE Group has 7 lots remaining at $360K avg = $2.5M unrealized.',                                  action:'Aggressive pricing + Phase 2 buyer incentive bundle.',                                  quad:'UH' },
-  { id:3,  priority:'HIGH',     category:'Inventory Risk',     title:'112 Lots Remaining',             text:'At 32 lots/month velocity = 3.5 months runway.',                                                         action:'Increase marketing on 4 slow projects. 5% discount on >12mo aged.',                      quad:'UL' },
-  { id:4,  priority:'HIGH',     category:'Partner',            title:'Partner Distribution Ready',     text:'$38.76M net income available. Class A investors (8% pref) await payout.',                                action:'Prepare waterfall distribution schedule for Q3 2026.',                                  quad:'UH' },
-  { id:5,  priority:'HIGH',     category:'Cost Control',       title:'Riverview Cost Ratio High',      text:'Riverview cost ratio 69.7% vs portfolio avg 61.3%.',                                                    action:'Cost audit — identify soft cost and interest overruns.',                                 quad:'NH' },
-  { id:6,  priority:'MEDIUM',   category:'Liquidity',          title:'Cash Deployment',                text:'$6.42M cash earning minimal return. 3 entities below $500K minimum.',                                    action:'Establish $300K floor per entity. Sweep excess to money market.',                        quad:'NH' },
-  { id:7,  priority:'MEDIUM',   category:'Margin Watch',       title:'Cornerstone Near Floor',         text:'Cornerstone at 30.3% margin, just above 30% floor.',                                                    action:'Monthly margin review. Freeze discretionary spend immediately.',                          quad:'NH' },
-  { id:8,  priority:'MEDIUM',   category:'Tax Planning',       title:'Tax Optimization',               text:'Soft costs and interest may be immediately deductible vs capitalized.',                                   action:'CPA review for cost segregation — potential $200K+ tax saving.',                         quad:'NH' },
-  { id:9,  priority:'LOW',      category:'Financing',          title:'Untapped Borrowing Capacity',    text:'LTV at 42% vs 60% limit = $20M+ untapped borrowing capacity.',                                          action:'Prepare portfolio credit facility proposal for Phase 2 land.',                           quad:'NL' },
-  { id:10, priority:'LOW',      category:'Strategy',           title:'Geographic Concentration',       text:'All 12 companies Texas-only. Single-state concentration risk.',                                          action:'AZ/FL market analysis for Phase 3 pipeline — target Q3 2026.',                          quad:'NL' },
+  { id:1,  priority:'CRITICAL', category:'Liquidity',          title:'Cash Runway: 1.1 Months',           text:'Current cash covers only 1.1 months of EMI ($17,645/mo). August shortfall of $16,732 due by Aug 10. No distributions possible until EMI is funded.',  action:'Initiate capital call or partner contribution to cover August EMI shortfall before Aug 10.',          quad:'UH' },
+  { id:2,  priority:'HIGH',     category:'Partner Relations',  title:'Zero Distributions — 100% Capital at Risk', text:'$2,223,677 of partner capital is fully deployed with 0% returned. No distributions have been made to any of the 17 partners. Pre-sale phase only.',       action:'Prepare distribution waterfall memo for partners. Trigger upon first lot sale.',                     quad:'UH' },
+  { id:3,  priority:'HIGH',     category:'Valuation',          title:'Break-Even Sale Price $4.86M',      text:'Partnership break-even (including 8% preferred return on $2.22M capital) requires lot sale proceeds of $4,862,551. Current cost basis is $3,892,736.',       action:'Confirm appraisal value vs break-even. Engage broker to assess market comparables.',                  quad:'UH' },
+  { id:4,  priority:'MEDIUM',   category:'Profitability',      title:'4 of 6 Years Net Loss',             text:'WWBG reported net income only in 2024 ($79,584). All other years (2021-2023, 2025-2026) show net losses driven by interest and carrying costs.',               action:'Monitor 2026 expenses. Reduce discretionary spend. Capitalize interest to reduce current-year loss.', quad:'NH' },
+  { id:5,  priority:'LOW',      category:'Financing',          title:'Loan Rate Below Market',            text:'Current loan rate is 4.25% (Greater Plains Bank) vs market rate of ~6.5%. No refinancing needed. Existing rate is favorable for carry period.',                action:'No action needed. Confirm rate lock expiry date and renegotiate 12 months before maturity.',          quad:'NL' },
+  { id:6,  priority:'LOW',      category:'Concentration',      title:'Top 2 Partners Hold 21.11% Equity', text:'R Family Ltd (10.73%) and VRE (10.38%) together hold 21.11% of total equity. Remaining 15 partners average 5.25% each. Concentration is moderate.',          action:'No immediate action. Note for Phase 2 capital raise — consider diversifying lead partner exposure.',  quad:'NL' },
 ];
 
 const CHECKLIST_ITEMS = [
-  'Review capital call status with all 6 partners',
-  'Approve Q3 distribution waterfall',
-  'Cost audit initiated for Riverview & Cornerstone',
-  'Cash floor policy communicated to all entities',
-  'CPA briefed on tax optimization',
-  'Phase 2 land pipeline review scheduled',
+  'Fund August EMI shortfall ($16,732) before Aug 10',
+  'Send EMI status update to all 17 partners',
+  'Confirm break-even appraisal with broker ($4,862,551)',
+  'Prepare distribution waterfall memo (pre-sale template)',
+  'Verify 4.25% loan rate lock expiry date with Greater Plains Bank',
+  'CPA review: capitalize vs expense remaining 2026 interest',
 ];
 const CHECKLIST_KEY = 'propdev_cfo_checklist';
 
@@ -518,9 +514,7 @@ function CFOTab() {
           <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
             <p className="text-xs font-semibold text-amber-600 uppercase mb-2">Top 3 Performers</p>
             {[
-              { name:'Riverview Land Partners', net:'$4.61M', rank:1 },
-              { name:'Summit RE Group',         net:'$4.32M', rank:2 },
-              { name:'Horizon Land Group',      net:'$3.95M', rank:3 },
+              { name:'WWBG (2024 net income)', net:'$79,584', rank:1 },
             ].map(p => (
               <div key={p.rank} className="flex items-center gap-3 p-2 rounded-lg border border-green-100 bg-green-50 mb-2">
                 <span className="w-6 h-6 rounded-full bg-green-600 text-white text-xs flex items-center justify-center font-bold">{p.rank}</span>
@@ -536,9 +530,9 @@ function CFOTab() {
           <div className="bg-white rounded-lg p-4 shadow-sm border border-red-100">
             <p className="text-xs font-semibold text-red-600 uppercase mb-2">Attention Required</p>
             {[
-              'Capital calls overdue: 6 partners, $75,500 total',
-              'Riverview cost ratio: 69.7% (above 65% threshold)',
-              'Cornerstone margin: 30.3% (near floor)',
+              'WWBG: Cash covers only 1.1 months of EMI — Aug shortfall $16,732',
+              'No distributions made — $2.22M partner capital fully at risk',
+              '4 of 6 years net loss — only 2024 profitable ($79,584)',
             ].map((a,i) => (
               <div key={i} className="flex gap-2 p-2 rounded bg-red-50 border border-red-100 mb-2 text-xs">
                 <AlertTriangle size={12} className="text-red-500 shrink-0 mt-0.5" />
@@ -666,238 +660,218 @@ function StrategicTab() {
   );
 }
 
-// ── Partner Data ──────────────────────────────────────────────────────────────
-type PartnerNature = 'GP' | 'LP' | 'Class A' | 'Class B' | 'Silent';
-interface PartnerRow {
-  id: string; name: string; nature: PartnerNature;
-  invested: number; bookValue: number; preferred: number; ownership: number;
-  committed: number; called: number; distributions: number;
-  lastCall: string; status: 'overdue' | 'pending' | 'received';
-}
-
-const PARTNER_FINANCIALS: PartnerRow[] = [
-  { id:'cascade',  name:'Cascade Capital Group',    nature:'GP',      invested:12500000, bookValue:15800000, preferred:8.0, ownership:15.0, committed:12500000, called:12500000, distributions:2800000, lastCall:'Aug 2025', status:'overdue'  },
-  { id:'keystone', name:'Keystone Investment LLC',  nature:'LP',      invested:8750000,  bookValue:10900000, preferred:8.0, ownership:10.5, committed:9000000,  called:8750000,  distributions:1950000, lastCall:'Sep 2025', status:'overdue'  },
-  { id:'apex',     name:'Apex RE Fund II',          nature:'Class A', invested:15000000, bookValue:18200000, preferred:8.0, ownership:18.0, committed:15000000, called:15000000, distributions:3800000, lastCall:'Aug 2025', status:'overdue'  },
-  { id:'vanguard', name:'Vanguard Land Partners',   nature:'LP',      invested:6250000,  bookValue:7800000,  preferred:8.0, ownership:7.5,  committed:7000000,  called:6250000,  distributions:1200000, lastCall:'Sep 2025', status:'overdue'  },
-  { id:'monarch',  name:'Monarch Capital RE',       nature:'Class B', invested:9000000,  bookValue:10650000, preferred:6.0, ownership:10.8, committed:9000000,  called:9000000,  distributions:980000,  lastCall:'Aug 2025', status:'overdue'  },
-  { id:'skyline',  name:'Skyline Investment Group', nature:'Class A', invested:11000000, bookValue:13400000, preferred:8.0, ownership:13.2, committed:11000000, called:11000000, distributions:2200000, lastCall:'Sep 2025', status:'overdue'  },
-  { id:'granite',  name:'Granite Peak Ventures',    nature:'Class B', invested:7500000,  bookValue:8900000,  preferred:6.0, ownership:9.0,  committed:8000000,  called:7500000,  distributions:850000,  lastCall:'Oct 2025', status:'pending'  },
-  { id:'riviera',  name:'Riviera Capital Partners', nature:'Silent',  invested:5000000,  bookValue:5900000,  preferred:5.0, ownership:6.0,  committed:5000000,  called:5000000,  distributions:600000,  lastCall:'Oct 2025', status:'received' },
+// ── Real WWBG Partner Data (from BS.xlsx 2026 capital balances) ───────────────
+interface WwbgPartner { id: string; name: string; capital: number; pct: number; }
+const WWBG_PARTNERS_STATIC: WwbgPartner[] = [
+  { id:'rfamily', name:'R Family Ltd',  capital:238660, pct:10.73 },
+  { id:'vre',     name:'VRE',           capital:230717, pct:10.38 },
+  { id:'spsir',   name:'S PSIR',        capital:225592, pct:10.15 },
+  { id:'rss',     name:'RSS',           capital:225536, pct:10.14 },
+  { id:'ev',      name:'EV',            capital:211713, pct: 9.52 },
+  { id:'rvdr',    name:'RVDR',          capital:119495, pct: 5.37 },
+  { id:'hc',      name:'HC',            capital:119440, pct: 5.37 },
+  { id:'scip',    name:'SCIP',          capital:119399, pct: 5.37 },
+  { id:'bp',      name:'B P',           capital:112503, pct: 5.06 },
+  { id:'nb',      name:'N B',           capital:109474, pct: 4.92 },
+  { id:'sv',      name:'S V',           capital:109474, pct: 4.92 },
+  { id:'vm',      name:'V M',           capital:109474, pct: 4.92 },
+  { id:'mcca',    name:'MC @ CA',       capital:104576, pct: 4.70 },
+  { id:'kv',      name:'KV',            capital:102576, pct: 4.61 },
+  { id:'csp',     name:'CSP',           capital: 41039, pct: 1.85 },
+  { id:'yb',      name:'Y B',           capital: 41035, pct: 1.85 },
+  { id:'rm',      name:'R M',           capital:  2972, pct: 0.13 },
 ];
-
-const NATURE_BADGE: Record<PartnerNature, string> = {
-  'GP':      'bg-green-800 text-white',
-  'LP':      'bg-blue-600 text-white',
-  'Class A': 'bg-amber-500 text-white',
-  'Class B': 'bg-purple-600 text-white',
-  'Silent':  'bg-gray-500 text-white',
-};
-
-const WATERFALL_DATA = [
-  { stage:'Preferred Return', GP:0,        LP:1248000, ClassA:2152000, ClassB:1188000, Silent:250000 },
-  { stage:'Return of Capital', GP:1250000, LP:2625000, ClassA:4500000, ClassB:2700000, Silent:0      },
-  { stage:'GP Promote (20%)', GP:1580000,  LP:0,       ClassA:0,       ClassB:0,       Silent:0      },
-  { stage:'Residual Split',   GP:2200000,  LP:1850000, ClassA:2800000, ClassB:1600000, Silent:350000 },
-];
-
-const CO_PARTNER_DATA = [
-  { company:'Sunstone',    gp:8.5,  lp:6.2, classA:4.1, classB:0,   silent:0   },
-  { company:'Meridian',    gp:10.2, lp:7.8, classA:5.3, classB:3.1, silent:0   },
-  { company:'Cornerstone', gp:7.1,  lp:5.5, classA:3.8, classB:2.2, silent:0   },
-  { company:'Pinnacle I',  gp:6.8,  lp:4.9, classA:3.2, classB:0,   silent:1.8 },
-  { company:'Pinnacle II', gp:7.4,  lp:5.8, classA:4.5, classB:2.8, silent:0   },
-  { company:'Oakridge',    gp:9.1,  lp:7.2, classA:5.0, classB:3.5, silent:0   },
-  { company:'Heritage',    gp:8.3,  lp:6.4, classA:4.6, classB:2.1, silent:0   },
-  { company:'Summit',      gp:11.2, lp:8.9, classA:6.2, classB:4.1, silent:0   },
-  { company:'Crestview',   gp:7.8,  lp:6.0, classA:4.2, classB:2.5, silent:0   },
-  { company:'Riverview',   gp:12.5, lp:9.8, classA:6.8, classB:4.5, silent:0   },
-  { company:'Landmark',    gp:6.5,  lp:5.0, classA:3.5, classB:0,   silent:1.5 },
-  { company:'Horizon',     gp:9.8,  lp:7.5, classA:5.2, classB:3.2, silent:1.8 },
-];
+const WWBG_TOTAL_CAPITAL = 2223677;
+const WWBG_LOAN          = 1787644;
+const WWBG_EMI           = 17645;
+const WWBG_COST_BASIS    = 3892736;
 
 // ── Tab: Partners & Distribution ──────────────────────────────────────────────
 function PartnersTab() {
-  const totalInvested = PARTNER_FINANCIALS.reduce((s, p) => s + p.invested, 0);
-  const totalBook     = PARTNER_FINANCIALS.reduce((s, p) => s + p.bookValue, 0);
-  const totalDist     = PARTNER_FINANCIALS.reduce((s, p) => s + p.distributions, 0);
-  const totalCalled   = PARTNER_FINANCIALS.reduce((s, p) => s + p.called, 0);
-  const totalCommit   = PARTNER_FINANCIALS.reduce((s, p) => s + p.committed, 0);
+  const { companies } = usePropDev();
 
-  const distPie = PARTNER_FINANCIALS.map((p, i) => ({
-    name: p.name.split(' ').slice(0, 2).join(' '),
-    value: p.distributions,
+  // Use real partners from DB context; fall back to static WWBG data
+  const partners: WwbgPartner[] = useMemo(() => {
+    const wwbg = companies.find(c => c.name.toUpperCase().includes('WWBG'));
+    if (wwbg?.partners && wwbg.partners.length > 0) {
+      const total = wwbg.partners.reduce((s, p) => s + p.capitalContributed, 0) || WWBG_TOTAL_CAPITAL;
+      return wwbg.partners.map(p => ({
+        id: p.id,
+        name: p.name,
+        capital: p.capitalContributed,
+        pct: (p.capitalContributed / total) * 100,
+      }));
+    }
+    return WWBG_PARTNERS_STATIC;
+  }, [companies]);
+
+  const totalCapital = partners.reduce((s, p) => s + p.capital, 0);
+
+  const ownershipPie = partners.map((p, i) => ({
+    name: p.name,
+    value: p.capital,
     fill: COLORS[i % COLORS.length],
   }));
-
-  const statusPill: Record<string, string> = {
-    overdue:  'bg-red-100 text-red-800',
-    pending:  'bg-amber-100 text-amber-800',
-    received: 'bg-green-100 text-green-800',
-  };
-  const statusLabel: Record<string, string> = { overdue: 'Overdue', pending: 'Pending', received: 'Received' };
 
   return (
     <div className="space-y-6">
 
+      {/* KPI strip */}
+      <div className="grid grid-cols-4 gap-3">
+        {[
+          { label:'Total Partners',      value:String(partners.length),           bg:'bg-white border-gray-200',   text:'text-gray-900' },
+          { label:'Total Capital In',    value:fmt(totalCapital),                 bg:'bg-white border-gray-200',   text:'text-gray-900' },
+          { label:'Distributions Paid',  value:'$0',                              bg:'bg-amber-50 border-amber-200', text:'text-amber-700' },
+          { label:'Next Distribution',   value:'Upon lot sale',                   bg:'bg-blue-50 border-blue-200', text:'text-blue-700'  },
+        ].map((card, i) => (
+          <div key={i} className={`rounded-lg p-4 border ${card.bg}`}>
+            <p className="text-xs text-gray-500 mb-1">{card.label}</p>
+            <p className={`text-lg font-bold font-mono ${card.text}`}>{card.value}</p>
+          </div>
+        ))}
+      </div>
+
       {/* Section A: Partner Capital Summary Table */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
-        <div className="bg-gray-900 text-white px-4 py-2 text-sm font-bold">Partner Capital Summary</div>
+        <div className="bg-gray-900 text-white px-4 py-2 text-sm font-bold">
+          WWBG Partner Capital Summary — {partners.length} Partners
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200">
+                <th className="text-left px-3 py-2">#</th>
+                <th className="text-left px-3 py-2">Partner</th>
+                <th className="text-right px-3 py-2">Capital Contributed</th>
+                <th className="text-right px-3 py-2">Ownership %</th>
+                <th className="text-right px-3 py-2">Distributions</th>
+                <th className="text-right px-3 py-2">ROI</th>
+                <th className="text-center px-3 py-2">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {partners.map((p, i) => (
+                <tr key={p.id} className="border-t border-gray-100 hover:bg-gray-50">
+                  <td className="px-3 py-1.5 text-gray-400 font-bold">{i + 1}</td>
+                  <td className="px-3 py-1.5 font-medium">{p.name}</td>
+                  <td className="px-3 py-1.5 text-right font-mono">{fmt(p.capital)}</td>
+                  <td className="px-3 py-1.5 text-right font-mono text-blue-700">{p.pct.toFixed(2)}%</td>
+                  <td className="px-3 py-1.5 text-right font-mono text-gray-400">$0</td>
+                  <td className="px-3 py-1.5 text-right font-mono text-gray-400">0.0%</td>
+                  <td className="px-3 py-1.5 text-center">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">Pre-sale</span>
+                  </td>
+                </tr>
+              ))}
+              <tr className="border-t-2 border-gray-300 bg-gray-100 font-bold">
+                <td className="px-3 py-2 text-gray-400" colSpan={2}>TOTAL ({partners.length} partners)</td>
+                <td className="px-3 py-2 text-right font-mono">{fmt(totalCapital)}</td>
+                <td className="px-3 py-2 text-right font-mono text-blue-700">100.00%</td>
+                <td className="px-3 py-2 text-right font-mono text-gray-500">$0</td>
+                <td className="px-3 py-2 text-right font-mono text-gray-500">0.0%</td>
+                <td />
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Section B: Ownership chart + Waterfall structure */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+          <p className="text-sm font-semibold text-gray-700 mb-1">Ownership Distribution</p>
+          <p className="text-xs text-gray-400 mb-3">Size = capital contributed</p>
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart>
+              <Pie data={ownershipPie} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, pct }) => `${name} ${(pct * 100).toFixed(1)}%`} labelLine={false}>
+                {ownershipPie.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+              </Pie>
+              <Tooltip formatter={(v: number) => fmt(v)} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="bg-white rounded-lg p-4 shadow-sm border border-amber-200">
+          <p className="text-sm font-semibold text-gray-700 mb-1">Distribution Waterfall — Pre-Sale</p>
+          <p className="text-xs text-amber-600 mb-4">No distributions yet. Structure applies upon first lot sale.</p>
+          <div className="space-y-2 text-xs">
+            {[
+              { step: '1. Return of Capital',    note: '100% to partners (pro-rata)',      status: 'Pending' },
+              { step: '2. Preferred Return (8%)', note: 'On unreturned capital per annum', status: 'Pending' },
+              { step: '3. Residual Split',        note: 'Pro-rata by ownership %',         status: 'Pending' },
+            ].map((w, i) => (
+              <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 bg-gray-50">
+                <div className="w-7 h-7 rounded-full bg-gray-800 text-white flex items-center justify-center font-bold text-xs shrink-0">{i + 1}</div>
+                <div className="flex-1">
+                  <p className="font-semibold text-gray-800">{w.step}</p>
+                  <p className="text-gray-500 mt-0.5">{w.note}</p>
+                </div>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">{w.status}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 p-3 bg-amber-50 rounded-lg border border-amber-200 text-xs text-amber-800">
+            Break-even sale price: <strong>$4,862,551</strong> (includes 8% preferred return on $2.22M capital)
+          </div>
+        </div>
+      </div>
+
+      {/* Section C: Per-Partner WWBG Loan Exposure */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-blue-700 text-white px-4 py-2 text-sm font-bold">
+          WWBG — Partner Loan Exposure (Pro-Rata Share)
+        </div>
+        <div className="text-xs text-gray-500 px-4 py-2 bg-blue-50 border-b border-blue-100">
+          Based on: Loan outstanding $1,787,644 · Monthly EMI $17,645 · Total cost basis $3,892,736
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="text-left px-3 py-2">Partner</th>
-                <th className="text-left px-3 py-2">Nature</th>
-                <th className="text-right px-3 py-2">Invested</th>
-                <th className="text-right px-3 py-2">Book Value</th>
-                <th className="text-right px-3 py-2">ROI %</th>
-                <th className="text-right px-3 py-2">Pref %</th>
                 <th className="text-right px-3 py-2">Ownership %</th>
-                <th className="text-right px-3 py-2">Committed</th>
-                <th className="text-right px-3 py-2">Called</th>
-                <th className="text-right px-3 py-2">Distributions</th>
-                <th className="text-center px-3 py-2">Last Call</th>
-                <th className="text-center px-3 py-2">Status</th>
+                <th className="text-right px-3 py-2">Share of Loan</th>
+                <th className="text-right px-3 py-2">Monthly EMI Share</th>
+                <th className="text-right px-3 py-2">Share of Cost Basis</th>
               </tr>
             </thead>
             <tbody>
-              {PARTNER_FINANCIALS.map(p => {
-                const roi = ((p.bookValue - p.invested) / p.invested * 100).toFixed(1);
+              {partners.map((p, i) => {
+                const f = p.pct / 100;
                 return (
-                  <tr key={p.id} className="border-t border-gray-100 hover:bg-gray-50">
-                    <td className="px-3 py-2 font-medium">{p.name}</td>
-                    <td className="px-3 py-2">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${NATURE_BADGE[p.nature]}`}>{p.nature}</span>
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono">{fmtM(p.invested)}</td>
-                    <td className="px-3 py-2 text-right font-mono text-green-700">{fmtM(p.bookValue)}</td>
-                    <td className="px-3 py-2 text-right font-mono font-semibold text-blue-700">{roi}%</td>
-                    <td className="px-3 py-2 text-right">{p.preferred.toFixed(1)}%</td>
-                    <td className="px-3 py-2 text-right">{p.ownership.toFixed(1)}%</td>
-                    <td className="px-3 py-2 text-right font-mono">{fmtM(p.committed)}</td>
-                    <td className="px-3 py-2 text-right font-mono">{fmtM(p.called)}</td>
-                    <td className="px-3 py-2 text-right font-mono text-amber-700">{fmtM(p.distributions)}</td>
-                    <td className="px-3 py-2 text-center text-gray-500">{p.lastCall}</td>
-                    <td className="px-3 py-2 text-center">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusPill[p.status]}`}>{statusLabel[p.status]}</span>
-                    </td>
+                  <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
+                    <td className="px-3 py-1.5 font-medium">{p.name}</td>
+                    <td className="px-3 py-1.5 text-right font-mono text-blue-700">{p.pct.toFixed(2)}%</td>
+                    <td className="px-3 py-1.5 text-right font-mono">{fmt(WWBG_LOAN * f)}</td>
+                    <td className="px-3 py-1.5 text-right font-mono">{fmt(WWBG_EMI * f)}</td>
+                    <td className="px-3 py-1.5 text-right font-mono">{fmt(WWBG_COST_BASIS * f)}</td>
                   </tr>
                 );
               })}
               <tr className="border-t-2 border-gray-300 bg-gray-100 font-bold">
-                <td className="px-3 py-2" colSpan={2}>TOTALS</td>
-                <td className="px-3 py-2 text-right font-mono">{fmtM(totalInvested)}</td>
-                <td className="px-3 py-2 text-right font-mono text-green-700">{fmtM(totalBook)}</td>
-                <td className="px-3 py-2 text-right font-mono text-blue-700">{((totalBook - totalInvested) / totalInvested * 100).toFixed(1)}%</td>
-                <td className="px-3 py-2 text-right">—</td>
-                <td className="px-3 py-2 text-right">72.0%</td>
-                <td className="px-3 py-2 text-right font-mono">{fmtM(totalCommit)}</td>
-                <td className="px-3 py-2 text-right font-mono">{fmtM(totalCalled)}</td>
-                <td className="px-3 py-2 text-right font-mono text-amber-700">{fmtM(totalDist)}</td>
-                <td colSpan={2} />
+                <td className="px-3 py-2">TOTAL</td>
+                <td className="px-3 py-2 text-right font-mono text-blue-700">100.00%</td>
+                <td className="px-3 py-2 text-right font-mono">{fmt(WWBG_LOAN)}</td>
+                <td className="px-3 py-2 text-right font-mono">{fmt(WWBG_EMI)}</td>
+                <td className="px-3 py-2 text-right font-mono">{fmt(WWBG_COST_BASIS)}</td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Section B: Charts */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
-          <p className="text-sm font-semibold text-gray-700 mb-3">Waterfall Distribution by Stage ($)</p>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={WATERFALL_DATA} margin={{ bottom: 30, left: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="stage" tick={{ fontSize: 9 }} angle={-20} textAnchor="end" />
-              <YAxis tickFormatter={v => `$${(v / 1e6).toFixed(1)}M`} tick={{ fontSize: 9 }} />
-              <Tooltip formatter={(v: number) => fmt(v)} />
-              <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-              <Bar dataKey="GP"      stackId="a" fill={COLORS[1]}  />
-              <Bar dataKey="LP"      stackId="a" fill={COLORS[0]}  />
-              <Bar dataKey="ClassA"  stackId="a" fill={COLORS[3]}  name="Class A" />
-              <Bar dataKey="ClassB"  stackId="a" fill={COLORS[4]}  name="Class B" />
-              <Bar dataKey="Silent"  stackId="a" fill={COLORS[11]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
-          <p className="text-sm font-semibold text-gray-700 mb-3">Distributions by Partner</p>
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie data={distPie} cx="50%" cy="50%" outerRadius={80} dataKey="value">
-                {distPie.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-              </Pie>
-              <Tooltip formatter={(v: number) => fmtM(v)} />
-              <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Section C: Per-Company Partner Exposure */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
-        <div className="bg-blue-700 text-white px-4 py-2 text-sm font-bold">Per-Company Partner Exposure ($M)</div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="text-left px-3 py-2">Company</th>
-                <th className="text-right px-3 py-2"><span className="px-1.5 py-0.5 rounded bg-green-800 text-white">GP</span></th>
-                <th className="text-right px-3 py-2"><span className="px-1.5 py-0.5 rounded bg-blue-600 text-white">LP</span></th>
-                <th className="text-right px-3 py-2"><span className="px-1.5 py-0.5 rounded bg-amber-500 text-white">Class A</span></th>
-                <th className="text-right px-3 py-2"><span className="px-1.5 py-0.5 rounded bg-purple-600 text-white">Class B</span></th>
-                <th className="text-right px-3 py-2"><span className="px-1.5 py-0.5 rounded bg-gray-500 text-white">Silent</span></th>
-                <th className="text-right px-3 py-2 font-bold">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {CO_PARTNER_DATA.map((r, i) => {
-                const total = r.gp + r.lp + r.classA + r.classB + r.silent;
-                return (
-                  <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
-                    <td className="px-3 py-1.5 font-medium">{r.company}</td>
-                    <td className="px-3 py-1.5 text-right font-mono">{r.gp > 0 ? `$${r.gp}M` : '—'}</td>
-                    <td className="px-3 py-1.5 text-right font-mono">{r.lp > 0 ? `$${r.lp}M` : '—'}</td>
-                    <td className="px-3 py-1.5 text-right font-mono">{r.classA > 0 ? `$${r.classA}M` : '—'}</td>
-                    <td className="px-3 py-1.5 text-right font-mono">{r.classB > 0 ? `$${r.classB}M` : '—'}</td>
-                    <td className="px-3 py-1.5 text-right font-mono">{r.silent > 0 ? `$${r.silent}M` : '—'}</td>
-                    <td className="px-3 py-1.5 text-right font-mono font-bold">${total.toFixed(1)}M</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Section D: Capital Call Status Strip */}
-      <div className="grid grid-cols-4 gap-4">
-        {[
-          { label:'Capital Calls Overdue',  value:'6 Partners',  sub:'$75,500 total',        bg:'bg-red-50 border-red-200',   dot:'bg-red-600',   text:'text-red-700'   },
-          { label:'Calls Received (MTD)',   value:'2 Partners',  sub:'$42,000 collected',    bg:'bg-green-50 border-green-200', dot:'bg-green-600', text:'text-green-700' },
-          { label:'Pending (Next 30d)',     value:'3 Partners',  sub:'$28,750 expected',     bg:'bg-amber-50 border-amber-200', dot:'bg-amber-500', text:'text-amber-700' },
-          { label:'Next Distribution',      value:'Q3 2026',     sub:'$38.76M projected',    bg:'bg-blue-50 border-blue-200',  dot:'bg-blue-600',  text:'text-blue-700'  },
-        ].map((card, i) => (
-          <div key={i} className={`rounded-lg p-4 border ${card.bg}`}>
-            <div className={`w-2 h-2 rounded-full ${card.dot} mb-2`} />
-            <p className="text-xs text-gray-500 mb-1">{card.label}</p>
-            <p className={`text-xl font-bold font-mono ${card.text}`}>{card.value}</p>
-            <p className={`text-xs mt-1 ${card.text} opacity-80`}>{card.sub}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Section E: CFO Partner Insights */}
+      {/* Section D: CFO Insights */}
       <div className="space-y-2">
         {[
-          { title:'Preferred Return Threshold Triggered', text:'Class A & LP investors hold 8% preferred return hurdle. Current portfolio IRR of 22.4% far exceeds the hurdle — waterfall distribution to residual split is triggered. Recommend issuing Q3 2026 distribution memo to all LPs immediately.' },
-          { title:'Capital Call Compliance Risk', text:'6 partners are overdue on capital calls totalling $75,500. Per operating agreement, late fees of 1.5%/month apply after the 30-day grace period. Immediate outreach required to prevent GP/LP agreement disputes and preserve co-investor relationships.' },
-          { title:'Equity Concentration Alert', text:'Apex RE Fund II and Cascade Capital Group together represent 33% of total equity committed ($27.5M). Concentration above 25% per single partner is a portfolio risk flag. Consider diversification strategy for Phase 2 capital raise to reduce exposure.' },
+          { title:'No Distributions Made — $2.22M Fully at Risk', color:'bg-amber-50 border-amber-200', textColor:'text-amber-800',
+            text:'All 17 partners have contributed capital with 0% returned. WWBG is in pre-sale phase. Distributions will trigger upon lot sale proceeds exceeding cost basis + preferred return.' },
+          { title:'August EMI Shortfall: $16,732 Action Required', color:'bg-red-50 border-red-200', textColor:'text-red-800',
+            text:'Current cash covers 1.1 months of EMI ($17,645/mo). Partners should be notified of the August shortfall. Consider a pro-rata capital call based on ownership percentages above.' },
+          { title:'R Family Ltd & VRE Lead at 21.11% Combined', color:'bg-blue-50 border-blue-200', textColor:'text-blue-800',
+            text:'Top 2 partners hold 21.11% of equity. Remaining 15 partners average 5.25% each. Concentration is within acceptable range — no diversification action needed for Phase 1.' },
         ].map((ins, i) => (
-          <div key={i} className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-            <p className="text-sm font-semibold text-amber-800 mb-1">{ins.title}</p>
-            <p className="text-xs text-amber-700">{ins.text}</p>
+          <div key={i} className={`border rounded-lg p-4 ${ins.color}`}>
+            <p className={`text-sm font-semibold mb-1 ${ins.textColor}`}>{ins.title}</p>
+            <p className={`text-xs ${ins.textColor} opacity-90`}>{ins.text}</p>
           </div>
         ))}
       </div>
@@ -916,12 +890,7 @@ interface PDFinancials {
   pl: PDFinItem[]; bs: PDFinItem[];
 }
 
-const PD_COMPANIES = [
-  'WWBG',
-  'ABC LLC','Sunstone Development LLC','Meridian PropDev LLC','Cornerstone RE Ventures',
-  'Pinnacle Land Holdings','Summit Development LLC','Heritage Land Partners',
-  'Riverview PropDev LLC','Landmark Developers','Horizon Land Group','Crestview Development LLC',
-];
+const PD_COMPANIES = ['WWBG'];
 const PD_LS_KEY = (co: string) => `propdev_upload_${co.replace(/\s+/g,'_').toLowerCase()}`;
 
 // ── Convert DB yearly JSON → PDFinancials (no file upload required) ──────────
@@ -937,8 +906,8 @@ function wwbgBuildPL(
   const items: PDFinItem[] = [
     makeItem('Income', {}, { isSectionHeader: true }),
     makeItem('Lot Sales Revenue', Object.fromEntries(years.map(y => [y, 0]))),
-    makeItem('Other Income', yv('other_income')),
-    makeItem('Total for Income', Object.fromEntries(years.map(y => [y, (yearlyPL[String(y)]?.other_income ?? 0)])), { isTotal: true }),
+    makeItem('Other Income', Object.fromEntries(years.map(y => [y, Math.abs(yearlyPL[String(y)]?.other_income ?? 0)])) as Record<number,number>),
+    makeItem('Total for Income', Object.fromEntries(years.map(y => [y, Math.abs(yearlyPL[String(y)]?.other_income ?? 0)])) as Record<number,number>, { isTotal: true }),
     makeItem('Expenses', {}, { isSectionHeader: true }),
   ];
 
@@ -1107,7 +1076,9 @@ function pdSumI(items: PDFinItem[], pat: RegExp, y: number): number {
 }
 function pdKpis(fin: PDFinancials, y: number) {
   const p=fin.pl; const b=fin.bs;
-  const rev = pdYV(p,/^total\s+for\s+income$/i,y)||pdYV(p,/^total\s+income$/i,y)||pdYV(p,/^total\s+revenue$/i,y)||pdSumI(p,/income|revenue|rent/i,y);
+  // QuickBooks exports income as negative credits in some formats — take abs to keep revenue positive
+  const rawRev = pdYV(p,/^total\s+for\s+income$/i,y)||pdYV(p,/^total\s+income$/i,y)||pdYV(p,/^total\s+revenue$/i,y)||pdSumI(p,/^(other\s+)?income$/i,y);
+  const rev = Math.abs(rawRev);
   const exp = Math.abs(pdYV(p,/^total\s+for\s+expenses?$/i,y)||pdYV(p,/^total\s+expenses?$/i,y));
   const netInc = pdYV(p,/^net\s+income$/i,y);
   const interest = Math.abs(pdSumI(p,/interest/i,y));
