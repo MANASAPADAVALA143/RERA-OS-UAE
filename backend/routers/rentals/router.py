@@ -261,8 +261,9 @@ def get_portfolio_summary(
         if summ["collected_this_month"] == 0.0:
             import re as _re
             from models.rentals.models import RentalFinancialUpload as _RFU
+            # Anchored via .match() — matches labels STARTING WITH these patterns only
             _INCOME_RE = _re.compile(
-                r"rental\s+income|rent\s+income|^rent\s*[-–]|^other\s+income",
+                r"rental\s+income|rent\s+income|rent\s*[-–]|other\s+income",
                 _re.IGNORECASE,
             )
             _EXP_SKIP = _re.compile(
@@ -286,12 +287,17 @@ def get_portfolio_summary(
                 pl_income  = 0.0
                 pl_expense = 0.0
                 for item in _flatten_pl_items(upload.pl_data):
+                    # Skip section headers and running-total rows — they double-count
+                    if item.get("isSectionHeader") or item.get("isTotal"):
+                        continue
                     label = str(item.get("label", ""))
                     mv    = item.get("monthlyValues") or {}
                     val   = abs(float(mv.get(mk_space, mv.get(mk_dash, 0)) or 0))
                     if val == 0:
                         continue
-                    if _INCOME_RE.search(label):
+                    # Use .match() (anchored to label start) so "Total Rental Income"
+                    # does NOT match — only labels that START with these patterns count.
+                    if _INCOME_RE.match(label):
                         pl_income += val
                     elif not _EXP_SKIP.match(label.strip()) and not _ONE_TIME.search(label):
                         pl_expense += val
