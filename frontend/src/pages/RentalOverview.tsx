@@ -29,29 +29,29 @@ const CARD: React.CSSProperties = {
 };
 
 const KPI_LBL: React.CSSProperties = {
-  fontSize: 12, fontWeight: 600, letterSpacing: '0.06em',
+  fontSize: 13, fontWeight: 600, letterSpacing: '0.06em',
   textTransform: 'uppercase', color: '#6B6B6B', marginBottom: 4,
 };
 
 const KPI_VAL_PRI: React.CSSProperties = {
-  fontSize: 32, fontWeight: 700, color: '#1F1F1F', lineHeight: 1.1,
+  fontSize: 36, fontWeight: 700, color: '#1F1F1F', lineHeight: 1.1,
   fontVariantNumeric: 'tabular-nums lining-nums',
 };
 
 const KPI_VAL_SEC: React.CSSProperties = {
-  fontSize: 28, fontWeight: 700, color: '#1F1F1F', lineHeight: 1.1,
+  fontSize: 30, fontWeight: 700, color: '#1F1F1F', lineHeight: 1.1,
   fontVariantNumeric: 'tabular-nums lining-nums',
 };
 
 const KPI_HELP: React.CSSProperties = {
-  fontSize: 12, fontWeight: 400, color: '#7A7A7A', marginTop: 4,
+  fontSize: 13, fontWeight: 400, color: '#7A7A7A', marginTop: 4,
 };
 
 const TAB_NUM: React.CSSProperties = { fontVariantNumeric: 'tabular-nums lining-nums' };
 
-const TICK  = { fill: '#6B6B6B', fontSize: 11 };
+const TICK  = { fill: '#6B6B6B', fontSize: 12 };
 const TT    = {
-  contentStyle: { background: C_CARD, border: `1px solid ${C_BORD}`, color: '#262626', borderRadius: 8, fontSize: 12 },
+  contentStyle: { background: C_CARD, border: `1px solid ${C_BORD}`, color: '#262626', borderRadius: 8, fontSize: 13 },
   labelStyle:   { color: '#5A4B35', fontWeight: 600 },
 };
 
@@ -169,14 +169,36 @@ function SkeletonChart() {
 
 // ── inline KPI tiles ──────────────────────────────────────────────────────────
 
+function MiniSparkline({ values, color }: { values: number[]; color: string }) {
+  if (values.length < 2) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const W = 80, H = 28;
+  const pts = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * W;
+    const y = H - ((v - min) / range) * H;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return (
+    <svg width={W} height={H} style={{ display: 'block', marginTop: 6, opacity: 0.75 }}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={pts.split(' ').at(-1)!.split(',')[0]} cy={pts.split(' ').at(-1)!.split(',')[1]}
+        r={3} fill={color} />
+    </svg>
+  );
+}
+
 function PriTile({
-  label, value, sub, accent, warn,
-}: { label: string; value: string; sub?: string; accent?: string; warn?: boolean }) {
+  label, value, sub, accent, warn, sparkline,
+}: { label: string; value: string; sub?: string; accent?: string; warn?: boolean; sparkline?: number[] }) {
+  const col = warn ? C_RED : (accent ?? '#1F1F1F');
   return (
     <div style={CARD} className="ov-tile">
       <div style={KPI_LBL}>{label}</div>
-      <div style={{ ...KPI_VAL_PRI, color: warn ? C_RED : (accent ?? '#1F1F1F') }}>{value}</div>
+      <div style={{ ...KPI_VAL_PRI, color: col }}>{value}</div>
       {sub && <div style={KPI_HELP}>{sub}</div>}
+      {sparkline && sparkline.length >= 2 && <MiniSparkline values={sparkline} color={col === '#1F1F1F' ? C_GOLD : col} />}
     </div>
   );
 }
@@ -196,7 +218,7 @@ function SecTile({
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={CARD}>
-      <h3 style={{ fontSize: 16, fontWeight: 600, color: '#3A2F1F', marginBottom: 16 }}>{title}</h3>
+      <h3 style={{ fontSize: 18, fontWeight: 600, color: '#3A2F1F', marginBottom: 16 }}>{title}</h3>
       {children}
     </div>
   );
@@ -384,6 +406,10 @@ export default function RentalOverview() {
       .slice(0, 8);
   }, [data, selectedCo]);
 
+  // Sparkline data: last 6 collected values and NOI values from trend
+  const sparkCollected = useMemo(() => trendData.map(d => d.collected).filter(v => v > 0), [trendData]);
+  const sparkNoi       = useMemo(() => trendData.map(d => d.noi).filter((_, i, arr) => arr.length > 0), [trendData]);
+
   // Sync banner
   const lastSyncMonth = useMemo(() => {
     if (selectedCoId) return syncCompanies.find(c => c.id === selectedCoId)?.last_sync_month ?? '';
@@ -449,13 +475,13 @@ export default function RentalOverview() {
         .ov-tile { transition: transform 0.14s ease, box-shadow 0.14s ease; }
         .ov-tile:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.08) !important; }
         .ov-row-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #6B6B6B; }
-        .ov-section-title { font-size: 15px; font-weight: 600; color: #3A2F1F; margin-bottom: 10px; }
+        .ov-section-title { font-size: 16px; font-weight: 600; color: #3A2F1F; margin-bottom: 10px; }
       `}</style>
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 600, color: '#262626', lineHeight: 1.2 }}>
+          <h1 style={{ fontSize: 30, fontWeight: 600, color: '#262626', lineHeight: 1.2 }}>
             Rental Portfolio Overview
           </h1>
           <p style={{ fontSize: 13, fontWeight: 400, color: '#6B6B6B', marginTop: 3 }}>
@@ -550,6 +576,7 @@ export default function RentalOverview() {
                 : kpis.billed_this_month > 0 ? `of ${fmtUSD(kpis.billed_this_month)} billed` : monthLabel
             }
             accent={C_TEAL}
+            sparkline={sparkCollected}
           />
           <PriTile
             label="NOI This Month"
@@ -560,6 +587,7 @@ export default function RentalOverview() {
                 : `Expenses: ${fmtUSD(kpis.total_expense_this_month)}`
             }
             warn={kpis.noi_this_month < 0}
+            sparkline={sparkNoi}
           />
           <PriTile
             label="Gross Potential Rent"
@@ -824,7 +852,7 @@ export default function RentalOverview() {
                   <YAxis type="category" dataKey="name" width={84} tick={{ ...TICK, fontSize: 10 }} />
                   <Tooltip formatter={(v: number) => fmtUSD(v)} {...TT} />
                   <Bar dataKey="avg_rent" name="Avg Rent" radius={[0, 4, 4, 0]}>
-                    {avgRentByCompany.map((_, idx) => <Cell key={idx} fill={C_GOLD} />)}
+                    {avgRentByCompany.map((_, idx) => <Cell key={idx} fill={C_GOLD} opacity={idx % 2 === 0 ? 1 : 0.72} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -870,12 +898,12 @@ export default function RentalOverview() {
             Ranked by combined arrears + vacancy exposure · Arrears days require aging data upload
           </p>
           <div className="overflow-x-auto">
-            <table className="w-full" style={{ fontSize: 13, borderCollapse: 'collapse' }}>
+            <table className="w-full" style={{ fontSize: 14, borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${C_BORD}` }}>
                   {['Company', 'Arrears', 'Vacancy Loss', 'Occupancy', 'Arrears Days', 'Risk'].map(h => (
                     <th key={h} className="py-2 px-3 text-left"
-                      style={{ fontSize: 12, fontWeight: 600, color: '#5A4B35' }}>{h}</th>
+                      style={{ fontSize: 13, fontWeight: 600, color: '#5A4B35' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -899,7 +927,7 @@ export default function RentalOverview() {
                           {(c.occupancy_pct * 100).toFixed(1)}%
                         </span>
                       </td>
-                      <td className="py-2.5 px-3" style={{ color: '#B0B0B0', fontSize: 12 }}>
+                      <td className="py-2.5 px-3" style={{ color: '#B0B0B0', fontSize: 13 }}>
                         Awaiting aging data
                       </td>
                       <td className="py-2.5 px-3">
@@ -934,10 +962,14 @@ export default function RentalOverview() {
                 <YAxis domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} tick={TICK} />
                 <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} {...TT} />
                 <Bar dataKey="occupancy_pct" name="Occupancy %" radius={[4, 4, 0, 0]}>
-                  {occupancyChartData.map((entry, idx) => (
-                    <Cell key={idx} fill={C_GOLD}
-                      opacity={selectedCoId && selectedCoId !== entry.company_id ? 0.4 : 1} />
-                  ))}
+                  {occupancyChartData.map((entry, idx) => {
+                    const statusColor = entry.occupancy_pct >= OCCUPANCY_TARGET ? C_GREEN
+                      : entry.occupancy_pct >= OCCUPANCY_TARGET - 10 ? C_AMBER : C_RED;
+                    return (
+                      <Cell key={idx} fill={statusColor}
+                        opacity={selectedCoId && selectedCoId !== entry.company_id ? 0.35 : 1} />
+                    );
+                  })}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -965,8 +997,8 @@ export default function RentalOverview() {
                 <Bar dataKey="noi" name="NOI" radius={[4, 4, 0, 0]}>
                   {data.by_company.map((entry, idx) => (
                     <Cell key={idx}
-                      fill={entry.noi_this_month < 0 ? C_RED : C_GOLD}
-                      opacity={selectedCoId && selectedCoId !== entry.company_id ? 0.4 : 1} />
+                      fill={entry.noi_this_month < 0 ? C_RED : C_TEAL}
+                      opacity={selectedCoId && selectedCoId !== entry.company_id ? 0.35 : 1} />
                   ))}
                 </Bar>
               </BarChart>
@@ -980,12 +1012,12 @@ export default function RentalOverview() {
         <div style={CARD}>
           <h3 className="ov-section-title">Upcoming Lease Expirations (next 90 days)</h3>
           <div className="overflow-x-auto">
-            <table className="w-full" style={{ fontSize: 13, borderCollapse: 'collapse' }}>
+            <table className="w-full" style={{ fontSize: 14, borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${C_BORD}` }}>
                   {['Unit', 'Company', 'Tenant', 'Lease End', 'Days Left'].map(h => (
                     <th key={h} className="py-2 px-3 text-left"
-                      style={{ fontSize: 12, fontWeight: 600, color: '#5A4B35' }}>{h}</th>
+                      style={{ fontSize: 13, fontWeight: 600, color: '#5A4B35' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
