@@ -584,8 +584,8 @@ function FinTable({ items, years, labelCol = 'Line Item', selectedYear, periods,
     position: 'sticky', left: 0, zIndex: 1,
     background: bg,
     fontFamily: FIN_FONT,
-    fontSize: item.isSectionHeader ? 11 : isGrandTotal(item) ? 13 : item.isTotal ? 12 : 12,
-    fontWeight: (isGrandTotal(item) || item.isTotal) ? 500 : item.isSectionHeader ? 500 : 400,
+    fontSize: item.isSectionHeader ? 13 : isGrandTotal(item) ? 14 : item.isTotal ? 14 : 14,
+    fontWeight: (isGrandTotal(item) || item.isTotal) ? 600 : item.isSectionHeader ? 600 : 400,
     letterSpacing: item.isSectionHeader ? '0.05em' : undefined,
     textTransform: item.isSectionHeader ? 'uppercase' : undefined,
     color: item.isSectionHeader ? '#92400E' : '#1C1917',
@@ -604,8 +604,8 @@ function FinTable({ items, years, labelCol = 'Line Item', selectedYear, periods,
     else if (val === 0) color = '#B0B0B0';
     return {
       fontFamily: FIN_FONT,
-      fontSize: isGrandTotal(item) ? 13 : item.isTotal ? 12 : 12,
-      fontWeight: (isGrandTotal(item) || item.isTotal) ? 500 : 400,
+      fontSize: isGrandTotal(item) ? 14 : item.isTotal ? 14 : 14,
+      fontWeight: (isGrandTotal(item) || item.isTotal) ? 600 : 400,
       textAlign: 'right',
       paddingTop: item.isSectionHeader ? 7 : 9,
       paddingBottom: item.isSectionHeader ? 7 : 9,
@@ -625,17 +625,17 @@ function FinTable({ items, years, labelCol = 'Line Item', selectedYear, periods,
       <table className="w-full" style={{ borderCollapse: 'collapse' }}>
         <thead>
           <tr style={{ background: '#DDD5C4' }}>
-            <th style={{ position: 'sticky', left: 0, zIndex: 2, background: '#DDD5C4', textAlign: 'left', padding: '10px 12px', fontSize: 13, fontWeight: 600, color: '#5C5043', letterSpacing: '0.03em', whiteSpace: 'nowrap', minWidth: 240, fontFamily: FIN_FONT }}>
+            <th style={{ position: 'sticky', left: 0, zIndex: 2, background: '#DDD5C4', textAlign: 'left', padding: '10px 12px', fontSize: 13, fontWeight: 600, color: '#78716C', letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: 240, fontFamily: FIN_FONT }}>
               {labelCol}
             </th>
             {displayCols
               ? displayCols.map(p => (
-                  <th key={p} style={{ textAlign: 'right', padding: '10px 10px', fontSize: 12, fontWeight: 600, color: '#5C5043', letterSpacing: '0.03em', minWidth: 110, whiteSpace: 'nowrap', fontFamily: FIN_FONT }}>
+                  <th key={p} style={{ textAlign: 'right', padding: '10px 10px', fontSize: 13, fontWeight: 600, color: '#78716C', letterSpacing: '0.03em', minWidth: 110, whiteSpace: 'nowrap', fontFamily: FIN_FONT }}>
                     {p}
                   </th>
                 ))
               : years.map(y => (
-                  <th key={y} style={{ textAlign: 'right', padding: '10px 10px', fontSize: 13, fontWeight: 600, color: '#5C5043', letterSpacing: '0.03em', minWidth: 120, whiteSpace: 'nowrap', fontFamily: FIN_FONT }}>
+                  <th key={y} style={{ textAlign: 'right', padding: '10px 10px', fontSize: 13, fontWeight: 600, color: '#78716C', letterSpacing: '0.03em', minWidth: 120, whiteSpace: 'nowrap', fontFamily: FIN_FONT }}>
                     {y}
                   </th>
                 ))
@@ -796,9 +796,9 @@ function KCard({ label, value, sub, status, trendData, category }: KCardProps) {
       padding: '14px 14px 10px',
       fontFamily: FIN_FONT,
     }}>
-      <p style={{ fontSize: 12, fontWeight: 600, color: '#262626', marginBottom: 4 }}>{label}</p>
-      <p style={{ fontSize: 23, fontWeight: 700, color: valueColor, marginBottom: 2, lineHeight: 1.15 }}>{value}</p>
-      <p style={{ fontSize: 12, fontWeight: 400, color: '#6B6B6B', marginBottom: 8 }}>{sub}</p>
+      <p style={{ fontSize: 13, fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{label}</p>
+      <p style={{ fontSize: 28, fontWeight: 700, color: valueColor, marginBottom: 2, lineHeight: 1.15 }}>{value}</p>
+      <p style={{ fontSize: 13, fontWeight: 400, color: '#A8A29E', marginBottom: 8 }}>{sub}</p>
 
       {trendData && trendData.length > 0 && (
         <div style={{ height: 28, marginBottom: 8 }}>
@@ -863,10 +863,10 @@ function KPITab({ fin }: { fin: ParsedFinancials }) {
 
   return (
     <div className="space-y-6">
-      <p className="text-xs text-gray-500">KPIs for latest year: <strong>{lastY}</strong></p>
+      <p style={{ fontSize: 13, color: '#A8A29E' }}>KPIs for latest year: <strong style={{ color: '#1C1917' }}>{lastY}</strong></p>
 
       <div>
-        <p style={{ fontSize: 11, fontWeight: 600, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Profitability</p>
+        <p style={{ fontSize: 13, fontWeight: 600, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Profitability</p>
         <div className="grid grid-cols-4 gap-4">
           <KCard label="NOI Margin" value={`${noiM.toFixed(1)}%`} sub={`NOI: ${fmt(k.noi)}`} status={noiM>=40?'good':noiM>=20?'warn':'bad'} trendData={noiMTrend} category={noiM<20?'review':'profitability'} />
           <KCard label="Net Income Margin" value={`${netM.toFixed(1)}%`} sub={`Net: ${fmt(k.netIncome)}`} status={netM>=10?'good':netM>=0?'warn':'bad'} trendData={netMTrend} category={netM<0?'review':'profitability'} />
@@ -876,7 +876,7 @@ function KPITab({ fin }: { fin: ParsedFinancials }) {
       </div>
 
       <div>
-        <p style={{ fontSize: 11, fontWeight: 600, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Rental Performance</p>
+        <p style={{ fontSize: 13, fontWeight: 600, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Rental Performance</p>
         <div className="grid grid-cols-4 gap-4">
           <KCard label="Rental Income %" value={`${rentP.toFixed(1)}%`} sub={`${fmt(k.rentalIncome)} of ${fmt(k.totalRevenue)}`} status={rentP>=80?'good':'info'} category="rental" />
           <KCard label="Interest Coverage" value={iCov>0?`${iCov.toFixed(2)}x`:'N/A'} sub={`NOI ÷ Interest (${fmt(k.interestExpense)})`} status={iCov>=2?'good':iCov>=1.2?'warn':'bad'} category={iCov<1.2?'review':'rental'} />
@@ -886,7 +886,7 @@ function KPITab({ fin }: { fin: ParsedFinancials }) {
       </div>
 
       <div>
-        <p style={{ fontSize: 11, fontWeight: 600, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Balance Sheet</p>
+        <p style={{ fontSize: 13, fontWeight: 600, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Balance Sheet</p>
         <div className="grid grid-cols-4 gap-4">
           <KCard label="LTV (Loans / Building)" value={ltv>0?`${ltv.toFixed(1)}%`:'N/A'} sub={`Loans: ${fmt(k.longTermLoans)}`} status={ltv>0&&ltv<=75?'good':ltv<=85?'warn':'bad'} category={ltv>85?'review':'balance'} />
           <KCard label="Asset / Liability Ratio" value={alR>0?`${alR.toFixed(2)}x`:'N/A'} sub={`Assets: ${fmt(k.totalAssets)}`} status={alR>=1.5?'good':alR>=1?'warn':'bad'} category={alR<1?'review':'balance'} />
@@ -1076,7 +1076,7 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
 
       {/* Period Toggle */}
       <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: '14px 16px' }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: '#6B6B6B', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Income Analysis Period</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Income Analysis Period</div>
         <PeriodToggle
           period={period}
           month={pMonth}
@@ -1089,14 +1089,14 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
       {/* Period Panels — shown when a period is active */}
       {period && periodAgg && (
         <div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#5C5043', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>
             Income Statement — {period === 'MoM' ? `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][pMonth-1]} ${pYear}` : period === 'YTD' ? `YTD Jan–${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][pMonth-1]} ${pYear}` : `TTM (${periodKeys[0]}–${periodKeys[11]})`}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
 
             {/* Panel 1 — Revenue Mix Donut */}
             <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
-              <p style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 12 }}>Revenue Mix</p>
+              <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>Revenue Mix</p>
               {periodAgg.totalRevenue > 0 ? (
                 <>
                   <ResponsiveContainer width="100%" height={180}>
@@ -1119,30 +1119,30 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
                       <div key={s.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ width: 10, height: 10, borderRadius: 2, background: s.color, display: 'inline-block' }} />
-                          <span style={{ fontSize: 11, color: '#6B6B6B' }}>{s.name}</span>
+                          <span style={{ fontSize: 13, color: '#1C1917' }}>{s.name}</span>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: '#262626', fontFamily: 'monospace' }}>{fmtFull(s.val)}</span>
-                          <span style={{ fontSize: 10, color: '#9CA3AF', marginLeft: 6 }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: '#1C1917', fontFamily: 'monospace' }}>{fmtFull(s.val)}</span>
+                          <span style={{ fontSize: 12, color: '#A8A29E', marginLeft: 6 }}>
                             {periodAgg.totalRevenue > 0 ? `${(s.val / periodAgg.totalRevenue * 100).toFixed(1)}%` : '—'}
                           </span>
                         </div>
                       </div>
                     ))}
                     <div style={{ borderTop: '1px solid #E8DEC8', paddingTop: 6, display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: '#5C5043' }}>Total Revenue</span>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: '#1C1917', fontFamily: 'monospace' }}>{fmtFull(periodAgg.totalRevenue)}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#78716C' }}>Total Revenue</span>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: '#1C1917', fontFamily: 'monospace' }}>{fmtFull(periodAgg.totalRevenue)}</span>
                     </div>
                   </div>
                 </>
               ) : (
-                <p style={{ fontSize: 12, color: '#9CA3AF', textAlign: 'center', paddingTop: 40 }}>No revenue data for this period</p>
+                <p style={{ fontSize: 13, color: '#A8A29E', textAlign: 'center', paddingTop: 40 }}>No revenue data for this period</p>
               )}
             </div>
 
             {/* Panel 2 — Opex Breakdown */}
             <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
-              <p style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 12 }}>Opex Breakdown</p>
+              <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>Opex Breakdown</p>
               {(() => {
                 const cats = [
                   { name: 'Management Fee', val: periodAgg.management },
@@ -1156,7 +1156,7 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
                   { name: 'Depreciation',   val: periodAgg.depreciation },
                   { name: 'Other',          val: periodAgg.otherOpex },
                 ].filter(c => c.val > 0).sort((a, b) => b.val - a.val);
-                if (!cats.length) return <p style={{ fontSize: 12, color: '#9CA3AF', textAlign: 'center', paddingTop: 40 }}>No expense data for this period</p>;
+                if (!cats.length) return <p style={{ fontSize: 13, color: '#A8A29E', textAlign: 'center', paddingTop: 40 }}>No expense data for this period</p>;
                 const totalOpex = cats.reduce((s, c) => s + c.val, 0);
                 return (
                   <>
@@ -1173,7 +1173,7 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
                     </ResponsiveContainer>
                     <div style={{ marginTop: 8 }}>
                       {cats.map((c, i) => (
-                        <div key={c.name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '2px 0', borderBottom: '1px solid #EEE8DF' }}>
+                        <div key={c.name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0', borderBottom: '1px solid #EEE8DF' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                             <span style={{ width: 8, height: 8, borderRadius: 2, background: OPEX_PALETTE[i % OPEX_PALETTE.length], display: 'inline-block', flexShrink: 0 }} />
                             <span style={{ color: '#374151' }}>{c.name}</span>
@@ -1192,7 +1192,7 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
 
             {/* Panel 3 — Profitability Trend */}
             <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
-              <p style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 12 }}>Profitability Trend</p>
+              <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>Profitability Trend</p>
               {periodTrend.some(d => d.grossMargin !== 0 || d.operatingMargin !== 0 || d.netMargin !== 0) ? (
                 <ResponsiveContainer width="100%" height={200}>
                   <LineChart data={periodTrend} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
@@ -1207,13 +1207,13 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
-                <p style={{ fontSize: 12, color: '#9CA3AF', textAlign: 'center', paddingTop: 40 }}>No margin data for this period</p>
+                <p style={{ fontSize: 13, color: '#A8A29E', textAlign: 'center', paddingTop: 40 }}>No margin data for this period</p>
               )}
             </div>
 
             {/* Panel 4 — Revenue by Month */}
             <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
-              <p style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 12 }}>Revenue by Month</p>
+              <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>Revenue by Month</p>
               {periodRevByMonth.some(d => d.rentIncome > 0 || d.otherIncome > 0) ? (
                 <>
                   <ResponsiveContainer width="100%" height={200}>
@@ -1229,7 +1229,7 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
                   </ResponsiveContainer>
                 </>
               ) : (
-                <p style={{ fontSize: 12, color: '#9CA3AF', textAlign: 'center', paddingTop: 40 }}>No revenue data for this period</p>
+                <p style={{ fontSize: 13, color: '#A8A29E', textAlign: 'center', paddingTop: 40 }}>No revenue data for this period</p>
               )}
             </div>
 
@@ -1239,7 +1239,7 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
 
       {/* Year Selector */}
       <div className="flex flex-wrap items-center gap-2">
-        <span style={{ fontSize: '12px', color: '#92400E', fontWeight: 600, marginRight: '4px' }}>YEAR:</span>
+        <span style={{ fontSize: 13, color: '#92400E', fontWeight: 600, marginRight: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>YEAR:</span>
         {fin.years.map(y => (
           <button
             key={y}
@@ -1271,8 +1271,8 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
                 { label: 'Cash (Bank)',value: k.cash > 0 ? fmtFull(k.cash) : '—' },
               ].map(item => (
                 <div key={item.label}>
-                  <p style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{item.label}</p>
-                  <p style={{ fontSize: '16px', fontWeight: 700, color: '#111827', marginTop: '2px' }}>{item.value}</p>
+                  <p style={{ fontSize: 13, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>{item.label}</p>
+                  <p style={{ fontSize: 18, fontWeight: 700, color: '#1C1917', marginTop: 2 }}>{item.value}</p>
                 </div>
               ))}
             </div>
@@ -1282,26 +1282,26 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
 
       {/* Multi-Year Snapshot Table */}
       <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, overflow:'hidden' }}>
-        <div style={{ background:'#DDD5C4', color:'#5C5043', padding:'8px 16px', fontSize:12, fontWeight:700 }}>Multi-Year Financial Snapshot</div>
+        <div style={{ background:'#DDD5C4', color:'#78716C', padding:'8px 16px', fontSize:13, fontWeight:700 }}>Multi-Year Financial Snapshot</div>
         <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+          <table className="w-full">
             <thead>
               <tr style={{ background:'#DDD5C4' }}>
                 {['Year','Total Revenue','Total Expenses','Net Income','NOI','Cash','Net Margin %'].map(h => (
-                  <th key={h} style={{ fontSize:11, fontWeight:600, color:'#5C5043', textTransform:'uppercase', textAlign: h==='Year' ? 'left' : 'right', padding:'6px 16px' }}>{h}</th>
+                  <th key={h} style={{ fontSize:13, fontWeight:600, color:'#78716C', textTransform:'uppercase', textAlign: h==='Year' ? 'left' : 'right', padding:'8px 16px', letterSpacing:'0.03em' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {snapshotRows.map((r, i) => (
                 <tr key={i} style={{ background: r.year === selectedYear ? '#EDE5D8' : i % 2 === 0 ? '#F7F1E6' : '#FBF6EE', borderTop:'1px solid #E8DEC8' }}>
-                  <td style={{ padding:'6px 16px', fontSize:12, fontWeight: r.year === selectedYear ? 700 : 500, color:'#1C1917' }}>{r.year}{r.year === selectedYear ? ' ◀' : ''}</td>
-                  <td style={{ padding:'6px 16px', textAlign:'right', fontFamily:'monospace', fontSize:12, color:'#1C1917' }}>{fmt(r.revenue)}</td>
-                  <td style={{ padding:'6px 16px', textAlign:'right', fontFamily:'monospace', fontSize:12, color:'#D9534F' }}>{fmt(r.expenses)}</td>
-                  <td style={{ padding:'6px 16px', textAlign:'right', fontFamily:'monospace', fontSize:12, fontWeight:600, color: r.netIncome>=0 ? '#1baf7a' : '#D9534F' }}>{r.netIncome < 0 ? `(${fmt(Math.abs(r.netIncome))})` : fmt(r.netIncome)}</td>
-                  <td style={{ padding:'6px 16px', textAlign:'right', fontFamily:'monospace', fontSize:12, color: r.noi>=0 ? '#2F80ED' : '#D9534F' }}>{r.noi < 0 ? `(${fmt(Math.abs(r.noi))})` : fmt(r.noi)}</td>
-                  <td style={{ padding:'6px 16px', textAlign:'right', fontFamily:'monospace', fontSize:12, color:'#2F80ED' }}>{r.cash > 0 ? fmt(r.cash) : '—'}</td>
-                  <td style={{ padding:'6px 16px', textAlign:'right', fontFamily:'monospace', fontSize:12, color: r.margin>=0 ? '#1baf7a' : '#D9534F' }}>{r.margin.toFixed(1)}%</td>
+                  <td style={{ padding:'8px 16px', fontSize:14, fontWeight: r.year === selectedYear ? 700 : 500, color:'#1C1917' }}>{r.year}{r.year === selectedYear ? ' ◀' : ''}</td>
+                  <td style={{ padding:'8px 16px', textAlign:'right', fontFamily:'monospace', fontSize:14, color:'#1C1917' }}>{fmt(r.revenue)}</td>
+                  <td style={{ padding:'8px 16px', textAlign:'right', fontFamily:'monospace', fontSize:14, color:'#D9534F' }}>{fmt(r.expenses)}</td>
+                  <td style={{ padding:'8px 16px', textAlign:'right', fontFamily:'monospace', fontSize:14, fontWeight:600, color: r.netIncome>=0 ? '#1baf7a' : '#D9534F' }}>{r.netIncome < 0 ? `(${fmt(Math.abs(r.netIncome))})` : fmt(r.netIncome)}</td>
+                  <td style={{ padding:'8px 16px', textAlign:'right', fontFamily:'monospace', fontSize:14, color: r.noi>=0 ? '#2F80ED' : '#D9534F' }}>{r.noi < 0 ? `(${fmt(Math.abs(r.noi))})` : fmt(r.noi)}</td>
+                  <td style={{ padding:'8px 16px', textAlign:'right', fontFamily:'monospace', fontSize:14, color:'#2F80ED' }}>{r.cash > 0 ? fmt(r.cash) : '—'}</td>
+                  <td style={{ padding:'8px 16px', textAlign:'right', fontFamily:'monospace', fontSize:14, color: r.margin>=0 ? '#1baf7a' : '#D9534F' }}>{r.margin.toFixed(1)}%</td>
                 </tr>
               ))}
             </tbody>
@@ -1312,7 +1312,7 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
       {/* Charts Grid 2×2 */}
       <div className="grid grid-cols-2 gap-4">
         <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
-          <p style={{ fontSize:13, fontWeight:600, color:'#262626', marginBottom:12 }}>Net Income Trajectory</p>
+          <p style={{ fontSize:15, fontWeight:600, color:'#1C1917', marginBottom:12 }}>Net Income Trajectory</p>
           <ResponsiveContainer width="100%" height={210}>
             <LineChart data={niTrajectory} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
@@ -1324,7 +1324,7 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
           </ResponsiveContainer>
         </div>
         <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
-          <p style={{ fontSize:13, fontWeight:600, color:'#262626', marginBottom:12 }}>Expense Ratio Trend</p>
+          <p style={{ fontSize:15, fontWeight:600, color:'#1C1917', marginBottom:12 }}>Expense Ratio Trend</p>
           <ResponsiveContainer width="100%" height={210}>
             <LineChart data={expRatioTrend} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
@@ -1336,7 +1336,7 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
           </ResponsiveContainer>
         </div>
         <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
-          <p style={{ fontSize:13, fontWeight:600, color:'#262626', marginBottom:12 }}>Revenue vs Expenses</p>
+          <p style={{ fontSize:15, fontWeight:600, color:'#1C1917', marginBottom:12 }}>Revenue vs Expenses</p>
           <ResponsiveContainer width="100%" height={210}>
             <BarChart data={revExpCombo} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
@@ -1350,7 +1350,7 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
           </ResponsiveContainer>
         </div>
         <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
-          <p style={{ fontSize:13, fontWeight:600, color:'#262626', marginBottom:12 }}>Cash Balance Trend (Bank Accounts)</p>
+          <p style={{ fontSize:15, fontWeight:600, color:'#1C1917', marginBottom:12 }}>Cash Balance Trend (Bank Accounts)</p>
           <ResponsiveContainer width="100%" height={210}>
             <LineChart data={cashTrend} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
@@ -1366,7 +1366,7 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
       {/* Revenue Breakdown + Expense Pie for selected year */}
       <div className="grid grid-cols-2 gap-4">
         <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
-          <p style={{ fontSize:13, fontWeight:600, color:'#262626', marginBottom:12 }}>Revenue Breakdown by Year</p>
+          <p style={{ fontSize:15, fontWeight:600, color:'#1C1917', marginBottom:12 }}>Revenue Breakdown by Year</p>
           <ResponsiveContainer width="100%" height={210}>
             <BarChart data={revChart} margin={{ left: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -1381,7 +1381,7 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
           </ResponsiveContainer>
         </div>
         <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
-          <p style={{ fontSize:13, fontWeight:600, color:'#262626', marginBottom:12 }}>Expense Breakdown ({selectedYear})</p>
+          <p style={{ fontSize:15, fontWeight:600, color:'#1C1917', marginBottom:12 }}>Expense Breakdown ({selectedYear})</p>
           <ResponsiveContainer width="100%" height={210}>
             <PieChart>
               <Pie data={expPie} cx="50%" cy="50%" outerRadius={75} dataKey="value">
@@ -1867,8 +1867,8 @@ export default function RentalFinancials() {
           {/* Header */}
           <div className="border rounded-2xl shadow-sm p-4 flex items-center justify-between gap-4 flex-wrap" style={{ background: '#F7F5F0', borderColor: '#DDD8CC' }}>
             <div>
-              <h1 className="text-lg font-bold text-gray-900">{currentFin.companyName}</h1>
-              <p className="text-gray-400 text-xs mt-0.5">
+              <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1C1917' }}>{currentFin.companyName}</h1>
+              <p style={{ fontSize: 13, color: '#A8A29E', marginTop: 2 }}>
                 {currentFin.dateRange || 'Financial Statements'} · Years: {currentFin.years.join(', ')}
               </p>
             </div>
