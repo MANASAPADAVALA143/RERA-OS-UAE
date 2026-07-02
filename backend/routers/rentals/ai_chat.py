@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 
 from config import settings
 from database import get_db
+from models.audit_log import AuditLog
 from models.rentals.models import RentalCompany, RentalUnit, RentalInvoice
 from services.auth_service import get_current_tenant
 from services.llm_client import invoke_narrative
@@ -226,6 +227,33 @@ User question: {req.message}"""
         max_tokens=500,
     )
 
+    ai_model = result.get("model", "")
+    # Derive a short human-readable source label for the response payload
+    if "haiku" in ai_model.lower():
+        source = "claude-haiku"
+    elif "sonnet" in ai_model.lower():
+        source = "claude-sonnet"
+    elif "nova" in ai_model.lower():
+        source = "nova"
+    else:
+        source = "fallback"
+
+    # Write audit log — single row insert, negligible latency
+    try:
+        db.add(AuditLog(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            action="ai_rental_chat",
+            endpoint="/api/rentals/ai/chat",
+            success=result["success"],
+            ai_model=ai_model or None,
+            purpose="rental_chat_query",
+        ))
+        db.commit()
+    except Exception:
+        logger.exception("Failed to write AI audit log for user %s", user_id)
+        # Never let audit-log failure block the AI response
+
     if not result["success"]:
         logger.warning("LLM call failed: %s", result.get("error"))
         raise HTTPException(
@@ -233,13 +261,9 @@ User question: {req.message}"""
             detail="AI assistant temporarily unavailable",
         )
 
-    # Determine which model was used (Claude or Nova)
-    # For now, default to "claude" since that's preferred
-    source = "claude"  # Will be overridden by LLM client in future
-
     logger.info(
-        "Chat response for user %s: %d chars, source=%s",
-        user_id, len(result["text"]), source
+        "Chat response for user %s: %d chars, model=%s",
+        user_id, len(result["text"]), ai_model,
     )
 
     return ChatResponse(reply=result["text"], source=source)

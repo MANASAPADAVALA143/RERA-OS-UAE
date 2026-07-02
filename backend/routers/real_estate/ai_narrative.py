@@ -27,13 +27,24 @@ def _get_tenant_ai_enabled(db: Session, tenant_id) -> bool:
     return tenant.ai_narrative_enabled if tenant else False
 
 
-def _log_ai_call(db: Session, tenant_id, user_id: str, action: str, endpoint: str, success: bool):
+def _log_ai_call(
+    db: Session,
+    tenant_id,
+    user_id: str,
+    action: str,
+    endpoint: str,
+    success: bool,
+    ai_model: str | None = None,
+    purpose: str | None = None,
+) -> None:
     log = AuditLog(
         tenant_id=tenant_id,
         user_id=user_id,
         action=action,
         endpoint=endpoint,
         success=success,
+        ai_model=ai_model,
+        purpose=purpose,
     )
     db.add(log)
     db.commit()
@@ -71,7 +82,11 @@ def morning_briefing(
         f"never invent numbers not present in the input JSON.\n\n{payload}"
     )
     result = invoke_narrative(prompt, task_type="cfo_insight")
-    _log_ai_call(db, current_user.tenant_id, current_user.user_id, "ai_morning_briefing", "/api/real-estate/ai/morning-briefing", result["success"])
+    _log_ai_call(
+        db, current_user.tenant_id, current_user.user_id,
+        "ai_morning_briefing", "/api/real-estate/ai/morning-briefing",
+        result["success"], ai_model=result.get("model"), purpose="morning_briefing",
+    )
 
     if result["success"]:
         return {"briefing_text": result["text"], "generated_at": datetime.now(timezone.utc).isoformat(), "fallback_used": False}
@@ -111,7 +126,11 @@ def explain_overrun(
 
     prompt = f"Explain this construction cost variance in 2-3 sentences with a suggested next action. Data: {payload}"
     result = invoke_narrative(prompt, task_type="variance_label", max_tokens=200)
-    _log_ai_call(db, current_user.tenant_id, current_user.user_id, "ai_explain_overrun", "/api/real-estate/ai/explain-overrun", result["success"])
+    _log_ai_call(
+        db, current_user.tenant_id, current_user.user_id,
+        "ai_explain_overrun", "/api/real-estate/ai/explain-overrun",
+        result["success"], ai_model=result.get("model"), purpose="cost_variance_explanation",
+    )
 
     return {"explanation": result["text"] if result["success"] else fallback, "fallback_used": not result["success"]}
 
@@ -154,7 +173,11 @@ def compare_parcels(
         f"not a final answer. Flag missing IRR data.\n\n{parcels}"
     )
     result = invoke_narrative(prompt, task_type="deal_analysis", max_tokens=250)
-    _log_ai_call(db, current_user.tenant_id, current_user.user_id, "ai_compare_parcels", "/api/real-estate/ai/compare-parcels", result["success"])
+    _log_ai_call(
+        db, current_user.tenant_id, current_user.user_id,
+        "ai_compare_parcels", "/api/real-estate/ai/compare-parcels",
+        result["success"], ai_model=result.get("model"), purpose="parcel_comparison",
+    )
 
     return {"narrative": result["text"] if result["success"] else fallback, "fallback_used": not result["success"]}
 

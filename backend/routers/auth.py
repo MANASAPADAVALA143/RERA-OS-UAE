@@ -6,11 +6,13 @@ from datetime import datetime, timedelta, timezone
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from config import settings
-from database import get_db
+from database import get_db, set_rls_tenant
 from middleware.auth import CurrentUser, get_current_user, require_role
+from models.audit_log import AuditLog
 from models.tenancy import Tenant, TenantUser, UserRole, UserStatus
 from services.local_auth import (
     DEMO_EMAIL,
@@ -344,6 +346,182 @@ def provision_client(
             + ";"
         ),
     }
+
+
+class TenantDeleteResponse(BaseModel):
+    tenant_id: str
+    deleted_rows: dict[str, int]
+    message: str
+
+
+# ── FK-safe delete order ───────────────────────────────────────────────────────
+# Tables are ordered deepest-child first so no FK constraint is violated.
+# All tables except tenants/tenant_users carry tenant_id (RLS enforced).
+# r_financial_uploads: no FK to tenants, but has ON DELETE CASCADE from r_companies,
+#   so it is automatically deleted when r_companies rows are removed.
+# capital_risk_events: association table (vendor_id, project_id, tenant_id).
+_TENANT_TABLES_IN_ORDER: list[str] = [
+    # ── Rental deepest leaves ────────────────────────────────────────────────
+    "r_collections",            # child of r_invoices
+    "r_invoices",               # child of r_leases, r_units
+    "r_leases",                 # child of r_units, r_tenants
+    "r_unit_inspection_checklist",
+    "r_unit_inspection_photos",
+    "r_unit_inspections",       # child of r_units
+    "r_tenants",                # child of r_units
+    "r_expenses",               # child of r_properties, r_companies
+    "r_ownership",              # child of r_companies
+    # r_financial_uploads cascades from r_companies (ON DELETE CASCADE FK)
+    "r_units",                  # child of r_properties, r_companies
+    "r_properties",             # child of r_companies
+    "r_companies",
+    "r_maintenance_requests",
+    "r_receivables",
+    "r_payables",
+    # ── Construction / real-estate leaves ────────────────────────────────────
+    "work_log_notes",           # child of work_log_entries
+    "work_log_images",          # child of work_log_entries
+    "daily_progress_photos",    # child of daily_progress_photo_entries
+    "change_order_task_lines",  # child of change_orders
+    "debt_drawdowns",           # child of financing_facilities
+    "pay_applications",         # child of cost_trades
+    "work_log_entries",
+    "daily_progress_photo_entries",
+    "change_orders",
+    "cost_trades",
+    "project_expenses",
+    "permits",
+    "inspections",
+    "quality_checks",
+    "schedule_tasks",
+    "compliance_docs",
+    "project_financial_snapshots",
+    "project_roi_assumptions",
+    "financing_facilities",
+    "loans",
+    # association table — references vendor_contractors + projects
+    "capital_risk_events",
+    "vendor_contractors",
+    "projects",
+    "entities",
+    "litigation_claims",
+    "tax_events",
+    "land_parcels",
+    "market_comps",
+    # ── Old REIT / rental schema ─────────────────────────────────────────────
+    "leases",                   # child of units (old schema)
+    "units",                    # old reit rental units
+    "rental_properties",
+    "reit_assets",
+    # ── New REIT module ──────────────────────────────────────────────────────
+    "reit_units",               # child of reit_properties
+    "reit_properties",          # child of reit_companies
+    "reit_operating_expenses",
+    "reit_loans",
+    "reit_ownership",
+    "reit_cash_flow_weeks",
+    "reit_companies",
+    # ── PropDev ─────────────────────────────────────────────────────────────
+    "propdev_capital_calls",    # child of propdev_lots, propdev_companies
+    "propdev_partners",
+    "propdev_expenses",
+    "propdev_lots",
+    "propdev_companies",
+    "propdev_loans",
+    # ── Audit (delete before tenant row so FK is satisfied) ──────────────────
+    "audit_logs",
+]
+
+
+@router.delete("/admin/tenant/{tenant_id}", response_model=TenantDeleteResponse)
+def delete_tenant(
+    tenant_id: str,
+    current_user: CurrentUser = Depends(require_role("platform_admin")),
+    db: Session = Depends(get_db),
+):
+    """
+    Permanently delete a tenant and ALL of its data.
+
+    Gate: platform_admin role only (must be set manually in DB — cannot
+    be assigned via the invite-user endpoint).
+
+    Safety:
+    - Verify target tenant exists before touching anything.
+    - Set Postgres RLS context to target tenant before issuing deletes.
+    - Wrap the entire operation in a single transaction.
+    - Return a table-by-table row-count summary for the audit trail.
+    - Log the operation to audit_logs BEFORE committing (using caller's tenant_id).
+
+    NEVER call this against AKK's tenant or any live LLC tenant without
+    confirming on a disposable test tenant first.
+    """
+    try:
+        target_id = uuid.UUID(tenant_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid tenant_id UUID format")
+
+    # tenants is excluded from RLS — query it directly
+    target_tenant = db.query(Tenant).filter(Tenant.id == target_id).first()
+    if not target_tenant:
+        raise HTTPException(status_code=404, detail=f"Tenant {tenant_id} not found")
+
+    deleted_rows: dict[str, int] = {}
+
+    # Set Postgres RLS context to the target tenant so that all DELETEs below
+    # are scoped through the tenant_isolation policy.  The caller's context was
+    # already set by get_current_user(); we override it here for the delete pass.
+    set_rls_tenant(db, tenant_id)
+
+    for table in _TENANT_TABLES_IN_ORDER:
+        # Verify the table actually exists (gracefully skip if a table hasn't
+        # been created yet in this deployment, e.g. on a fresh staging DB).
+        exists = db.execute(
+            text(
+                "SELECT 1 FROM information_schema.tables "
+                "WHERE table_schema = 'public' AND table_name = :tbl"
+            ),
+            {"tbl": table},
+        ).fetchone()
+        if not exists:
+            deleted_rows[table] = 0
+            continue
+
+        result = db.execute(
+            text(f"DELETE FROM {table} WHERE tenant_id = :tid"),  # noqa: S608
+            {"tid": target_id},
+        )
+        deleted_rows[table] = result.rowcount
+
+    # tenant_users and tenants are excluded from RLS — delete them directly.
+    tu_result = db.execute(
+        text("DELETE FROM tenant_users WHERE tenant_id = :tid"),
+        {"tid": target_id},
+    )
+    deleted_rows["tenant_users"] = tu_result.rowcount
+
+    t_result = db.execute(
+        text("DELETE FROM tenants WHERE id = :tid"),
+        {"tid": target_id},
+    )
+    deleted_rows["tenants"] = t_result.rowcount
+
+    # Audit the deletion itself — use the caller's tenant_id, not the deleted one.
+    db.add(AuditLog(
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.user_id,
+        action="tenant_deletion",
+        endpoint=f"/api/auth/admin/tenant/{tenant_id}",
+        success=True,
+        purpose=f"deleted_tenant:{tenant_id}",
+    ))
+
+    db.commit()
+
+    return TenantDeleteResponse(
+        tenant_id=tenant_id,
+        deleted_rows=deleted_rows,
+        message=f"Tenant '{target_tenant.company_name}' and all associated data deleted.",
+    )
 
 
 @router.get("/team")

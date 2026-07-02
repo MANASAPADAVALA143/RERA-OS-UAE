@@ -21,6 +21,9 @@ class UserRole(str, enum.Enum):
     controller = "controller"
     analyst = "analyst"
     viewer = "viewer"
+    # Cross-tenant platform administrator — can delete tenants.
+    # Must be set manually in the DB; cannot be assigned via invite-user endpoint.
+    platform_admin = "platform_admin"
 
 
 class UserStatus(str, enum.Enum):
