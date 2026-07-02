@@ -1,7 +1,7 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ComposedChart, Bar, Line, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, CartesianGrid, Cell,
+  ComposedChart, BarChart, Bar, Line, Area, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, CartesianGrid, Cell, Legend,
 } from 'recharts';
 import { AlertTriangle } from 'lucide-react';
 import api from '../services/api';
@@ -303,19 +303,74 @@ function StatusHistoryTab() {
   );
 }
 
-// ── LTM PERFORMANCE TAB ───────────────────────────────────────────────────────
+// ── LTM PERFORMANCE TAB (REDESIGNED) ─────────────────────────────────────────
+
+const LTM_C = {
+  teal:  '#18B7A0',
+  green: '#26A65B',
+  amber: '#F2C14E',
+  red:   '#E76F6F',
+  gold:  '#D4AF37',
+};
+const LTM_CARD: React.CSSProperties = {
+  background: '#FBF6EE',
+  border: '1px solid #E8DEC8',
+  borderRadius: 12,
+  padding: '14px 16px',
+};
+const LTM_TICK = { fill: '#7A7A7A', fontSize: 11 };
+const LTM_TT = {
+  contentStyle: { background: '#FBF6EE', border: '1px solid #E8DEC8', color: '#262626', borderRadius: 8, fontSize: 12 },
+  labelStyle:   { color: '#5A4B35', fontWeight: 600 },
+};
+
+function priorityScore(ltm: ReturnType<typeof computeUnitLtm>): number {
+  let s = 0;
+  if (ltm.occPct < 50)  s += 40;
+  else if (ltm.occPct < 75)  s += 20;
+  else if (ltm.occPct < 90)  s += 10;
+  if (ltm.lost > 10000) s += 30;
+  else if (ltm.lost > 5000)  s += 15;
+  else if (ltm.lost > 2000)  s += 8;
+  if (ltm.lastStatus === 'vacant')     s += 20;
+  if (ltm.maxConsecVacant >= 3)        s += 10;
+  return s;
+}
+
+function LtmKpi({ label, value, sub, accent, warn, na }: {
+  label: string; value: string; sub?: string; accent?: string; warn?: boolean; na?: boolean;
+}) {
+  return (
+    <div style={LTM_CARD}>
+      <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#7A7A7A', marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums lining-nums', color: na ? '#C0C0C0' : warn ? LTM_C.red : (accent ?? '#1F1F1F') }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: na ? '#D0D0D0' : '#9B9B9B', marginTop: 4 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function LtmChart({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
+  return (
+    <div style={LTM_CARD}>
+      <div style={{ marginBottom: 12 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 600, color: '#3A2F1F', margin: 0 }}>{title}</h3>
+        {sub && <p style={{ fontSize: 11, color: '#9B9B9B', margin: '3px 0 0' }}>{sub}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
 
 function LTMPerformanceTab() {
-  const [allUnits, setAllUnits] = useState<UnitRow[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [filterCo, setFilterCo] = useState('');
-  const [selId, setSelId]       = useState('all');
-  const [viewMode, setViewMode] = useState<'chart' | 'table'>('chart');
+  const [allUnits, setAllUnits]         = useState<UnitRow[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [filterCo, setFilterCo]         = useState('');
+  const [filterBuilding, setFilterBuilding] = useState('');
 
   useEffect(() => {
-    api.get<UnitRow[]>('/api/rentals/units').then(r => {
-      setAllUnits(r.data);
-    }).finally(() => setLoading(false));
+    api.get<UnitRow[]>('/api/rentals/units')
+      .then(r => setAllUnits(r.data))
+      .finally(() => setLoading(false));
   }, []);
 
   const availableMonths = useMemo(() => getAvailableMonths(allUnits), [allUnits]);
@@ -325,256 +380,372 @@ function LTMPerformanceTab() {
     [allUnits],
   );
 
+  const buildings = useMemo(() => {
+    const src = filterCo ? allUnits.filter(u => u.company_name === filterCo) : allUnits;
+    return [...new Set(src.map(u => u.property_name).filter((n): n is string => !!n))].sort();
+  }, [allUnits, filterCo]);
+
   const filteredUnits = useMemo(
-    () => filterCo ? allUnits.filter(u => u.company_name === filterCo) : allUnits,
-    [allUnits, filterCo],
+    () => allUnits.filter(u =>
+      (!filterCo || u.company_name === filterCo) &&
+      (!filterBuilding || u.property_name === filterBuilding)
+    ),
+    [allUnits, filterCo, filterBuilding],
   );
 
-  const displayUnit = useMemo(
-    () => selId !== 'all' ? allUnits.find(u => u.id === selId) : undefined,
-    [allUnits, selId],
+  const allLtm = useMemo(
+    () => filteredUnits.map(u => ({ unit: u, ltm: computeUnitLtm(u, availableMonths) })),
+    [filteredUnits, availableMonths],
   );
 
-  const displayLtm = useMemo(
-    () => displayUnit ? computeUnitLtm(displayUnit, availableMonths) : null,
-    [displayUnit, availableMonths],
+  // ── Portfolio KPIs ───────────────────────────────────────────────────────────
+  const kpis = useMemo(() => {
+    const totalUnits = allLtm.length;
+    const occupied   = allLtm.filter(({ ltm }) => ltm.occMonths > 0).length;
+    const collected  = allLtm.reduce((s, { ltm }) => s + ltm.collected, 0);
+    const expected   = allLtm.reduce((s, { ltm }) => s + ltm.expected, 0);
+    const lost       = Math.max(0, expected - collected);
+    const occRate    = totalUnits > 0 ? occupied / totalUnits : 0;
+    const collRate   = expected > 0 ? (collected / expected) * 100 : null;
+    const avgOccRent = occupied > 0 ? collected / occupied : null;
+    return { totalUnits, occupied, collected, expected, lost, occRate, collRate, avgOccRent };
+  }, [allLtm]);
+
+  // ── Cross-section chart: all units ranked by Lost Rent ───────────────────────
+  const crossSection = useMemo(() =>
+    allLtm
+      .filter(({ ltm }) => ltm.totalMonths > 0)
+      .sort((a, b) => b.ltm.lost - a.ltm.lost)
+      .map(({ unit, ltm }) => ({
+        name: unit.unit_number.length > 10 ? unit.unit_number.slice(0, 10) + '…' : unit.unit_number,
+        lost: ltm.lost,
+        occPct: ltm.occPct,
+      })),
+    [allLtm],
   );
 
-  const chartData = useMemo(() => {
-    if (!displayLtm) return [];
-    return displayLtm.monthData.map(m => ({
-      month: m.month.slice(0, 3),  // "Jan" from "Jan-2026"
-      fullMonth: m.month,
-      rent: m.rent,
-      occupancy: m.rent > 0 ? 100 : 0,
-      status: m.status,
-      lost: m.status === 'vacant' ? displayLtm.marketRent : 0,
-    }));
-  }, [displayLtm]);
+  // ── Monthly trend (portfolio aggregate) ──────────────────────────────────────
+  const monthlyTrend = useMemo(() =>
+    availableMonths.map(month => {
+      let collected = 0, expected = 0;
+      for (const { unit, ltm } of allLtm) {
+        collected += (unit.rent_history ?? {})[month] ?? 0;
+        expected  += ltm.marketRent;
+      }
+      return { month: month.slice(0, 3), collected, expected, lost: Math.max(0, expected - collected) };
+    }),
+    [allLtm, availableMonths],
+  );
 
-  // Strategic insights from REAL units
+  // ── Building comparison ───────────────────────────────────────────────────────
+  const buildingChart = useMemo(() => {
+    const map: Record<string, { collected: number; expected: number }> = {};
+    for (const { unit, ltm } of allLtm) {
+      const key = (unit.property_name || unit.company_name || 'Unknown').slice(0, 20);
+      if (!map[key]) map[key] = { collected: 0, expected: 0 };
+      map[key].collected += ltm.collected;
+      map[key].expected  += ltm.expected;
+    }
+    return Object.entries(map).map(([name, v]) => ({ name, ...v })).sort((a, b) => b.expected - a.expected);
+  }, [allLtm]);
+
+  // ── Action distribution ───────────────────────────────────────────────────────
+  const actionDist = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const { ltm } of allLtm) {
+      if (ltm.totalMonths > 0) map[ltm.action] = (map[ltm.action] ?? 0) + 1;
+    }
+    const ACTION_FILL: Record<string, string> = {
+      'Offer discount': LTM_C.red,
+      'Review rent':    LTM_C.amber,
+      'Retain tenant':  LTM_C.green,
+      'Monitor':        '#A8A29E',
+    };
+    return Object.entries(map)
+      .map(([action, count]) => ({ action, count, fill: ACTION_FILL[action] ?? LTM_C.gold }))
+      .sort((a, b) => b.count - a.count);
+  }, [allLtm]);
+
+  // ── Top risk units ─────────────────────────────────────────────────────────────
+  const topRisk = useMemo(() =>
+    allLtm
+      .filter(({ ltm }) => ltm.totalMonths > 0)
+      .map(({ unit, ltm }) => ({ unit, ltm, score: priorityScore(ltm) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 12),
+    [allLtm],
+  );
+
+  // ── Strategic insights ─────────────────────────────────────────────────────────
   const insights = useMemo(() => {
-    if (availableMonths.length === 0) return [];
-    const list: { type: 'red' | 'orange' | 'yellow' | 'green'; text: string; rec: string }[] = [];
-    for (const unit of filteredUnits) {
-      const ltm = computeUnitLtm(unit, availableMonths);
+    type InsightType = 'red' | 'amber' | 'green';
+    const list: { type: InsightType; icon: string; title: string; detail: string }[] = [];
+    for (const { unit, ltm } of allLtm) {
       if (ltm.totalMonths === 0) continue;
-      if (ltm.maxConsecVacant >= 3) {
-        list.push({ type: 'red', text: `${unit.unit_number} (${unit.company_name}) — vacant ${ltm.maxConsecVacant} months · Lost: ${fmtN(ltm.lost)}`, rec: 'Offer 1 month free or reduce rent 10% to fill quickly' });
-      } else if (ltm.lastStatus === 'vacant' && ltm.maxConsecVacant >= 2) {
-        list.push({ type: 'orange', text: `${unit.unit_number} (${unit.company_name}) — currently vacant ${ltm.maxConsecVacant} months`, rec: 'Contact prospects now · Offer early move-in special' });
-      } else if (ltm.avgRent > 0 && ltm.marketRent > 0 && ltm.avgRent < ltm.marketRent * 0.9 && ltm.lastStatus === 'occupied') {
-        list.push({ type: 'yellow', text: `${unit.unit_number} (${unit.company_name}) — avg rent ${fmtN(ltm.avgRent)}, market ${fmtN(ltm.marketRent)}`, rec: 'Gradual increase $100/year to approach market rate' });
+      const lbl = unit.unit_number;
+      if (ltm.occPct < 50 && ltm.lost > 3000) {
+        list.push({ type: 'red',   icon: '🔴', title: `Urgent discount review — ${lbl}`, detail: `${ltm.occPct}% occupancy · ${fmtN(ltm.lost)} lost` });
+      } else if (ltm.avgRent > 0 && ltm.marketRent > 0 && ltm.avgRent > ltm.marketRent * 0.95 && ltm.occPct < 70) {
+        list.push({ type: 'amber', icon: '🟡', title: `Pricing review — ${lbl}`, detail: `High avg rent but ${ltm.occPct}% occupancy` });
+      } else if (ltm.expected > 8000 && ltm.collected / ltm.expected < 0.70) {
+        list.push({ type: 'amber', icon: '🟠', title: `Collections: ${lbl}`, detail: `${Math.round((ltm.collected / ltm.expected) * 100)}% collection rate` });
       } else if (ltm.occPct === 100 && ltm.totalMonths >= 3) {
-        list.push({ type: 'green', text: `${unit.unit_number} (${unit.company_name}) — 100% occupancy across ${ltm.totalMonths} months`, rec: 'Best performer · Consider rent increase at renewal' });
+        list.push({ type: 'green', icon: '🟢', title: `Top performer — ${lbl}`, detail: `100% occupancy · ${fmtN(ltm.avgRent)}/mo avg` });
       }
     }
-    return list.slice(0, 12);
-  }, [filteredUnits, availableMonths]);
-
-  const insightBorder = { red: '#EF4444', orange: '#F97316', yellow: '#F59E0B', green: '#22C55E' };
-  const insightBg = { red: 'rgba(239,68,68,0.1)', orange: 'rgba(249,115,22,0.1)', yellow: 'rgba(245,158,11,0.1)', green: 'rgba(34,197,94,0.1)' };
-  const insightColor = { red: '#FCA5A5', orange: '#FDBA74', yellow: '#FDE68A', green: '#86EFAC' };
-  const insightIcon = { red: '🔴', orange: '🟠', yellow: '🟡', green: '🟢' };
+    return list.slice(0, 8);
+  }, [allLtm]);
 
   if (loading) return <LoadingSkeleton rows={8} />;
 
   const periodLabel = availableMonths.length > 0
-    ? `${availableMonths.length} months (${availableMonths[0]} – ${availableMonths[availableMonths.length - 1]})`
-    : 'No rent history available';
+    ? `${availableMonths[0]} – ${availableMonths[availableMonths.length - 1]} (${availableMonths.length} mo)`
+    : 'No rent history';
+
+  const hasData = availableMonths.length > 0 && allLtm.some(({ ltm }) => ltm.totalMonths > 0);
 
   return (
     <div className="space-y-5">
-      {/* Controls */}
+      {/* Filters */}
       <div className="flex flex-wrap gap-2 items-center">
-        <select value={filterCo} onChange={e => { setFilterCo(e.target.value); setSelId('all'); }} style={SEL_STYLE}>
+        <select value={filterCo} onChange={e => { setFilterCo(e.target.value); setFilterBuilding(''); }} style={SEL_STYLE}>
           <option value="" style={{ background: '#F7F5F0' }}>All Companies</option>
           {companies.map(c => <option key={c} value={c} style={{ background: '#F7F5F0' }}>{c}</option>)}
         </select>
-        <select value={selId} onChange={e => setSelId(e.target.value)} style={SEL_STYLE}>
-          <option value="all" style={{ background: '#F7F5F0' }}>All Units</option>
-          {filteredUnits.map(u => (
-            <option key={u.id} value={u.id} style={{ background: '#F7F5F0' }}>
-              {u.unit_number} — {u.property_name || u.company_name}
-            </option>
-          ))}
+        <select value={filterBuilding} onChange={e => setFilterBuilding(e.target.value)} style={SEL_STYLE}>
+          <option value="" style={{ background: '#F7F5F0' }}>All Buildings</option>
+          {buildings.map(b => <option key={b} value={b} style={{ background: '#F7F5F0' }}>{b}</option>)}
         </select>
         <span className="text-xs ml-2" style={{ color: '#A8A29E' }}>{periodLabel}</span>
-        <div className="flex gap-1 ml-auto p-1 rounded-lg" style={{ background: '#F0EDE5' }}>
-          {(['chart', 'table'] as const).map(v => (
-            <button key={v} onClick={() => setViewMode(v)}
-              className="px-3 py-1 rounded text-xs font-medium capitalize transition-colors"
-              style={viewMode === v
-                ? { background: '#F7F5F0', color: '#1C1917' }
-                : { color: '#A8A29E' }
-              }>{v}</button>
-          ))}
-        </div>
       </div>
 
-      {/* No history notice */}
       {availableMonths.length === 0 && (
         <div className="rounded-xl p-5 text-center" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)' }}>
           <p className="font-medium mb-1" style={{ color: '#D4AF37' }}>No rent history data yet</p>
-          <p className="text-sm" style={{ color: '#A8A29E' }}>
-            Use <strong>Sync Rent Data</strong> to upload the Rent Receivable Excel — that populates month-by-month history for LTM analysis.
-          </p>
+          <p className="text-sm" style={{ color: '#A8A29E' }}>Use <strong>Sync Rent Data</strong> to upload the Rent Receivable Excel.</p>
         </div>
       )}
 
-      {/* Dual-axis chart — single unit */}
-      {viewMode === 'chart' && displayUnit && displayLtm && chartData.length > 0 && (
-        <div className="rounded-xl p-5" style={{ background: '#F7F5F0', border: '1px solid #DDD8CC' }}>
-          <p className="text-sm font-semibold mb-0.5" style={{ color: '#1C1917' }}>
-            {displayUnit.unit_number} ({displayUnit.company_name}) — Rent &amp; Occupancy
-          </p>
-          <p className="text-xs mb-4" style={{ color: '#A8A29E' }}>
-            {periodLabel} · Market rent: {fmtN(displayLtm.marketRent)}/mo
-          </p>
-          <ResponsiveContainer width="100%" height={260}>
-            <ComposedChart data={chartData} margin={{ left: 0, right: 30 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F7F5F0" />
-              <XAxis dataKey="month" tick={TICK} />
-              <YAxis yAxisId="left" tickFormatter={v => `$${(v / 1000).toFixed(1)}K`} tick={TICK} domain={[0, displayLtm.marketRent * 1.2]} />
-              <YAxis yAxisId="right" orientation="right" tickFormatter={v => `${v}%`} tick={TICK} domain={[0, 130]} />
-              <Tooltip
-                content={({ active, payload, label }) => {
-                  if (!active || !payload?.length) return null;
-                  const d = payload[0]?.payload;
-                  return (
-                    <div style={{ background: '#F7F5F0', border: '1px solid #DDD8CC', borderRadius: 8, padding: '0.75rem', fontSize: '0.75rem', color: '#1C1917' }}>
-                      <p style={{ fontWeight: 600, marginBottom: 4, color: '#92400E' }}>{d.fullMonth || label}</p>
-                      <p>Status: <span style={{ fontWeight: 600 }}>{d.status === 'occupied' ? 'Occupied' : 'Vacant'}</span></p>
-                      <p>Rent: <span style={{ fontFamily: 'monospace' }}>{fmtN(d.rent)}</span></p>
-                      {d.lost > 0 && <p style={{ color: '#F87171' }}>Lost: <span style={{ fontFamily: 'monospace' }}>{fmtN(d.lost)}</span></p>}
-                    </div>
-                  );
-                }}
-              />
-              <Bar yAxisId="left" dataKey="rent" name="Rent Collected" radius={[2, 2, 0, 0]}>
-                {chartData.map((d, i) => <Cell key={i} fill={d.rent > 0 ? '#22C55E' : '#EF4444'} />)}
-              </Bar>
-              <Line yAxisId="right" type="stepAfter" dataKey="occupancy" stroke="#F59E0B" strokeWidth={2} dot={false} name="Occupancy %" />
-            </ComposedChart>
-          </ResponsiveContainer>
-          <div className="flex gap-4 mt-2 text-xs" style={{ color: '#A8A29E' }}>
-            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#22C55E' }} /> Rent Collected</span>
-            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#EF4444' }} /> Vacant Month</span>
-            <span className="flex items-center gap-1"><span className="inline-block w-6 h-0.5" style={{ background: '#F59E0B' }} /> Occupancy %</span>
+      {hasData && (
+        <>
+          {/* ── 8 KPI Cards ────────────────────────────────────────────────── */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3">
+            <LtmKpi label="Total Units"     value={String(kpis.totalUnits)} sub={`${filteredUnits.length} in scope`} />
+            <LtmKpi label="Occupied Units"  value={String(kpis.occupied)}  sub={`${kpis.totalUnits - kpis.occupied} vacant`} accent={LTM_C.green} />
+            <LtmKpi
+              label="Occupancy Rate" value={`${Math.round(kpis.occRate * 100)}%`}
+              accent={kpis.occRate >= 0.92 ? LTM_C.green : kpis.occRate >= 0.82 ? LTM_C.amber : LTM_C.red}
+            />
+            <LtmKpi label="Rent Collected"  value={fmtN(kpis.collected)}  sub="LTM period"        accent={LTM_C.teal} />
+            <LtmKpi label="Expected Rent"   value={fmtN(kpis.expected)}   sub="If fully occupied" />
+            <LtmKpi label="Vacancy Loss"    value={fmtN(kpis.lost)} warn={kpis.lost > 0} sub="Expected − Collected" />
+            <LtmKpi
+              label="Collection Rate"
+              value={kpis.collRate !== null ? `${kpis.collRate.toFixed(1)}%` : '—'}
+              warn={kpis.collRate !== null && kpis.collRate < 90}
+              na={kpis.collRate === null}
+            />
+            <LtmKpi
+              label="Avg Occ Rent"
+              value={kpis.avgOccRent !== null ? fmtN(kpis.avgOccRent) : '—'}
+              sub="/mo per occupied"
+              accent={LTM_C.gold}
+              na={kpis.avgOccRent === null}
+            />
           </div>
-        </div>
-      )}
 
-      {viewMode === 'chart' && !displayUnit && availableMonths.length > 0 && (
-        <div className="rounded-lg p-4 text-sm" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', color: '#D4AF37' }}>
-          Select a specific unit above to view its dual-axis chart.
-        </div>
-      )}
+          {/* ── Row 1: Two wide charts ──────────────────────────────────── */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <LtmChart title="Lost Rent vs Occupancy by Unit" sub="Bars = vacancy loss · Line = occupancy % · sorted highest loss first">
+              {crossSection.length > 0 ? (
+                <ResponsiveContainer width="100%" height={240}>
+                  <ComposedChart data={crossSection} margin={{ left: 0, right: 32, top: 4, bottom: 28 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(232,222,200,0.5)" />
+                    <XAxis dataKey="name" tick={{ ...LTM_TICK, fontSize: 10 }} angle={-25} textAnchor="end" height={52} />
+                    <YAxis yAxisId="left"  tick={LTM_TICK} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+                    <YAxis yAxisId="right" orientation="right" tick={LTM_TICK} tickFormatter={(v: number) => `${v}%`} domain={[0, 110]} />
+                    <Tooltip
+                      contentStyle={LTM_TT.contentStyle}
+                      labelStyle={LTM_TT.labelStyle}
+                      formatter={(v: number, name: string) => name === 'occPct' ? [`${v}%`, 'Occupancy'] : [fmtN(v), 'Lost Rent']}
+                    />
+                    <Bar yAxisId="left" dataKey="lost" name="Lost Rent" radius={[3, 3, 0, 0]}>
+                      {crossSection.map((_, i) => <Cell key={i} fill={LTM_C.red} opacity={Math.max(0.55, 0.9 - i * 0.025)} />)}
+                    </Bar>
+                    <Line yAxisId="right" type="monotone" dataKey="occPct" name="Occupancy %" stroke={LTM_C.gold} strokeWidth={2} dot={{ r: 3, fill: LTM_C.gold }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-40" style={{ color: '#C0C0C0', fontSize: 13 }}>No vacancy loss data available</div>
+              )}
+            </LtmChart>
 
-      {/* LTM Summary table — always visible */}
-      {availableMonths.length > 0 && (
-        <div className="rounded-xl overflow-hidden" style={{ background: '#F7F5F0', border: '1px solid #DDD8CC' }}>
-          <div className="px-4 py-3" style={{ borderBottom: '1px solid #DDD8CC' }}>
-            <p className="font-semibold text-sm" style={{ color: '#1C1917' }}>
-              LTM Summary — {filterCo || 'All Companies'} · {filteredUnits.length} units
-            </p>
+            <LtmChart title="Monthly Trend — Collected vs Expected" sub="Portfolio aggregate · area = uncollected gap">
+              {monthlyTrend.length > 0 ? (
+                <ResponsiveContainer width="100%" height={240}>
+                  <ComposedChart data={monthlyTrend} margin={{ left: 0, right: 8, top: 4, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(232,222,200,0.5)" />
+                    <XAxis dataKey="month" tick={LTM_TICK} />
+                    <YAxis tick={LTM_TICK} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip
+                      contentStyle={LTM_TT.contentStyle}
+                      labelStyle={LTM_TT.labelStyle}
+                      formatter={(v: number, name: string) => [fmtN(v), name]}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 11, color: '#7A7A7A' }} />
+                    <Area type="monotone" dataKey="lost" name="Lost" fill={`${LTM_C.red}25`} stroke="none" legendType="none" />
+                    <Line type="monotone" dataKey="expected"  name="Expected"  stroke={LTM_C.gold}  strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
+                    <Line type="monotone" dataKey="collected" name="Collected" stroke={LTM_C.teal}  strokeWidth={2.5} dot={{ r: 3, fill: LTM_C.teal }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-40" style={{ color: '#C0C0C0', fontSize: 13 }}>No monthly trend data</div>
+              )}
+            </LtmChart>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr style={{ background: '#F0EDE5' }}>
-                  {['Unit', 'Building', 'Company', 'Occ Mo', 'Vac Mo', 'Collected', 'Expected', 'Lost', 'Occ %', 'Avg Rent', 'Trend', 'Action'].map(h => (
-                    <th key={h} className="px-3 py-2.5 text-left whitespace-nowrap font-medium" style={{ color: '#A8A29E' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUnits.map(u => {
-                  const ltm = computeUnitLtm(u, availableMonths);
-                  const noHistory = ltm.totalMonths === 0;
-                  const actionColor = {
-                    'Offer discount': { bg: '#FCEAEA', color: '#C0392B' },
-                    'Review rent':    { bg: 'rgba(245,158,11,0.15)', color: '#92400E' },
-                    'Retain tenant':  { bg: 'rgba(34,197,94,0.15)',  color: '#065F46' },
-                    'Monitor':        { bg: 'rgba(100,116,139,0.15)', color: '#44403C' },
-                  }[ltm.action] ?? { bg: 'rgba(100,116,139,0.15)', color: '#44403C' };
 
-                  return (
-                    <tr key={u.id} style={{ borderTop: '1px solid #1E2A4A' }}>
-                      <td className="px-3 py-2 font-mono font-medium" style={{ color: '#1C1917' }}>{u.unit_number}</td>
-                      <td className="px-3 py-2 max-w-[120px] truncate" style={{ color: '#92400E' }}>{u.property_name || '—'}</td>
-                      <td className="px-3 py-2 max-w-[120px] truncate" style={{ color: '#92400E' }}>{u.company_name || '—'}</td>
-                      {noHistory ? (
-                        <td colSpan={9} className="px-3 py-2 text-xs italic" style={{ color: '#DDD8CC' }}>
-                          No history — upload rent receivable to see LTM data
-                        </td>
-                      ) : (
-                        <>
-                          <td className="px-3 py-2 text-center font-medium" style={{ color: '#86EFAC' }}>{ltm.occMonths}</td>
-                          <td className="px-3 py-2 text-center font-medium" style={{ color: ltm.vacMonths > 0 ? '#F87171' : '#A8A29E' }}>{ltm.vacMonths}</td>
-                          <td className="px-3 py-2 font-mono text-right" style={{ color: '#1C1917' }}>{fmtN(ltm.collected)}</td>
-                          <td className="px-3 py-2 font-mono text-right" style={{ color: '#A8A29E' }}>{fmtN(ltm.expected)}</td>
-                          <td className="px-3 py-2 font-mono text-right" style={{ color: ltm.lost > 0 ? '#F87171' : '#A8A29E' }}>{ltm.lost > 0 ? fmtN(ltm.lost) : '—'}</td>
-                          <td className="px-3 py-2 text-center">
-                            <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={
-                              ltm.occPct === 100
-                                ? { background: 'rgba(34,197,94,0.15)', color: '#86EFAC' }
-                                : ltm.occPct >= 75
-                                  ? { background: 'rgba(245,158,11,0.15)', color: '#FDE68A' }
-                                  : { background: 'rgba(239,68,68,0.15)', color: '#FCA5A5' }
-                            }>{ltm.occPct}%</span>
-                          </td>
-                          <td className="px-3 py-2 font-mono text-right" style={{ color: '#1C1917' }}>{ltm.avgRent > 0 ? fmtN(ltm.avgRent) : '—'}</td>
-                          <td className="px-3 py-2 text-center text-base font-bold">
-                            {ltm.trend === 'up'
-                              ? <span style={{ color: '#86EFAC' }}>↑</span>
-                              : ltm.trend === 'down'
-                                ? <span style={{ color: '#F87171' }}>↓</span>
-                                : <span style={{ color: '#A8A29E' }}>→</span>}
-                          </td>
-                          <td className="px-3 py-2">
-                            <span className="px-2 py-0.5 rounded text-xs font-medium" style={{ background: actionColor.bg, color: actionColor.color }}>
-                              {ltm.action}
-                            </span>
-                          </td>
-                        </>
-                      )}
+          {/* ── Row 2: Three medium charts ──────────────────────────────── */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <LtmChart title="By Building" sub="LTM Collected vs Expected">
+              {buildingChart.length > 0 ? (
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart layout="vertical" data={buildingChart} margin={{ left: 4, right: 16, top: 4, bottom: 4 }}>
+                    <XAxis type="number" tick={{ ...LTM_TICK, fontSize: 10 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+                    <YAxis type="category" dataKey="name" width={88} tick={{ ...LTM_TICK, fontSize: 10 }} />
+                    <Tooltip contentStyle={LTM_TT.contentStyle} labelStyle={LTM_TT.labelStyle} formatter={(v: number, name: string) => [fmtN(v), name]} />
+                    <Legend wrapperStyle={{ fontSize: 10, color: '#7A7A7A' }} />
+                    <Bar dataKey="expected"  name="Expected"  fill={`${LTM_C.gold}70`} radius={[0, 3, 3, 0]} />
+                    <Bar dataKey="collected" name="Collected" fill={LTM_C.teal}         radius={[0, 3, 3, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-40" style={{ color: '#C0C0C0', fontSize: 13 }}>No building data</div>
+              )}
+            </LtmChart>
+
+            <LtmChart title="Vacancy Duration Breakdown" sub="Days vacant per unit group">
+              <div className="flex flex-col items-center justify-center py-6 gap-3">
+                <span style={{ fontSize: 30, opacity: 0.3 }}>📊</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#B0B0B0' }}>Vacancy duration data pending</span>
+                <span style={{ fontSize: 11, color: '#C8C8C8', maxWidth: 200, textAlign: 'center', lineHeight: 1.5 }}>
+                  Buckets 0–30 / 31–60 / 61–90 / 90+ days require vacancy start-date tracking not yet captured.
+                </span>
+              </div>
+            </LtmChart>
+
+            <LtmChart title="Recommended Actions" sub="Unit count by action type">
+              {actionDist.length > 0 ? (
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={actionDist} margin={{ left: 0, right: 8, top: 4, bottom: 36 }}>
+                    <XAxis dataKey="action" tick={{ ...LTM_TICK, fontSize: 9 }} angle={-20} textAnchor="end" height={58} interval={0} />
+                    <YAxis tick={LTM_TICK} allowDecimals={false} />
+                    <Tooltip contentStyle={LTM_TT.contentStyle} labelStyle={LTM_TT.labelStyle} />
+                    <Bar dataKey="count" name="Units" radius={[4, 4, 0, 0]}>
+                      {actionDist.map((d, i) => <Cell key={i} fill={d.fill} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-40" style={{ color: '#C0C0C0', fontSize: 13 }}>No data</div>
+              )}
+            </LtmChart>
+          </div>
+
+          {/* ── Bottom: Top Risk Table + Strategic Insights ─────────────── */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            {/* Top Risk table */}
+            <div style={{ ...LTM_CARD, padding: 0, overflow: 'hidden' }} className="lg:col-span-2">
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid #E8DEC8' }}>
+                <h3 style={{ fontSize: 15, fontWeight: 600, color: '#3A2F1F', margin: 0 }}>Top Risk Units</h3>
+                <p style={{ fontSize: 11, color: '#9B9B9B', margin: '3px 0 0' }}>Ranked by occupancy risk + vacancy loss · {topRisk.length} shown</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full" style={{ borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: '#F0EDE5' }}>
+                      {['Unit', 'Building', 'Occ Mo', 'Vac Mo', 'Collected', 'Expected', 'Lost', 'Occ %', 'Avg Rent', 'Trend', 'Action', 'Score'].map(h => (
+                        <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#7A7A7A', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', borderBottom: '1px solid #E8DEC8' }}>{h}</th>
+                      ))}
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+                  </thead>
+                  <tbody>
+                    {topRisk.map(({ unit, ltm, score }, i) => {
+                      const occColor = ltm.occPct >= 92 ? LTM_C.green : ltm.occPct >= 82 ? '#C57B1A' : LTM_C.red;
+                      const trendEl = ltm.trend === 'up'
+                        ? <span style={{ color: LTM_C.green, fontWeight: 700 }}>↑</span>
+                        : ltm.trend === 'down'
+                          ? <span style={{ color: LTM_C.red, fontWeight: 700 }}>↓</span>
+                          : <span style={{ color: '#A8A29E' }}>→</span>;
+                      const scoreBg    = score >= 60 ? 'rgba(231,111,111,0.18)' : score >= 30 ? 'rgba(242,193,78,0.18)' : 'rgba(38,166,91,0.12)';
+                      const scoreColor = score >= 60 ? '#B91C1C' : score >= 30 ? '#92400E' : '#065F46';
+                      const actionStyle = {
+                        'Offer discount': { bg: '#FCEAEA', color: '#C0392B' },
+                        'Review rent':    { bg: 'rgba(242,193,78,0.2)', color: '#92400E' },
+                        'Retain tenant':  { bg: 'rgba(38,166,91,0.12)', color: '#065F46' },
+                        'Monitor':        { bg: 'rgba(168,162,158,0.15)', color: '#44403C' },
+                      }[ltm.action] ?? { bg: 'rgba(168,162,158,0.15)', color: '#44403C' };
+                      return (
+                        <tr key={unit.id} style={{ background: i % 2 === 0 ? '#F7F1E6' : '#FBF6EE', borderBottom: '1px solid rgba(232,222,200,0.5)' }}>
+                          <td style={{ padding: '7px 10px', fontWeight: 500, color: '#262626', whiteSpace: 'nowrap' }}>{unit.unit_number}</td>
+                          <td style={{ padding: '7px 10px', color: '#5A4B35', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{unit.property_name || '—'}</td>
+                          <td style={{ padding: '7px 10px', textAlign: 'center', color: LTM_C.green, fontWeight: 600 }}>{ltm.occMonths}</td>
+                          <td style={{ padding: '7px 10px', textAlign: 'center', color: ltm.vacMonths > 0 ? LTM_C.red : '#A8A29E', fontWeight: 600 }}>{ltm.vacMonths}</td>
+                          <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums' }}>{fmtN(ltm.collected)}</td>
+                          <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums', color: '#7A7A7A' }}>{fmtN(ltm.expected)}</td>
+                          <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums', color: ltm.lost > 0 ? LTM_C.red : '#A8A29E', fontWeight: ltm.lost > 0 ? 600 : 400 }}>{ltm.lost > 0 ? fmtN(ltm.lost) : '—'}</td>
+                          <td style={{ padding: '7px 10px', textAlign: 'center' }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: occColor }}>{ltm.occPct}%</span>
+                          </td>
+                          <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums' }}>{ltm.avgRent > 0 ? fmtN(ltm.avgRent) : '—'}</td>
+                          <td style={{ padding: '7px 10px', textAlign: 'center', fontSize: 15 }}>{trendEl}</td>
+                          <td style={{ padding: '7px 10px' }}>
+                            <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 10, whiteSpace: 'nowrap', background: actionStyle.bg, color: actionStyle.color }}>{ltm.action}</span>
+                          </td>
+                          <td style={{ padding: '7px 10px', textAlign: 'center' }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 10, background: scoreBg, color: scoreColor }}>{score}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {topRisk.length === 0 && (
+                      <tr><td colSpan={12} style={{ padding: '20px 16px', textAlign: 'center', color: '#C0C0C0', fontSize: 13 }}>No risk units — portfolio performing within range.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
-      {/* Strategic Insights */}
-      {insights.length > 0 && (
-        <div className="rounded-xl p-5" style={{ background: '#F7F5F0', border: '1px solid #DDD8CC' }}>
-          <p className="text-sm font-semibold mb-3" style={{ color: '#1C1917' }}>Strategic Insights</p>
-          <div className="space-y-2">
-            {insights.map((ins, i) => (
-              <div
-                key={i}
-                className="rounded-r-lg p-3 border-l-4"
-                style={{ borderColor: insightBorder[ins.type], background: insightBg[ins.type] }}
-              >
-                <p className="text-sm font-medium" style={{ color: insightColor[ins.type] }}>
-                  <span className="mr-2">{insightIcon[ins.type]}</span>{ins.text}
-                </p>
-                <p className="text-sm mt-0.5 ml-6" style={{ color: insightColor[ins.type], opacity: 0.8 }}>
-                  💡 {ins.rec}
+            {/* Strategic Insights */}
+            <div style={LTM_CARD}>
+              <h3 style={{ fontSize: 15, fontWeight: 600, color: '#3A2F1F', margin: '0 0 3px' }}>Strategic Insights</h3>
+              <p style={{ fontSize: 11, color: '#9B9B9B', margin: '0 0 14px' }}>Rule-based flags from per-unit LTM data</p>
+              {insights.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {insights.map((ins, i) => {
+                    const border = ins.type === 'red' ? LTM_C.red : ins.type === 'amber' ? LTM_C.amber : LTM_C.green;
+                    const bg     = ins.type === 'red' ? 'rgba(231,111,111,0.08)' : ins.type === 'amber' ? 'rgba(242,193,78,0.10)' : 'rgba(38,166,91,0.08)';
+                    const tc     = ins.type === 'red' ? '#B91C1C' : ins.type === 'amber' ? '#92400E' : '#065F46';
+                    return (
+                      <div key={i} style={{ borderLeft: `3px solid ${border}`, background: bg, padding: '8px 10px', borderRadius: '0 6px 6px 0' }}>
+                        <p style={{ fontSize: 12, fontWeight: 600, color: tc, margin: 0 }}>{ins.icon} {ins.title}</p>
+                        <p style={{ fontSize: 11, color: tc, opacity: 0.8, margin: '3px 0 0' }}>{ins.detail}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '16px 0', color: '#65A87A', fontSize: 13 }}>
+                  🟢 No urgent issues — portfolio within normal range.
+                </div>
+              )}
+              <div style={{ marginTop: 14, padding: '8px 10px', background: 'rgba(38,38,38,0.04)', borderRadius: 8 }}>
+                <p style={{ fontSize: 10, color: '#A0A0A0', margin: 0, lineHeight: 1.6 }}>
+                  Rules: Occ &lt;50% + loss &gt;$3K → discount review · High rent + low occ → pricing review · Collection rate &lt;70% → collections flag
                 </p>
               </div>
-            ))}
+            </div>
           </div>
-        </div>
-      )}
-
-      {insights.length === 0 && availableMonths.length > 0 && (
-        <div className="rounded-xl p-4 text-sm" style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', color: '#86EFAC' }}>
-          🟢 No urgent issues found — all units are performing within normal range.
-        </div>
+        </>
       )}
     </div>
   );
