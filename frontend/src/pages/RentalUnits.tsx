@@ -493,11 +493,11 @@ function LTMPerformanceTab() {
                   const ltm = computeUnitLtm(u, availableMonths);
                   const noHistory = ltm.totalMonths === 0;
                   const actionColor = {
-                    'Offer discount': { bg: 'rgba(239,68,68,0.15)', color: '#FCA5A5' },
-                    'Review rent':    { bg: 'rgba(245,158,11,0.15)', color: '#FDE68A' },
-                    'Retain tenant':  { bg: 'rgba(34,197,94,0.15)',  color: '#86EFAC' },
-                    'Monitor':        { bg: 'rgba(100,116,139,0.15)', color: '#92400E' },
-                  }[ltm.action] ?? { bg: 'rgba(100,116,139,0.15)', color: '#92400E' };
+                    'Offer discount': { bg: '#FCEAEA', color: '#C0392B' },
+                    'Review rent':    { bg: 'rgba(245,158,11,0.15)', color: '#92400E' },
+                    'Retain tenant':  { bg: 'rgba(34,197,94,0.15)',  color: '#065F46' },
+                    'Monitor':        { bg: 'rgba(100,116,139,0.15)', color: '#44403C' },
+                  }[ltm.action] ?? { bg: 'rgba(100,116,139,0.15)', color: '#44403C' };
 
                   return (
                     <tr key={u.id} style={{ borderTop: '1px solid #1E2A4A' }}>

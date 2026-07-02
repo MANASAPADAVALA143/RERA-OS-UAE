@@ -316,8 +316,8 @@ export default function RentalLoanTracker() {
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-charcoal">Loan Tracker</h1>
-          <p className="text-sm text-gray-500">Rental property debt portfolio</p>
+          <h1 style={{ fontSize: 26, fontWeight: 600, color: '#1C1917', lineHeight: 1.25 }}>Loan Tracker</h1>
+          <p style={{ fontSize: 13, fontWeight: 400, color: '#6B6B6B', marginTop: 2 }}>Rental property debt portfolio · DSCR analysis, refinancing &amp; amortization</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <select value={companyFilter} onChange={e => { setCompanyFilter(e.target.value); setBuildingFilter('all'); }}
@@ -363,16 +363,16 @@ export default function RentalLoanTracker() {
           { label: 'Total Outstanding', value: fmtUSD(filtered.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0) ?? 0) },
         ].map(k => (
           <div key={k.label} style={{ background: PT.cardBg, border: `0.5px solid ${PT.border}`, borderRadius: 8, padding: '16px 16px 12px' }}>
-            <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: PT.muted, marginBottom: 8 }}>{k.label}</p>
-            <p style={{ fontSize: 22, fontWeight: 700, color: PT.text, lineHeight: 1.2 }}>{k.value}</p>
-            {k.sub && <p style={{ fontSize: 11, color: PT.muted, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.sub}</p>}
+            <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 8 }}>{k.label}</p>
+            <p style={{ fontSize: 28, fontWeight: 700, color: PT.text, lineHeight: 1.2, fontVariantNumeric: 'tabular-nums lining-nums' }}>{k.value}</p>
+            {k.sub && <p style={{ fontSize: 12, color: PT.muted, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.sub}</p>}
           </div>
         ))}
       </div>
 
       <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, overflow: 'hidden' }}>
         <div style={{ padding: '12px 16px', borderBottom: `1px solid ${PT.border}` }}>
-          <h3 style={{ fontSize: 15, fontWeight: 600, color: PT.text }}>Loan Register</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: PT.text }}>Loan Register</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full" style={{ borderCollapse: 'collapse' }}>
@@ -384,7 +384,7 @@ export default function RentalLoanTracker() {
                   ['Outstanding', 'right'], ['Maturity', 'right'], ['EMI Day', 'right'],
                   ['DSCR', 'right'], ['Status', 'right'],
                 ] as [string, string][]).map(([h, align]) => (
-                  <th key={h} style={{ padding: '9px 12px', textAlign: align as 'left' | 'right', fontSize: 11, fontWeight: 600, color: PT.hdrText, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', borderBottom: `1px solid ${PT.border}` }}>{h}</th>
+                  <th key={h} style={{ padding: '9px 12px', textAlign: align as 'left' | 'right', fontSize: 12, fontWeight: 600, color: PT.hdrText, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', borderBottom: `1px solid ${PT.border}` }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -403,16 +403,16 @@ export default function RentalLoanTracker() {
                 const dscrColor = l.dscr == null ? PT.muted : l.dscr < 1.0 ? '#D9534F' : l.dscr <= 1.25 ? '#F5A623' : '#22A06B';
                 return (
                   <tr key={l.id} style={{ background: idx % 2 === 0 ? PT.rowOdd : PT.rowEven, borderBottom: `1px solid ${PT.border}` }}>
-                    <td style={{ padding: '9px 12px', fontSize: 12, color: PT.text }}>{l.company_name}</td>
-                    <td style={{ padding: '9px 12px', fontSize: 12, color: PT.text }}>{l.property_name}</td>
-                    <td style={{ padding: '9px 12px', fontSize: 12, color: PT.text }}>{l.loan_bank_name}</td>
-                    <td style={{ padding: '9px 12px', fontSize: 12, color: PT.text, textAlign: 'right', fontFamily: 'monospace' }}>{fmtUSD(l.loan_amount)}</td>
-                    <td style={{ padding: '9px 12px', fontSize: 12, color: rateColor, textAlign: 'right', fontFamily: 'monospace', fontWeight: 600 }}>{rate != null ? `${rate.toFixed(2)}%` : '—'}</td>
-                    <td style={{ padding: '9px 12px', fontSize: 12, color: PT.text, textAlign: 'right', fontFamily: 'monospace' }}>{l.loan_emi != null ? fmtUSD(l.loan_emi) : '—'}</td>
-                    <td style={{ padding: '9px 12px', fontSize: 12, color: PT.text, textAlign: 'right', fontFamily: 'monospace' }}>{fmtUSD(l.loan_balance_as_of ?? l.loan_amount)}</td>
-                    <td style={{ padding: '9px 12px', fontSize: 12, color: matColor, textAlign: 'right', fontWeight: matColor === '#D9534F' ? 600 : 400 }}>{l.loan_maturity_date ?? '—'}</td>
-                    <td style={{ padding: '9px 12px', fontSize: 12, color: PT.text, textAlign: 'right' }}>{l.loan_emi_day ?? '—'}</td>
-                    <td style={{ padding: '9px 12px', fontSize: 12, color: dscrColor, textAlign: 'right', fontFamily: 'monospace', fontWeight: 600 }}>{l.dscr != null ? `${l.dscr.toFixed(2)}x` : '—'}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 13, color: PT.text }}>{l.company_name}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 13, color: PT.text }}>{l.property_name}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 13, color: PT.text }}>{l.loan_bank_name}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 13, color: PT.text, textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums' }}>{fmtUSD(l.loan_amount)}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 13, color: rateColor, textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums', fontWeight: 600 }}>{rate != null ? `${rate.toFixed(2)}%` : '—'}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 13, color: PT.text, textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums' }}>{l.loan_emi != null ? fmtUSD(l.loan_emi) : '—'}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 13, color: PT.text, textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums' }}>{fmtUSD(l.loan_balance_as_of ?? l.loan_amount)}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 13, color: matColor, textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums', fontWeight: matColor === '#D9534F' ? 600 : 400 }}>{l.loan_maturity_date ?? '—'}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 13, color: PT.text, textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums' }}>{l.loan_emi_day ?? '—'}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 13, color: dscrColor, textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums', fontWeight: 600 }}>{l.dscr != null ? `${l.dscr.toFixed(2)}x` : '—'}</td>
                     <td style={{ padding: '9px 12px', textAlign: 'right' }}>
                       <span className={`px-2 py-0.5 rounded-full text-xs ${DSCR_STYLE[st]}`}>{st}</span>
                     </td>
@@ -449,8 +449,8 @@ export default function RentalLoanTracker() {
           <div style={{ background: '#FFF7E8', borderLeft: '4px solid #F2994A', borderRadius: '0 8px 8px 0', padding: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
             <AlertCircle size={18} style={{ color: '#F2994A', flexShrink: 0, marginTop: 1 }} />
             <div>
-              <h4 style={{ fontSize: 13, fontWeight: 600, color: '#7A4500', marginBottom: 2 }}>Refinancing Opportunity</h4>
-              <p style={{ fontSize: 12, color: '#7A4500' }}>
+              <h4 style={{ fontSize: 14, fontWeight: 600, color: '#7A4500', marginBottom: 2 }}>Refinancing Opportunity</h4>
+              <p style={{ fontSize: 13, color: '#7A4500' }}>
                 {highRateLoans.length} loan(s) above market rate ({(MARKET_RATE * 100).toFixed(1)}%).
                 Est. monthly savings: <strong>{fmtUSD(monthlySavings)}</strong> ({fmtUSD(monthlySavings * 12)}/yr)
               </p>
@@ -463,8 +463,8 @@ export default function RentalLoanTracker() {
           <div style={{ background: '#FFECEC', borderLeft: '4px solid #EB5757', borderRadius: '0 8px 8px 0', padding: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
             <TrendingDown size={18} style={{ color: '#EB5757', flexShrink: 0, marginTop: 1 }} />
             <div>
-              <h4 style={{ fontSize: 13, fontWeight: 600, color: '#7B0000', marginBottom: 2 }}>High Debt Service</h4>
-              <p style={{ fontSize: 12, color: '#7B0000' }}>
+              <h4 style={{ fontSize: 14, fontWeight: 600, color: '#7B0000', marginBottom: 2 }}>High Debt Service</h4>
+              <p style={{ fontSize: 13, color: '#7B0000' }}>
                 Annual EMI of <strong>{fmtUSD(kpis.emi * 12)}</strong> exceeds 12% of loan portfolio — review cash reserves.
               </p>
             </div>
@@ -476,8 +476,8 @@ export default function RentalLoanTracker() {
           <div style={{ background: '#F4FFF3', borderLeft: '4px solid #27AE60', borderRadius: '0 8px 8px 0', padding: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
             <CheckCircle2 size={18} style={{ color: '#27AE60', flexShrink: 0, marginTop: 1 }} />
             <div>
-              <h4 style={{ fontSize: 13, fontWeight: 600, color: '#1A5C33', marginBottom: 2 }}>All Rates Optimized</h4>
-              <p style={{ fontSize: 12, color: '#1A5C33' }}>All loans at or below market rate ({(MARKET_RATE * 100).toFixed(1)}%). No refinancing action needed.</p>
+              <h4 style={{ fontSize: 14, fontWeight: 600, color: '#1A5C33', marginBottom: 2 }}>All Rates Optimized</h4>
+              <p style={{ fontSize: 13, color: '#1A5C33' }}>All loans at or below market rate ({(MARKET_RATE * 100).toFixed(1)}%). No refinancing action needed.</p>
             </div>
           </div>
         )}
@@ -485,7 +485,7 @@ export default function RentalLoanTracker() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, padding: 20 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 600, color: PT.text, marginBottom: 16 }}>Debt by Building</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: PT.text, marginBottom: 16 }}>Debt by Building</h3>
           <ResponsiveContainer width="100%" height={250}>
             <PieChart>
               <Pie data={debtByBuildingData} cx="50%" cy="50%" outerRadius={80} innerRadius={36} dataKey="value" nameKey="name">
@@ -498,7 +498,7 @@ export default function RentalLoanTracker() {
         </div>
 
         <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, padding: 20 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 600, color: PT.text, marginBottom: 16 }}>EMI Breakdown by Bank</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: PT.text, marginBottom: 16 }}>EMI Breakdown by Bank</h3>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={emiByBankData} margin={{ left: 0, right: 10, top: 16, bottom: 40 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={PT.border} />
@@ -515,7 +515,7 @@ export default function RentalLoanTracker() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, padding: 20 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 600, color: PT.text, marginBottom: 16 }}>Maturity Timeline</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: PT.text, marginBottom: 16 }}>Maturity Timeline</h3>
           <div className="space-y-3">
             {maturityTimelineData.map((l, i) => {
               const barColor = l.monthsLeft < 12 ? '#D9534F' : l.monthsLeft < 24 ? '#F5A623' : '#22A06B';
@@ -536,7 +536,7 @@ export default function RentalLoanTracker() {
         </div>
 
         <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, padding: 20 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 600, color: PT.text, marginBottom: 16 }}>Interest Rate vs Market (6.5%)</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: PT.text, marginBottom: 16 }}>Interest Rate vs Market (6.5%)</h3>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={rateComparisonData} margin={{ left: 0, right: 10, top: 5, bottom: 40 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={PT.border} />
@@ -556,14 +556,14 @@ export default function RentalLoanTracker() {
 
       <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, overflow: 'hidden' }}>
         <div style={{ padding: '12px 20px', borderBottom: `1px solid ${PT.border}` }}>
-          <h3 style={{ fontSize: 15, fontWeight: 600, color: PT.text }}>Building DSCR Health</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: PT.text }}>Building DSCR Health</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full" style={{ borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: PT.hdrBg }}>
                 {(['Building', 'NOI (Annual)', 'Debt Service', 'DSCR Ratio', 'Status', 'Recommendation'] as const).map((h, i) => (
-                  <th key={h} style={{ padding: '9px 16px', textAlign: i === 0 || i === 5 ? 'left' : i === 4 ? 'center' : 'right', fontSize: 11, fontWeight: 600, color: PT.hdrText, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', borderBottom: `1px solid ${PT.border}` }}>{h}</th>
+                  <th key={h} style={{ padding: '9px 16px', textAlign: i === 0 || i === 5 ? 'left' : i === 4 ? 'center' : 'right', fontSize: 12, fontWeight: 600, color: PT.hdrText, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', borderBottom: `1px solid ${PT.border}` }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -572,10 +572,10 @@ export default function RentalLoanTracker() {
                 const dscrColor = row.dscr == null ? PT.muted : row.dscr < 1.0 ? '#D9534F' : row.dscr <= 1.25 ? '#F5A623' : '#22A06B';
                 return (
                   <tr key={row.building} style={{ background: idx % 2 === 0 ? PT.rowOdd : PT.rowEven, borderBottom: `1px solid ${PT.border}` }}>
-                    <td style={{ padding: '9px 16px', fontSize: 12, fontWeight: 600, color: PT.text }}>{row.building}</td>
-                    <td style={{ padding: '9px 16px', fontSize: 12, color: PT.text, textAlign: 'right', fontFamily: 'monospace' }}>{fmtUSD(row.noi)}</td>
-                    <td style={{ padding: '9px 16px', fontSize: 12, color: PT.text, textAlign: 'right', fontFamily: 'monospace' }}>{fmtUSD(row.debtService)}</td>
-                    <td style={{ padding: '9px 16px', fontSize: 13, fontWeight: 700, color: dscrColor, textAlign: 'right', fontFamily: 'monospace' }}>
+                    <td style={{ padding: '9px 16px', fontSize: 13, fontWeight: 600, color: PT.text }}>{row.building}</td>
+                    <td style={{ padding: '9px 16px', fontSize: 13, color: PT.text, textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums' }}>{fmtUSD(row.noi)}</td>
+                    <td style={{ padding: '9px 16px', fontSize: 13, color: PT.text, textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums' }}>{fmtUSD(row.debtService)}</td>
+                    <td style={{ padding: '9px 16px', fontSize: 14, fontWeight: 700, color: dscrColor, textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums' }}>
                       {row.dscr != null ? `${row.dscr.toFixed(2)}x` : '—'}
                     </td>
                     <td style={{ padding: '9px 16px', textAlign: 'center' }}>
@@ -583,7 +583,7 @@ export default function RentalLoanTracker() {
                         {row.status}
                       </span>
                     </td>
-                    <td style={{ padding: '9px 16px', fontSize: 12, color: PT.muted }}>{row.recommendation}</td>
+                    <td style={{ padding: '9px 16px', fontSize: 13, color: PT.muted }}>{row.recommendation}</td>
                   </tr>
                 );
               })}
