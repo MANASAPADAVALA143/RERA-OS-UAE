@@ -1,0 +1,147 @@
+// Shared expense categorisation logic — used by RentalExpenses and RentalCompanyDashboard.
+// Keep in sync: any change here affects both pages.
+
+export interface FinItem {
+  label: string;
+  values?: Record<number, number>;
+  monthlyValues?: Record<string, number>;
+  isSectionHeader?: boolean;
+  isTotal?: boolean;
+  children?: FinItem[];
+}
+
+export const ONE_TIME_CAT = 'OneTimeAdjustment';
+export const ONE_TIME_RE  = /sec\s*481|481\s*\(a\)|accounting\s*method\s*adjustment/i;
+
+export const EXPENSE_CATS: { label: string; re: RegExp }[] = [
+  { label: 'Management Fee',           re: /management\s*fee/i },
+  { label: 'Insurance',                re: /insurance/i },
+  { label: 'Interest',                 re: /interest.*loan|interest.*paid|interest.*expense|interest\s+on/i },
+  { label: 'Legal',                    re: /\blegal\b/i },
+  { label: 'Accounting Fee',           re: /accounting\s*fee/i },
+  { label: 'HOA',                      re: /\bhoa\b/i },
+  { label: 'Property Tax',             re: /property\s*tax|real\s*estate\s*tax/i },
+  { label: 'Repairs & Maintenance',    re: /repair|maintenance/i },
+  { label: 'Utilities',                re: /utilit/i },
+  { label: 'Depreciation',             re: /depreciat/i },
+  { label: 'Consulting',               re: /consult/i },
+  { label: 'Loan Processing',          re: /loan.*process/i },
+  { label: 'Membership/Subscriptions', re: /membership|subscript/i },
+  { label: 'Misc Expenses',            re: /\bmisc\b/i },
+  { label: 'Office Supplies',          re: /office.*suppl/i },
+  { label: 'Cleaning',                 re: /clean/i },
+  { label: 'Irrigation',               re: /irrigat/i },
+  { label: 'Advertising',              re: /advertis/i },
+  { label: 'Appraisal Fee',            re: /apprais/i },
+  { label: 'Bank Charges',             re: /bank.*charg|bank.*fee/i },
+  { label: 'Commission',               re: /commission/i },
+  { label: 'Courier',                  re: /courier/i },
+  { label: 'Donation',                 re: /donat/i },
+  { label: 'Engineering',              re: /engineer/i },
+  { label: 'Fire Safety',              re: /fire.*safe|fire.*protect/i },
+];
+
+export const SKIP_RE = /^(total|subtotal|net\s|gross\s|\bincome\b|^revenue|rental\s+income|rent\s+income|rent\s*-|other\s+income|total\s+revenue|total\s+income|total\s+rent|operating\s+income|net\s+income|net\s+loss)/i;
+
+export const REVENUE_LINE_RE  = /rental\s+income|rent\s+income|other\s+income|parking\s+income|rent\s*-/i;
+export const REVENUE_SKIP_RE  = /^(total\s|subtotal\s|net\s|gross\s)/i;
+
+/** Returns the expense category for a P&L line label, or null to skip. */
+export function classifyLabel(label: string): string | null {
+  const t = label.trim();
+  if (SKIP_RE.test(t)) return null;
+  if (ONE_TIME_RE.test(t)) return ONE_TIME_CAT;
+  for (const { label: cat, re } of EXPENSE_CATS) {
+    if (re.test(label)) return cat;
+  }
+  return 'Other';
+}
+
+/** Recursively flatten a P&L item tree to leaf + parent nodes. */
+export function flattenItems(items: FinItem[]): FinItem[] {
+  const out: FinItem[] = [];
+  function walk(list: FinItem[]) {
+    for (const item of list) {
+      out.push(item);
+      if (item.children?.length) walk(item.children);
+    }
+  }
+  walk(items);
+  return out;
+}
+
+export const MNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+export function monthSortKey(k: string): number {
+  const [m, y] = k.split(/[\s-]/);
+  return (parseInt(y) || 0) * 100 + (MNAMES.indexOf(m) + 1);
+}
+
+export function allMonthKeys(items: FinItem[]): string[] {
+  const s = new Set<string>();
+  flattenItems(items).forEach(i => Object.keys(i.monthlyValues ?? {}).forEach(k => s.add(k)));
+  return Array.from(s);
+}
+
+/** Parchment/earth palette used across expense charts. */
+export const EXP_PALETTE = [
+  '#D4AF37','#B8860B','#C08B40','#8B6914','#A67C52',
+  '#7A6040','#C4A882','#6B4423','#C17A3F','#9B6B4A',
+  '#D4956A','#8B7355','#E8C87A','#5C4033','#A87050',
+  '#7D5A3C','#D4B896','#C19A65',
+];
+export const catColor = (cat: string, cats: string[]) =>
+  EXP_PALETTE[cats.indexOf(cat) % EXP_PALETTE.length] ?? '#A8A29E';
+
+/**
+ * From a flat P&L item list, build {category → all-time total} map.
+ * Excludes Sec 481(a) one-time adjustments and skips section headers/totals.
+ */
+export function buildCategoryTotals(pl: FinItem[]): Record<string, number> {
+  const byCat: Record<string, number> = {};
+  for (const item of flattenItems(pl)) {
+    if (item.children?.length || item.isSectionHeader || item.isTotal) continue;
+    const cat = classifyLabel(item.label);
+    if (!cat || cat === ONE_TIME_CAT) continue;
+    for (const val of Object.values(item.monthlyValues ?? {})) {
+      byCat[cat] = (byCat[cat] ?? 0) + Math.abs(val as number);
+    }
+  }
+  return byCat;
+}
+
+/**
+ * From a flat P&L item list, build {normalised-month → total expense} map.
+ * Month keys are normalised to "Mon YYYY" (space-separated).
+ */
+export function buildMonthlyExpense(pl: FinItem[]): Record<string, number> {
+  const map: Record<string, number> = {};
+  for (const item of flattenItems(pl)) {
+    if (item.children?.length || item.isSectionHeader || item.isTotal) continue;
+    const cat = classifyLabel(item.label);
+    if (!cat || cat === ONE_TIME_CAT) continue;
+    for (const [month, val] of Object.entries(item.monthlyValues ?? {})) {
+      const norm = month.replace(/-/g, ' ');
+      map[norm] = (map[norm] ?? 0) + Math.abs(val as number);
+    }
+  }
+  return map;
+}
+
+/**
+ * From a flat P&L item list, build {normalised-month → total revenue} map.
+ * Revenue lines: rent income, other income, parking income.
+ */
+export function buildMonthlyRevenue(pl: FinItem[]): Record<string, number> {
+  const map: Record<string, number> = {};
+  for (const item of flattenItems(pl)) {
+    if (item.children?.length || item.isSectionHeader || item.isTotal) continue;
+    const t = item.label.trim();
+    if (REVENUE_SKIP_RE.test(t) || !REVENUE_LINE_RE.test(t)) continue;
+    for (const [month, val] of Object.entries(item.monthlyValues ?? {})) {
+      const norm = month.replace(/-/g, ' ');
+      map[norm] = (map[norm] ?? 0) + Math.abs(val as number);
+    }
+  }
+  return map;
+}

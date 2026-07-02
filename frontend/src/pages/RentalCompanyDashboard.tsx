@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell,
@@ -7,6 +7,13 @@ import api from '../services/api';
 import { Card, KpiCard } from '../components/ui/Card';
 import { LoadingSkeleton } from '../components/ui/Table';
 import { fmtUSD, fmtPct } from '../components/ProtectedRoute';
+import {
+  type FinItem,
+  ONE_TIME_CAT,
+  classifyLabel, flattenItems,
+  buildCategoryTotals, buildMonthlyExpense, buildMonthlyRevenue,
+  EXP_PALETTE,
+} from '../utils/rentalExpenseUtils';
 
 interface Props {
   companyId: string;
@@ -84,7 +91,6 @@ const COND_PILL: Record<string, string> = {
   needs_repair: 'bg-red-100 text-red-800',
 };
 
-const CAT_COLORS = ['#1E3A8A', '#3B82F6', '#4BA892', '#1D4ED8', '#6ECABB', '#8FD5C4', '#B3E5DC', '#D1F0EA'];
 
 type DashTab = 'overview' | 'leases' | 'maintenance' | 'inspections';
 
@@ -103,21 +109,54 @@ export default function RentalCompanyDashboard({ companyId }: Props) {
   const [maintenance, setMaintenance] = useState<MaintItem[] | null>(null);
   const [inspections, setInspections] = useState<InspItem[] | null>(null);
   const [subLoading, setSubLoading] = useState(false);
+  const [pl, setPl] = useState<FinItem[] | null>(null);
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await api.get<DashboardData>(`/api/rentals/companies/${companyId}/dashboard`);
-      setData(res.data);
-    } catch {
-      setError('Failed to load company dashboard.');
+      const [dashRes, finRes] = await Promise.allSettled([
+        api.get<DashboardData>(`/api/rentals/companies/${companyId}/dashboard`),
+        api.get<{ company_name: string; pl: FinItem[] }>(`/api/rentals/financials/${companyId}`),
+      ]);
+      if (dashRes.status === 'fulfilled') setData(dashRes.value.data);
+      else setError('Failed to load company dashboard.');
+      if (finRes.status === 'fulfilled') setPl(finRes.value.data.pl ?? []);
     } finally {
       setLoading(false);
     }
   }, [companyId]);
 
   useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
+
+  // Derive expense breakdown from P&L using the same category-matcher as the Expenses tab.
+  // Falls back to the API field if no P&L upload exists.
+  const localExpBreakdown = useMemo((): CategoryAmount[] => {
+    if (!pl?.length) return data?.expense_breakdown ?? [];
+    const totals = buildCategoryTotals(pl);
+    return Object.entries(totals)
+      .map(([category, amount]) => ({ category, amount: Math.round(amount) }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [pl, data?.expense_breakdown]);
+
+  // Monthly expense totals from P&L (normalised to "Mon YYYY" keys).
+  const plMonthExp = useMemo(() => pl?.length ? buildMonthlyExpense(pl) : {}, [pl]);
+
+  // Monthly revenue (billed) totals from P&L.
+  const plMonthBilled = useMemo(() => pl?.length ? buildMonthlyRevenue(pl) : {}, [pl]);
+
+  // Merge P&L billed/expense into the API income_trend (which has correct collected values).
+  const enrichedTrend = useMemo(() => {
+    if (!data) return [];
+    return data.income_trend.map(pt => {
+      const norm = pt.month.replace(/-/g, ' ');
+      return {
+        ...pt,
+        billed:  plMonthBilled[norm] ?? plMonthBilled[pt.month] ?? pt.billed,
+        expense: plMonthExp[norm]    ?? plMonthExp[pt.month]    ?? pt.expense,
+      };
+    });
+  }, [data, plMonthBilled, plMonthExp]);
 
   // Lazy-load maintenance / inspections on first visit to those tabs
   useEffect(() => {
@@ -181,35 +220,32 @@ export default function RentalCompanyDashboard({ companyId }: Props) {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card title="Income Trend — 6 Months">
               <ResponsiveContainer width="100%" height={240}>
-                <LineChart data={data.income_trend}>
+                <LineChart data={enrichedTrend}>
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                   <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                   <Tooltip formatter={(v: number) => fmtUSD(v)} />
                   <Legend />
-                  <Line type="monotone" dataKey="billed"    stroke="#1E3A8A" name="Billed"    strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="collected" stroke="#3B82F6" name="Collected" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="expense"   stroke="#ef4444" name="Expense"   strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="billed"    stroke="#D4AF37" name="Billed"    strokeWidth={2} dot={false} connectNulls />
+                  <Line type="monotone" dataKey="collected" stroke="#22A06B" name="Collected" strokeWidth={2} dot={false} connectNulls />
+                  <Line type="monotone" dataKey="expense"   stroke="#EB5757" name="Expense"   strokeWidth={2} dot={false} connectNulls />
                 </LineChart>
               </ResponsiveContainer>
             </Card>
 
             <Card title="Expense Breakdown">
-              {data.expense_breakdown.length === 0 ? (
-                <p className="text-gray-400 text-center py-10">No expense data</p>
+              {localExpBreakdown.length === 0 ? (
+                <p className="text-gray-400 text-center py-10">No expense data — upload a P&amp;L to see breakdown</p>
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
                   <PieChart>
                     <Pie
-                      data={data.expense_breakdown}
+                      data={localExpBreakdown}
                       dataKey="amount"
                       nameKey="category"
-                      cx="50%" cy="50%" outerRadius={80}
-                      label={({ category, percent }: { category: string; percent: number }) =>
-                        `${category}: ${(percent * 100).toFixed(0)}%`
-                      }
+                      cx="50%" cy="50%" innerRadius={44} outerRadius={80} paddingAngle={2}
                     >
-                      {data.expense_breakdown.map((_, i) => (
-                        <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />
+                      {localExpBreakdown.map((_, i) => (
+                        <Cell key={i} fill={EXP_PALETTE[i % EXP_PALETTE.length]} />
                       ))}
                     </Pie>
                     <Tooltip formatter={(v: number) => fmtUSD(v)} />
