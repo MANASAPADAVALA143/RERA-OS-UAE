@@ -133,6 +133,217 @@ function LiveDataPanel({ fin }: { fin: LiveFin }) {
   );
 }
 
+// ── Bullet-chart helpers ─────────────────────────────────────────────────────
+
+const STATUS_BAR: Record<StatusType, string> = {
+  good:     '#22A06B',
+  watch:    '#F2C94C',
+  critical: '#EB5757',
+  monitor:  '#EB5757',
+  info:     '#78716C',
+};
+
+interface BulletDef {
+  names:     string[];
+  benchmark: number;
+  unit:      string;
+  reversed:  boolean;   // lower is better for this metric
+  max:       number;    // chart scale ceiling
+  extract:   (raw: string) => number;
+}
+
+const BULLET_DEFS: BulletDef[] = [
+  {
+    names: ['Net Profit Margin'],
+    benchmark: 25, unit: '%', reversed: false, max: 80,
+    // value may be "-4.8% (NOI: 39.0%)" — use the NOI portion for the bullet
+    extract: v => { const m = v.match(/NOI[:\s]+([0-9.]+)%/i); return m ? parseFloat(m[1]) : Math.max(0, parseFloat(v) || 0); },
+  },
+  { names: ['Operating Expense Ratio'], benchmark: 60, unit: '%', reversed: true,  max: 130, extract: v => Math.abs(parseFloat(v)) || 0 },
+  { names: ['Return on Assets'],        benchmark: 4,  unit: '%', reversed: false, max: 12,  extract: v => parseFloat(v) || 0 },
+  { names: ['Return on Equity'],        benchmark: 8,  unit: '%', reversed: false, max: 20,  extract: v => parseFloat(v) || 0 },
+  { names: ['EBITDA Margin'],           benchmark: 45, unit: '%', reversed: false, max: 80,  extract: v => parseFloat(v) || 0 },
+  { names: ['NOI Margin'],              benchmark: 35, unit: '%', reversed: false, max: 80,  extract: v => parseFloat(v) || 0 },
+  { names: ['Cash-on-Cash Return'],     benchmark: 7,  unit: '%', reversed: false, max: 20,  extract: v => parseFloat(v) || 0 },
+  { names: ['Gross Rent Multiplier', 'Gross Rent Multiple'],
+    benchmark: 14, unit: 'x', reversed: true, max: 22, extract: v => parseFloat(v) || 0 },
+];
+
+function BulletChartStrip({ cards }: { cards: RatioCard[] }) {
+  const rows = BULLET_DEFS.flatMap(def => {
+    const card = cards.find(c => def.names.some(n => c.name === n));
+    if (!card) return [];
+    const current      = def.extract(card.value);
+    const pctCurrent   = current > 0 ? Math.min(100, current   / def.max * 100) : 0;
+    const pctBenchmark = Math.min(100, def.benchmark / def.max * 100);
+    return [{ card, def, current, pctCurrent, pctBenchmark, fill: STATUS_BAR[card.status] }];
+  });
+  if (!rows.length) return null;
+
+  return (
+    <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '20px 24px' }}>
+      <div style={{ fontSize: 15, fontWeight: 600, color: '#1C1917' }}>Benchmark Comparison</div>
+      <div style={{ fontSize: 12, color: '#6B7280', marginTop: 3, marginBottom: 18 }}>
+        Current ratio health vs benchmark — bar colour reflects card status&nbsp;·&nbsp;▎ marker = target
+      </div>
+
+      {/* Column header */}
+      <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr 80px', gap: 12, paddingBottom: 8, borderBottom: '1px solid #E8DEC8', marginBottom: 4 }}>
+        {['Metric', 'vs Benchmark', 'Current'].map((h, i) => (
+          <div key={h} style={{ fontSize: 11, fontWeight: 600, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: i === 2 ? 'right' : 'left' }}>{h}</div>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+        {rows.map(({ card, def, current, pctCurrent, pctBenchmark, fill }, idx) => (
+          <div key={card.name} style={{
+            display: 'grid', gridTemplateColumns: '170px 1fr 80px', gap: 12, alignItems: 'center',
+            padding: '8px 0', borderBottom: idx < rows.length - 1 ? '1px solid rgba(232,222,200,0.5)' : 'none',
+          }}>
+            {/* Label + target annotation */}
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 500, color: '#1C1917', lineHeight: 1.3 }}>{card.name}</div>
+              <div style={{ fontSize: 11, color: '#6B7280' }}>
+                {def.reversed ? `< ${def.benchmark}${def.unit}` : `> ${def.benchmark}${def.unit}`} target
+              </div>
+            </div>
+
+            {/* Bullet bar */}
+            <div style={{ position: 'relative', height: 22 }}>
+              {/* Track */}
+              <div style={{ position: 'absolute', top: 6, left: 0, right: 0, height: 10, background: '#E8DEC8', borderRadius: 5 }} />
+              {/* Quarter-scale ticks (subtle) */}
+              {[25, 50, 75].map(t => (
+                <div key={t} style={{ position: 'absolute', top: 6, left: `${t}%`, width: 1, height: 10, background: 'rgba(120,113,108,0.18)' }} />
+              ))}
+              {/* Filled bar */}
+              {pctCurrent > 0 && (
+                <div style={{ position: 'absolute', top: 6, left: 0, width: `${pctCurrent}%`, height: 10, background: fill, borderRadius: 5 }} />
+              )}
+              {/* Benchmark marker line */}
+              <div style={{
+                position: 'absolute', top: 2, left: `${pctBenchmark}%`,
+                width: 2, height: 18, background: '#5C5043', borderRadius: 1,
+                transform: 'translateX(-1px)',
+              }} />
+            </div>
+
+            {/* Current value */}
+            <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: fill, fontVariantNumeric: 'tabular-nums lining-nums' }}>
+              {current > 0 ? `${current.toFixed(1)}${def.unit}` : '—'}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Scale hint */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, paddingLeft: 182, fontSize: 11, color: '#9CA3AF' }}>
+        <span>0</span><span>25%</span><span>50%</span><span>75%</span><span>max</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Profitability trend helpers ───────────────────────────────────────────────
+
+type ProfPt  = { label: string; npm: number | null; ebitda: number | null; noi: number | null };
+type RetPt   = { label: string; roa: number | null; roe: number | null;  coc: number | null  };
+
+function buildTrendFromSparks(cards: RatioCard[]): { profTrend: ProfPt[]; retTrend: RetPt[] } {
+  const get = (name: string) => cards.find(c => c.name === name || c.name.includes(name));
+  const sparks = {
+    npm:    get('Net Profit Margin')?.spark,
+    ebitda: get('EBITDA Margin')?.spark,
+    noi:    get('NOI Margin')?.spark,
+    roa:    get('Return on Assets')?.spark,
+    roe:    get('Return on Equity')?.spark,
+    coc:    get('Cash-on-Cash Return')?.spark,
+  };
+  const len = Math.max(...Object.values(sparks).map(s => s?.length ?? 0));
+  if (len < 2) return { profTrend: [], retTrend: [] };
+  const labels = len === 4 ? ['T−3', 'T−2', 'T−1', 'Latest'] : Array.from({ length: len }, (_, i) => i === len - 1 ? 'Latest' : `T−${len - 1 - i}`);
+  return {
+    profTrend: labels.map((label, i) => ({ label, npm: sparks.npm?.[i] ?? null, ebitda: sparks.ebitda?.[i] ?? null, noi: sparks.noi?.[i] ?? null })),
+    retTrend:  labels.map((label, i) => ({ label, roa: sparks.roa?.[i] ?? null, roe: sparks.roe?.[i] ?? null, coc: sparks.coc?.[i] ?? null })),
+  };
+}
+
+function buildTrendFromLive(fin: LiveFin): { profTrend: ProfPt[]; retTrend: RetPt[] } {
+  const { pl, bs, years } = fin;
+  const yv = (items: FinItem[], pat: RegExp, y: number) => items.find(i => pat.test(i.label))?.values[y] ?? 0;
+  const si = (items: FinItem[], pat: RegExp, y: number) =>
+    items.filter(i => !i.isSectionHeader && !i.isTotal && pat.test(i.label)).reduce((s, i) => s + (i.values[y] ?? 0), 0);
+  return {
+    profTrend: years.map(y => {
+      const rev = yv(pl, /^total\s+(for\s+)?income$/i, y) || si(pl, /income|revenue|rent/i, y);
+      const exp = yv(pl, /^total\s+(for\s+)?expenses?$/i, y);
+      const ni  = yv(pl, /^net\s+income$/i, y);
+      const ie  = Math.abs(si(pl, /interest/i, y));
+      const dep = Math.abs(si(pl, /depreciation|amortization/i, y));
+      const noi = rev - exp + ie;
+      return {
+        label:  String(y),
+        npm:    rev > 0 ? +(ni / rev * 100).toFixed(1) : null,
+        ebitda: rev > 0 ? +((noi + dep) / rev * 100).toFixed(1) : null,
+        noi:    rev > 0 ? +(noi / rev * 100).toFixed(1) : null,
+      };
+    }),
+    retTrend: years.map(y => {
+      const ni    = yv(pl, /^net\s+income$/i, y);
+      const assets = yv(bs, /^total\s+(for\s+)?assets$/i, y);
+      const eq     = yv(bs, /^total\s+(for\s+)?equity$/i, y);
+      return {
+        label: String(y),
+        roa: assets > 0 ? +(ni / assets * 100).toFixed(1) : null,
+        roe: eq     > 0 ? +(ni / eq    * 100).toFixed(1) : null,
+        coc: null,
+      };
+    }),
+  };
+}
+
+const EMPTY_CHART = (
+  <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF', fontSize: 12, textAlign: 'center' }}>
+    Upload multi-year P&L to populate historical trend
+  </div>
+);
+
+function ProfTrendChart({ data }: { data: ProfPt[] }) {
+  if (data.length < 2) return EMPTY_CHART;
+  return (
+    <ResponsiveContainer width="100%" height={200}>
+      <LineChart data={data} margin={{ left: 0, right: 12, top: 8, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+        <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#6B7280' }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} tickFormatter={v => `${v}%`} axisLine={false} tickLine={false} width={38} />
+        <Tooltip contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 12 }} formatter={(v: number) => [`${v?.toFixed(1)}%`]} />
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+        <Line type="monotone" dataKey="noi"    name="NOI Margin"        stroke="#22A06B" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+        <Line type="monotone" dataKey="ebitda" name="EBITDA Margin"     stroke="#D4AF37" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+        <Line type="monotone" dataKey="npm"    name="Net Profit Margin" stroke="#1C1917" strokeWidth={2} dot={{ r: 3 }} strokeDasharray="5 3" connectNulls />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+function RetTrendChart({ data }: { data: RetPt[] }) {
+  if (data.length < 2) return EMPTY_CHART;
+  return (
+    <ResponsiveContainer width="100%" height={200}>
+      <LineChart data={data} margin={{ left: 0, right: 12, top: 8, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+        <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#6B7280' }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} tickFormatter={v => `${v}%`} axisLine={false} tickLine={false} width={38} />
+        <Tooltip contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 12 }} formatter={(v: number) => [`${v?.toFixed(1)}%`]} />
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+        <Line type="monotone" dataKey="roa" name="Return on Assets" stroke="#18B7A0" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+        <Line type="monotone" dataKey="roe" name="Return on Equity" stroke="#4E79A7" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+        <Line type="monotone" dataKey="coc" name="Cash-on-Cash"     stroke="#F2C14E" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
 // Data will be fetched from API instead of hardcoded
 const DEFAULT_CO_DATA: any[] = [];
 const DEFAULT_TREND_DATA = [
@@ -354,48 +565,35 @@ function calcAllRatios(fin: LiveFin): { profitability: RatioCard[]; liquidity: R
 
 // ── Tab components ─────────────────────────────────────────────────────────────
 
-function ProfitabilityTab({ coData, trendData, liveCards }: { coData: any[]; trendData: any[]; liveCards?: RatioCard[] }) {
+function ProfitabilityTab({ coData, trendData, liveCards, liveFin }: {
+  coData: any[]; trendData: any[]; liveCards?: RatioCard[]; liveFin?: LiveFin;
+}) {
   const cards = liveCards ?? PROFITABILITY;
-  const displayTrend = trendData.length > 0 ? trendData : [{ year: 'No data', noiMargin: 0, netProfitMargin: 0 }];
+  const { profTrend, retTrend } = liveFin ? buildTrendFromLive(liveFin) : buildTrendFromSparks(cards);
+
   return (
     <div className="space-y-6">
+      {/* ── Existing KPI cards — unchanged ─────────────────────────────── */}
       <CardGrid cards={cards} />
+
+      {/* ── NEW: Benchmark bullet-chart strip ──────────────────────────── */}
+      <BulletChartStrip cards={cards} />
+
+      {/* ── NEW: Trend charts ──────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 style={{ fontSize: 13, color: '#262626', fontWeight: 600, marginBottom: 16 }}>Portfolio Margin Trend</h3>
-          {displayTrend[0].year === 'No data' ? (
-            <div className="h-[200px] flex items-center justify-center text-gray-500">No historical data available</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={displayTrend} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} />
-                <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`]} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Line type="monotone" dataKey="noiMargin"        name="NOI Margin %"         stroke="#1a3a2a" strokeWidth={2} dot={{ r: 3 }} />
-                <Line type="monotone" dataKey="netProfitMargin"  name="Net Profit Margin %"  stroke="#B8860B" strokeWidth={2} dot={{ r: 3 }} strokeDasharray="5 3" />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
+        <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '20px 24px' }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: '#1C1917' }}>Profitability Trend</div>
+          <div style={{ fontSize: 12, color: '#6B7280', marginTop: 3, marginBottom: 16 }}>
+            NOI Margin · EBITDA Margin · Net Profit Margin over time
+          </div>
+          <ProfTrendChart data={profTrend} />
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 style={{ fontSize: 13, color: '#262626', fontWeight: 600, marginBottom: 16 }}>NOI Margin by Company</h3>
-          {coData.length === 0 ? (
-            <div className="h-[200px] flex items-center justify-center text-gray-500">No company data available</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={coData} margin={{ left: 0, right: 5, top: 5, bottom: 40 }}>
-                <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-35} textAnchor="end" interval={0} />
-                <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} />
-                <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'NOI Margin']} />
-                <ReferenceLine y={25} stroke="#dc2626" strokeDasharray="4 2" label={{ value: '25% benchmark', position: 'right', fontSize: 9, fill: '#dc2626' }} />
-                <Bar dataKey="noiMargin" name="NOI Margin %" radius={[3, 3, 0, 0]}>
-                  {coData.map((d, i) => <Cell key={i} fill={d.noiMargin > 20 ? '#16a34a' : d.noiMargin >= 15 ? '#d97706' : '#dc2626'} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
+        <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '20px 24px' }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: '#1C1917' }}>Returns Trend</div>
+          <div style={{ fontSize: 12, color: '#6B7280', marginTop: 3, marginBottom: 16 }}>
+            Return on Assets · Return on Equity · Cash-on-Cash Return
+          </div>
+          <RetTrendChart data={retTrend} />
         </div>
       </div>
     </div>
@@ -744,7 +942,7 @@ export default function RentalFinancialRatios() {
         const liveRatios = liveData ? calcAllRatios(liveData) : null;
         return (
           <div>
-            {activeTab === 'Profitability'   && <ProfitabilityTab coData={coData} trendData={trendData} liveCards={liveRatios?.profitability} />}
+            {activeTab === 'Profitability'   && <ProfitabilityTab coData={coData} trendData={trendData} liveCards={liveRatios?.profitability} liveFin={liveData ?? undefined} />}
             {activeTab === 'Liquidity'       && <LiquidityTab coData={coData} liveCards={liveRatios?.liquidity} />}
             {activeTab === 'Solvency'        && <SolvencyTab coData={coData} liveCards={liveRatios?.solvency} />}
             {activeTab === 'Rental KPIs'     && <RentalKPIsTab coData={coData} />}
