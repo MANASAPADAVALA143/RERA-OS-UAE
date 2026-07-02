@@ -169,8 +169,8 @@ const BULLET_DEFS: BulletDef[] = [
     benchmark: 14, unit: 'x', reversed: true, max: 22, extract: v => parseFloat(v) || 0 },
 ];
 
-function BulletChartStrip({ cards }: { cards: RatioCard[] }) {
-  const rows = BULLET_DEFS.flatMap(def => {
+function BulletChartStrip({ cards, defs = BULLET_DEFS }: { cards: RatioCard[]; defs?: BulletDef[] }) {
+  const rows = defs.flatMap(def => {
     const card = cards.find(c => def.names.some(n => c.name === n));
     if (!card) return [];
     const current      = def.extract(card.value);
@@ -600,29 +600,209 @@ function ProfitabilityTab({ coData, trendData, liveCards, liveFin }: {
   );
 }
 
-function LiquidityTab({ coData, liveCards }: { coData: any[]; liveCards?: RatioCard[] }) {
+/* ── Liquidity & Cash: bullet definitions ── */
+const LIQUIDITY_BULLET_DEFS: BulletDef[] = [
+  { names: ['Current Ratio'],
+    benchmark: 1.5, unit: 'x', reversed: false, max: 5,
+    extract: v => parseFloat(v) || 0 },
+  { names: ['Quick Ratio'],
+    benchmark: 1.0, unit: 'x', reversed: false, max: 5,
+    extract: v => parseFloat(v) || 0 },
+  { names: ['Cash Ratio'],
+    benchmark: 0.2, unit: 'x', reversed: false, max: 1.5,
+    extract: v => parseFloat(v) || 0 },
+  { names: ['Operating Cash Flow Ratio', 'Operating CF Ratio'],
+    benchmark: 1.0, unit: 'x', reversed: false, max: 3,
+    extract: v => parseFloat(v) || 0 },
+  { names: ['Days Cash on Hand'],
+    benchmark: 60, unit: 'd', reversed: false, max: 120,
+    extract: v => parseFloat(v) || 0 },
+  { names: ['Working Capital'],
+    benchmark: 0, unit: 'k', reversed: false, max: 400,
+    extract: v => {
+      const neg = v.includes('(');
+      const raw = parseFloat(v.replace(/[$,()KkMm]/g, '')) || 0;
+      const scaled = v.includes('M') || v.includes('m') ? raw * 1000 : v.includes('K') || v.includes('k') ? raw : raw / 1000;
+      return neg ? 0 : scaled;
+    }},
+];
+
+type LiqPt = { label: string; currR: number; quickR: number; cashR: number; ocfR: number; daysC: number; wc: number; ca?: number; cl?: number };
+type WcRow  = { label: string; invisible: number; bar: number; fill: string };
+
+function buildLiqTrendFromSparks(cards: RatioCard[]): { liqTrend: LiqPt[]; cashTrend: { label: string; days: number }[]; wcData: WcRow[] } {
+  const g = (name: string) => cards.find(c => c.name === name);
+  const sp = (c?: RatioCard) => (c?.spark ?? []).map(Number);
+  const currSp = sp(g('Current Ratio'));
+  const cashSp = sp(g('Cash Ratio'));
+  const ocfSp  = sp(g('Operating Cash Flow Ratio') ?? g('Operating CF Ratio'));
+  const dcSp   = sp(g('Days Cash on Hand'));
+  const n      = Math.max(currSp.length, cashSp.length, ocfSp.length, dcSp.length, 1);
+  const labels = ['T-3', 'T-2', 'T-1', 'Latest'].slice(-n);
+  const liqTrend: LiqPt[] = labels.map((label, i) => ({
+    label, currR: currSp[i] ?? NaN, quickR: currSp[i] ?? NaN,
+    cashR: cashSp[i] ?? NaN, ocfR: ocfSp[i] ?? NaN, daysC: dcSp[i] ?? NaN, wc: NaN,
+  }));
+  const cashTrend = dcSp.map((days, i) => ({ label: labels[i] ?? `T-${dcSp.length - i}`, days }));
+  const currRv = parseFloat(g('Current Ratio')?.value ?? '3.86') || 3.86;
+  const wcV    = parseFloat((g('Working Capital')?.value ?? '$209178').replace(/[$,()]/g, '')) || 209178;
+  const cl     = wcV / (currRv - 1);
+  const ca     = cl * currRv;
+  const wcData: WcRow[] = [
+    { label: 'Curr. Assets',  invisible: 0,              bar: Math.round(ca),  fill: '#18B7A0' },
+    { label: '− Liabilities', invisible: Math.round(wcV), bar: Math.round(cl),  fill: '#EB5757' },
+    { label: 'Working Cap.',  invisible: 0,              bar: Math.round(wcV), fill: '#22A06B' },
+  ];
+  return { liqTrend, cashTrend, wcData };
+}
+
+function buildLiqTrendFromLive(fin: LiveFin): { liqTrend: LiqPt[]; cashTrend: { label: string; days: number }[]; wcData: WcRow[] } {
+  const { pl, bs, years } = fin;
+  const yv = (items: FinItem[], pat: RegExp, y: number) => items.find(i => pat.test(i.label))?.values[y] ?? 0;
+  const si = (items: FinItem[], pat: RegExp, y: number) =>
+    items.filter(i => !i.isSectionHeader && !i.isTotal && pat.test(i.label)).reduce((s, i) => s + (i.values[y] ?? 0), 0);
+  const pts: LiqPt[] = years.map(y => {
+    const cash = Math.abs(yv(bs, /^total\s+for\s+bank/i, y)) || Math.abs(si(bs, /bank|checking|savings|cash/i, y));
+    const ca   = Math.abs(yv(bs, /^total\s+for\s+current\s+assets/i, y)) || (cash + Math.abs(si(bs, /receivable/i, y)));
+    const cl   = Math.abs(yv(bs, /^total\s+for\s+current\s+liab/i, y)) || Math.abs(si(bs, /payable/i, y));
+    const exp  = Math.abs(yv(pl, /^total.*expense/i, y));
+    const ocf  = yv(pl, /^net\s+income/i, y);
+    return {
+      label: String(y), currR: cl > 0 ? ca / cl : 0, quickR: cl > 0 ? ca / cl : 0,
+      cashR: cl > 0 ? cash / cl : 0, ocfR: cl > 0 ? Math.abs(ocf) / cl : 0,
+      daysC: exp > 0 ? cash / (exp / 365) : 0, wc: ca - cl, ca, cl,
+    };
+  });
+  const cashTrend = pts.map(p => ({ label: p.label, days: Math.round(p.daysC) }));
+  const last = pts[pts.length - 1] ?? { ca: 0, cl: 0, wc: 0 };
+  const wc = Math.max(0, last.wc ?? 0);
+  const wcData: WcRow[] = [
+    { label: 'Curr. Assets',  invisible: 0,              bar: Math.round(last.ca ?? 0), fill: '#18B7A0' },
+    { label: '− Liabilities', invisible: Math.round(wc), bar: Math.round(last.cl ?? 0), fill: '#EB5757' },
+    { label: 'Working Cap.',  invisible: 0,              bar: Math.round(wc),            fill: '#22A06B' },
+  ];
+  return { liqTrend: pts, cashTrend, wcData };
+}
+
+const LIQ_PANEL = { background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '16px 20px' } as const;
+const LIQ_H3    = { fontSize: 13, color: '#1C1917', fontWeight: 600, marginBottom: 16 } as const;
+
+function LiqRatiosTrendChart({ data }: { data: LiqPt[] }) {
+  if (!data.length) return null;
+  const LINES: { key: keyof LiqPt; label: string; color: string }[] = [
+    { key: 'currR',  label: 'Current Ratio',  color: '#18B7A0' },
+    { key: 'quickR', label: 'Quick Ratio',    color: '#D4AF37' },
+    { key: 'cashR',  label: 'Cash Ratio',     color: '#E76F6F' },
+    { key: 'ocfR',   label: 'OCF Ratio',      color: '#4E79A7' },
+  ];
+  return (
+    <div style={LIQ_PANEL}>
+      <h3 style={LIQ_H3}>Liquidity Ratios — Trend</h3>
+      <ResponsiveContainer width="100%" height={200}>
+        <ComposedChart data={data} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+          <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#78716C' }} />
+          <YAxis tick={{ fontSize: 10, fill: '#78716C' }} tickFormatter={v => `${v}x`} width={36} />
+          <Tooltip formatter={(v: number, name: string) => [`${(+v).toFixed(2)}x`, name]} contentStyle={{ fontSize: 11 }} />
+          <ReferenceLine y={1.5} stroke="#18B7A0" strokeDasharray="4 2" strokeWidth={1} />
+          <ReferenceLine y={1.0} stroke="#E76F6F" strokeDasharray="4 2" strokeWidth={1} />
+          {LINES.map(l => (
+            <Line key={l.key} type="monotone" dataKey={l.key as string} name={l.label}
+              stroke={l.color} strokeWidth={2} dot={{ r: 3, fill: l.color }}
+              activeDot={{ r: 5, strokeWidth: 1.5, stroke: l.color, fill: '#fff' }}
+              connectNulls />
+          ))}
+        </ComposedChart>
+      </ResponsiveContainer>
+      <div style={{ display: 'flex', gap: 14, marginTop: 10, flexWrap: 'wrap' }}>
+        {LINES.map(l => (
+          <span key={l.key} style={{ fontSize: 11, color: '#57534E', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ display: 'inline-block', width: 20, height: 2, background: l.color, borderRadius: 1 }} />
+            {l.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DaysCashChart({ data }: { data: { label: string; days: number }[] }) {
+  const colored = data.map(d => ({ ...d, fill: d.days < 30 ? '#EB5757' : d.days < 60 ? '#F2C94C' : '#22A06B' }));
+  return (
+    <div style={LIQ_PANEL}>
+      <h3 style={LIQ_H3}>Days Cash on Hand — Runway</h3>
+      <ResponsiveContainer width="100%" height={200}>
+        <BarChart data={colored} margin={{ left: 0, right: 48, top: 8, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" vertical={false} />
+          <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#78716C' }} />
+          <YAxis tick={{ fontSize: 10, fill: '#78716C' }} tickFormatter={v => `${v}d`} width={36} domain={[0, 'auto']} />
+          <Tooltip formatter={(v: number) => [`${v} days`, 'Days Cash on Hand']} contentStyle={{ fontSize: 11 }} />
+          <ReferenceLine y={60} stroke="#D4AF37" strokeDasharray="5 3" strokeWidth={1.5}
+            label={{ value: '60d floor', position: 'right', fontSize: 9, fill: '#B8860B' }} />
+          <ReferenceLine y={30} stroke="#EB5757" strokeDasharray="4 2" strokeWidth={1}
+            label={{ value: '30d min', position: 'right', fontSize: 9, fill: '#EB5757' }} />
+          <Bar dataKey="days" name="Days Cash" radius={[4, 4, 0, 0]} maxBarSize={40}>
+            {colored.map((d, i) => <Cell key={i} fill={d.fill} />)}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+      <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 11, color: '#57534E' }}>
+        {[['#22A06B', '> 60 days'], ['#F2C94C', '30–60 days'], ['#EB5757', '< 30 days']].map(([bg, label]) => (
+          <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ background: bg, display: 'inline-block', width: 10, height: 10, borderRadius: 2 }} />{label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WcCompositionChart({ data }: { data: WcRow[] }) {
+  const fmt = (n: number) => n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(2)}M` : n >= 1_000 ? `$${Math.round(n / 1_000)}K` : `$${n.toLocaleString()}`;
+  return (
+    <div style={LIQ_PANEL}>
+      <h3 style={LIQ_H3}>Working Capital Composition — Waterfall</h3>
+      <ResponsiveContainer width="100%" height={200}>
+        <BarChart data={data} margin={{ left: 20, right: 20, top: 8, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" vertical={false} />
+          <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#78716C' }} />
+          <YAxis tick={{ fontSize: 10, fill: '#78716C' }} tickFormatter={v => v >= 1000 ? `$${Math.round(v / 1000)}K` : `$${v}`} width={52} />
+          <Tooltip
+            formatter={(v: number, name: string) => name === 'invisible' ? (null as any) : [fmt(v), 'Amount']}
+            labelFormatter={l => String(l)}
+            contentStyle={{ fontSize: 11 }}
+          />
+          <Bar dataKey="invisible" stackId="wf" fill="transparent" isAnimationActive={false} legendType="none" />
+          <Bar dataKey="bar" stackId="wf" radius={[4, 4, 0, 0]} isAnimationActive={false} name="Amount">
+            {data.map((d, i) => <Cell key={i} fill={d.fill} />)}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+      <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 11, color: '#57534E' }}>
+        {[['#18B7A0', 'Current Assets'], ['#EB5757', 'Current Liabilities'], ['#22A06B', 'Working Capital']].map(([bg, label]) => (
+          <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ background: bg, display: 'inline-block', width: 10, height: 10, borderRadius: 2 }} />{label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LiquidityTab({ coData: _coData, liveCards, liveFin }: { coData: any[]; liveCards?: RatioCard[]; liveFin?: LiveFin }) {
   const cards = liveCards ?? LIQUIDITY;
+  const { liqTrend, cashTrend, wcData } = liveFin
+    ? buildLiqTrendFromLive(liveFin)
+    : buildLiqTrendFromSparks(cards);
   return (
     <div className="space-y-6">
       <CardGrid cards={cards} />
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-        <h3 style={{ fontSize: 13, color: '#262626', fontWeight: 600, marginBottom: 16 }}>Current Ratio by Company — benchmark 1.5x</h3>
-        {coData.length === 0 ? (
-          <div className="h-[220px] flex items-center justify-center text-gray-500">No company data available</div>
-        ) : (
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={coData} layout="vertical" margin={{ left: 60, right: 40, top: 5, bottom: 5 }}>
-              <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `${v}x`} domain={[0, 6]} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={70} />
-              <Tooltip formatter={(v: number) => [`${v.toFixed(2)}x`, 'Current Ratio']} />
-              <ReferenceLine x={1.5} stroke="#dc2626" strokeDasharray="4 2" label={{ value: '1.5x min', position: 'top', fontSize: 9, fill: '#dc2626' }} />
-              <Bar dataKey="currRatio" name="Current Ratio" radius={[0, 3, 3, 0]}>
-                {coData.map((d, i) => <Cell key={i} fill={d.currRatio >= 1.5 ? '#22A06B' : d.currRatio >= 1.0 ? '#F5A623' : '#D9534F'} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        )}
+      <BulletChartStrip cards={cards} defs={LIQUIDITY_BULLET_DEFS} />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <LiqRatiosTrendChart data={liqTrend} />
+        <DaysCashChart data={cashTrend} />
       </div>
+      <WcCompositionChart data={wcData} />
     </div>
   );
 }
@@ -943,7 +1123,7 @@ export default function RentalFinancialRatios() {
         return (
           <div>
             {activeTab === 'Profitability'   && <ProfitabilityTab coData={coData} trendData={trendData} liveCards={liveRatios?.profitability} liveFin={liveData ?? undefined} />}
-            {activeTab === 'Liquidity'       && <LiquidityTab coData={coData} liveCards={liveRatios?.liquidity} />}
+            {activeTab === 'Liquidity'       && <LiquidityTab coData={coData} liveCards={liveRatios?.liquidity} liveFin={liveData ?? undefined} />}
             {activeTab === 'Solvency'        && <SolvencyTab coData={coData} liveCards={liveRatios?.solvency} />}
             {activeTab === 'Rental KPIs'     && <RentalKPIsTab coData={coData} />}
             {activeTab === 'Cost of Capital' && <CostOfCapitalTab loanData={loanData} />}
