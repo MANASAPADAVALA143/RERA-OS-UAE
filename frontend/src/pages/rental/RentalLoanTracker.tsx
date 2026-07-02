@@ -4,7 +4,7 @@ import { useRentalCfoData, dscrStatus } from '../../hooks/useRentalCfoData';
 import { LoadingSkeleton } from '../../components/ui/Table';
 import { fmtUSD } from '../../components/ProtectedRoute';
 import { api } from '../../services/api';
-import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, LabelList } from 'recharts';
 import { BulletChartStrip } from '../../components/shared/BulletChartStrip';
 import type { BulletDef, BulletCard } from '../../components/shared/BulletChartStrip';
 
