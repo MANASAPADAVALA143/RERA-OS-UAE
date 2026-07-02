@@ -175,16 +175,16 @@ function MiniSparkline({ values, color }: { values: number[]; color: string }) {
   const max = Math.max(...values);
   const range = max - min || 1;
   const W = 80, H = 28;
-  const pts = values.map((v, i) => {
-    const x = (i / (values.length - 1)) * W;
-    const y = H - ((v - min) / range) * H;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
+  const coords = values.map((v, i) => ({
+    x: (i / (values.length - 1)) * W,
+    y: H - ((v - min) / range) * (H - 4) - 2,
+  }));
+  const pts = coords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
+  const last = coords[coords.length - 1];
   return (
     <svg width={W} height={H} style={{ display: 'block', marginTop: 6, opacity: 0.75 }}>
       <polyline points={pts} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={pts.split(' ').at(-1)!.split(',')[0]} cy={pts.split(' ').at(-1)!.split(',')[1]}
-        r={3} fill={color} />
+      <circle cx={last.x.toFixed(1)} cy={last.y.toFixed(1)} r={3} fill={color} />
     </svg>
   );
 }

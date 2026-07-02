@@ -263,8 +263,19 @@ export default function RentalMaintenance() {
     setLoading(true);
     setError('');
     api.get<MaintResponse>('/api/rentals/maintenance')
-      .then(r => setResponse(r.data))
-      .catch(() => setError('Failed to load maintenance data.'))
+      .then(r => {
+        const d = r.data;
+        if (d && Array.isArray(d.items)) {
+          setResponse(d);
+        } else {
+          // API returned unexpected shape — treat as empty
+          setResponse({ summary: { total:0,open:0,in_progress:0,completed:0,overdue:0,at_risk:0,total_cost:0 }, items: [] });
+        }
+      })
+      .catch(err => {
+        console.error('[Maintenance] API error:', err?.response?.status, err?.response?.data ?? err?.message);
+        setError(`Failed to load maintenance data. ${err?.response?.status ? `(${err.response.status})` : ''}`);
+      })
       .finally(() => setLoading(false));
   };
 
