@@ -8,6 +8,8 @@ import { Upload, Building2, FileSpreadsheet, TrendingUp, TrendingDown, DollarSig
 import { api } from '../services/api';
 import PeriodToggle from '../components/shared/PeriodToggle';
 import { type Period, getPeriodKeys } from '../utils/periodWindow';
+import { BulletChartStrip } from '../components/shared/BulletChartStrip';
+import type { BulletDef, BulletCard } from '../components/shared/BulletChartStrip';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -493,14 +495,21 @@ function calcKpis(fin: ParsedFinancials, year: number): KpiData {
   const totalLiabilities =
     getYV(bs,/^total\s+for\s+liabilities$/i,year) ||
     getYV(bs,/^total\s+liabilities$/i,year) ||
-    getYV(bs,/^total\s+for\s+liabilities\s+and\s+equity$/i,year);
+    // DO NOT fall back to "Total for Liabilities and Equity" — that's the B/S grand total, not liabilities alone
+    getYV(bs,/^total\s+for\s+long.term\s+liabilities$/i,year) + Math.abs(getYV(bs,/^total\s+for\s+current\s+liabilities$/i,year));
   const equity =
     getYV(bs,/^total\s+for\s+equity$/i,year) ||
     getYV(bs,/^total\s+equity$/i,year);
   const cash =
     getYV(bs,/^total\s+for\s+bank\s+accounts$/i,year) ||
     sumI(bs,/^bank\s+of\s+america|^great\s+plains|^prosperity|checking|savings/i,year);
-  const buildings = Math.abs(getYV(bs,/^buildings$/i,year));
+  const buildings = Math.abs(
+    getYV(bs,/^buildings$/i,year) ||
+    getYV(bs,/^property\s*(and|&)?\s*equipment/i,year) ||
+    getYV(bs,/^fixed\s*assets/i,year) ||
+    getYV(bs,/^land\s*(and|&)?\s*buildings/i,year) ||
+    getYV(bs,/^real\s+estate/i,year)
+  );
   const accumDep = getYV(bs,/accumulated\s+dep/i,year);
   const longTermLoans = Math.abs(
     getYV(bs,/^total\s+for\s+long.term\s+liabilities$/i,year) ||
@@ -848,6 +857,55 @@ function KPITab({ fin }: { fin: ParsedFinancials }) {
     return { year: String(y), Revenue: kk.totalRevenue, Expenses: kk.totalExpenses, 'Net Income': kk.netIncome, NOI: kk.noi };
   });
 
+  // Margins & Ratios trend (Section 2)
+  const marginsTrend = fin.years.map(y => {
+    const kk = calcKpis(fin, y);
+    return {
+      year: String(y),
+      'NOI Margin %':    kk.totalRevenue > 0 ? +(kk.noi / kk.totalRevenue * 100).toFixed(1) : 0,
+      'Net Margin %':    kk.totalRevenue > 0 ? +(kk.netIncome / kk.totalRevenue * 100).toFixed(1) : 0,
+      'Expense Ratio %': kk.totalRevenue > 0 ? +(kk.totalExpenses / kk.totalRevenue * 100).toFixed(1) : 0,
+    };
+  });
+
+  // Bullet-chart card adapters — map KCard statuses to BulletStatus
+  const toBS = (s: 'good'|'warn'|'bad'|'info'): BulletCard['status'] =>
+    s === 'warn' ? 'monitor' : s === 'bad' ? 'critical' : s;
+
+  const profBulletCards: BulletCard[] = [
+    { name: 'NOI Margin',          value: `${noiM.toFixed(1)}%`,                               status: toBS(noiM>=40?'good':noiM>=20?'warn':'bad') },
+    { name: 'Net Income Margin',   value: `${netM.toFixed(1)}%`,                               status: toBS(netM>=10?'good':netM>=0?'warn':'bad') },
+    { name: 'Revenue Growth YoY',  value: revG !== null ? `${revG.toFixed(1)}%` : '0%',        status: toBS(revG===null?'info':revG>=3?'good':revG>=0?'warn':'bad') },
+    { name: 'Expense Ratio',       value: `${expR.toFixed(1)}%`,                               status: toBS(expR<=70?'good':expR<=85?'warn':'bad') },
+  ];
+  const rentalBulletCards: BulletCard[] = [
+    { name: 'Interest Coverage',   value: `${iCov.toFixed(2)}x`,                              status: toBS(iCov>=2?'good':iCov>=1.2?'warn':'bad') },
+    { name: 'Mgmt Fee %',          value: `${mgmtP.toFixed(1)}%`,                             status: toBS(mgmtP<=10?'good':mgmtP<=15?'warn':'bad') },
+    { name: 'Repair % of Revenue', value: `${repP.toFixed(1)}%`,                              status: toBS(repP<=5?'good':repP<=10?'warn':'bad') },
+  ];
+  const balanceBulletCards: BulletCard[] = [
+    { name: 'LTV',                 value: ltv > 0 ? `${ltv.toFixed(1)}%` : '0%',             status: ltv > 0 ? toBS(ltv<=75?'good':ltv<=85?'warn':'bad') : 'info' },
+    { name: 'Asset/Liability',     value: `${alR.toFixed(2)}x`,                               status: toBS(alR>=1.5?'good':alR>=1?'warn':'bad') },
+    { name: 'Debt-to-Equity',      value: `${dte.toFixed(2)}x`,                               status: toBS(dte>0&&dte<=2?'good':dte<=4?'warn':'bad') },
+  ];
+
+  const PROF_BULLET_DEFS: BulletDef[] = [
+    { names: ['NOI Margin'],         benchmark: 35, unit: '%', reversed: false, max: 80,  extract: v => parseFloat(v) || 0 },
+    { names: ['Net Income Margin'],  benchmark: 25, unit: '%', reversed: false, max: 80,  extract: v => parseFloat(v) || 0 },
+    { names: ['Revenue Growth YoY'], benchmark: 0,  unit: '%', reversed: false, max: 30,  extract: v => Math.max(0, parseFloat(v.replace('+','')) || 0) },
+    { names: ['Expense Ratio'],      benchmark: 60, unit: '%', reversed: true,  max: 130, extract: v => parseFloat(v) || 0 },
+  ];
+  const RENTAL_BULLET_DEFS: BulletDef[] = [
+    { names: ['Interest Coverage'],   benchmark: 1.5, unit: 'x', reversed: false, max: 5,  extract: v => parseFloat(v) || 0 },
+    { names: ['Mgmt Fee %'],          benchmark: 10,  unit: '%', reversed: true,  max: 25, extract: v => parseFloat(v) || 0 },
+    { names: ['Repair % of Revenue'], benchmark: 10,  unit: '%', reversed: true,  max: 25, extract: v => parseFloat(v) || 0 },
+  ];
+  const BALANCE_BULLET_DEFS: BulletDef[] = [
+    { names: ['LTV'],             benchmark: 75,  unit: '%', reversed: true,  max: 130, extract: v => parseFloat(v) || 0 },
+    { names: ['Asset/Liability'], benchmark: 1.5, unit: 'x', reversed: false, max: 3,   extract: v => parseFloat(v) || 0 },
+    { names: ['Debt-to-Equity'],  benchmark: 2,   unit: 'x', reversed: true,  max: 15,  extract: v => parseFloat(v) || 0 },
+  ];
+
   // Data for new charts
   const lastKpi = k;
   const revenueAllocation = [
@@ -888,11 +946,46 @@ function KPITab({ fin }: { fin: ParsedFinancials }) {
       <div>
         <p style={{ fontSize: 13, fontWeight: 600, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Balance Sheet</p>
         <div className="grid grid-cols-4 gap-4">
-          <KCard label="LTV (Loans / Building)" value={ltv>0?`${ltv.toFixed(1)}%`:'N/A'} sub={`Loans: ${fmt(k.longTermLoans)}`} status={ltv>0&&ltv<=75?'good':ltv<=85?'warn':'bad'} category={ltv>85?'review':'balance'} />
+          <KCard label="LTV (Loans / Building)" value={ltv>0?`${ltv.toFixed(1)}%`:'Not available'} sub={ltv>0?`Loans: ${fmt(k.longTermLoans)}`:'Property value not found in balance sheet'} status={ltv>0&&ltv<=75?'good':ltv>0&&ltv<=85?'warn':ltv>0?'bad':'info'} category={ltv>85?'review':'balance'} />
           <KCard label="Asset / Liability Ratio" value={alR>0?`${alR.toFixed(2)}x`:'N/A'} sub={`Assets: ${fmt(k.totalAssets)}`} status={alR>=1.5?'good':alR>=1?'warn':'bad'} category={alR<1?'review':'balance'} />
           <KCard label="Debt-to-Equity" value={dte>0?`${dte.toFixed(2)}x`:'N/A'} sub={`Equity: ${fmt(k.equity)}`} status={dte>0&&dte<=2?'good':dte<=4?'warn':'bad'} category={dte>4?'review':'balance'} />
           <KCard label="Cash Balance" value={fmt(k.cash)} sub={`As of Dec 31, ${lastY}`} status={k.cash>10000?'good':k.cash>0?'warn':'bad'} trendData={cashTrend} category={k.cash<=0?'review':'balance'} />
         </div>
+      </div>
+
+      {/* ── Benchmark Bullet Strips ─────────────────────────────────────── */}
+      <div className="space-y-3">
+        <p style={{ fontSize: 13, fontWeight: 600, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Benchmark Comparison</p>
+        <div style={{ borderLeft: '3px solid #2F80ED', paddingLeft: 12 }}>
+          <p style={{ fontSize: 12, fontWeight: 600, color: '#2F80ED', marginBottom: 8 }}>Profitability</p>
+          <BulletChartStrip cards={profBulletCards} defs={PROF_BULLET_DEFS} />
+        </div>
+        <div style={{ borderLeft: '3px solid #27AE60', paddingLeft: 12 }}>
+          <p style={{ fontSize: 12, fontWeight: 600, color: '#27AE60', marginBottom: 8 }}>Rental Performance — Rental Income % and Cash Balance excluded (not ratio-comparable)</p>
+          <BulletChartStrip cards={rentalBulletCards} defs={RENTAL_BULLET_DEFS} />
+        </div>
+        <div style={{ borderLeft: '3px solid #F2994A', paddingLeft: 12 }}>
+          <p style={{ fontSize: 12, fontWeight: 600, color: '#F2994A', marginBottom: 8 }}>Balance Sheet — Cash Balance excluded ($ amount, not ratio)</p>
+          <BulletChartStrip cards={balanceBulletCards} defs={BALANCE_BULLET_DEFS} />
+        </div>
+      </div>
+
+      {/* ── Margins & Ratios Trend ──────────────────────────────────────── */}
+      <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: 20 }}>
+        <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Margins &amp; Ratios Trend</p>
+        <p style={{ fontSize: 12, color: '#A8A29E', marginBottom: 16 }}>NOI Margin, Net Margin, and Expense Ratio over all available years</p>
+        <ResponsiveContainer width="100%" height={220}>
+          <LineChart data={marginsTrend} margin={{ left: 0, right: 16, top: 4, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+            <XAxis dataKey="year" tick={{ fontSize: 11 }} />
+            <YAxis tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} />
+            <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 }} />
+            <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
+            <Line type="monotone" dataKey="NOI Margin %"    stroke="#D4AF37" strokeWidth={2} dot={{ r: 3, fill: '#D4AF37' }} />
+            <Line type="monotone" dataKey="Net Margin %"    stroke="#22A06B" strokeWidth={2} dot={{ r: 3, fill: '#22A06B' }} />
+            <Line type="monotone" dataKey="Expense Ratio %" stroke="#EB5757" strokeWidth={2} strokeDasharray="5 3" dot={{ r: 3, fill: '#EB5757' }} />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
 
       <div>
