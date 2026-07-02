@@ -23,7 +23,12 @@ export const STATUS_BAR: Record<BulletStatus, string> = {
   info:     '#78716C',
 };
 
-export function BulletChartStrip({ cards, defs }: { cards: BulletCard[]; defs: BulletDef[] }) {
+export function BulletChartStrip({ cards, defs, title = 'Benchmark Comparison', subtitle }: {
+  cards: BulletCard[];
+  defs: BulletDef[];
+  title?: string;
+  subtitle?: string;
+}) {
   const rows = defs.flatMap(def => {
     const card = cards.find(c => def.names.some(n => c.name === n));
     if (!card) return [];
@@ -36,9 +41,9 @@ export function BulletChartStrip({ cards, defs }: { cards: BulletCard[]; defs: B
 
   return (
     <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '20px 24px' }}>
-      <div style={{ fontSize: 15, fontWeight: 600, color: '#1C1917' }}>Benchmark Comparison</div>
+      <div style={{ fontSize: 15, fontWeight: 600, color: '#1C1917' }}>{title}</div>
       <div style={{ fontSize: 12, color: '#6B7280', marginTop: 3, marginBottom: 18 }}>
-        Current metric health vs benchmark — bar colour reflects card status&nbsp;·&nbsp;▎ marker = target
+        {subtitle ?? 'Current metric health vs benchmark — bar colour reflects card status · ▎ marker = target'}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr 80px', gap: 12, paddingBottom: 8, borderBottom: '1px solid #E8DEC8', marginBottom: 4 }}>

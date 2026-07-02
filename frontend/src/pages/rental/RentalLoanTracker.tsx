@@ -4,7 +4,9 @@ import { useRentalCfoData, dscrStatus } from '../../hooks/useRentalCfoData';
 import { LoadingSkeleton } from '../../components/ui/Table';
 import { fmtUSD } from '../../components/ProtectedRoute';
 import { api } from '../../services/api';
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, ReferenceLine, LabelList } from 'recharts';
+import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { BulletChartStrip } from '../../components/shared/BulletChartStrip';
+import type { BulletDef, BulletCard } from '../../components/shared/BulletChartStrip';
 
 const MARKET_RATE = 0.065;
 
@@ -23,8 +25,6 @@ const PT = {
   muted:    '#6B6B6B',
 };
 
-// Suite-specific palette for Debt by Building donut
-const SUITE_COLORS = ['#D4AF37', '#2F80ED', '#27AE60', '#F2994A', '#EB5757', '#9B51E0', '#56CCF2', '#F2C94C'];
 
 const EMPTY_FORM = {
   company_name: '', property_name: '', loan_bank_name: '',
@@ -302,6 +302,121 @@ export default function RentalLoanTracker() {
       });
   }, [filtered]);
 
+  // ── New KPIs ────────────────────────────────────────────────────────────────
+  const extKpis = useMemo(() => {
+    const now = new Date();
+    const totalOutstanding = filtered.reduce((s, l) => s + (l.loan_balance_as_of ?? l.loan_amount), 0);
+
+    // Weighted avg remaining term (months), weighted by outstanding balance
+    const loansWithMaturity = filtered.filter(l => l.loan_maturity_date);
+    const weightedTermNum = loansWithMaturity.reduce((s, l) => {
+      const bal = l.loan_balance_as_of ?? l.loan_amount;
+      const mat = new Date(l.loan_maturity_date!);
+      const months = Math.max(0, (mat.getFullYear() - now.getFullYear()) * 12 + mat.getMonth() - now.getMonth());
+      return s + months * bal;
+    }, 0);
+    const weightedTermDen = loansWithMaturity.reduce((s, l) => s + (l.loan_balance_as_of ?? l.loan_amount), 0);
+    const weightedAvgTerm = weightedTermDen > 0 ? weightedTermNum / weightedTermDen : null;
+
+    // Maturing in next 12 months
+    const in12 = filtered.filter(l => {
+      if (!l.loan_maturity_date) return false;
+      const mat = new Date(l.loan_maturity_date);
+      const months = (mat.getFullYear() - now.getFullYear()) * 12 + mat.getMonth() - now.getMonth();
+      return months >= 0 && months <= 12;
+    });
+    const maturingCount = in12.length;
+    const maturingAmt   = in12.reduce((s, l) => s + (l.loan_balance_as_of ?? l.loan_amount), 0);
+
+    // Average LTV (only where current_property_value is populated)
+    const ltvLoans = filtered.filter(l => l.current_property_value && l.current_property_value > 0);
+    const avgLtv = ltvLoans.length > 0
+      ? ltvLoans.reduce((s, l) => {
+          const bal = l.loan_balance_as_of ?? l.loan_amount;
+          return s + (bal / l.current_property_value!) * 100;
+        }, 0) / ltvLoans.length
+      : null;
+    const ltvCount = ltvLoans.length;
+
+    // Portfolio DSCR: total annual NOI / total annual debt service
+    const totalDebtService = filtered.reduce((s, l) => s + (l.loan_emi ?? 0) * 12, 0);
+    const noiLoans = filtered.filter(l => l.noi_annual && l.noi_annual > 0);
+    const totalNoi = noiLoans.reduce((s, l) => s + (l.noi_annual ?? 0), 0);
+    const portfolioDscr = totalDebtService > 0 && totalNoi > 0 ? totalNoi / totalDebtService : null;
+
+    // Concentration risk: largest building share & largest lender share
+    const byBuilding: Record<string, number> = {};
+    const byLender:   Record<string, number> = {};
+    filtered.forEach(l => {
+      const bal = l.loan_balance_as_of ?? l.loan_amount;
+      byBuilding[l.property_name]  = (byBuilding[l.property_name]  || 0) + bal;
+      byLender[l.loan_bank_name]   = (byLender[l.loan_bank_name]   || 0) + bal;
+    });
+    const maxBuilding = Object.entries(byBuilding).sort((a, b) => b[1] - a[1])[0];
+    const maxLender   = Object.entries(byLender).sort((a, b) => b[1] - a[1])[0];
+    const topBuildingPct  = totalOutstanding > 0 && maxBuilding ? maxBuilding[1] / totalOutstanding * 100 : null;
+    const topLenderPct    = totalOutstanding > 0 && maxLender   ? maxLender[1]   / totalOutstanding * 100 : null;
+
+    return {
+      weightedAvgTerm, maturingCount, maturingAmt, avgLtv, ltvCount,
+      portfolioDscr, totalNoi, totalDebtService,
+      topBuilding: maxBuilding?.[0] ?? '', topBuildingPct,
+      topLender:   maxLender?.[0]   ?? '', topLenderPct,
+    };
+  }, [filtered]);
+
+  // Maturity Ladder — debt maturing per calendar year (aggregated)
+  const maturityLadderData = useMemo(() => {
+    const byYear: Record<number, number> = {};
+    filtered.forEach(l => {
+      if (!l.loan_maturity_date) return;
+      const yr = new Date(l.loan_maturity_date).getFullYear();
+      byYear[yr] = (byYear[yr] || 0) + (l.loan_balance_as_of ?? l.loan_amount);
+    });
+    return Object.entries(byYear)
+      .sort(([a], [b]) => parseInt(a) - parseInt(b))
+      .map(([year, amount]) => ({ year, amount }));
+  }, [filtered]);
+
+  // Rate variance (bps above/below MARKET_RATE)
+  const rateVarianceData = useMemo(() => {
+    return filtered
+      .filter(l => l.loan_interest_rate != null)
+      .map(l => ({
+        name: l.property_name,
+        bps: Math.round(((l.loan_interest_rate ?? 0) - MARKET_RATE) * 10000),
+        bal: l.loan_balance_as_of ?? l.loan_amount,
+      }))
+      .sort((a, b) => b.bps - a.bps);
+  }, [filtered]);
+
+  // Debt by Building — ranked bar (replaces donut)
+  const debtByBuildingRanked = useMemo(() => {
+    return [...debtByBuildingData]
+      .sort((a, b) => b.value - a.value)
+      .map(d => ({ ...d, label: d.name.length > 16 ? d.name.slice(0, 14) + '…' : d.name }));
+  }, [debtByBuildingData]);
+
+  // DSCR Bullet Chart data
+  const dscrBulletCards: BulletCard[] = useMemo(() => dscrHealth
+    .filter(r => r.dscr != null)
+    .map(r => ({
+      name: r.building,
+      value: `${r.dscr!.toFixed(2)}x`,
+      status: r.dscr! > 1.25 ? 'good' : r.dscr! >= 1.0 ? 'monitor' : 'critical',
+    } satisfies BulletCard)), [dscrHealth]);
+
+  const dscrBulletDefs: BulletDef[] = useMemo(() => dscrHealth
+    .filter(r => r.dscr != null)
+    .map(r => ({
+      names: [r.building],
+      benchmark: 1.25,
+      unit: 'x',
+      reversed: false,
+      max: 3,
+      extract: v => parseFloat(v) || 0,
+    })), [dscrHealth]);
+
   if (loading) return <LoadingSkeleton rows={10} />;
   if (error) return <div className="text-red-600 p-4">{error}<button className="ml-3 underline" onClick={reload}>Retry</button></div>;
 
@@ -368,6 +483,106 @@ export default function RentalLoanTracker() {
             {k.sub && <p style={{ fontSize: 12, color: PT.muted, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.sub}</p>}
           </div>
         ))}
+      </div>
+
+      {/* ── Second KPI row ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Portfolio DSCR */}
+        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 8, padding: '16px 16px 12px',
+          borderLeft: extKpis.portfolioDscr == null ? `3px solid ${PT.border}` : extKpis.portfolioDscr > 1.25 ? '3px solid #22A06B' : extKpis.portfolioDscr >= 1.0 ? '3px solid #F2C94C' : '3px solid #EB5757' }}>
+          <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 8 }}>Portfolio DSCR</p>
+          {extKpis.portfolioDscr != null ? (
+            <>
+              <p style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.2, fontVariantNumeric: 'tabular-nums lining-nums',
+                color: extKpis.portfolioDscr > 1.25 ? '#22A06B' : extKpis.portfolioDscr >= 1.0 ? '#F2C94C' : '#EB5757' }}>
+                {extKpis.portfolioDscr.toFixed(2)}x
+              </p>
+              <p style={{ fontSize: 11, color: PT.muted, marginTop: 4 }}>NOI {fmtUSD(extKpis.totalNoi)}/yr ÷ DS {fmtUSD(extKpis.totalDebtService)}/yr</p>
+            </>
+          ) : (
+            <>
+              <p style={{ fontSize: 16, fontWeight: 600, color: PT.muted }}>Not available</p>
+              <p style={{ fontSize: 11, color: PT.muted, marginTop: 4 }}>Add NOI Annual to loans for DSCR</p>
+            </>
+          )}
+        </div>
+
+        {/* Weighted Avg Remaining Term */}
+        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 8, padding: '16px 16px 12px' }}>
+          <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 8 }}>Wtd Avg Remaining Term</p>
+          {extKpis.weightedAvgTerm != null ? (
+            <>
+              <p style={{ fontSize: 28, fontWeight: 700, color: extKpis.weightedAvgTerm < 12 ? '#EB5757' : extKpis.weightedAvgTerm < 36 ? '#F2C94C' : PT.text, lineHeight: 1.2, fontVariantNumeric: 'tabular-nums lining-nums' }}>
+                {Math.round(extKpis.weightedAvgTerm)}mo
+              </p>
+              <p style={{ fontSize: 11, color: PT.muted, marginTop: 4 }}>~{(extKpis.weightedAvgTerm / 12).toFixed(1)} yrs · weighted by balance</p>
+            </>
+          ) : (
+            <p style={{ fontSize: 16, fontWeight: 600, color: PT.muted }}>No maturity dates</p>
+          )}
+        </div>
+
+        {/* Maturing in 12 months */}
+        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 8, padding: '16px 16px 12px',
+          borderLeft: extKpis.maturingCount > 0 ? '3px solid #EB5757' : `1px solid ${PT.border}` }}>
+          <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 8 }}>Maturing ≤12 Months</p>
+          <p style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.2, color: extKpis.maturingCount > 0 ? '#EB5757' : '#22A06B' }}>
+            {extKpis.maturingCount} loan{extKpis.maturingCount !== 1 ? 's' : ''}
+          </p>
+          <p style={{ fontSize: 11, color: PT.muted, marginTop: 4 }}>
+            {extKpis.maturingCount > 0 ? fmtUSD(extKpis.maturingAmt) + ' coming due' : 'No near-term maturities'}
+          </p>
+        </div>
+
+        {/* Average LTV / Concentration */}
+        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 8, padding: '16px 16px 12px' }}>
+          <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 8 }}>Average LTV</p>
+          {extKpis.avgLtv != null ? (
+            <>
+              <p style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.2, fontVariantNumeric: 'tabular-nums lining-nums',
+                color: extKpis.avgLtv <= 75 ? '#22A06B' : extKpis.avgLtv <= 85 ? '#F2C94C' : '#EB5757' }}>
+                {extKpis.avgLtv.toFixed(1)}%
+              </p>
+              <p style={{ fontSize: 11, color: PT.muted, marginTop: 4 }}>{extKpis.ltvCount} of {filtered.length} loans have property value</p>
+            </>
+          ) : (
+            <>
+              <p style={{ fontSize: 16, fontWeight: 600, color: PT.muted }}>Not available</p>
+              <p style={{ fontSize: 11, color: PT.muted, marginTop: 4 }}>Add Property Value to loans for LTV</p>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Concentration Risk + Fixed/Floating row */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 8, padding: '16px 16px 12px' }}>
+          <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 10 }}>Building Concentration Risk</p>
+          {extKpis.topBuildingPct != null ? (
+            <>
+              <p style={{ fontSize: 22, fontWeight: 700, color: extKpis.topBuildingPct > 50 ? '#EB5757' : extKpis.topBuildingPct > 33 ? '#F2C94C' : '#22A06B', fontVariantNumeric: 'tabular-nums lining-nums' }}>
+                {extKpis.topBuildingPct.toFixed(0)}%
+              </p>
+              <p style={{ fontSize: 12, color: PT.muted, marginTop: 4 }}>Largest: {extKpis.topBuilding}</p>
+            </>
+          ) : <p style={{ fontSize: 14, color: PT.muted }}>—</p>}
+        </div>
+        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 8, padding: '16px 16px 12px' }}>
+          <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 10 }}>Lender Concentration Risk</p>
+          {extKpis.topLenderPct != null ? (
+            <>
+              <p style={{ fontSize: 22, fontWeight: 700, color: extKpis.topLenderPct > 60 ? '#EB5757' : extKpis.topLenderPct > 40 ? '#F2C94C' : '#22A06B', fontVariantNumeric: 'tabular-nums lining-nums' }}>
+                {extKpis.topLenderPct.toFixed(0)}%
+              </p>
+              <p style={{ fontSize: 12, color: PT.muted, marginTop: 4 }}>Largest lender: {extKpis.topLender}</p>
+            </>
+          ) : <p style={{ fontSize: 14, color: PT.muted }}>—</p>}
+        </div>
+        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 8, padding: '16px 16px 12px' }}>
+          <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 10 }}>Fixed vs Floating Split</p>
+          <p style={{ fontSize: 16, fontWeight: 600, color: PT.muted }}>Not available</p>
+          <p style={{ fontSize: 11, color: PT.muted, marginTop: 4 }}>Rate type not tracked per loan</p>
+        </div>
       </div>
 
       <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, overflow: 'hidden' }}>
@@ -485,16 +700,23 @@ export default function RentalLoanTracker() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, padding: 20 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 600, color: PT.text, marginBottom: 16 }}>Debt by Building</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie data={debtByBuildingData} cx="50%" cy="50%" outerRadius={80} innerRadius={36} dataKey="value" nameKey="name">
-                {debtByBuildingData.map((_, i) => <Cell key={i} fill={SUITE_COLORS[i % SUITE_COLORS.length]} />)}
-              </Pie>
-              <Tooltip formatter={(v: number) => fmtUSD(v)} />
-              <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-            </PieChart>
-          </ResponsiveContainer>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: PT.text, marginBottom: 4 }}>Debt by Building</h3>
+          <p style={{ fontSize: 12, color: PT.muted, marginBottom: 16 }}>Outstanding balance ranked highest to lowest</p>
+          {debtByBuildingRanked.length === 0 ? (
+            <p style={{ fontSize: 13, color: PT.muted }}>No loan data</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={Math.max(180, debtByBuildingRanked.length * 38)}>
+              <BarChart data={debtByBuildingRanked} layout="vertical" margin={{ left: 0, right: 60, top: 4, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={PT.border} horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 11, fill: PT.muted }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+                <YAxis type="category" dataKey="label" width={110} tick={{ fontSize: 12, fill: PT.text }} />
+                <Tooltip formatter={(v: number) => fmtUSD(v)} labelFormatter={(_l, payload) => payload?.[0]?.payload?.name ?? ''} />
+                <Bar dataKey="value" name="Balance" radius={[0, 4, 4, 0]}>
+                  {debtByBuildingRanked.map((_, i) => <Cell key={i} fill={i === 0 ? '#D4AF37' : i === 1 ? '#F2C94C' : '#E8DEC8'} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
 
         <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, padding: 20 }}>
@@ -515,44 +737,59 @@ export default function RentalLoanTracker() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, padding: 20 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 600, color: PT.text, marginBottom: 16 }}>Maturity Timeline</h3>
-          <div className="space-y-3">
-            {maturityTimelineData.map((l, i) => {
-              const barColor = l.monthsLeft < 12 ? '#D9534F' : l.monthsLeft < 24 ? '#F5A623' : '#22A06B';
-              return (
-                <div key={i}>
-                  <div className="flex justify-between" style={{ marginBottom: 4 }}>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: PT.text }}>{l.property_name}</span>
-                    <span style={{ fontSize: 11, color: barColor, fontWeight: 600 }}>{l.monthsLeft}mo</span>
-                  </div>
-                  <div style={{ width: '100%', background: PT.border, borderRadius: 4, height: 6 }}>
-                    <div style={{ width: `${Math.min(100, (l.monthsLeft / 60) * 100)}%`, background: barColor, height: 6, borderRadius: 4 }} />
-                  </div>
-                  <p style={{ fontSize: 11, color: PT.muted, marginTop: 2 }}>{l.loan_maturity_date}</p>
-                </div>
-              );
-            })}
-          </div>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: PT.text, marginBottom: 4 }}>Maturity Ladder</h3>
+          <p style={{ fontSize: 12, color: PT.muted, marginBottom: 16 }}>Total debt maturing per calendar year</p>
+          {maturityLadderData.length === 0 ? (
+            <p style={{ fontSize: 13, color: PT.muted }}>No maturity dates recorded</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={maturityLadderData} margin={{ left: 0, right: 10, top: 8, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={PT.border} />
+                <XAxis dataKey="year" tick={{ fontSize: 12, fill: PT.muted }} />
+                <YAxis tick={{ fontSize: 11, fill: PT.muted }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+                <Tooltip formatter={(v: number) => fmtUSD(v)} labelFormatter={l => `Year ${l}`} />
+                <Bar dataKey="amount" name="Maturing Balance" radius={[4, 4, 0, 0]}>
+                  {maturityLadderData.map((d, i) => {
+                    const yr = typeof d.year === 'string' ? parseInt(d.year) : d.year;
+                    const now = new Date().getFullYear();
+                    return <Cell key={i} fill={yr - now <= 1 ? '#EB5757' : yr - now <= 2 ? '#F2C94C' : '#D4AF37'} />;
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
 
         <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, padding: 20 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 600, color: PT.text, marginBottom: 16 }}>Interest Rate vs Market (6.5%)</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={rateComparisonData} margin={{ left: 0, right: 10, top: 5, bottom: 40 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={PT.border} />
-              <XAxis dataKey="name" angle={-30} textAnchor="end" height={70} tick={{ fontSize: 11, fill: PT.muted }} />
-              <YAxis tick={{ fontSize: 11, fill: PT.muted }} tickFormatter={v => `${v.toFixed(1)}%`} />
-              <Tooltip formatter={(v: number) => `${v.toFixed(2)}%`} />
-              <ReferenceLine y={6.5} stroke="#D9534F" strokeDasharray="4 3" label={{ value: '6.5%', position: 'right', fontSize: 10, fill: '#D9534F' }} />
-              <Bar dataKey="rate" name="Loan Rate" radius={[4, 4, 0, 0]}>
-                {rateComparisonData.map((entry, i) => (
-                  <Cell key={i} fill={entry.rate <= 6.5 ? '#22A06B' : '#F5A623'} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: PT.text, marginBottom: 4 }}>Rate Variance vs Market ({(MARKET_RATE * 100).toFixed(1)}%)</h3>
+          <p style={{ fontSize: 12, color: PT.muted, marginBottom: 16 }}>Basis points above (↑ costly) or below (↓ good) the {(MARKET_RATE * 100).toFixed(1)}% benchmark</p>
+          {rateVarianceData.length === 0 ? (
+            <p style={{ fontSize: 13, color: PT.muted }}>No interest rate data</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={rateVarianceData} margin={{ left: 0, right: 10, top: 8, bottom: 40 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={PT.border} />
+                <XAxis dataKey="name" angle={-30} textAnchor="end" height={70} tick={{ fontSize: 11, fill: PT.muted }} />
+                <YAxis tick={{ fontSize: 11, fill: PT.muted }} tickFormatter={v => `${v > 0 ? '+' : ''}${v}bps`} />
+                <Tooltip formatter={(v: number) => [`${v > 0 ? '+' : ''}${v} bps`, 'Rate vs Market']} />
+                <ReferenceLine y={0} stroke={PT.border} strokeWidth={2} />
+                <Bar dataKey="bps" name="Rate vs Market" radius={[4, 4, 0, 0]}>
+                  {rateVarianceData.map((d, i) => <Cell key={i} fill={d.bps <= 0 ? '#22A06B' : d.bps <= 50 ? '#F2C94C' : '#EB5757'} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
+
+      {dscrBulletCards.length > 0 && (
+        <BulletChartStrip
+          cards={dscrBulletCards}
+          defs={dscrBulletDefs}
+          title="DSCR by Building"
+          subtitle="Debt Service Coverage Ratio vs 1.25x benchmark — bar colour reflects coverage health · ▎ marker = 1.25x target"
+        />
+      )}
 
       <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, overflow: 'hidden' }}>
         <div style={{ padding: '12px 20px', borderBottom: `1px solid ${PT.border}` }}>
