@@ -447,7 +447,7 @@ export default function RentalArDashboard() {
                       dataKey="month"
                       tick={{ fontSize: 11, fill: '#6B7280' }}
                       axisLine={false} tickLine={false}
-                      interval={trendData.length > 24 ? 5 : trendData.length > 12 ? 2 : 1}
+                      interval={Math.max(1, Math.floor(trendData.length / 10))}
                     />
                     <YAxis
                       tick={{ fontSize: 11, fill: '#6B7280' }}
@@ -459,8 +459,8 @@ export default function RentalArDashboard() {
                     {/* Under-collection fill: stacked transparent base + red gap */}
                     <Area type="monotone" dataKey="collectedBase" stackId="gap" fill="transparent" stroke="none" legendType="none" />
                     <Area type="monotone" dataKey="gapFill"       stackId="gap" fill="rgba(235,87,87,0.12)" stroke="none" legendType="none" />
-                    <Line type="monotone" dataKey="billed"    name="Billed"    stroke="#4E79A7" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
-                    <Line type="monotone" dataKey="collected" name="Collected" stroke="#22A06B" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
+                    <Line type="monotone" dataKey="billed"    name="Billed"    stroke="#4E79A7" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 1.5, stroke: '#4E79A7', fill: '#fff' }} />
+                    <Line type="monotone" dataKey="collected" name="Collected" stroke="#22A06B" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 1.5, stroke: '#22A06B', fill: '#fff' }} />
                   </ComposedChart>
                 </ResponsiveContainer>
                 <div style={{ display: 'flex', gap: 20, marginTop: 10, alignItems: 'center' }}>

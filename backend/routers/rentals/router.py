@@ -2327,10 +2327,17 @@ def get_ar_summary(
     # those are section-total aggregates and would double-count when individual
     # unit lines are also present in the same P&L.
     RENT_RE = re.compile(r'^rent\s*[-–]', re.IGNORECASE)
+    # Validates a normalised month key — must be "Mon-YYYY" (3-letter abbrev + 4-digit year).
+    # Rejects "Total", "YTD", "Budget", "Prior Year" and other non-month P&L columns that
+    # would otherwise be summed into src_b and produce a phantom spike month.
+    MONTH_KEY_RE = re.compile(r'^[A-Za-z]{3}-\d{4}$')
 
     def norm_month(m: str) -> str:
         # "Jan 2026" → "Jan-2026"; "Jan-2026" → "Jan-2026"
         return m.replace(' ', '-') if ' ' in m else m
+
+    def valid_month(mk: str) -> bool:
+        return bool(MONTH_KEY_RE.match(mk))
 
     def month_sort_key(m: str) -> tuple:
         MNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
@@ -2359,8 +2366,9 @@ def get_ar_summary(
         if co.monthly_rent_data:
             for k, v in co.monthly_rent_data.items():
                 val = float(v or 0)
-                if val > 0:
-                    src_a[norm_month(k)] = val
+                mk = norm_month(k)
+                if val > 0 and valid_month(mk):
+                    src_a[mk] = val
 
         # Source B: P&L financials fallback
         src_b: dict[str, float] = {}
@@ -2378,6 +2386,8 @@ def get_ar_summary(
                 mv: dict = item.get('monthlyValues') or {}
                 for raw_k, v in mv.items():
                     mk = norm_month(raw_k)
+                    if not valid_month(mk):   # drop "Total", "YTD", "Budget" etc.
+                        continue
                     src_b[mk] = src_b.get(mk, 0.0) + float(v or 0)
 
                 # Flag unmatched unit labels
