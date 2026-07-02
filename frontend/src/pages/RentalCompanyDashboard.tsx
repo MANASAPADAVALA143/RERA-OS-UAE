@@ -90,7 +90,7 @@ type DashTab = 'overview' | 'leases' | 'maintenance' | 'inspections';
 
 const TABS: { id: DashTab; label: string }[] = [
   { id: 'overview',     label: 'Overview'     },
-  { id: 'leases',       label: 'Leases'       },
+  { id: 'leases',       label: 'Rentals'      },
   { id: 'maintenance',  label: 'Maintenance'  },
   { id: 'inspections',  label: 'Inspections'  },
 ];
@@ -279,9 +279,9 @@ export default function RentalCompanyDashboard({ companyId }: Props) {
         </div>
       )}
 
-      {/* ── LEASES ────────────────────────────────────────────────────────── */}
+      {/* ── RENTALS ───────────────────────────────────────────────────────── */}
       {dashTab === 'leases' && (
-        <Card title="Active Leases">
+        <Card title="Active Rentals">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

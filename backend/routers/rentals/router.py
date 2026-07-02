@@ -68,6 +68,132 @@ def _flatten_pl_items(items: list) -> list:
     return result
 
 
+# ── P&L regex patterns (compiled once at import time) ────────────────────────
+
+import re as _re
+from models.rentals.models import RentalFinancialUpload as _RFU
+
+_INCOME_RE = _re.compile(
+    r"rental\s+income|rent\s+income|rent\s*[-–]|other\s+income", _re.IGNORECASE
+)
+_EXP_SKIP = _re.compile(
+    r"^(total|subtotal|net\s|gross\s|\bincome\b|revenue|rental\s+income"
+    r"|rent\s+income|rent\s*-|operating\s+income|net\s+income|net\s+loss)",
+    _re.IGNORECASE,
+)
+_ONE_TIME = _re.compile(
+    r"sec\s*481|481\s*\(a\)|accounting\s*method\s*adjustment", _re.IGNORECASE
+)
+
+
+def _apply_collected_fallback(
+    summ: dict,
+    co,
+    month_abbrev: str,
+    db,
+    tid,
+) -> None:
+    """
+    Apply Excel-sync → P&L fallback for collected/NOI in-place.
+
+    Called by list_companies, company_dashboard, and get_portfolio_summary
+    so the same two-source priority is enforced everywhere:
+      Source B: Excel-synced monthly_rent_data / collected_this_month column
+      Source C: Latest P&L upload for the company
+    """
+    # ── Source B: Excel sync ──────────────────────────────────────────────────
+    if summ["collected_this_month"] == 0.0:
+        monthly_data: dict = co.monthly_rent_data or {}
+        synced = float(monthly_data.get(month_abbrev, 0.0))
+        if synced == 0.0 and co.last_sync_month and co.collected_this_month:
+            try:
+                if (
+                    datetime.strptime(co.last_sync_month, "%b-%Y").strftime("%Y-%m")
+                    == datetime.strptime(month_abbrev, "%b-%Y").strftime("%Y-%m")
+                ):
+                    synced = float(co.collected_this_month)
+            except ValueError:
+                pass
+        if synced > 0.0:
+            summ["collected_this_month"] = synced
+            summ["noi_this_month"] = round(synced - summ["total_expense_this_month"], 2)
+            summ["collected_source"] = "excel_sync"
+
+    # ── Source C: P&L upload ──────────────────────────────────────────────────
+    if summ["collected_this_month"] == 0.0:
+        upload = (
+            db.query(_RFU)
+            .filter(_RFU.tenant_id == tid, _RFU.company_id == co.id)
+            .order_by(_RFU.uploaded_at.desc())
+            .first()
+        )
+        if upload and upload.pl_data:
+            mk_space = month_abbrev.replace("-", " ")
+            mk_dash  = month_abbrev
+            pl_income  = 0.0
+            pl_expense = 0.0
+            for item in _flatten_pl_items(upload.pl_data):
+                if item.get("isSectionHeader") or item.get("isTotal"):
+                    continue
+                label = str(item.get("label", ""))
+                mv    = item.get("monthlyValues") or {}
+                val   = abs(float(mv.get(mk_space, mv.get(mk_dash, 0)) or 0))
+                if val == 0:
+                    continue
+                if _INCOME_RE.match(label):
+                    pl_income += val
+                elif not _EXP_SKIP.match(label.strip()) and not _ONE_TIME.search(label):
+                    pl_expense += val
+            if pl_income > 0.0:
+                summ["collected_this_month"] = pl_income
+                summ["collected_source"]     = "pl_fallback"
+                if pl_expense > 0.0 and summ["total_expense_this_month"] == 0.0:
+                    summ["total_expense_this_month"] = pl_expense
+                summ["noi_this_month"] = round(
+                    summ["collected_this_month"] - summ["total_expense_this_month"], 2
+                )
+                if summ["billed_this_month"] == 0.0 and summ["gross_potential_rent"] > 0.0:
+                    summ["billed_this_month"] = summ["gross_potential_rent"]
+                summ["arrears_total"] = round(
+                    max(0.0, summ["billed_this_month"] - summ["collected_this_month"]), 2
+                )
+
+    # ── Gross potential / vacancy loss column fallbacks ───────────────────────
+    if summ["gross_potential_rent"] == 0.0 and co.gross_potential_rent:
+        summ["gross_potential_rent"] = float(co.gross_potential_rent)
+    if summ["vacancy_loss"] == 0.0 and co.vacancy_loss:
+        summ["vacancy_loss"] = float(co.vacancy_loss)
+
+
+def _pl_expense_breakdown(co, month_abbrev: str, db, tid) -> list[dict]:
+    """
+    Build expense-by-category list from the P&L upload for one company/month.
+    Returns [] if no upload or no expense items for that month.
+    """
+    upload = (
+        db.query(_RFU)
+        .filter(_RFU.tenant_id == tid, _RFU.company_id == co.id)
+        .order_by(_RFU.uploaded_at.desc())
+        .first()
+    )
+    if not (upload and upload.pl_data):
+        return []
+    mk_space = month_abbrev.replace("-", " ")
+    mk_dash  = month_abbrev
+    exp_by_cat: dict[str, float] = defaultdict(float)
+    for item in _flatten_pl_items(upload.pl_data):
+        if item.get("isSectionHeader") or item.get("isTotal"):
+            continue
+        label = str(item.get("label", ""))
+        if _INCOME_RE.match(label) or _EXP_SKIP.match(label.strip()) or _ONE_TIME.search(label):
+            continue
+        mv  = item.get("monthlyValues") or {}
+        val = abs(float(mv.get(mk_space, mv.get(mk_dash, 0)) or 0))
+        if val > 0:
+            exp_by_cat[label] += val
+    return [{"category": k, "amount": round(v, 2)} for k, v in exp_by_cat.items()]
+
+
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def _inv_dict(inv: RentalInvoice) -> dict:
@@ -237,93 +363,8 @@ def get_portfolio_summary(
         unit_dicts = [_unit_dict(u, inv_by_unit.get(str(u.id), []), today) for u in units]
         summ = company_summary(unit_dicts, inv_dicts, exp_dicts, today, cur_month=selected_month)
 
-        # ── Synced-data fallback ──────────────────────────────────────────────
-        # When there are no RentalCollection records the dynamic calc returns $0.
-        # Fall back to the Excel-synced monthly_rent_data for the requested month.
-        if summ["collected_this_month"] == 0.0:
-            monthly_data: dict = co.monthly_rent_data or {}
-            synced = float(monthly_data.get(month_abbrev, 0.0))
-            # Secondary fallback: use collected_this_month if last_sync_month matches
-            if synced == 0.0 and co.last_sync_month and co.collected_this_month:
-                try:
-                    if datetime.strptime(co.last_sync_month, "%b-%Y").strftime("%Y-%m") == selected_month:
-                        synced = float(co.collected_this_month)
-                except ValueError:
-                    pass
-            if synced > 0.0:
-                summ["collected_this_month"] = synced
-                summ["noi_this_month"] = round(synced - summ["total_expense_this_month"], 2)
-                summ["collected_source"] = "excel_sync"
-
-        # ── P&L fallback (Source C) ───────────────────────────────────────────
-        # Fires when rent-receivable AND excel-sync data are both absent for the
-        # requested month (e.g. Jul-2026 when sync is only through Jun-2026).
-        if summ["collected_this_month"] == 0.0:
-            import re as _re
-            from models.rentals.models import RentalFinancialUpload as _RFU
-            # Anchored via .match() — matches labels STARTING WITH these patterns only
-            _INCOME_RE = _re.compile(
-                r"rental\s+income|rent\s+income|rent\s*[-–]|other\s+income",
-                _re.IGNORECASE,
-            )
-            _EXP_SKIP = _re.compile(
-                r"^(total|subtotal|net\s|gross\s|\bincome\b|revenue|rental\s+income"
-                r"|rent\s+income|rent\s*-|operating\s+income|net\s+income|net\s+loss)",
-                _re.IGNORECASE,
-            )
-            _ONE_TIME = _re.compile(
-                r"sec\s*481|481\s*\(a\)|accounting\s*method\s*adjustment",
-                _re.IGNORECASE,
-            )
-            upload = (
-                db.query(_RFU)
-                .filter(_RFU.tenant_id == tid, _RFU.company_id == co.id)
-                .order_by(_RFU.uploaded_at.desc())
-                .first()
-            )
-            if upload and upload.pl_data:
-                mk_space = month_abbrev.replace("-", " ")   # "Jul 2026"
-                mk_dash  = month_abbrev                      # "Jul-2026"
-                pl_income  = 0.0
-                pl_expense = 0.0
-                for item in _flatten_pl_items(upload.pl_data):
-                    # Skip section headers and running-total rows — they double-count
-                    if item.get("isSectionHeader") or item.get("isTotal"):
-                        continue
-                    label = str(item.get("label", ""))
-                    mv    = item.get("monthlyValues") or {}
-                    val   = abs(float(mv.get(mk_space, mv.get(mk_dash, 0)) or 0))
-                    if val == 0:
-                        continue
-                    # Use .match() (anchored to label start) so "Total Rental Income"
-                    # does NOT match — only labels that START with these patterns count.
-                    if _INCOME_RE.match(label):
-                        pl_income += val
-                    elif not _EXP_SKIP.match(label.strip()) and not _ONE_TIME.search(label):
-                        pl_expense += val
-
-                if pl_income > 0.0:
-                    summ["collected_this_month"] = pl_income
-                    summ["collected_source"]     = "pl_fallback"
-                    if pl_expense > 0.0 and summ["total_expense_this_month"] == 0.0:
-                        summ["total_expense_this_month"] = pl_expense
-                    summ["noi_this_month"] = round(
-                        summ["collected_this_month"] - summ["total_expense_this_month"], 2
-                    )
-                    # Use gross_potential_rent as billed proxy when no invoices exist
-                    if summ["billed_this_month"] == 0.0 and summ["gross_potential_rent"] > 0.0:
-                        summ["billed_this_month"] = summ["gross_potential_rent"]
-                    # Recompute arrears as billed - collected
-                    summ["arrears_total"] = round(
-                        max(0.0, summ["billed_this_month"] - summ["collected_this_month"]), 2
-                    )
-
-        # Gross potential rent — use synced value when unit rents are all 0
-        if summ["gross_potential_rent"] == 0.0 and co.gross_potential_rent:
-            summ["gross_potential_rent"] = float(co.gross_potential_rent)
-        # Vacancy loss — same fallback
-        if summ["vacancy_loss"] == 0.0 and co.vacancy_loss:
-            summ["vacancy_loss"] = float(co.vacancy_loss)
+        # Apply Excel-sync → P&L fallback (shared helper — same logic as company_dashboard)
+        _apply_collected_fallback(summ, co, month_abbrev, db, tid)
         # ─────────────────────────────────────────────────────────────────────
 
         all_units_dicts.extend(unit_dicts)
@@ -465,6 +506,8 @@ def list_companies(
         except Exception as exc2:
             _log.error("list_companies retry also failed: %s", exc2)
             return []
+    month_abbrev = today.strftime("%b-%Y")  # e.g. "Jul-2026"
+    cur_month    = today.strftime("%Y-%m")  # e.g. "2026-07"
     result = []
     for co in companies:
         units, inv_dicts, exp_dicts = _load_company_data(co.id, tid, db)
@@ -472,7 +515,9 @@ def list_companies(
         for inv in inv_dicts:
             inv_by_unit[inv["unit_id"]].append(inv)
         unit_dicts = [_unit_dict(u, inv_by_unit.get(str(u.id), []), today) for u in units]
-        summ = company_summary(unit_dicts, inv_dicts, exp_dicts, today)
+        summ = company_summary(unit_dicts, inv_dicts, exp_dicts, today, cur_month=cur_month)
+        # Apply Excel-sync → P&L fallback (same priority as portfolio summary)
+        _apply_collected_fallback(summ, co, month_abbrev, db, tid)
         props = db.query(RentalProp).filter(RentalProp.company_id == co.id).all()
         result.append({
             "id": str(co.id),
@@ -586,18 +631,45 @@ def company_dashboard(
     if not co:
         raise HTTPException(404, "Company not found")
 
+    month_abbrev = today.strftime("%b-%Y")  # e.g. "Jul-2026"
+    cur_month    = today.strftime("%Y-%m")  # e.g. "2026-07"
+
     units, inv_dicts, exp_dicts = _load_company_data(co.id, tid, db)
     inv_by_unit: dict[str, list[dict]] = defaultdict(list)
     for inv in inv_dicts:
         inv_by_unit[inv["unit_id"]].append(inv)
     unit_dicts = [_unit_dict(u, inv_by_unit.get(str(u.id), []), today) for u in units]
-    summ = company_summary(unit_dicts, inv_dicts, exp_dicts, today)
-    trend = income_trend(inv_dicts, exp_dicts, months=6)
+    summ = company_summary(unit_dicts, inv_dicts, exp_dicts, today, cur_month=cur_month)
 
+    # Apply Excel-sync → P&L fallback so KPIs match Portfolio Overview
+    _apply_collected_fallback(summ, co, month_abbrev, db, tid)
+
+    # Income trend — from invoice/collection records; fallback to synced monthly data
+    trend = income_trend(inv_dicts, exp_dicts, months=6)
+    if not trend and co.monthly_rent_data:
+        # Build a synthetic 6-month trend from synced collected amounts.
+        # Sort chronologically using MONTH_OPTIONS order (not alphabetically).
+        def _month_key(m: str) -> int:
+            try:
+                return MONTH_OPTIONS.index(m)
+            except ValueError:
+                return 999
+        sorted_entries = sorted(
+            ((m, float(v)) for m, v in co.monthly_rent_data.items() if float(v) > 0),
+            key=lambda x: _month_key(x[0]),
+        )[-6:]
+        trend = [
+            {"month": m, "billed": 0.0, "collected": v, "expense": 0.0, "noi": v}
+            for m, v in sorted_entries
+        ]
+
+    # Expense breakdown — from RentalExpense records; fallback to P&L upload
     exp_by_cat: dict[str, float] = defaultdict(float)
     for e in exp_dicts:
         exp_by_cat[e["category"]] += e["amount"]
     expense_breakdown = [{"category": k, "amount": round(v, 2)} for k, v in exp_by_cat.items()]
+    if not expense_breakdown:
+        expense_breakdown = _pl_expense_breakdown(co, month_abbrev, db, tid)
 
     ownership_rows = db.query(RentalOwnership).filter(
         RentalOwnership.tenant_id == tid, RentalOwnership.company_id == co.id,
