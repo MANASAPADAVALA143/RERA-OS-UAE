@@ -119,11 +119,17 @@ def parse_sheet(ws, sheet_name: str, target_month: str) -> Dict:
         vacancy_loss = 0.0
         if is_vacant and tgt and tgt in sorted_months:
             target_idx = sorted_months.index(tgt)
+            # Average the last 2-3 non-zero months so a single catch-up / multi-month
+            # payment doesn't inflate the expected-rent proxy.
+            lookback: list[float] = []
             for prev_m in reversed(sorted_months[:target_idx]):
                 prev_amt = history.get(prev_m, 0)
                 if prev_amt > 0:
-                    vacancy_loss = prev_amt
+                    lookback.append(prev_amt)
+                if len(lookback) >= 3:
                     break
+            if lookback:
+                vacancy_loss = round(sum(lookback) / len(lookback), 2)
 
         units.append({
             'name': unit_name,
