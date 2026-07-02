@@ -68,35 +68,39 @@ function capitalize(s: string) {
   return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
+const PARCH_CARD: React.CSSProperties = {
+  background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, overflow: 'hidden',
+};
+
 function StatusPill({ status }: { status: string }) {
-  const cls =
-    status === 'completed'  ? 'bg-green-100  text-green-700  border-green-200'  :
-    status === 'in_progress'? 'bg-blue-100   text-blue-700   border-blue-200'   :
-    status === 'closed'     ? 'bg-gray-100   text-gray-600   border-gray-200'   :
-                              'bg-orange-100 text-orange-700  border-orange-200';
+  const [bg, color, border] =
+    status === 'completed'  ? ['rgba(38,166,91,0.10)',  '#065F46', '1px solid rgba(38,166,91,0.25)']  :
+    status === 'in_progress'? ['rgba(59,130,246,0.10)', '#1D4ED8', '1px solid rgba(59,130,246,0.25)'] :
+    status === 'closed'     ? ['rgba(120,113,108,0.10)','#57534E', '1px solid rgba(120,113,108,0.25)']:
+                              ['rgba(234,88,12,0.10)',  '#C2410C', '1px solid rgba(234,88,12,0.25)'];
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${cls}`}>
+    <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 999, border, background: bg, color, fontWeight: 600 }}>
       {capitalize(status)}
     </span>
   );
 }
 
 function PriorityBadge({ priority }: { priority: string }) {
-  const cls =
-    priority === 'emergency'? 'bg-red-200    text-red-800'   :
-    priority === 'high'     ? 'bg-red-100    text-red-600'   :
-    priority === 'medium'   ? 'bg-yellow-100 text-yellow-700':
-                              'bg-gray-100   text-gray-500';
-  return <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${cls}`}>{priority}</span>;
+  const [bg, color] =
+    priority === 'emergency'? ['rgba(192,57,43,0.15)',  '#C0392B'] :
+    priority === 'high'     ? ['rgba(239,68,68,0.10)',  '#B91C1C'] :
+    priority === 'medium'   ? ['rgba(242,193,78,0.18)', '#92400E'] :
+                              ['rgba(120,113,108,0.10)','#78716C'];
+  return <span style={{ fontSize: 12, padding: '2px 6px', borderRadius: 6, background: bg, color, fontWeight: 600 }}>{priority}</span>;
 }
 
 function SlaBadge({ status }: { status: string }) {
-  const cls =
-    status === 'overdue' ? 'bg-red-100    text-red-700'   :
-    status === 'at_risk' ? 'bg-amber-100  text-amber-700' :
-    status === 'on_time' ? 'bg-green-100  text-green-700' :
-                           'bg-gray-100   text-gray-500';
-  return <span className={`text-xs px-1.5 py-0.5 rounded ${cls}`}>{capitalize(status)}</span>;
+  const [bg, color] =
+    status === 'overdue' ? ['rgba(239,68,68,0.10)',  '#B91C1C'] :
+    status === 'at_risk' ? ['rgba(242,193,78,0.18)', '#92400E'] :
+    status === 'on_time' ? ['rgba(38,166,91,0.10)',  '#065F46'] :
+                           ['rgba(120,113,108,0.10)','#78716C'];
+  return <span style={{ fontSize: 12, padding: '2px 6px', borderRadius: 6, background: bg, color }}>{capitalize(status)}</span>;
 }
 
 // ── Company Card ──────────────────────────────────────────────────────────────
@@ -118,51 +122,48 @@ function CompanyCard({ company, items }: { company: string; items: MaintItem[] }
   const vendors = [...new Set(items.map(w => w.vendor_name).filter(Boolean))];
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+    <div style={PARCH_CARD}>
       {/* Header */}
-      <div className="px-5 py-4 border-b border-gray-100">
-        <div className="flex items-start gap-3">
-          <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center shrink-0 mt-0.5">
-            <Building2 size={16} className="text-green-700" />
-          </div>
-          <div className="min-w-0">
-            <p className="font-semibold text-gray-900 text-sm leading-tight">{company}</p>
-            <p className="text-xs text-gray-500 mt-0.5">{items[0]?.property_name || company} · {items.length} work order{items.length !== 1 ? 's' : ''}</p>
-          </div>
+      <div style={{ padding: '14px 20px', borderBottom: '1px solid #E8DEC8', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(212,175,55,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Building2 size={16} style={{ color: '#92400E' }} />
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <p style={{ fontSize: 16, fontWeight: 700, color: '#1C1917', lineHeight: 1.2 }}>{company}</p>
+          <p style={{ fontSize: 13, color: '#78716C', marginTop: 2 }}>{items[0]?.property_name || company} · {items.length} work order{items.length !== 1 ? 's' : ''}</p>
         </div>
       </div>
 
       {/* KPI tiles */}
-      <div className="grid grid-cols-3 gap-px bg-gray-100 border-b border-gray-100">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '1px', background: '#E8DEC8', borderBottom: '1px solid #E8DEC8' }}>
         {[
-          { label: 'Total Work Orders', value: String(items.length) },
-          { label: 'Open Issues',       value: String(open), red: open > 0 },
-          { label: 'Total Spend',       value: totalSpend > 0 ? fmt(totalSpend) : '—' },
+          { label: 'Total Work Orders', value: String(items.length), red: false },
+          { label: 'Open Issues',       value: String(open),         red: open > 0 },
+          { label: 'Total Spend',       value: totalSpend > 0 ? fmt(totalSpend) : '—', red: false },
         ].map(t => (
-          <div key={t.label} className="bg-white px-4 py-3 text-center">
-            <p className={`text-lg font-bold ${('red' in t && t.red) ? 'text-red-600' : 'text-gray-900'}`}>{t.value}</p>
-            <p className="text-xs text-gray-500 mt-0.5 leading-tight">{t.label}</p>
+          <div key={t.label} style={{ background: '#FBF6EE', padding: '12px 16px', textAlign: 'center' }}>
+            <p style={{ fontSize: 28, fontWeight: 700, color: t.red ? '#B91C1C' : '#1C1917', fontVariantNumeric: 'tabular-nums lining-nums', lineHeight: 1.1 }}>{t.value}</p>
+            <p style={{ fontSize: 13, color: '#78716C', marginTop: 3 }}>{t.label}</p>
           </div>
         ))}
       </div>
 
-      <div className="px-5 py-4 space-y-4">
+      <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
         {/* Expense by Category */}
         {cats.some(([, { cost }]) => cost > 0) && (
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Spend by Category</p>
-            <div className="space-y-2">
+            <p style={{ fontSize: 13, fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>Spend by Category</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {cats.map(([cat, { cost, count }]) => (
-                <div key={cat} className="flex items-center gap-2">
-                  <div className="w-24 shrink-0">
-                    <p className="text-xs text-gray-700 truncate" title={capitalize(cat)}>{capitalize(cat)}</p>
+                <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 96, flexShrink: 0 }}>
+                    <p style={{ fontSize: 13, color: '#1C1917', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={capitalize(cat)}>{capitalize(cat)}</p>
                   </div>
-                  <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all"
-                      style={{ width: `${(cost / maxCost) * 100}%`, backgroundColor: catColor(cat) }} />
+                  <div style={{ flex: 1, height: 10, background: '#E8DEC8', borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', borderRadius: 99, width: `${(cost / maxCost) * 100}%`, backgroundColor: catColor(cat) }} />
                   </div>
-                  <span className="text-xs text-gray-700 font-mono w-16 text-right shrink-0">{cost > 0 ? fmt(cost) : '—'}</span>
-                  <span className="text-xs text-gray-400 w-12 text-right shrink-0">{count} order{count !== 1 ? 's' : ''}</span>
+                  <span style={{ fontSize: 13, color: '#1C1917', fontVariantNumeric: 'tabular-nums lining-nums', width: 64, textAlign: 'right', flexShrink: 0 }}>{cost > 0 ? fmt(cost) : '—'}</span>
+                  <span style={{ fontSize: 13, color: '#A8A29E', width: 56, textAlign: 'right', flexShrink: 0 }}>{count} order{count !== 1 ? 's' : ''}</span>
                 </div>
               ))}
             </div>
@@ -171,30 +172,30 @@ function CompanyCard({ company, items }: { company: string; items: MaintItem[] }
 
         {/* Status breakdown */}
         <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Status</p>
-          <div className="flex flex-wrap gap-2">
-            <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 font-medium">✅ Done: {done}</span>
-            <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-medium">🔄 In Progress: {inProg}</span>
-            <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-orange-100 text-orange-700 font-medium">⚠️ Open: {open}</span>
+          <p style={{ fontSize: 13, fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>Status</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <span style={{ fontSize: 13, padding: '3px 10px', borderRadius: 999, background: 'rgba(38,166,91,0.10)', color: '#065F46', fontWeight: 600 }}>Done: {done}</span>
+            <span style={{ fontSize: 13, padding: '3px 10px', borderRadius: 999, background: 'rgba(59,130,246,0.10)', color: '#1D4ED8', fontWeight: 600 }}>In Progress: {inProg}</span>
+            <span style={{ fontSize: 13, padding: '3px 10px', borderRadius: 999, background: 'rgba(234,88,12,0.10)', color: '#C2410C', fontWeight: 600 }}>Open: {open}</span>
           </div>
         </div>
 
         {/* Work order list */}
         <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Work Orders</p>
-          <div className="space-y-1">
-            {items.slice(0, 15).map(wo => (
-              <div key={wo.id} className="flex flex-wrap items-center gap-2 text-xs py-1.5 border-b border-gray-50 last:border-0">
-                <span className="text-gray-600 flex-1 font-medium min-w-0 truncate" title={wo.title}>{wo.title}</span>
-                <span className="text-gray-400 shrink-0">{capitalize(wo.category)}</span>
+          <p style={{ fontSize: 13, fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>Work Orders</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {items.slice(0, 15).map((wo, i) => (
+              <div key={wo.id} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, padding: '8px 0', borderBottom: i < Math.min(items.length, 15) - 1 ? '1px solid #F0EDE5' : 'none' }}>
+                <span style={{ fontSize: 14, color: '#1C1917', fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={wo.title}>{wo.title}</span>
+                <span style={{ fontSize: 13, color: '#78716C', flexShrink: 0 }}>{capitalize(wo.category)}</span>
                 <PriorityBadge priority={wo.priority} />
                 <StatusPill status={wo.status} />
                 <SlaBadge status={wo.sla_status} />
-                {wo.cost != null && <span className="font-mono text-gray-700 w-14 text-right shrink-0">{fmt(wo.cost)}</span>}
+                {wo.cost != null && <span style={{ fontSize: 13, color: '#1C1917', fontVariantNumeric: 'tabular-nums lining-nums', width: 56, textAlign: 'right', flexShrink: 0 }}>{fmt(wo.cost)}</span>}
               </div>
             ))}
             {items.length > 15 && (
-              <p className="text-xs text-gray-400 pt-1">+{items.length - 15} more work orders</p>
+              <p style={{ fontSize: 13, color: '#A8A29E', paddingTop: 4 }}>+{items.length - 15} more work orders</p>
             )}
           </div>
         </div>
@@ -202,8 +203,8 @@ function CompanyCard({ company, items }: { company: string; items: MaintItem[] }
         {/* Vendors */}
         {vendors.length > 0 && (
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Vendors</p>
-            <p className="text-xs text-gray-400">{vendors.join(' · ')}</p>
+            <p style={{ fontSize: 13, fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Vendors</p>
+            <p style={{ fontSize: 13, color: '#A8A29E' }}>{vendors.join(' · ')}</p>
           </div>
         )}
       </div>
@@ -222,26 +223,26 @@ function CategoryStackedBar({ items }: { items: MaintItem[] }) {
   if (sorted.length === 0) return null;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-      <p className="text-sm font-semibold text-gray-700 mb-4">Spend by Category — Portfolio</p>
-      <div className="flex h-8 rounded-lg overflow-hidden">
+    <div style={{ ...PARCH_CARD, padding: 20 }}>
+      <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 16 }}>Spend by Category — Portfolio</p>
+      <div style={{ display: 'flex', height: 32, borderRadius: 8, overflow: 'hidden' }}>
         {sorted.map(([cat, cost]) => {
           const w = (cost / grandTotal) * 100;
           return (
             <div key={cat} className="flex items-center justify-center relative"
               style={{ width: `${w}%`, backgroundColor: catColor(cat) }}
               title={`${capitalize(cat)}: ${fmt(cost)} (${w.toFixed(1)}%)`}>
-              {w > 8 && <span className="text-white text-xs font-medium truncate px-1">{w.toFixed(0)}%</span>}
+              {w > 8 && <span style={{ color: '#fff', fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', padding: '0 4px' }}>{w.toFixed(0)}%</span>}
             </div>
           );
         })}
       </div>
-      <div className="flex flex-wrap gap-3 mt-3">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 12 }}>
         {sorted.map(([cat, cost]) => (
-          <div key={cat} className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: catColor(cat) }} />
-            <span className="text-xs text-gray-600">{capitalize(cat)}</span>
-            <span className="text-xs text-gray-400 font-mono">{fmt(cost)}</span>
+          <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 12, height: 12, borderRadius: 3, flexShrink: 0, backgroundColor: catColor(cat) }} />
+            <span style={{ fontSize: 13, color: '#1C1917' }}>{capitalize(cat)}</span>
+            <span style={{ fontSize: 13, color: '#78716C', fontVariantNumeric: 'tabular-nums lining-nums' }}>{fmt(cost)}</span>
           </div>
         ))}
       </div>
@@ -547,8 +548,8 @@ export default function RentalMaintenance() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Maintenance</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Work orders from maintenance log · All properties</p>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1C1917' }}>Maintenance</h1>
+          <p style={{ fontSize: 13, color: '#78716C', marginTop: 2 }}>Work orders from maintenance log · All properties</p>
         </div>
         <button
           onClick={() => setShowForm(true)}
@@ -559,40 +560,28 @@ export default function RentalMaintenance() {
       </div>
 
       {/* Filter bar */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <select value={filterCompany} onChange={e => setFilterCompany(e.target.value)}
-          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-green-600 bg-white">
-          <option value="">All Companies</option>
-          {companies.map(n => <option key={n} value={n}>{n}</option>)}
-        </select>
-
-        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
-          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-green-600 bg-white">
-          <option value="">All Categories</option>
-          {categories.map(c => <option key={c} value={c}>{capitalize(c)}</option>)}
-        </select>
-
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-green-600 bg-white">
-          <option value="">All Statuses</option>
-          <option value="open">Open</option>
-          <option value="in_progress">In Progress</option>
-          <option value="completed">Completed</option>
-          <option value="closed">Closed</option>
-        </select>
-
-        <button onClick={load}
-          className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+        {[
+          { val: filterCompany,  setVal: setFilterCompany,  options: [['','All Companies'], ...companies.map(n=>[n,n])] },
+          { val: filterCategory, setVal: setFilterCategory, options: [['','All Categories'], ...categories.map(c=>[c,capitalize(c)])] },
+          { val: filterStatus,   setVal: setFilterStatus,   options: [['','All Statuses'],['open','Open'],['in_progress','In Progress'],['completed','Completed'],['closed','Closed']] },
+        ].map((f, i) => (
+          <select key={i} value={f.val} onChange={e => f.setVal(e.target.value)}
+            style={{ padding: '6px 10px', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13, background: '#FBF6EE', color: '#1C1917', outline: 'none' }}>
+            {f.options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        ))}
+        <button onClick={load} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13, background: '#FBF6EE', color: '#78716C', cursor: 'pointer' }}>
           <RefreshCw size={13} /> Refresh
         </button>
       </div>
 
       {/* Empty state */}
       {allItems.length === 0 ? (
-        <div className="text-center py-20">
-          <Wrench size={40} className="mx-auto text-gray-300 mb-4" />
-          <p className="text-lg font-medium text-gray-500">No maintenance work orders yet</p>
-          <p className="text-sm text-gray-400 mt-1 mb-5">Click <strong>Add Work Order</strong> above to log your first request.</p>
+        <div style={{ textAlign: 'center', padding: '80px 0' }}>
+          <Wrench size={40} style={{ margin: '0 auto 16px', color: '#D4C4A0' }} />
+          <p style={{ fontSize: 16, fontWeight: 600, color: '#78716C' }}>No maintenance work orders yet</p>
+          <p style={{ fontSize: 14, color: '#A8A29E', marginTop: 4, marginBottom: 20 }}>Click <strong>Add Work Order</strong> above to log your first request.</p>
           <button onClick={() => setShowForm(true)}
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold text-white"
             style={{ background: '#2D6A2D' }}>
@@ -602,17 +591,17 @@ export default function RentalMaintenance() {
       ) : (
         <>
           {/* Summary strip */}
-          <div className="grid grid-cols-5 gap-3">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 12 }}>
             {[
-              { label: 'Total Work Orders', value: summary.total,             color: 'text-gray-900',   bg: 'bg-gray-50'   },
-              { label: 'Open',              value: summary.open,              color: 'text-orange-600', bg: 'bg-orange-50' },
-              { label: 'In Progress',       value: summary.inProg,            color: 'text-blue-600',   bg: 'bg-blue-50'   },
-              { label: 'Completed',         value: summary.done,              color: 'text-green-600',  bg: 'bg-green-50'  },
-              { label: 'Total Spend',       value: fmt(summary.spend),        color: 'text-gray-900',   bg: 'bg-white'     },
+              { label: 'Total Work Orders', value: summary.total,      color: '#1C1917' },
+              { label: 'Open',              value: summary.open,       color: summary.open > 0 ? '#C2410C' : '#1C1917' },
+              { label: 'In Progress',       value: summary.inProg,     color: '#1D4ED8' },
+              { label: 'Completed',         value: summary.done,       color: '#065F46' },
+              { label: 'Total Spend',       value: fmt(summary.spend), color: '#1C1917' },
             ].map(t => (
-              <div key={t.label} className={`${t.bg} rounded-xl border border-gray-100 shadow-sm px-4 py-3 text-center`}>
-                <p className={`text-2xl font-bold ${t.color}`}>{t.value}</p>
-                <p className="text-xs text-gray-500 mt-1">{t.label}</p>
+              <div key={t.label} style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '12px 16px', textAlign: 'center' }}>
+                <p style={{ fontSize: 28, fontWeight: 700, color: t.color, fontVariantNumeric: 'tabular-nums lining-nums', lineHeight: 1.1 }}>{t.value}</p>
+                <p style={{ fontSize: 13, color: '#78716C', marginTop: 4 }}>{t.label}</p>
               </div>
             ))}
           </div>
@@ -622,8 +611,8 @@ export default function RentalMaintenance() {
 
           {/* Per-company cards */}
           {byCompany.length === 0 ? (
-            <div className="text-center py-10 text-gray-400">
-              <p className="text-sm">No work orders match the current filters.</p>
+            <div style={{ textAlign: 'center', padding: '40px 0' }}>
+              <p style={{ fontSize: 14, color: '#A8A29E' }}>No work orders match the current filters.</p>
             </div>
           ) : (
             <div className={`grid gap-4 ${byCompany.length === 1 ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'}`}>

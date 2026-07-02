@@ -65,7 +65,7 @@ function StyledKpiCard({ icon, label, value, sub, borderColor, iconBgColor }: St
         {icon}
       </div>
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: '12px', color: '#92400E', fontWeight: 500, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        <div style={{ fontSize: '13px', color: '#92400E', fontWeight: 600, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           {label}
         </div>
         <div style={{ fontSize: '28px', fontWeight: 700, color: '#1C1917', fontFamily: 'monospace', marginBottom: '4px' }}>
