@@ -14,6 +14,8 @@ interface VacantUnit extends Record<string, unknown> {
   status_changed_at: string | null;
 }
 
+interface CompanyOption { id: string; company_name: string }
+
 // ── shared styles ─────────────────────────────────────────────────────────────
 const CARD: React.CSSProperties = {
   background: '#FBF6EE',
@@ -40,24 +42,40 @@ function VKpi({ label, value, accent }: { label: string; value: string; accent?:
   );
 }
 
+const SEL: React.CSSProperties = {
+  background: '#F7F5F0', border: '1px solid #E8DEC8', color: '#1C1917',
+  borderRadius: 8, padding: '6px 12px', fontSize: 14,
+};
+
 export default function RentalVacancy() {
-  const [units, setUnits]     = useState<VacantUnit[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState('');
-  const [sortKey, setSortKey] = useState<keyof VacantUnit>('days_vacant');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [units, setUnits]           = useState<VacantUnit[]>([]);
+  const [companies, setCompanies]   = useState<CompanyOption[]>([]);
+  const [filterCo, setFilterCo]     = useState('');
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState('');
+  const [sortKey, setSortKey]       = useState<keyof VacantUnit>('days_vacant');
+  const [sortDir, setSortDir]       = useState<'asc' | 'desc'>('desc');
+
+  // load companies once for the dropdown
+  useEffect(() => {
+    api.get<CompanyOption[]>('/api/rentals/companies')
+      .then(r => setCompanies(Array.isArray(r.data) ? r.data : []))
+      .catch(() => {});
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const res = await api.get<VacantUnit[]>('/api/rentals/units', { params: { status: 'vacant' } });
+      const params: Record<string, string> = { status: 'vacant' };
+      if (filterCo) params.company_id = filterCo;
+      const res = await api.get<VacantUnit[]>('/api/rentals/units', { params });
       setUnits(res.data);
     } catch {
       setError('Failed to load vacant units.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filterCo]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -97,7 +115,19 @@ export default function RentalVacancy() {
 
   return (
     <div className="space-y-6">
-      <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1C1917' }}>Vacancy &amp; Loss</h1>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1C1917' }}>Vacancy &amp; Loss</h1>
+          <p style={{ fontSize: 13, color: '#A8A29E', marginTop: 2 }}>Vacant units — real-time from unit records</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.04em' }}>COMPANY</span>
+          <select value={filterCo} onChange={e => setFilterCo(e.target.value)} style={SEL}>
+            <option value="">All Companies</option>
+            {companies.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
+          </select>
+        </div>
+      </div>
 
       {loading ? <LoadingSkeleton rows={6} /> : error ? (
         <p style={{ color: '#B91C1C' }}>{error}</p>
