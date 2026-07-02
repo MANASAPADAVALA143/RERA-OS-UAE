@@ -1,8 +1,7 @@
-﻿import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import api from '../services/api';
-import { Card, KpiCard } from '../components/ui/Card';
-import { Table, LoadingSkeleton, type Column } from '../components/ui/Table';
+import { LoadingSkeleton } from '../components/ui/Table';
 import { fmtUSD } from '../components/ProtectedRoute';
 
 interface VacantUnit extends Record<string, unknown> {
@@ -15,14 +14,41 @@ interface VacantUnit extends Record<string, unknown> {
   status_changed_at: string | null;
 }
 
-export default function RentalVacancy() {
-  const [units, setUnits] = useState<VacantUnit[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+// ── shared styles ─────────────────────────────────────────────────────────────
+const CARD: React.CSSProperties = {
+  background: '#FBF6EE',
+  border: '1px solid #E8DEC8',
+  borderRadius: 12,
+  padding: '18px 20px',
+};
+const TT = {
+  contentStyle: { background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 },
+};
 
-  const fetch = useCallback(async () => {
-    setLoading(true);
-    setError('');
+function VKpi({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div style={{
+      ...CARD,
+      background: accent ? '#161310' : '#FBF6EE',
+      border: accent ? '1px solid #D4AF37' : '1px solid #E8DEC8',
+    }}>
+      <p style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em',
+        color: accent ? '#D4AF37' : '#92400E', marginBottom: 6 }}>{label}</p>
+      <p style={{ fontSize: 34, fontWeight: 700, color: accent ? '#fff' : '#1C1917', lineHeight: 1.1,
+        fontVariantNumeric: 'tabular-nums lining-nums' }}>{value}</p>
+    </div>
+  );
+}
+
+export default function RentalVacancy() {
+  const [units, setUnits]     = useState<VacantUnit[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState('');
+  const [sortKey, setSortKey] = useState<keyof VacantUnit>('days_vacant');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
     try {
       const res = await api.get<VacantUnit[]>('/api/rentals/units', { params: { status: 'vacant' } });
       setUnits(res.data);
@@ -33,59 +59,122 @@ export default function RentalVacancy() {
     }
   }, []);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => { load(); }, [load]);
 
-  const totalVacancyLoss = units.reduce((s, u) => s + u.monthly_rent, 0);
-  const avgDaysVacant = units.length > 0
+  const totalLoss    = units.reduce((s, u) => s + u.monthly_rent, 0);
+  const avgDays      = units.length > 0
     ? units.reduce((s, u) => s + (u.days_vacant ?? 0), 0) / units.length
     : 0;
 
-  // Vacancy loss by company
   const byCompany: Record<string, number> = {};
-  units.forEach(u => {
-    const k = u.company_name ?? 'Unknown';
-    byCompany[k] = (byCompany[k] ?? 0) + u.monthly_rent;
-  });
-  const chartData = Object.entries(byCompany).map(([name, loss]) => ({ name: name.length > 14 ? name.slice(0, 12) + '…' : name, loss }));
+  units.forEach(u => { const k = u.company_name ?? 'Unknown'; byCompany[k] = (byCompany[k] ?? 0) + u.monthly_rent; });
+  const chartData = Object.entries(byCompany)
+    .map(([name, loss]) => ({ name: name.length > 14 ? name.slice(0, 12) + '…' : name, loss }))
+    .sort((a, b) => b.loss - a.loss);
 
-  const columns: Column<VacantUnit>[] = [
-    { key: 'unit_number', label: 'Unit', sortValue: (r) => r.unit_number },
-    { key: 'company_name', label: 'Company', sortValue: (r) => r.company_name ?? '' },
-    { key: 'property_name', label: 'Property', sortValue: (r) => r.property_name ?? '' },
-    { key: 'days_vacant', label: 'Days Vacant', render: (r) => r.days_vacant != null ? `${r.days_vacant}d` : '—', sortValue: (r) => r.days_vacant ?? 0 },
-    { key: 'monthly_rent', label: 'Rent Lost/Month', render: (r) => fmtUSD(r.monthly_rent), sortValue: (r) => r.monthly_rent },
-    { key: 'status_changed_at', label: 'Vacant Since', sortValue: (r) => r.status_changed_at ?? '' },
-  ];
+  const sorted = [...units].sort((a, b) => {
+    const av = a[sortKey] ?? (typeof a[sortKey] === 'number' ? 0 : '');
+    const bv = b[sortKey] ?? (typeof b[sortKey] === 'number' ? 0 : '');
+    return sortDir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+  });
+
+  const toggleSort = (key: keyof VacantUnit) => {
+    if (key === sortKey) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('desc'); }
+  };
+
+  const SortIcon = ({ k }: { k: keyof VacantUnit }) =>
+    sortKey === k ? <span style={{ marginLeft: 4, opacity: 0.7 }}>{sortDir === 'asc' ? '↑' : '↓'}</span> : null;
+
+  const TH = ({ label, k, right }: { label: string; k: keyof VacantUnit; right?: boolean }) => (
+    <th onClick={() => toggleSort(k)} style={{
+      padding: '10px 14px', fontSize: 13, fontWeight: 600, color: '#78716C', textAlign: right ? 'right' : 'left',
+      textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap',
+    }}>
+      {label}<SortIcon k={k} />
+    </th>
+  );
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-charcoal">Vacancy & Loss</h1>
+      <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1C1917' }}>Vacancy &amp; Loss</h1>
 
       {loading ? <LoadingSkeleton rows={6} /> : error ? (
-        <p className="text-red-600">{error}</p>
+        <p style={{ color: '#B91C1C' }}>{error}</p>
       ) : (
         <>
+          {/* KPI row */}
           <div className="grid grid-cols-3 gap-4">
-            <KpiCard label="Total Vacant Units" value={String(units.length)} />
-            <KpiCard label="Monthly Vacancy Loss" value={fmtUSD(totalVacancyLoss)} accent />
-            <KpiCard label="Avg Days Vacant" value={avgDaysVacant > 0 ? `${avgDaysVacant.toFixed(0)}d` : '—'} />
+            <VKpi label="Total Vacant Units"    value={String(units.length)} />
+            <VKpi label="Monthly Vacancy Loss"  value={fmtUSD(totalLoss)} accent />
+            <VKpi label="Avg Days Vacant"       value={avgDays > 0 ? `${avgDays.toFixed(0)}d` : '—'} />
           </div>
 
-          <Card title="Vacant Units">
-            <Table columns={columns} data={units} emptyMessage="No vacant units" defaultSortKey="days_vacant" defaultSortDir="desc" />
-          </Card>
+          {/* Vacant Units table */}
+          <div style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid #E8DEC8' }}>
+              <span style={{ fontSize: 16, fontWeight: 600, color: '#92400E' }}>Vacant Units</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full" style={{ borderCollapse: 'collapse' }}>
+                <thead style={{ background: '#F0EDE5' }}>
+                  <tr style={{ borderBottom: '1px solid #E8DEC8' }}>
+                    <TH label="Unit"           k="unit_number" />
+                    <TH label="Company"        k="company_name" />
+                    <TH label="Property"       k="property_name" />
+                    <TH label="Days Vacant"    k="days_vacant" right />
+                    <TH label="Rent Lost/Month" k="monthly_rent" right />
+                    <TH label="Vacant Since"   k="status_changed_at" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {sorted.length === 0 ? (
+                    <tr><td colSpan={6} style={{ padding: '40px 16px', textAlign: 'center', fontSize: 14, color: '#A8A29E' }}>No vacant units</td></tr>
+                  ) : sorted.map((u, i) => (
+                    <tr key={u.id} style={{ borderBottom: '1px solid #F0EDE5', background: i % 2 === 0 ? '#FBF6EE' : '#F7F1E6' }}>
+                      <td style={{ padding: '10px 14px', fontSize: 14, fontWeight: 500, color: '#1C1917' }}>{u.unit_number}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 14, color: '#92400E' }}>{u.company_name ?? '—'}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 14, color: '#92400E' }}>{u.property_name ?? '—'}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 14, textAlign: 'right', color: u.days_vacant ? '#B91C1C' : '#A8A29E', fontWeight: u.days_vacant ? 600 : 400, fontVariantNumeric: 'tabular-nums lining-nums' }}>
+                        {u.days_vacant != null ? `${u.days_vacant}d` : '—'}
+                      </td>
+                      <td style={{ padding: '10px 14px', fontSize: 14, textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums', color: u.monthly_rent > 0 ? '#B91C1C' : '#A8A29E', fontWeight: u.monthly_rent > 0 ? 600 : 400 }}>
+                        {fmtUSD(u.monthly_rent)}
+                      </td>
+                      <td style={{ padding: '10px 14px', fontSize: 13, color: '#78716C' }}>
+                        {u.status_changed_at ? new Date(u.status_changed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                {sorted.length > 0 && (
+                  <tfoot>
+                    <tr style={{ borderTop: '2px solid #E8DEC8', background: '#F0EDE5' }}>
+                      <td colSpan={4} style={{ padding: '10px 14px', fontSize: 14, fontWeight: 700, color: '#1C1917' }}>Total Monthly Loss</td>
+                      <td style={{ padding: '10px 14px', fontSize: 17, fontWeight: 700, color: '#B91C1C', textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums' }}>
+                        {fmtUSD(totalLoss)}
+                      </td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </div>
 
+          {/* Vacancy Loss by Company chart */}
           {chartData.length > 0 && (
-            <Card title="Vacancy Loss by Company">
+            <div style={CARD}>
+              <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 16 }}>Vacancy Loss by Company</p>
               <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={chartData}>
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(v: number) => fmtUSD(v)} />
-                  <Bar dataKey="loss" fill="#1E3A8A" name="Vacancy Loss" radius={[4, 4, 0, 0]} />
+                <BarChart data={chartData} margin={{ left: 0, right: 8, top: 4, bottom: 4 }}>
+                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#78716C' }} />
+                  <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12, fill: '#78716C' }} />
+                  <Tooltip formatter={(v: number) => fmtUSD(v)} {...TT} />
+                  <Bar dataKey="loss" name="Vacancy Loss" fill="#E76F6F" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
-            </Card>
+            </div>
           )}
         </>
       )}
