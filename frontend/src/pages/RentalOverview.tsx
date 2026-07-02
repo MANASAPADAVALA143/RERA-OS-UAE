@@ -22,29 +22,28 @@ const OCCUPANCY_TARGET = 92; // percent
 
 const CARD: React.CSSProperties = {
   background: C_CARD,
-  border: '1px solid rgba(38,38,38,0.08)',
-  borderRadius: 14,
-  padding: '18px 20px',
-  boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+  border: '1px solid #E8DEC8',
+  borderRadius: 12,
+  padding: '16px 18px',
 };
 
 const KPI_LBL: React.CSSProperties = {
-  fontSize: 13, fontWeight: 600, letterSpacing: '0.06em',
-  textTransform: 'uppercase', color: '#6B6B6B', marginBottom: 4,
+  fontSize: 13, fontWeight: 600, letterSpacing: '0.05em',
+  textTransform: 'uppercase', color: '#78716C', marginBottom: 4,
 };
 
 const KPI_VAL_PRI: React.CSSProperties = {
-  fontSize: 36, fontWeight: 700, color: '#1F1F1F', lineHeight: 1.1,
+  fontSize: 32, fontWeight: 700, color: '#1C1917', lineHeight: 1.1,
   fontVariantNumeric: 'tabular-nums lining-nums',
 };
 
 const KPI_VAL_SEC: React.CSSProperties = {
-  fontSize: 30, fontWeight: 700, color: '#1F1F1F', lineHeight: 1.1,
+  fontSize: 28, fontWeight: 700, color: '#1C1917', lineHeight: 1.1,
   fontVariantNumeric: 'tabular-nums lining-nums',
 };
 
 const KPI_HELP: React.CSSProperties = {
-  fontSize: 13, fontWeight: 400, color: '#7A7A7A', marginTop: 4,
+  fontSize: 12, fontWeight: 400, color: '#A8A29E', marginTop: 4,
 };
 
 const TAB_NUM: React.CSSProperties = { fontVariantNumeric: 'tabular-nums lining-nums' };
@@ -190,15 +189,19 @@ function MiniSparkline({ values, color }: { values: number[]; color: string }) {
 }
 
 function PriTile({
-  label, value, sub, accent, warn, sparkline,
-}: { label: string; value: string; sub?: string; accent?: string; warn?: boolean; sparkline?: number[] }) {
-  const col = warn ? C_RED : (accent ?? '#1F1F1F');
+  label, value, sub, accent, warn, sparkline, gold,
+}: { label: string; value: string; sub?: string; accent?: string; warn?: boolean; sparkline?: number[]; gold?: boolean }) {
+  const col = gold ? '#fff' : warn ? C_RED : (accent ?? '#1C1917');
   return (
-    <div style={CARD} className="ov-tile">
-      <div style={KPI_LBL}>{label}</div>
+    <div style={{
+      ...CARD,
+      background: gold ? 'linear-gradient(135deg,#D4AF37,#B8860B)' : CARD.background,
+      border: gold ? '1px solid #B8860B' : CARD.border,
+    }} className="ov-tile">
+      <div style={{ ...KPI_LBL, color: gold ? 'rgba(255,255,255,0.8)' : KPI_LBL.color }}>{label}</div>
       <div style={{ ...KPI_VAL_PRI, color: col }}>{value}</div>
-      {sub && <div style={KPI_HELP}>{sub}</div>}
-      {sparkline && sparkline.length >= 2 && <MiniSparkline values={sparkline} color={col === '#1F1F1F' ? C_GOLD : col} />}
+      {sub && <div style={{ ...KPI_HELP, color: gold ? 'rgba(255,255,255,0.7)' : KPI_HELP.color }}>{sub}</div>}
+      {sparkline && sparkline.length >= 2 && <MiniSparkline values={sparkline} color={gold ? 'rgba(255,255,255,0.8)' : col === '#1C1917' ? C_GOLD : col} />}
     </div>
   );
 }
@@ -218,7 +221,7 @@ function SecTile({
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={CARD}>
-      <h3 style={{ fontSize: 18, fontWeight: 600, color: '#3A2F1F', marginBottom: 16 }}>{title}</h3>
+      <h3 style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 16 }}>{title}</h3>
       {children}
     </div>
   );
@@ -481,10 +484,10 @@ export default function RentalOverview() {
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 style={{ fontSize: 30, fontWeight: 600, color: '#262626', lineHeight: 1.2 }}>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1C1917', lineHeight: 1.2 }}>
             Rental Portfolio Overview
           </h1>
-          <p style={{ fontSize: 13, fontWeight: 400, color: '#6B6B6B', marginTop: 3 }}>
+          <p style={{ fontSize: 13, fontWeight: 400, color: '#A8A29E', marginTop: 3 }}>
             Portfolio drill-down · {monthLabel}
           </p>
         </div>
@@ -556,11 +559,10 @@ export default function RentalOverview() {
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-          <PriTile
+          <PriTile gold
             label="Occupancy Rate"
             value={fmtPct(kpis.occupancy_pct)}
             sub={`${kpis.occupied_units} / ${kpis.total_units} units`}
-            accent={occPct >= OCCUPANCY_TARGET ? C_GREEN : occPct >= OCCUPANCY_TARGET - 10 ? C_AMBER : C_RED}
           />
           <PriTile
             label="Occupied / Vacant"
