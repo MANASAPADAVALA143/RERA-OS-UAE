@@ -5,8 +5,8 @@ import {
   ComposedChart,
 } from 'recharts';
 import { api } from '../../services/api';
-import { BulletChartStrip, BulletDef, STATUS_BAR } from '../../components/shared/BulletChartStrip';
-import type { BulletStatus } from '../../components/shared/BulletChartStrip';
+import { BulletChartStrip } from '../../components/shared/BulletChartStrip';
+import type { BulletDef, BulletStatus } from '../../components/shared/BulletChartStrip';
 
 type RatioTab = 'Profitability' | 'Liquidity' | 'Solvency' | 'Rental KPIs' | 'Cost of Capital';
 type StatusType = BulletStatus;

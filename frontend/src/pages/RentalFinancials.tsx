@@ -54,7 +54,6 @@ interface KpiData {
 const TABS = ['P&L Statement', 'Balance Sheet', 'Cash Flow', 'KPI Dashboard', 'CFO Dashboard', 'Financial Metrics'] as const;
 type FinTab = typeof TABS[number];
 
-const CC = ['#2E75B6','#70AD47','#ED7D31','#FFC000','#5A2D82','#C00000','#00B0F0','#FF0066'];
 
 // ── Parser ────────────────────────────────────────────────────────────────────
 
@@ -988,54 +987,52 @@ function KPITab({ fin }: { fin: ParsedFinancials }) {
         </ResponsiveContainer>
       </div>
 
-      <div>
-        <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">5-Year Financial Trend</p>
-        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
-          <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={trendData} margin={{ left:20, right:20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="year" tick={{ fontSize:11 }} />
-              <YAxis tickFormatter={v => fmt(v as number)} tick={{ fontSize:10 }} />
-              <Tooltip formatter={(v:number) => fmtFull(v)} />
-              <Legend />
-              <Line type="monotone" dataKey="Revenue" stroke={CC[0]} strokeWidth={2} dot />
-              <Line type="monotone" dataKey="Expenses" stroke={CC[5]} strokeWidth={2} dot />
-              <Line type="monotone" dataKey="Net Income" stroke={CC[1]} strokeWidth={2} dot />
-              <Line type="monotone" dataKey="NOI" stroke={CC[2]} strokeWidth={2} strokeDasharray="5 5" dot />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+      <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: 20 }}>
+        <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>5-Year Financial Trend</p>
+        <p style={{ fontSize: 12, color: '#A8A29E', marginBottom: 14 }}>Revenue, Expenses, Net Income and NOI across all available years</p>
+        <ResponsiveContainer width="100%" height={240}>
+          <LineChart data={trendData} margin={{ left: 16, right: 16, top: 4, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+            <XAxis dataKey="year" tick={{ fontSize: 11 }} />
+            <YAxis tickFormatter={v => fmt(v as number)} tick={{ fontSize: 10 }} />
+            <Tooltip formatter={(v: number) => fmtFull(v)} contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 }} />
+            <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
+            <Line type="monotone" dataKey="Revenue"    stroke="#D4AF37" strokeWidth={2} dot={{ r: 3 }} />
+            <Line type="monotone" dataKey="Expenses"   stroke="#EB5757" strokeWidth={2} dot={{ r: 3 }} />
+            <Line type="monotone" dataKey="Net Income" stroke="#22A06B" strokeWidth={2} dot={{ r: 3 }} />
+            <Line type="monotone" dataKey="NOI"        stroke="#8B6914" strokeWidth={2} strokeDasharray="5 3" dot={{ r: 3 }} />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
 
-      {/* New Visualization Row */}
-      <div className="grid grid-cols-2 gap-6">
-        {/* Revenue Allocation Donut */}
-        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
-          <p className="text-sm font-semibold text-gray-700 mb-3">Revenue Allocation ({lastY})</p>
+      {/* Revenue Allocation + YoY */}
+      <div className="grid grid-cols-2 gap-4">
+        <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: 20 }}>
+          <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 14 }}>Revenue Allocation ({lastY})</p>
           <ResponsiveContainer width="100%" height={220}>
             <PieChart>
               <Pie data={revenueAllocation} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value">
-                {revenueAllocation.map((_, i) => <Cell key={i} fill={CC[i % CC.length]} />)}
+                <Cell fill="#D4AF37" />
+                <Cell fill="#EB5757" />
               </Pie>
-              <Tooltip formatter={(v:number) => fmtFull(v)} />
-              <Legend iconSize={8} wrapperStyle={{ fontSize:10 }} />
+              <Tooltip formatter={(v: number) => fmtFull(v)} contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 }} />
+              <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
             </PieChart>
           </ResponsiveContainer>
         </div>
 
-        {/* YoY Comparison Bar */}
         {yoyComparison.length > 0 && (
-          <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
-            <p className="text-sm font-semibold text-gray-700 mb-3">This Year vs Last Year</p>
+          <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: 20 }}>
+            <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 14 }}>This Year vs Last Year</p>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={yoyComparison}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                <XAxis dataKey="kpi" tick={{ fontSize:9 }} />
-                <YAxis tick={{ fontSize:10 }} />
-                <Tooltip formatter={(v:number) => v.toFixed(2)} />
-                <Legend iconSize={8} wrapperStyle={{ fontSize:10 }} />
-                <Bar dataKey="current" name={`${lastY} (Current)`} fill={CC[0]} />
-                <Bar dataKey="previous" name={`${prevY} (Previous)`} fill={CC[2]} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" vertical={false} />
+                <XAxis dataKey="kpi" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 10 }} />
+                <Tooltip formatter={(v: number) => v.toFixed(2)} contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 }} />
+                <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
+                <Bar dataKey="current"  name={`${lastY} (Current)`}  fill="#D4AF37" radius={[4,4,0,0]} />
+                <Bar dataKey="previous" name={`${prevY} (Previous)`} fill="#A8A29E" radius={[4,4,0,0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -1462,14 +1459,14 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
           <p style={{ fontSize:15, fontWeight:600, color:'#1C1917', marginBottom:12 }}>Revenue Breakdown by Year</p>
           <ResponsiveContainer width="100%" height={210}>
             <BarChart data={revChart} margin={{ left: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="year" tick={{ fontSize: 10 }} />
-              <YAxis tickFormatter={v => fmt(v as number)} tick={{ fontSize: 9 }} />
-              <Tooltip formatter={(v: number) => fmtFull(v)} />
-              <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-              <Bar dataKey="Rental Income" stackId="a" fill={CC[0]} />
-              <Bar dataKey="Other Income"  stackId="a" fill={CC[1]} />
-              <Bar dataKey="Services"      stackId="a" fill={CC[3]} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+              <XAxis dataKey="year" tick={{ fontSize: 11 }} />
+              <YAxis tickFormatter={v => fmt(v as number)} tick={{ fontSize: 10 }} />
+              <Tooltip formatter={(v: number) => fmtFull(v)} contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 }} />
+              <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
+              <Bar dataKey="Rental Income" stackId="a" fill="#D4AF37" />
+              <Bar dataKey="Other Income"  stackId="a" fill="#B8860B" />
+              <Bar dataKey="Services"      stackId="a" fill="#8B6914" radius={[4,4,0,0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -1478,10 +1475,10 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
           <ResponsiveContainer width="100%" height={210}>
             <PieChart>
               <Pie data={expPie} cx="50%" cy="50%" outerRadius={75} dataKey="value">
-                {expPie.map((_, i) => <Cell key={i} fill={CC[i % CC.length]} />)}
+                {expPie.map((_, i) => <Cell key={i} fill={['#D4AF37','#EB5757','#22A06B','#F2994A','#8B6914','#A8A29E','#C08B40','#78716C'][i % 8]} />)}
               </Pie>
-              <Tooltip formatter={(v: number) => fmtFull(v)} />
-              <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
+              <Tooltip formatter={(v: number) => fmtFull(v)} contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 }} />
+              <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -1561,6 +1558,16 @@ function AllCompaniesSummary({ all }: { all: Record<string, ParsedFinancials> })
   );
 }
 
+const FM_INPUT: React.CSSProperties = {
+  width: '100%', padding: '8px 12px', border: '1px solid #E8DEC8',
+  borderRadius: 8, fontSize: 14, color: '#1C1917', background: '#FBF6EE',
+  outline: 'none', fontFamily: FIN_FONT,
+};
+const FM_LABEL: React.CSSProperties = {
+  display: 'block', fontSize: 13, fontWeight: 600, color: '#78716C',
+  textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6,
+};
+
 function FinancialMetricsTab({ companyName }: { companyName: string }) {
   const [metrics, setMetrics] = useState({
     month: new Date().toISOString().split('T')[0].slice(0, 7),
@@ -1584,20 +1591,13 @@ function FinancialMetricsTab({ companyName }: { companyName: string }) {
       return;
     }
     try {
-      // Save financial metrics via API (placeholder for now - backend integration needed)
       console.log('Saving financial metrics:', metrics);
       alert(`Financial metrics for ${metrics.month} saved successfully. Revenue: $${parseFloat(metrics.revenue).toLocaleString()}`);
-      // Reset form
       setMetrics({
         month: new Date().toISOString().split('T')[0].slice(0, 7),
-        revenue: '',
-        expenses: '',
-        noi: '',
-        cashFlow: '',
-        loanPayments: '',
-        notes: '',
+        revenue: '', expenses: '', noi: '', cashFlow: '', loanPayments: '', notes: '',
       });
-    } catch (error) {
+    } catch {
       alert('Failed to save financial metrics');
     }
   };
@@ -1605,107 +1605,76 @@ function FinancialMetricsTab({ companyName }: { companyName: string }) {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-bold text-gray-900 mb-4">Manual Financial Entry — {companyName}</h3>
-        <p className="text-sm text-gray-500 mb-6">Enter monthly financial figures. These will flow through to your portfolio KPIs and dashboard.</p>
+        <h3 style={{ fontSize: 22, fontWeight: 700, color: '#1C1917', marginBottom: 6 }}>
+          Manual Financial Entry — {companyName}
+        </h3>
+        <p style={{ fontSize: 13, color: '#A8A29E' }}>
+          Enter monthly financial figures. These will flow through to your portfolio KPIs and dashboard.
+        </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl">
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 680 }}>
         {/* Month */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Period (Month)</label>
-          <input
-            type="month"
-            name="month"
-            value={metrics.month}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
+        <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '16px 18px' }}>
+          <label style={FM_LABEL}>Period (Month)</label>
+          <input type="month" name="month" value={metrics.month} onChange={handleChange} style={FM_INPUT} />
         </div>
 
         {/* Financial Figures Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Total Revenue</label>
-            <input
-              type="number"
-              name="revenue"
-              placeholder="0.00"
-              value={metrics.revenue}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Total Expenses</label>
-            <input
-              type="number"
-              name="expenses"
-              placeholder="0.00"
-              value={metrics.expenses}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Net Operating Income (NOI)</label>
-            <input
-              type="number"
-              name="noi"
-              placeholder="0.00"
-              value={metrics.noi}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Cash Flow</label>
-            <input
-              type="number"
-              name="cashFlow"
-              placeholder="0.00"
-              value={metrics.cashFlow}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
+        <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '16px 18px' }}>
+          <p style={{ fontSize: 13, fontWeight: 600, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
+            Financial Figures
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            {[
+              { key: 'revenue',      label: 'Total Revenue' },
+              { key: 'expenses',     label: 'Total Expenses' },
+              { key: 'noi',          label: 'Net Operating Income (NOI)' },
+              { key: 'cashFlow',     label: 'Cash Flow' },
+            ].map(({ key, label }) => (
+              <div key={key}>
+                <label style={FM_LABEL}>{label}</label>
+                <input
+                  type="number" name={key} placeholder="0.00"
+                  value={metrics[key as keyof typeof metrics]}
+                  onChange={handleChange} style={FM_INPUT}
+                />
+              </div>
+            ))}
           </div>
         </div>
 
         {/* Loan Payments */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Loan Payments (if any)</label>
-          <input
-            type="number"
-            name="loanPayments"
-            placeholder="0.00"
-            value={metrics.loanPayments}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
+        <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '16px 18px' }}>
+          <label style={FM_LABEL}>Loan Payments (if any)</label>
+          <input type="number" name="loanPayments" placeholder="0.00"
+            value={metrics.loanPayments} onChange={handleChange} style={{ ...FM_INPUT, maxWidth: 320 }} />
         </div>
 
         {/* Notes */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Notes / Comments</label>
+        <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '16px 18px' }}>
+          <label style={FM_LABEL}>Notes / Comments</label>
           <textarea
-            name="notes"
-            placeholder="Any notes about this period..."
-            value={metrics.notes}
-            onChange={handleChange}
-            rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            name="notes" placeholder="Any notes about this period..."
+            value={metrics.notes} onChange={handleChange} rows={3}
+            style={{ ...FM_INPUT, resize: 'vertical' }}
           />
         </div>
 
         {/* Submit */}
-        <div className="flex gap-3 pt-4">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, paddingTop: 4 }}>
           <button
             type="submit"
-            className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors"
+            style={{
+              padding: '9px 24px', borderRadius: 8, border: 'none', cursor: 'pointer',
+              background: 'linear-gradient(135deg,#D4AF37,#B8860B)', color: '#fff',
+              fontSize: 14, fontWeight: 600, letterSpacing: '0.02em',
+            }}
           >
             Save Metrics
           </button>
-          <p className="text-xs text-gray-500 flex items-center">
-            💡 Tip: Use the Expenses page to record individual expense transactions. Revenue is typically captured from rent collections.
+          <p style={{ fontSize: 13, color: '#A8A29E' }}>
+            Tip: Use the Expenses page to record individual expense transactions.
           </p>
         </div>
       </form>
