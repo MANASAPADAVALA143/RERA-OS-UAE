@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Building2, Wrench } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { RefreshCw, Building2, Wrench, PlusCircle, X } from 'lucide-react';
 import api from '../services/api';
 
 // ── Types (match backend _req_dict shape) ────────────────────────────────────
@@ -249,17 +249,214 @@ function CategoryStackedBar({ items }: { items: MaintItem[] }) {
   );
 }
 
+// ── Add Work Order panel ──────────────────────────────────────────────────────
+
+interface UnitOption { id: string; unit_number: string; company_name: string; property_name: string | null; }
+
+const CATEGORIES = [
+  'landscaping','hvac','pool_maintenance','plumbing','electrical',
+  'cleaning','general','pest_control','security','roofing',
+  'painting','appliance','structural','flooring','other',
+];
+const PRIORITIES = ['low','medium','high','emergency'];
+
+const INPUT = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600 bg-white';
+const LABEL = 'block text-xs font-semibold text-gray-600 mb-1';
+
+interface WorkOrderDraft {
+  unit_id: string;
+  title: string;
+  category: string;
+  priority: string;
+  reported_by: string;
+  reported_date: string;
+  vendor_name: string;
+  target_completion_date: string;
+  cost: string;
+  description: string;
+}
+
+const EMPTY_DRAFT: WorkOrderDraft = {
+  unit_id: '', title: '', category: 'general', priority: 'medium',
+  reported_by: '', reported_date: new Date().toISOString().slice(0, 10),
+  vendor_name: '', target_completion_date: '', cost: '', description: '',
+};
+
+function AddWorkOrderPanel({
+  units, onClose, onSaved,
+}: { units: UnitOption[]; onClose: () => void; onSaved: () => void }) {
+  const [draft, setDraft]       = useState<WorkOrderDraft>(EMPTY_DRAFT);
+  const [saving, setSaving]     = useState(false);
+  const [formErr, setFormErr]   = useState('');
+
+  const set = (k: keyof WorkOrderDraft, v: string) => setDraft(d => ({ ...d, [k]: v }));
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!draft.unit_id) { setFormErr('Please select a unit.'); return; }
+    if (!draft.title.trim()) { setFormErr('Title is required.'); return; }
+    setFormErr('');
+    setSaving(true);
+    try {
+      await api.post('/api/rentals/maintenance', {
+        unit_id:                draft.unit_id,
+        title:                  draft.title.trim(),
+        category:               draft.category,
+        priority:               draft.priority,
+        status:                 'open',
+        reported_by:            draft.reported_by || undefined,
+        reported_date:          draft.reported_date || undefined,
+        vendor_name:            draft.vendor_name  || undefined,
+        target_completion_date: draft.target_completion_date || undefined,
+        cost:                   draft.cost ? parseFloat(draft.cost) : undefined,
+        description:            draft.description || undefined,
+      });
+      onSaved();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setFormErr(msg ?? 'Failed to save work order. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    /* Overlay */
+    <div className="fixed inset-0 z-50 flex justify-end" style={{ background: 'rgba(0,0,0,0.35)' }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      {/* Panel */}
+      <div className="w-full max-w-md bg-white h-full overflow-y-auto shadow-2xl flex flex-col">
+        {/* Panel header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 sticky top-0 bg-white z-10">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Add Work Order</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Creates a new maintenance request</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={submit} className="flex-1 flex flex-col px-5 py-5 space-y-4">
+          {/* Unit */}
+          <div>
+            <label className={LABEL}>Unit <span className="text-red-500">*</span></label>
+            <select value={draft.unit_id} onChange={e => set('unit_id', e.target.value)} className={INPUT} required>
+              <option value="">— Select unit —</option>
+              {units.map(u => (
+                <option key={u.id} value={u.id}>
+                  {u.unit_number} — {u.company_name}{u.property_name ? ` · ${u.property_name}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Title */}
+          <div>
+            <label className={LABEL}>Title / Issue <span className="text-red-500">*</span></label>
+            <input type="text" value={draft.title} onChange={e => set('title', e.target.value)}
+              className={INPUT} placeholder="e.g. AC unit not cooling Unit 3B" required />
+          </div>
+
+          {/* Category + Priority */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={LABEL}>Category</label>
+              <select value={draft.category} onChange={e => set('category', e.target.value)} className={INPUT}>
+                {CATEGORIES.map(c => <option key={c} value={c}>{capitalize(c)}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={LABEL}>Priority</label>
+              <select value={draft.priority} onChange={e => set('priority', e.target.value)} className={INPUT}>
+                {PRIORITIES.map(p => <option key={p} value={p}>{capitalize(p)}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Reported by + Date */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={LABEL}>Reported By</label>
+              <input type="text" value={draft.reported_by} onChange={e => set('reported_by', e.target.value)}
+                className={INPUT} placeholder="Tenant or staff name" />
+            </div>
+            <div>
+              <label className={LABEL}>Reported Date</label>
+              <input type="date" value={draft.reported_date} onChange={e => set('reported_date', e.target.value)} className={INPUT} />
+            </div>
+          </div>
+
+          {/* Vendor + Target date */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={LABEL}>Vendor / Contractor</label>
+              <input type="text" value={draft.vendor_name} onChange={e => set('vendor_name', e.target.value)}
+                className={INPUT} placeholder="e.g. ABC Plumbing" />
+            </div>
+            <div>
+              <label className={LABEL}>Target Completion</label>
+              <input type="date" value={draft.target_completion_date} onChange={e => set('target_completion_date', e.target.value)} className={INPUT} />
+            </div>
+          </div>
+
+          {/* Cost */}
+          <div>
+            <label className={LABEL}>Estimated / Actual Cost ($)</label>
+            <input type="number" min="0" step="0.01" value={draft.cost} onChange={e => set('cost', e.target.value)}
+              className={INPUT} placeholder="0.00" />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className={LABEL}>Description / Notes</label>
+            <textarea value={draft.description} onChange={e => set('description', e.target.value)}
+              className={INPUT} rows={3} placeholder="Details, location, tenant complaint, etc." />
+          </div>
+
+          {formErr && (
+            <div className="rounded-lg px-3 py-2 text-sm font-medium" style={{ background: '#FCEAEA', color: '#8B3A3A' }}>
+              {formErr}
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-2 sticky bottom-0 bg-white pb-4">
+            <button type="submit" disabled={saving}
+              className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-white transition-colors disabled:opacity-60"
+              style={{ background: saving ? '#6B9E6B' : '#2D6A2D' }}>
+              {saving ? 'Saving…' : 'Save Work Order'}
+            </button>
+            <button type="button" onClick={onClose}
+              className="px-4 py-2.5 rounded-lg text-sm font-medium text-gray-600 border border-gray-300 hover:bg-gray-50">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function RentalMaintenance() {
   const [response, setResponse] = useState<MaintResponse | null>(null);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [units,    setUnits]    = useState<UnitOption[]>([]);
 
   const [filterCompany,  setFilterCompany]  = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterStatus,   setFilterStatus]   = useState('');
 
-  const load = () => {
+  // Fetch available units for the work-order form
+  useEffect(() => {
+    api.get<UnitOption[]>('/api/rentals/units')
+      .then(r => setUnits(r.data))
+      .catch(() => {/* units list optional */});
+  }, []);
+
+  const load = useCallback(() => {
     setLoading(true);
     setError('');
     api.get<MaintResponse>('/api/rentals/maintenance')
@@ -277,9 +474,9 @@ export default function RentalMaintenance() {
         setError(`Failed to load maintenance data. ${err?.response?.status ? `(${err.response.status})` : ''}`);
       })
       .finally(() => setLoading(false));
-  };
+  }, []);
 
-  useEffect(load, []);
+  useEffect(load, [load]);
 
   const allItems = response?.items ?? [];
 
@@ -338,10 +535,27 @@ export default function RentalMaintenance() {
 
   return (
     <div className="space-y-5">
+      {/* Slide-in form panel */}
+      {showForm && (
+        <AddWorkOrderPanel
+          units={units}
+          onClose={() => setShowForm(false)}
+          onSaved={() => { setShowForm(false); load(); }}
+        />
+      )}
+
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Maintenance</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Work orders from maintenance log · All properties</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Maintenance</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Work orders from maintenance log · All properties</p>
+        </div>
+        <button
+          onClick={() => setShowForm(true)}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white shrink-0"
+          style={{ background: '#2D6A2D' }}>
+          <PlusCircle size={15} /> Add Work Order
+        </button>
       </div>
 
       {/* Filter bar */}
@@ -378,7 +592,12 @@ export default function RentalMaintenance() {
         <div className="text-center py-20">
           <Wrench size={40} className="mx-auto text-gray-300 mb-4" />
           <p className="text-lg font-medium text-gray-500">No maintenance work orders yet</p>
-          <p className="text-sm text-gray-400 mt-1">Add a work order from the company dashboard → Maintenance tab</p>
+          <p className="text-sm text-gray-400 mt-1 mb-5">Click <strong>Add Work Order</strong> above to log your first request.</p>
+          <button onClick={() => setShowForm(true)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold text-white"
+            style={{ background: '#2D6A2D' }}>
+            <PlusCircle size={15} /> Add Work Order
+          </button>
         </div>
       ) : (
         <>
