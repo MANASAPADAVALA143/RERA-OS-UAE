@@ -244,8 +244,16 @@ export default function RentalExpenses() {
   }, [allRevRows, period, pMonth, pYear]);
 
   // ── KPI 1: period / this-month tile ─────────────────────────────────────────
-  const currentMonthKey = `${MNAMES[new Date().getMonth()]} ${new Date().getFullYear()}`;
-  const periodLabel = period ?? 'This Month';
+  // Use latest month with actual data rather than today's calendar month —
+  // P&L uploads are typically 1-2 months behind the current date, so
+  // hardcoding to "Jul 2026" when data only goes to "Jun 2026" showed $0.
+  const currentMonthKey = useMemo(() => {
+    const calendarKey = `${MNAMES[new Date().getMonth()]} ${new Date().getFullYear()}`;
+    const months = [...new Set(operatingRows.map(r => r.month))].sort((a, b) => monthSortKey(a) - monthSortKey(b));
+    // If the calendar month exists in data use it; otherwise fall back to latest available
+    return months.includes(calendarKey) ? calendarKey : (months[months.length - 1] ?? calendarKey);
+  }, [operatingRows]);
+  const periodLabel = period ?? (currentMonthKey === `${MNAMES[new Date().getMonth()]} ${new Date().getFullYear()}` ? 'This Month' : `Latest · ${currentMonthKey}`);
   const periodTotal = useMemo(() =>
     period
       ? filteredOperatingRows.reduce((s, r) => s + r.amount, 0)
