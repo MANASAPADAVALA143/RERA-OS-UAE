@@ -543,10 +543,10 @@ export default function RentalOverview() {
       {lastSyncMonth && (
         <div className="rounded-xl px-4 py-2.5 flex items-center gap-3"
           style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)' }}>
-          <span className="text-xs font-semibold" style={{ color: '#34D399' }}>
+          <span className="text-sm font-semibold" style={{ color: '#1C1917' }}>
             ✅ Excel synced — {lastSyncMonth}
           </span>
-          <span className="text-xs" style={{ color: '#6EE7B7' }}>
+          <span className="text-sm" style={{ color: '#1C1917' }}>
             Collected figures auto-loaded from rent receivable upload
           </span>
         </div>
