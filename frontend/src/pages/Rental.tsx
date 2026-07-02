@@ -29,6 +29,7 @@ import RentalBuildingExpenses from './rental/RentalBuildingExpenses';
 import RentalLoanTracker from './rental/RentalLoanTracker';
 import RentalCfoPortfolio from './rental/RentalCfoPortfolio';
 import Rental13WeekCashFlow from './rental/Rental13WeekCashFlow';
+import RentalExecutiveSummary from './RentalExecutiveSummary';
 
 export default function Rental() {
   const { tab, setTab } = useRentalNav();
@@ -40,6 +41,7 @@ export default function Rental() {
   }, [location.pathname, setTab]);
   return (
     <div className="space-y-6">
+      {tab === 'executive-summary' && <ErrorBoundary><RentalExecutiveSummary /></ErrorBoundary>}
       {tab === 'overview'     && <ErrorBoundary><RentalOverview /></ErrorBoundary>}
       {tab === 'companies'    && <ErrorBoundary><RentalCompanies /></ErrorBoundary>}
       {tab === 'units'        && <ErrorBoundary><RentalUnits /></ErrorBoundary>}

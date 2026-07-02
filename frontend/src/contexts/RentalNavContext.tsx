@@ -6,10 +6,11 @@ import {
   Wrench, AlertTriangle, Receipt,
   TrendingUp, ArrowDownUp, Table2, CalendarCheck, Activity,
   Landmark, Store, BookOpen,
-  CircleDollarSign, CalendarRange, Tag, Percent,
+  CircleDollarSign, CalendarRange, Tag, Percent, ClipboardList,
 } from "lucide-react";
 
 export type RentalTab =
+  | "executive-summary"
   | "overview" | "companies" | "units" | "leases"
   | "maintenance" | "vendor-risk"
   | "collections" | "vacancy" | "expenses" | "ar-dashboard"
@@ -30,7 +31,8 @@ export interface RentalNavItem {
 
 export const RENTAL_TABS: RentalNavItem[] = [
   // ── RENTAL & LEASE ────────────────────────────────────────────────────────
-  { id: "overview",          label: "Overview",          Icon: LayoutDashboard, groupLabel: "RENTAL & LEASE" },
+  { id: "executive-summary", label: "Executive Summary", Icon: ClipboardList,   groupLabel: "RENTAL & LEASE" },
+  { id: "overview",          label: "Overview",          Icon: LayoutDashboard  },
   { id: "companies",         label: "Companies",         Icon: Building2       },
   { id: "units",             label: "Units",             Icon: Home            },
   { id: "discounts",         label: "Discounts",         Icon: Tag             },
