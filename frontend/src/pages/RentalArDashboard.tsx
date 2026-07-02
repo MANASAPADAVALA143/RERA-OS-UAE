@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  ComposedChart, Line, Area,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell,
+  ResponsiveContainer, Cell, Legend,
 } from 'recharts';
 import api from '../services/api';
 
@@ -72,6 +73,33 @@ function getStatus(rate: number, collected: number): { label: string; bg: string
 const SEL = { fontSize: 12, border: '1px solid #E8DEC8', borderRadius: 6, padding: '5px 10px', background: '#FBF6EE', color: '#374151', cursor: 'pointer' } as const;
 const CARD = { background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, padding: 16 } as const;
 
+// ── Billed-vs-Collected custom tooltip ───────────────────────────────────────
+function BvcTooltip({ active, payload }: { active?: boolean; payload?: any[] }) {
+  if (!active || !payload?.length) return null;
+  const row       = payload[0]?.payload ?? {};
+  const billed    = row.billed    ?? 0;
+  const collected = row.collected ?? 0;
+  const gap       = Math.max(0, billed - collected);
+  const realPct   = billed > 0 ? (collected / billed * 100).toFixed(1) : null;
+  const byCompany: { name: string; collected: number }[] = row.byCompany ?? [];
+  return (
+    <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, padding: '10px 14px', fontSize: 12, maxWidth: 260, fontVariantNumeric: 'tabular-nums lining-nums' }}>
+      <p style={{ fontWeight: 700, color: '#1C1917', marginBottom: 8 }}>{row.full ?? row.month}</p>
+      <p style={{ color: '#4E79A7' }}>Billed: {fmt$(billed)}</p>
+      <p style={{ color: '#22A06B' }}>Collected: {fmt$(collected)}</p>
+      <p style={{ color: '#B91C1C' }}>Gap: {fmt$(gap)}</p>
+      {realPct !== null && <p style={{ color: '#78716C', marginTop: 3 }}>Realization: {realPct}%</p>}
+      {byCompany.length > 1 && (
+        <div style={{ marginTop: 8, borderTop: '1px solid #E8DEC8', paddingTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {[...byCompany].sort((a, b) => b.collected - a.collected).map(c => (
+            <p key={c.name} style={{ fontSize: 11, color: '#6B6B6B' }}>{c.name}: {fmt$(c.collected)}</p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function RentalArDashboard() {
@@ -84,6 +112,7 @@ export default function RentalArDashboard() {
   const [selCoId,   setSelCoId]   = useState('');   // '' = All Companies
   const [statusFlt, setStatusFlt] = useState('All');
   const [showUnmatched, setShowUnmatched] = useState(false);
+  const [chartMonth, setChartMonth] = useState(''); // click-to-filter from chart
 
   // Fetch when month changes (company filter is client-side)
   useEffect(() => {
@@ -120,22 +149,32 @@ export default function RentalArDashboard() {
 
   // ── Trend — month-wise aggregated from filtered companies ─────────────────
   const trendData = useMemo(() => {
-    const map = new Map<string, { billed: number; collected: number }>();
+    const map = new Map<string, { billed: number; collected: number; byCompany: { name: string; collected: number }[] }>();
     for (const co of companies) {
       for (const m of co.monthly) {
-        const e = map.get(m.month) ?? { billed: 0, collected: 0 };
+        const existing = map.get(m.month);
+        if (!existing) {
+          map.set(m.month, { billed: 0, collected: 0, byCompany: [] });
+        }
+        const e = map.get(m.month)!;
         e.billed    += m.billed;
         e.collected += m.collected;
-        map.set(m.month, e);
+        if (m.collected > 0) e.byCompany.push({ name: co.company_name, collected: m.collected });
       }
     }
-    // Sort chronologically
     const MNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const sorted = [...map.entries()].sort(([a],[b]) => {
       const [am, ay] = a.split('-'); const [bm, by] = b.split('-');
       return (parseInt(ay)-parseInt(by)) || (MNAMES.indexOf(am)-MNAMES.indexOf(bm));
     });
-    return sorted.map(([m, v]) => ({ month: short(m), full: m, billed: v.billed, collected: v.collected }));
+    return sorted.map(([m, v]) => ({
+      month: short(m), full: m,
+      billed: v.billed, collected: v.collected,
+      byCompany: v.byCompany,
+      // stacked area series: transparent base up to collected, red fill for the gap
+      collectedBase: v.collected,
+      gapFill: Math.max(0, v.billed - v.collected),
+    }));
   }, [companies]);
 
   // ── Outstanding AR by company ─────────────────────────────────────────────
@@ -181,10 +220,18 @@ export default function RentalArDashboard() {
 
   const filteredRows = useMemo(() => {
     return detailRows.filter(r => {
+      if (chartMonth && r.month !== chartMonth && r.month !== short(chartMonth)) return false;
       if (statusFlt === 'All') return true;
       return getStatus(r.rate, r.collected).label === statusFlt;
     });
-  }, [detailRows, statusFlt]);
+  }, [detailRows, statusFlt, chartMonth]);
+
+  // Overall realization % across all trend months
+  const realizationPct = useMemo(() => {
+    const tb = trendData.reduce((s, d) => s + d.billed, 0);
+    const tc = trendData.reduce((s, d) => s + d.collected, 0);
+    return tb > 0 ? tc / tb * 100 : null;
+  }, [trendData]);
 
   // ── Recon flags ───────────────────────────────────────────────────────────
   const reconFlags = useMemo(() =>
@@ -349,41 +396,87 @@ export default function RentalArDashboard() {
       {!!port && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
 
-          {/* Billed vs Collected trend */}
+          {/* Billed vs Collected dual-line trend */}
           <div style={CARD}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>
-              Billed vs Collected — {selCoName || 'All Companies'}
+            {/* Header row */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 2, gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 16, fontWeight: 600, color: '#262626' }}>
+                Billed vs Collected — {selCoName || 'All Companies'}
+              </div>
+              {realizationPct !== null && (
+                <div style={{ fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 20,
+                  background: realizationPct >= 95 ? 'rgba(34,160,107,0.12)' : realizationPct >= 80 ? 'rgba(242,193,78,0.18)' : 'rgba(217,83,79,0.12)',
+                  color:      realizationPct >= 95 ? '#065F46' : realizationPct >= 80 ? '#92400E' : '#991B1B',
+                  border: `1px solid ${realizationPct >= 95 ? 'rgba(34,160,107,0.3)' : realizationPct >= 80 ? 'rgba(242,193,78,0.4)' : 'rgba(217,83,79,0.3)'}`,
+                  fontVariantNumeric: 'tabular-nums lining-nums', flexShrink: 0 }}>
+                  {realizationPct.toFixed(1)}% realization
+                </div>
+              )}
             </div>
-            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 12 }}>
+            <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 14 }}>
               {trendData.length > 0
                 ? `${trendData[0].full} → ${trendData[trendData.length - 1].full} · ${trendData.length} months`
                 : 'No collection data yet — upload Rent Receivable Excel'}
             </div>
+
+            {chartMonth && (
+              <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: '#EFF6FF', color: '#1E40AF', border: '1px solid #BFDBFE' }}>
+                  Table filtered: {chartMonth}
+                </span>
+                <button onClick={() => setChartMonth('')} style={{ fontSize: 11, color: '#6B7280', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+                  Clear
+                </button>
+              </div>
+            )}
+
             {trendData.length > 0 ? (
               <>
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={trendData} barCategoryGap="25%" margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E8DEC8" />
-                    <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 9, fill: '#9ca3af' }} tickFormatter={fmtK} axisLine={false} tickLine={false} width={38} />
-                    <Tooltip
-                      contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #E8DEC8' }}
-                      formatter={(v: number, name: string) => [fmt$(v), name === 'billed' ? 'Billed' : 'Collected']}
+                <ResponsiveContainer width="100%" height={220}>
+                  <ComposedChart
+                    data={trendData}
+                    margin={{ top: 8, right: 12, bottom: 0, left: 0 }}
+                    onClick={(e) => {
+                      const full = e?.activePayload?.[0]?.payload?.full;
+                      if (full) setChartMonth(prev => prev === full ? '' : full);
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <CartesianGrid vertical={false} stroke="#E5E7EB" strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="month"
+                      tick={{ fontSize: 11, fill: '#6B7280' }}
+                      axisLine={false} tickLine={false}
+                      interval={trendData.length > 24 ? 5 : trendData.length > 12 ? 2 : 1}
                     />
-                    <Bar dataKey="billed"    name="billed"    fill="#D4AF37" opacity={0.6} radius={[3,3,0,0]} />
-                    <Bar dataKey="collected" name="collected" fill="#22A06B" radius={[3,3,0,0]} />
-                  </BarChart>
+                    <YAxis
+                      tick={{ fontSize: 11, fill: '#6B7280' }}
+                      tickFormatter={(v: number) => v === 0 ? '$0' : v >= 1_000_000 ? `$${(v/1_000_000).toFixed(1)}M` : `$${(v/1000).toFixed(0)}k`}
+                      axisLine={false} tickLine={false} width={44}
+                      tickCount={6}
+                    />
+                    <Tooltip content={<BvcTooltip />} />
+                    {/* Under-collection fill: stacked transparent base + red gap */}
+                    <Area type="monotone" dataKey="collectedBase" stackId="gap" fill="transparent" stroke="none" legendType="none" />
+                    <Area type="monotone" dataKey="gapFill"       stackId="gap" fill="rgba(235,87,87,0.12)" stroke="none" legendType="none" />
+                    <Line type="monotone" dataKey="billed"    name="Billed"    stroke="#4E79A7" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
+                    <Line type="monotone" dataKey="collected" name="Collected" stroke="#22A06B" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
+                  </ComposedChart>
                 </ResponsiveContainer>
-                <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
-                  {[['#D4AF37','Billed'],['#22A06B','Collected']].map(([c,l]) => (
-                    <span key={l} style={{ fontSize: 10, color: '#6B6B6B', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span style={{ width: 10, height: 10, borderRadius: 2, background: c, display: 'inline-block', opacity: l === 'Billed' ? 0.6 : 1 }} />{l}
+                <div style={{ display: 'flex', gap: 20, marginTop: 10, alignItems: 'center' }}>
+                  {[['#4E79A7','Billed'],['#22A06B','Collected']].map(([c,l]) => (
+                    <span key={l} style={{ fontSize: 12, color: '#4B5563', display: 'flex', alignItems: 'center', gap: 5, fontWeight: 500 }}>
+                      <span style={{ width: 20, height: 3, borderRadius: 2, background: c, display: 'inline-block' }} />{l}
                     </span>
                   ))}
+                  <span style={{ fontSize: 11, color: '#9CA3AF', marginLeft: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 12, height: 10, background: 'rgba(235,87,87,0.25)', borderRadius: 2, display: 'inline-block' }} />Under-collection
+                  </span>
+                  <span style={{ fontSize: 11, color: '#9CA3AF', marginLeft: 'auto' }}>Click month to filter table ↓</span>
                 </div>
               </>
             ) : (
-              <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <p style={{ fontSize: 12, color: '#9CA3AF' }}>Upload Rent Receivable data to see trend</p>
               </div>
             )}
@@ -472,7 +565,7 @@ export default function RentalArDashboard() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1917' }}>
-                Collection detail — {selCoName || 'All Companies'} · {selMonth || 'All Months'}
+                Collection detail — {selCoName || 'All Companies'} · {chartMonth || selMonth || 'All Months'}
               </div>
               <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>
                 Every company × every month · billed from registry · collected from Rent Receivable or P&L

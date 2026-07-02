@@ -2322,7 +2322,11 @@ def get_ar_summary(
         if cid not in uploads_by_co or up.uploaded_at > uploads_by_co[cid].uploaded_at:
             uploads_by_co[cid] = up
 
-    RENT_RE = re.compile(r'^rent\s*[-–]|^total\s+for\s+(rental\s+income|services)', re.IGNORECASE)
+    # Only match individual rent lines (e.g. "Rent - Unit 3A").
+    # Deliberately excludes "Total for Rental Income" / "Total for Services" —
+    # those are section-total aggregates and would double-count when individual
+    # unit lines are also present in the same P&L.
+    RENT_RE = re.compile(r'^rent\s*[-–]', re.IGNORECASE)
 
     def norm_month(m: str) -> str:
         # "Jan 2026" → "Jan-2026"; "Jan-2026" → "Jan-2026"
@@ -2369,7 +2373,7 @@ def get_ar_summary(
                 label = str(item.get('label', ''))
                 if not RENT_RE.match(label):
                     continue
-                if item.get('isSectionHeader') or item.get('isTotal'):
+                if item.get('isSectionHeader') or item.get('isTotal') or item.get('children'):
                     continue
                 mv: dict = item.get('monthlyValues') or {}
                 for raw_k, v in mv.items():
