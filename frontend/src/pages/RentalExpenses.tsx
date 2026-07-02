@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import {
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
+  BarChart, Bar, LineChart, Line, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import api from '../services/api';
@@ -266,6 +266,30 @@ export default function RentalExpenses() {
     });
   }, [operatingRows]);
 
+  // top-5 categories for stacked trend chart
+  const top5cats = useMemo(() => byCategory.slice(0, 5).map(c => c.category), [byCategory]);
+
+  // stacked column chart: top-5 cats × last-6 months of all-time data
+  const stackedTrendData = useMemo(() => {
+    const byMonth: Record<string, Record<string, number>> = {};
+    operatingRows.forEach(r => {
+      if (!top5cats.includes(r.category)) return;
+      if (!byMonth[r.month]) byMonth[r.month] = {};
+      byMonth[r.month][r.category] = (byMonth[r.month][r.category] ?? 0) + r.amount;
+    });
+    const months6 = Object.keys(byMonth).sort((a, b) => monthSortKey(a) - monthSortKey(b)).slice(-6);
+    return months6.map(m => ({ month: m.split(' ')[0], ...byMonth[m] }));
+  }, [top5cats, operatingRows]);
+
+  // single-category trend when a filter is active
+  const singleCatTrend = useMemo(() => {
+    if (!filterCat) return [];
+    const byMonth: Record<string, number> = {};
+    operatingRows.forEach(r => { if (r.category === filterCat) byMonth[r.month] = (byMonth[r.month] ?? 0) + r.amount; });
+    const months6 = Object.keys(byMonth).sort((a, b) => monthSortKey(a) - monthSortKey(b)).slice(-6);
+    return months6.map(m => ({ month: m.split(' ')[0], amount: byMonth[m] ?? 0 }));
+  }, [filterCat, operatingRows]);
+
   // category sparklines — top 4 by filtered spend, last 6 months all-time trend
   const sparklineData = useMemo(() => {
     const top4 = byCategory.slice(0, 4).map(c => c.category);
@@ -470,47 +494,52 @@ export default function RentalExpenses() {
 
           {/* ── Charts row 1: Donut, Company bar, Trend ───────────────────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Donut — click to filter table */}
+            {/* Horizontal bar chart — click to filter table */}
             <div className="rounded-xl p-4" style={{ background: '#FBF6EE', border: '1px solid #E8DEC8' }}>
-              <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>Expense by Category</p>
+              <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 8 }}>Expense by Category</p>
+              {filterCat && (
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="px-2 py-0.5 rounded-full" style={{ background: catColor(filterCat, allCats), color: '#fff', fontSize: 12, fontWeight: 600 }}>{filterCat}</span>
+                  <button className="exp-interactive" onClick={() => setFilterCat(null)}
+                    style={{ fontSize: 12, color: '#A8A29E', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>× clear</button>
+                </div>
+              )}
               {byCategory.length > 0 ? (
                 <>
-                  {filterCat && (
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: catColor(filterCat, allCats), color: '#fff', fontSize: 12, fontWeight: 600 }}>{filterCat}</span>
-                      <button className="exp-interactive" onClick={() => setFilterCat(null)}
-                        style={{ fontSize: 12, color: '#A8A29E', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>× clear filter</button>
-                    </div>
-                  )}
-                  <ResponsiveContainer width="100%" height={180}>
-                    <PieChart>
-                      <Pie data={byCategory} cx="50%" cy="50%"
-                        innerRadius={44} outerRadius={70} paddingAngle={2}
-                        dataKey="amount" nameKey="category"
-                        onClick={(d: { category: string }) => setFilterCat(filterCat === d.category ? null : d.category)}>
-                        {byCategory.map((e, i) => (
-                          <Cell key={i} fill={catColor(e.category, allCats)}
-                            opacity={!filterCat || filterCat === e.category ? 1 : 0.35}
-                            style={{ cursor: 'pointer', transition: 'opacity 0.15s ease-out' }} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(v: number) => fmtUSD(v)} {...TT} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="mt-2 space-y-0.5 max-h-32 overflow-y-auto pr-1">
-                    {byCategory.map((e, i) => (
-                      <div key={i} className="exp-cat-item flex items-center justify-between px-1 py-1"
-                        onClick={() => setFilterCat(filterCat === e.category ? null : e.category)}>
-                        <span className="flex items-center gap-1.5" style={{ fontSize: 13, color: filterCat === e.category ? '#1C1917' : '#57534E', fontWeight: filterCat === e.category ? 600 : 400 }}>
-                          <span className="w-2 h-2 rounded-full flex-shrink-0"
-                            style={{ background: catColor(e.category, allCats), opacity: !filterCat || filterCat === e.category ? 1 : 0.35 }} />
-                          {e.category}
-                        </span>
-                        <span style={{ fontSize: 13, color: '#1C1917', fontWeight: 600 }}>{fmtUSD(e.amount)}</span>
-                      </div>
-                    ))}
+                  <div className="max-h-72 overflow-y-auto pr-1">
+                    {(() => {
+                      const maxAmt = byCategory[0]?.amount ?? 1;
+                      return byCategory.map((e, i) => {
+                        const pct  = (e.amount / maxAmt) * 100;
+                        const active   = !filterCat || filterCat === e.category;
+                        const selected = filterCat === e.category;
+                        return (
+                          <div key={i} className="flex items-center gap-2 py-1 rounded cursor-pointer"
+                            style={{ opacity: active ? 1 : 0.4, transition: 'opacity 0.15s' }}
+                            onClick={() => setFilterCat(filterCat === e.category ? null : e.category)}>
+                            <span style={{ width: 108, fontSize: 12, color: '#57534E', flexShrink: 0,
+                              textAlign: 'right', fontWeight: selected ? 700 : 400, lineHeight: 1.3 }}>
+                              {e.category}
+                            </span>
+                            <div style={{ flex: 1, height: 16, borderRadius: 3, background: '#F0EDE5', position: 'relative' }}>
+                              <div style={{
+                                position: 'absolute', left: 0, top: 0, height: '100%',
+                                width: `${pct}%`, borderRadius: 3,
+                                background: catColor(e.category, allCats),
+                                transition: 'width 0.3s ease',
+                              }} />
+                            </div>
+                            <span style={{ width: 76, fontSize: 12, color: '#1C1917', flexShrink: 0,
+                              textAlign: 'right', fontWeight: 600,
+                              fontVariantNumeric: 'tabular-nums lining-nums' }}>
+                              {fmtUSD(e.amount)}
+                            </span>
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
-                  <p style={{ fontSize: 12, color: '#A8A29E', marginTop: 6 }}>Click category to filter table below</p>
+                  <p style={{ fontSize: 12, color: '#A8A29E', marginTop: 8 }}>Click bar to filter table below</p>
                 </>
               ) : (
                 <div className="h-60 flex items-center justify-center" style={{ color: '#A8A29E', fontSize: 14 }}>No data</div>
@@ -575,25 +604,58 @@ export default function RentalExpenses() {
             </div>
           </div>
 
-          {/* ── Charts row 2: Category sparklines ─────────────────────────────── */}
-          {sparklineData.length > 0 && (
+          {/* ── Top Category Trends — stacked column (default) / single line (filter active) ── */}
+          {(stackedTrendData.length > 0 || singleCatTrend.length > 0) && (
             <div className="rounded-xl p-4" style={{ background: '#FBF6EE', border: '1px solid #E8DEC8' }}>
-              <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>Top Category Trends — 6 Months</p>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                {sparklineData.map(({ cat, data, total }) => (
-                  <div key={cat} className="rounded-lg p-3" style={{ background: '#F7F1E6', border: '1px solid #E8DEC8' }}>
-                    <p style={{ fontSize: 13, fontWeight: 600, color: '#78716C', marginBottom: 2 }}>{cat}</p>
-                    <p style={{ fontSize: 18, fontWeight: 700, color: '#1C1917', marginBottom: 6 }}>{fmtUSD(total)}</p>
-                    <ResponsiveContainer width="100%" height={52}>
-                      <LineChart data={data} margin={{ top: 2, bottom: 2, left: 0, right: 0 }}>
-                        <Line type="monotone" dataKey="amount" stroke={catColor(cat, allCats)}
-                          strokeWidth={2} dot={false} />
-                        <Tooltip formatter={(v: number) => fmtUSD(v)} {...TT} />
-                      </LineChart>
-                    </ResponsiveContainer>
+              <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Top Category Trends — 6 Months</p>
+              {filterCat ? (
+                <>
+                  <p style={{ fontSize: 12, color: '#A8A29E', marginBottom: 10 }}>
+                    Showing: <span style={{ fontWeight: 600, color: catColor(filterCat, allCats) }}>{filterCat}</span>
+                    <button onClick={() => setFilterCat(null)}
+                      style={{ marginLeft: 8, fontSize: 12, color: '#A8A29E', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                      × show all
+                    </button>
+                  </p>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={singleCatTrend} margin={{ left: 4, right: 8, top: 4, bottom: 4 }}>
+                      <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#78716C' }} />
+                      <YAxis tick={{ fontSize: 12, fill: '#78716C' }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+                      <Tooltip formatter={(v: number) => fmtUSD(v)} {...TT} />
+                      <Line type="monotone" dataKey="amount" name={filterCat}
+                        stroke={catColor(filterCat, allCats)} strokeWidth={2.5}
+                        dot={{ fill: catColor(filterCat, allCats), r: 4, strokeWidth: 0 }}
+                        activeDot={{ r: 6, fill: catColor(filterCat, allCats) }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </>
+              ) : (
+                <>
+                  <p style={{ fontSize: 12, color: '#A8A29E', marginBottom: 10 }}>Top 5 categories — click a bar or segment to drill in</p>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={stackedTrendData} margin={{ left: 4, right: 8, top: 4, bottom: 4 }}>
+                      <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#78716C' }} />
+                      <YAxis tick={{ fontSize: 12, fill: '#78716C' }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+                      <Tooltip formatter={(v: number) => fmtUSD(v)} {...TT} />
+                      {top5cats.map(cat => (
+                        <Bar key={cat} dataKey={cat} stackId="cats" name={cat}
+                          fill={catColor(cat, allCats)} radius={cat === top5cats[top5cats.length - 1] ? [3, 3, 0, 0] : [0, 0, 0, 0]}
+                          onClick={() => setFilterCat(cat)} style={{ cursor: 'pointer' }} />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                  <div className="flex flex-wrap gap-4 mt-3">
+                    {top5cats.map(cat => (
+                      <span key={cat} className="flex items-center gap-1.5 cursor-pointer"
+                        style={{ fontSize: 12, color: '#78716C' }}
+                        onClick={() => setFilterCat(cat)}>
+                        <span className="w-3 h-2 rounded-sm" style={{ background: catColor(cat, allCats), display: 'inline-block' }} />
+                        {cat}
+                      </span>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </>
+              )}
             </div>
           )}
 
