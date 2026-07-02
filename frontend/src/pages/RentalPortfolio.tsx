@@ -276,26 +276,26 @@ export default function RentalPortfolio() {
         <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#1C1917', marginBottom: '16px' }}>Attention Now</h3>
         <div className="space-y-2">
           {data.occupancy_pct < 0.9 && (
-            <div style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#FCA5A5', padding: '12px', borderRadius: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <AlertTriangle size={18} />
+            <div style={{ background: '#FCEAEA', border: '1px solid rgba(192,57,43,0.25)', color: '#8B3A3A', padding: '12px', borderRadius: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <AlertTriangle size={18} color="#C0392B" />
               <span>{data.vacant_units} vacant unit(s) — below occupancy target</span>
             </div>
           )}
           {data.arrears_total > data.gross_potential_rent * 0.1 && (
-            <div style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#FCA5A5', padding: '12px', borderRadius: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <AlertTriangle size={18} />
+            <div style={{ background: '#FCEAEA', border: '1px solid rgba(192,57,43,0.25)', color: '#8B3A3A', padding: '12px', borderRadius: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <AlertTriangle size={18} color="#C0392B" />
               <span>Arrears exceeding 10% of GPR — {fmtUSD(data.arrears_total)}</span>
             </div>
           )}
           {collectionRate < 95 && (
-            <div style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', color: '#FCD34D', padding: '12px', borderRadius: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <AlertCircle size={18} />
+            <div style={{ background: '#FDF3D9', border: '1px solid rgba(138,97,22,0.25)', color: '#6B4F1A', padding: '12px', borderRadius: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <AlertCircle size={18} color="#8A6116" />
               <span>Collection rate {collectionRate.toFixed(1)}% — below 95% target</span>
             </div>
           )}
           {data.by_company.filter(c => c.occupancy_pct < 0.85).length > 0 && (
-            <div style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', color: '#FCD34D', padding: '12px', borderRadius: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <AlertCircle size={18} />
+            <div style={{ background: '#FDF3D9', border: '1px solid rgba(138,97,22,0.25)', color: '#6B4F1A', padding: '12px', borderRadius: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <AlertCircle size={18} color="#8A6116" />
               <span>{data.by_company.filter(c => c.occupancy_pct < 0.85).length} company(ies) below 85% occupancy</span>
             </div>
           )}

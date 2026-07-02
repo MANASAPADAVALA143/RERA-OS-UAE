@@ -683,14 +683,14 @@ export default function RentalOverview() {
             {data.attention_now.map((item, i) => (
               <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm"
                 style={item.severity === 'warning'
-                  ? { background: 'rgba(239,68,68,0.10)', border: '1px solid rgba(239,68,68,0.25)', color: '#FCA5A5' }
-                  : { background: 'rgba(242,193,78,0.12)', border: '1px solid rgba(242,193,78,0.3)',  color: '#FCD34D' }}>
+                  ? { background: '#FCEAEA', border: '1px solid rgba(239,68,68,0.30)', color: '#8B3A3A' }
+                  : { background: '#FDF3D9', border: '1px solid rgba(242,193,78,0.45)', color: '#6B4F1A' }}>
                 <span className="shrink-0 px-2 py-0.5 rounded-full"
                   style={{
-                    fontSize: 11, fontWeight: 600,
+                    fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
                     ...(item.severity === 'warning'
-                      ? { background: 'rgba(239,68,68,0.22)', color: '#FCA5A5' }
-                      : { background: 'rgba(242,193,78,0.22)', color: '#FCD34D' }),
+                      ? { background: 'rgba(192,57,43,0.12)', color: '#C0392B' }
+                      : { background: 'rgba(138,97,22,0.12)',  color: '#8A6116' }),
                   }}>
                   {item.severity === 'warning' ? 'WARNING' : 'ATTENTION'}
                 </span>

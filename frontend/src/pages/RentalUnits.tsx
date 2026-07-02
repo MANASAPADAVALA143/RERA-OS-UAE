@@ -200,26 +200,26 @@ function StatusHistoryTab() {
       {ltm && (
         <div className="space-y-2">
           {ltm.maxConsecVacant >= 2 && (
-            <div className="flex gap-3 p-3 rounded-lg border-l-4" style={{ borderColor: '#EF4444', background: 'rgba(239,68,68,0.1)' }}>
-              <AlertTriangle size={16} style={{ color: '#F87171', flexShrink: 0, marginTop: 2 }} />
+            <div className="flex gap-3 p-3 rounded-lg border-l-4" style={{ borderColor: '#C0392B', background: '#FCEAEA' }}>
+              <AlertTriangle size={16} style={{ color: '#C0392B', flexShrink: 0, marginTop: 2 }} />
               <div>
-                <p className="text-sm font-semibold" style={{ color: '#FCA5A5' }}>
+                <p className="text-sm font-semibold" style={{ color: '#8B3A3A' }}>
                   {unit?.unit_number} vacant {ltm.maxConsecVacant}+ consecutive months
                 </p>
-                <p className="text-sm" style={{ color: '#FCA5A5', opacity: 0.8 }}>
+                <p className="text-sm" style={{ color: '#8B3A3A', opacity: 0.85 }}>
                   Revenue lost: {fmtN(ltm.lost)} · Recommended: offer discount to fill faster
                 </p>
               </div>
             </div>
           )}
           {ltm.occPct === 100 && availableMonths.length >= 3 && (
-            <div className="flex gap-3 p-3 rounded-lg border-l-4" style={{ borderColor: '#22C55E', background: 'rgba(34,197,94,0.1)' }}>
+            <div className="flex gap-3 p-3 rounded-lg border-l-4" style={{ borderColor: '#26A65B', background: 'rgba(38,166,91,0.08)' }}>
               <span style={{ flexShrink: 0 }}>🟢</span>
               <div>
-                <p className="text-sm font-semibold" style={{ color: '#86EFAC' }}>
+                <p className="text-sm font-semibold" style={{ color: '#065F46' }}>
                   {unit?.unit_number} — 100% occupancy across all {ltm.totalMonths} available months
                 </p>
-                <p className="text-sm" style={{ color: '#86EFAC', opacity: 0.8 }}>
+                <p className="text-sm" style={{ color: '#065F46', opacity: 0.85 }}>
                   Best-performing unit · Consider rent increase at renewal
                 </p>
               </div>
@@ -252,26 +252,26 @@ function StatusHistoryTab() {
                   <td className="px-4 py-2.5">
                     <span className="flex items-center gap-2">
                       <span>{m.status === 'occupied' ? '🟢' : '🔴'}</span>
-                      <span className="text-xs font-medium" style={{ color: m.status === 'occupied' ? '#86EFAC' : '#FCA5A5' }}>
+                      <span className="text-xs font-medium" style={{ color: m.status === 'occupied' ? '#065F46' : '#8B3A3A' }}>
                         {m.status === 'occupied' ? 'Occupied' : 'Vacant'}
                       </span>
                       {m.status === 'vacant' && i > 0 && ltm.monthData[i - 1].status !== 'vacant' && (
                         <span className="text-xs italic" style={{ color: '#A8A29E' }}>← tenant left</span>
                       )}
                       {m.status === 'occupied' && m.rent > 0 && m.rent < ltm.marketRent && (
-                        <span className="text-xs italic" style={{ color: '#FCD34D' }}>← below market</span>
+                        <span className="text-xs italic" style={{ color: '#92400E' }}>← below market</span>
                       )}
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono">
                     {m.rent > 0
-                      ? <span style={{ color: '#86EFAC' }}>{fmtN(m.rent)}</span>
+                      ? <span style={{ color: '#065F46' }}>{fmtN(m.rent)}</span>
                       : <span style={{ color: '#A8A29E' }}>$0</span>}
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono">
                     {m.status === 'vacant'
-                      ? <span style={{ color: '#F87171' }}>{fmtN(ltm.marketRent)}</span>
-                      : <span style={{ color: '#DDD8CC' }}>—</span>}
+                      ? <span style={{ color: '#B91C1C' }}>{fmtN(ltm.marketRent)}</span>
+                      : <span style={{ color: '#A8A29E' }}>—</span>}
                   </td>
                 </tr>
               ))}
@@ -282,10 +282,10 @@ function StatusHistoryTab() {
                 <td className="px-4 py-3 text-xs" style={{ color: '#92400E' }}>
                   Vacant: {ltm.vacMonths} mo · Occupied: {ltm.occMonths} mo · {ltm.totalMonths} total
                 </td>
-                <td className="px-4 py-3 text-right font-mono font-semibold" style={{ color: '#86EFAC' }}>
+                <td className="px-4 py-3 text-right font-mono font-semibold" style={{ color: '#065F46' }}>
                   {fmtN(ltm.collected)}
                 </td>
-                <td className="px-4 py-3 text-right font-mono font-semibold" style={{ color: '#F87171' }}>
+                <td className="px-4 py-3 text-right font-mono font-semibold" style={{ color: '#B91C1C' }}>
                   {ltm.lost > 0 ? fmtN(ltm.lost) : '—'}
                 </td>
               </tr>
