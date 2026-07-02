@@ -137,7 +137,7 @@ const PALETTE = [
   '#7D5A3C','#D4B896','#C19A65',
 ];
 const catColor = (cat: string, cats: string[]) => PALETTE[cats.indexOf(cat) % PALETTE.length] ?? '#A8A29E';
-const TT = { contentStyle: { background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: '0.5rem', fontSize: 12 } };
+const TT = { contentStyle: { background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: '0.5rem', fontSize: 13 } };
 
 // ── mini KPI card ─────────────────────────────────────────────────────────────
 function KpiTile({ label, value, sub, accent, warn, tip }: {
@@ -150,14 +150,14 @@ function KpiTile({ label, value, sub, accent, warn, tip }: {
         border: `1px solid ${warn ? '#FDE68A' : '#E8DEC8'}`,
         borderRadius: 12, padding: '16px 18px', cursor: 'default',
       }}>
-      <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em',
+      <p style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em',
         color: accent ? 'rgba(255,255,255,0.8)' : warn ? '#92400E' : '#78716C', marginBottom: 4 }}>
         {label}
       </p>
-      <p style={{ fontSize: 22, fontWeight: 700, color: accent ? '#fff' : warn ? '#92400E' : '#1C1917', lineHeight: 1.1 }}>
+      <p style={{ fontSize: 28, fontWeight: 700, color: accent ? '#fff' : warn ? '#92400E' : '#1C1917', lineHeight: 1.1 }}>
         {value}
       </p>
-      {sub && <p style={{ fontSize: 11, color: accent ? 'rgba(255,255,255,0.7)' : '#A8A29E', marginTop: 4 }}>{sub}</p>}
+      {sub && <p style={{ fontSize: 12, color: accent ? 'rgba(255,255,255,0.7)' : '#A8A29E', marginTop: 4 }}>{sub}</p>}
     </div>
   );
 }
@@ -412,8 +412,8 @@ export default function RentalExpenses() {
 
       {/* Header */}
       <div>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1C1917' }}>Expenses</h1>
-        <p style={{ fontSize: 12, color: '#A8A29E', marginTop: 2 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1C1917' }}>Expenses</h1>
+        <p style={{ fontSize: 13, color: '#A8A29E', marginTop: 2 }}>
           Pulled from P&amp;L financials — all categories, all companies
         </p>
       </div>
@@ -421,20 +421,20 @@ export default function RentalExpenses() {
       {/* Filters + PeriodToggle */}
       <div className="flex flex-wrap items-center gap-4 px-4 py-3 rounded-xl"
         style={{ background: '#F0EDE5', border: '1px solid #E8DEC8' }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Company</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Company</span>
         <select
           value={filterCompany}
           onChange={e => { setFilterCompany(e.target.value); setFilterCat(null); }}
           className="exp-interactive"
           style={{ background: '#FBF6EE', color: '#1C1917', border: '1px solid #E8DEC8',
-            borderRadius: 8, padding: '6px 12px', fontSize: 13 }}
+            borderRadius: 8, padding: '6px 12px', fontSize: 14 }}
         >
           <option value="">All Companies</option>
           {companies.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
         </select>
         {filterCompany && (
           <button className="exp-interactive" onClick={() => setFilterCompany('')}
-            style={{ fontSize: 11, color: '#D4AF37', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+            style={{ fontSize: 12, color: '#D4AF37', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
             × clear
           </button>
         )}
@@ -446,7 +446,7 @@ export default function RentalExpenses() {
 
       {loading ? <LoadingSkeleton rows={8} /> : noData ? (
         <div className="p-6 rounded-xl text-center"
-          style={{ background: '#F0EDE5', border: '1px solid #E8DEC8', color: '#A8A29E', fontSize: 14 }}>
+          style={{ background: '#F0EDE5', border: '1px solid #E8DEC8', color: '#A8A29E', fontSize: 15 }}>
           No P&amp;L data uploaded yet. Upload financial statements in the Financials tab to see expenses here.
         </div>
       ) : (
@@ -490,7 +490,7 @@ export default function RentalExpenses() {
           {/* ── Sec 481(a) disclosure ─────────────────────────────────────────── */}
           {oneTimeTotal > 0 && (
             <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 rounded-xl"
-              style={{ background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E', fontSize: 12 }}>
+              style={{ background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E', fontSize: 13 }}>
               <span style={{ fontWeight: 600 }}>Note:</span>
               <span>All Time and trend figures exclude {fmtUSD(oneTimeTotal)} in one-time Sec&nbsp;481(a) accounting-method adjustments.</span>
               <button className="exp-interactive"
@@ -503,7 +503,7 @@ export default function RentalExpenses() {
               </button>
               {showOneTime && (
                 <div ref={oneTimePanelRef} className="w-full mt-2 overflow-x-auto">
-                  <table className="w-full" style={{ fontSize: 12, borderTop: '1px solid #FDE68A' }}>
+                  <table className="w-full" style={{ fontSize: 13, borderTop: '1px solid #FDE68A' }}>
                     <thead>
                       <tr>{['Company','Label','Month','Amount'].map(h => (
                         <th key={h} className="py-1.5 px-3 text-left" style={{ fontWeight: 600, color: '#B45309' }}>{h}</th>
@@ -535,14 +535,14 @@ export default function RentalExpenses() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Donut — click to filter table */}
             <div className="rounded-xl p-4" style={{ background: '#FBF6EE', border: '1px solid #E8DEC8' }}>
-              <p style={{ fontSize: 14, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>Expense by Category</p>
+              <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>Expense by Category</p>
               {byCategory.length > 0 ? (
                 <>
                   {filterCat && (
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: catColor(filterCat, allCats), color: '#fff', fontSize: 11, fontWeight: 600 }}>{filterCat}</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: catColor(filterCat, allCats), color: '#fff', fontSize: 12, fontWeight: 600 }}>{filterCat}</span>
                       <button className="exp-interactive" onClick={() => setFilterCat(null)}
-                        style={{ fontSize: 11, color: '#A8A29E', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>× clear filter</button>
+                        style={{ fontSize: 12, color: '#A8A29E', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>× clear filter</button>
                     </div>
                   )}
                   <ResponsiveContainer width="100%" height={180}>
@@ -564,26 +564,26 @@ export default function RentalExpenses() {
                     {byCategory.map((e, i) => (
                       <div key={i} className="exp-cat-item flex items-center justify-between px-1 py-1"
                         onClick={() => setFilterCat(filterCat === e.category ? null : e.category)}>
-                        <span className="flex items-center gap-1.5" style={{ fontSize: 12, color: filterCat === e.category ? '#1C1917' : '#57534E', fontWeight: filterCat === e.category ? 600 : 400 }}>
+                        <span className="flex items-center gap-1.5" style={{ fontSize: 13, color: filterCat === e.category ? '#1C1917' : '#57534E', fontWeight: filterCat === e.category ? 600 : 400 }}>
                           <span className="w-2 h-2 rounded-full flex-shrink-0"
                             style={{ background: catColor(e.category, allCats), opacity: !filterCat || filterCat === e.category ? 1 : 0.35 }} />
                           {e.category}
                         </span>
-                        <span style={{ fontSize: 12, color: '#1C1917', fontWeight: 600 }}>{fmtUSD(e.amount)}</span>
+                        <span style={{ fontSize: 13, color: '#1C1917', fontWeight: 600 }}>{fmtUSD(e.amount)}</span>
                       </div>
                     ))}
                   </div>
-                  <p style={{ fontSize: 11, color: '#A8A29E', marginTop: 6 }}>Click category to filter table below</p>
+                  <p style={{ fontSize: 12, color: '#A8A29E', marginTop: 6 }}>Click category to filter table below</p>
                 </>
               ) : (
-                <div className="h-60 flex items-center justify-center" style={{ color: '#A8A29E', fontSize: 13 }}>No data</div>
+                <div className="h-60 flex items-center justify-center" style={{ color: '#A8A29E', fontSize: 14 }}>No data</div>
               )}
             </div>
 
             {/* By Company — click bar to drill down */}
             <div className="rounded-xl p-4" style={{ background: '#FBF6EE', border: '1px solid #E8DEC8' }}>
-              <p style={{ fontSize: 14, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Expense by Company</p>
-              <p style={{ fontSize: 11, color: '#A8A29E', marginBottom: 8 }}>Click a bar to filter to that company</p>
+              <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Expense by Company</p>
+              <p style={{ fontSize: 12, color: '#A8A29E', marginBottom: 8 }}>Click a bar to filter to that company</p>
               {byCompany.length > 0 ? (
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={byCompany} layout="vertical" margin={{ left: 4, right: 16, top: 4, bottom: 4 }}
@@ -594,9 +594,9 @@ export default function RentalExpenses() {
                       setFilterCompany(filterCompany === id ? '' : id);
                       setFilterCat(null);
                     }}>
-                    <XAxis type="number" tick={{ fontSize: 11, fill: '#78716C' }}
+                    <XAxis type="number" tick={{ fontSize: 12, fill: '#78716C' }}
                       tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: '#78716C' }} width={88} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: '#78716C' }} width={88} />
                     <Tooltip formatter={(v: number) => fmtUSD(v)} {...TT} />
                     <Bar dataKey="amount" radius={[0, 4, 4, 0]} className="exp-bar-clickable">
                       {byCompany.map((e, i) => (
@@ -607,18 +607,18 @@ export default function RentalExpenses() {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-60 flex items-center justify-center" style={{ color: '#A8A29E', fontSize: 13 }}>No data</div>
+                <div className="h-60 flex items-center justify-center" style={{ color: '#A8A29E', fontSize: 14 }}>No data</div>
               )}
             </div>
 
             {/* Trend 6 months */}
             <div className="rounded-xl p-4" style={{ background: '#FBF6EE', border: '1px solid #E8DEC8' }}>
-              <p style={{ fontSize: 14, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>Expense Trend — 6 Months</p>
+              <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>Expense Trend — 6 Months</p>
               {trendData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={260}>
                   <LineChart data={trendData}>
-                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#78716C' }} />
-                    <YAxis tick={{ fontSize: 11, fill: '#78716C' }}
+                    <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#78716C' }} />
+                    <YAxis tick={{ fontSize: 12, fill: '#78716C' }}
                       tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                     <Tooltip
                       formatter={(v: number) => fmtUSD(v)}
@@ -641,12 +641,12 @@ export default function RentalExpenses() {
           {/* ── Charts row 2: Category sparklines ─────────────────────────────── */}
           {sparklineData.length > 0 && (
             <div className="rounded-xl p-4" style={{ background: '#FBF6EE', border: '1px solid #E8DEC8' }}>
-              <p style={{ fontSize: 14, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>Top Category Trends — 6 Months</p>
+              <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>Top Category Trends — 6 Months</p>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {sparklineData.map(({ cat, data, total }) => (
                   <div key={cat} className="rounded-lg p-3" style={{ background: '#F7F1E6', border: '1px solid #E8DEC8' }}>
-                    <p style={{ fontSize: 11, fontWeight: 600, color: '#78716C', marginBottom: 2 }}>{cat}</p>
-                    <p style={{ fontSize: 16, fontWeight: 700, color: '#1C1917', marginBottom: 6 }}>{fmtUSD(total)}</p>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: '#78716C', marginBottom: 2 }}>{cat}</p>
+                    <p style={{ fontSize: 18, fontWeight: 700, color: '#1C1917', marginBottom: 6 }}>{fmtUSD(total)}</p>
                     <ResponsiveContainer width="100%" height={52}>
                       <LineChart data={data} margin={{ top: 2, bottom: 2, left: 0, right: 0 }}>
                         <Line type="monotone" dataKey="amount" stroke={catColor(cat, allCats)}
@@ -664,12 +664,12 @@ export default function RentalExpenses() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* YoY */}
             <div className="rounded-xl p-4" style={{ background: '#FBF6EE', border: '1px solid #E8DEC8' }}>
-              <p style={{ fontSize: 14, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Year-over-Year Comparison</p>
-              <p style={{ fontSize: 11, color: '#A8A29E', marginBottom: 10 }}>This year vs same months last year</p>
+              <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Year-over-Year Comparison</p>
+              <p style={{ fontSize: 12, color: '#A8A29E', marginBottom: 10 }}>This year vs same months last year</p>
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={yoyData} margin={{ left: 4, right: 8, top: 4, bottom: 4 }}>
-                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#78716C' }} />
-                  <YAxis tick={{ fontSize: 11, fill: '#78716C' }} tickFormatter={(v: number) => `$${(v/1000).toFixed(0)}k`} />
+                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#78716C' }} />
+                  <YAxis tick={{ fontSize: 12, fill: '#78716C' }} tickFormatter={(v: number) => `$${(v/1000).toFixed(0)}k`} />
                   <Tooltip formatter={(v: number) => fmtUSD(v)} {...TT} />
                   <Bar dataKey="thisYear" name="This Year" fill="#D4AF37" radius={[3,3,0,0]} />
                   <Bar dataKey="lastYear" name="Last Year" fill="#E8DEC8" radius={[3,3,0,0]} />
@@ -677,7 +677,7 @@ export default function RentalExpenses() {
               </ResponsiveContainer>
               <div className="flex gap-4 mt-2">
                 {[{color:'#D4AF37',label:'This Year'},{color:'#E8DEC8',label:'Last Year'}].map(({color,label})=>(
-                  <span key={label} className="flex items-center gap-1.5" style={{ fontSize: 11, color: '#78716C' }}>
+                  <span key={label} className="flex items-center gap-1.5" style={{ fontSize: 12, color: '#78716C' }}>
                     <span className="w-3 h-2 rounded-sm" style={{ background: color, display: 'inline-block' }} />{label}
                   </span>
                 ))}
@@ -686,16 +686,16 @@ export default function RentalExpenses() {
 
             {/* Heatmap — company × month */}
             <div className="rounded-xl p-4" style={{ background: '#FBF6EE', border: '1px solid #E8DEC8' }}>
-              <p style={{ fontSize: 14, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Expense Heatmap — Company × Month</p>
-              <p style={{ fontSize: 11, color: '#A8A29E', marginBottom: 10 }}>Darker gold = higher spend</p>
+              <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Expense Heatmap — Company × Month</p>
+              <p style={{ fontSize: 12, color: '#A8A29E', marginBottom: 10 }}>Darker gold = higher spend</p>
               {heatmapCompanies.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full" style={{ borderCollapse: 'separate', borderSpacing: 3 }}>
                     <thead>
                       <tr>
-                        <th style={{ fontSize: 11, color: '#A8A29E', fontWeight: 500, textAlign: 'left', paddingRight: 8, paddingBottom: 4 }}>Company</th>
+                        <th style={{ fontSize: 12, color: '#A8A29E', fontWeight: 500, textAlign: 'left', paddingRight: 8, paddingBottom: 4 }}>Company</th>
                         {heatmapMonths.map(m => (
-                          <th key={m} style={{ fontSize: 10, color: '#A8A29E', fontWeight: 500, textAlign: 'center', paddingBottom: 4, whiteSpace: 'nowrap' }}>
+                          <th key={m} style={{ fontSize: 11, color: '#A8A29E', fontWeight: 500, textAlign: 'center', paddingBottom: 4, whiteSpace: 'nowrap' }}>
                             {m.split(' ')[0]}
                           </th>
                         ))}
@@ -704,7 +704,7 @@ export default function RentalExpenses() {
                     <tbody>
                       {heatmapCompanies.map(co => (
                         <tr key={co}>
-                          <td style={{ fontSize: 11, color: '#57534E', paddingRight: 8, paddingBottom: 3, whiteSpace: 'nowrap', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <td style={{ fontSize: 12, color: '#57534E', paddingRight: 8, paddingBottom: 3, whiteSpace: 'nowrap', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {co.split(' ').slice(0,2).join(' ')}
                           </td>
                           {heatmapMonths.map(m => {
@@ -714,7 +714,7 @@ export default function RentalExpenses() {
                               <td key={m} title={`${co} · ${m}: ${fmtUSD(amt)}`}
                                 style={{
                                   background: amt > 0 ? `rgba(212,175,55,${Math.max(0.08, intensity * 0.9)})` : '#F7F1E6',
-                                  borderRadius: 4, textAlign: 'center', fontSize: 10, color: intensity > 0.5 ? '#5C4033' : '#78716C',
+                                  borderRadius: 4, textAlign: 'center', fontSize: 11, color: intensity > 0.5 ? '#5C4033' : '#78716C',
                                   fontWeight: intensity > 0.5 ? 600 : 400, padding: '5px 4px', minWidth: 44,
                                   transition: 'background 0.15s ease-out',
                                 }}>
@@ -728,7 +728,7 @@ export default function RentalExpenses() {
                   </table>
                 </div>
               ) : (
-                <div className="h-40 flex items-center justify-center" style={{ color: '#A8A29E', fontSize: 13 }}>No data</div>
+                <div className="h-40 flex items-center justify-center" style={{ color: '#A8A29E', fontSize: 14 }}>No data</div>
               )}
             </div>
           </div>
@@ -736,19 +736,19 @@ export default function RentalExpenses() {
           {/* ── All Expenses table ────────────────────────────────────────────── */}
           <div className="rounded-xl" style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', overflow: 'hidden' }}>
             <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid #E8DEC8' }}>
-              <p style={{ fontSize: 14, fontWeight: 600, color: '#1C1917' }}>
+              <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917' }}>
                 All Expenses{period ? ` — ${period}` : ''}
               </p>
               <div className="flex items-center gap-2">
                 {filterCat && (
                   <span className="flex items-center gap-1.5">
                     <span className="text-xs px-2 py-0.5 rounded-full font-medium"
-                      style={{ background: catColor(filterCat, allCats), color: '#fff', fontSize: 11 }}>{filterCat}</span>
+                      style={{ background: catColor(filterCat, allCats), color: '#fff', fontSize: 12 }}>{filterCat}</span>
                     <button className="exp-interactive" onClick={() => setFilterCat(null)}
-                      style={{ fontSize: 11, color: '#A8A29E', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>× clear</button>
+                      style={{ fontSize: 12, color: '#A8A29E', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>× clear</button>
                   </span>
                 )}
-                <span style={{ fontSize: 12, color: '#A8A29E' }}>{tableRows.length} rows</span>
+                <span style={{ fontSize: 13, color: '#A8A29E' }}>{tableRows.length} rows</span>
               </div>
             </div>
             <div className="overflow-x-auto" style={{ maxHeight: 480, overflowY: 'auto' }}>
@@ -757,7 +757,7 @@ export default function RentalExpenses() {
                   <tr style={{ borderBottom: '1px solid #E8DEC8' }}>
                     {['Company','Category','Month','Amount'].map(h => (
                       <th key={h} className="py-2 px-3 text-left"
-                        style={{ fontSize: 13, fontWeight: 600, color: '#78716C' }}>{h}</th>
+                        style={{ fontSize: 14, fontWeight: 600, color: '#78716C' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -768,23 +768,23 @@ export default function RentalExpenses() {
                     </td></tr>
                   ) : tableRows.map((r, i) => (
                     <tr key={i} className="exp-row" style={{ borderBottom: '1px solid #F7F1E6' }}>
-                      <td className="py-2 px-3" style={{ fontSize: 13, color: '#92400E' }}>{r.company}</td>
+                      <td className="py-2 px-3" style={{ fontSize: 14, color: '#92400E' }}>{r.company}</td>
                       <td className="py-2 px-3">
                         <span className="px-2 py-0.5 rounded-full"
-                          style={{ fontSize: 12, fontWeight: 500, background: catColor(r.category, allCats), color: '#fff' }}>
+                          style={{ fontSize: 13, fontWeight: 500, background: catColor(r.category, allCats), color: '#fff' }}>
                           {r.category}
                         </span>
                       </td>
-                      <td className="py-2 px-3" style={{ fontSize: 12, color: '#78716C' }}>{r.month}</td>
-                      <td className="py-2 px-3 text-right" style={{ fontSize: 13, fontWeight: 600, color: '#1C1917' }}>{fmtUSD(r.amount)}</td>
+                      <td className="py-2 px-3" style={{ fontSize: 13, color: '#78716C' }}>{r.month}</td>
+                      <td className="py-2 px-3 text-right" style={{ fontSize: 14, fontWeight: 600, color: '#1C1917' }}>{fmtUSD(r.amount)}</td>
                     </tr>
                   ))}
                 </tbody>
                 {tableRows.length > 0 && (
                   <tfoot>
                     <tr style={{ borderTop: '2px solid #E8DEC8', background: '#F0EDE5' }}>
-                      <td colSpan={3} className="py-2 px-3" style={{ fontSize: 13, fontWeight: 700, color: '#1C1917' }}>Total</td>
-                      <td className="py-2 px-3 text-right" style={{ fontSize: 15, fontWeight: 700, color: '#D4AF37' }}>
+                      <td colSpan={3} className="py-2 px-3" style={{ fontSize: 14, fontWeight: 700, color: '#1C1917' }}>Total</td>
+                      <td className="py-2 px-3 text-right" style={{ fontSize: 17, fontWeight: 700, color: '#D4AF37' }}>
                         {fmtUSD(tableRows.reduce((s, r) => s + r.amount, 0))}
                       </td>
                     </tr>
