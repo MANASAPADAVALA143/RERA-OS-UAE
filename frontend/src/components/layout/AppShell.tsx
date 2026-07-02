@@ -37,7 +37,7 @@ const NAV = [
 // ── Sub-nav shared styles ──────────────────────────────────────────────────
 const subActive   = { background: 'rgba(212,175,55,0.18)', color: '#D4AF37' } as const;
 const subInactive = { color: '#9C9893' } as const;
-const subBase     = 'w-full flex items-center gap-2 pl-7 pr-3 py-1.5 rounded-lg text-xs transition-colors text-left hover:bg-white/5';
+const subBase     = 'w-full flex items-center gap-2 pl-7 pr-3 py-1.5 rounded-lg text-sm transition-colors text-left hover:bg-white/5';
 
 function SidebarInner() {
   const { profile, signOut } = useAuth();
