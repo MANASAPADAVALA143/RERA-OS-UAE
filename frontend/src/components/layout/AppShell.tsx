@@ -1,7 +1,9 @@
+import { useState, useEffect } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, HardHat, Building2, Landmark, Home,
   ShieldAlert, Map, Settings, LogOut, HardDriveUpload, Database,
+  Menu, X,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Badge } from '../ui/Badge';
@@ -40,26 +42,63 @@ const subInactive = { color: '#9C9893' } as const;
 const subBase     = 'w-full flex items-center gap-2 pl-7 pr-3 py-1.5 rounded-lg text-sm transition-colors text-left hover:bg-white/5';
 
 function SidebarInner() {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { profile, signOut } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const onConstruction = location.pathname.startsWith('/construction');
   const onRental       = location.pathname.startsWith('/rental');
   const onPropDev      = location.pathname.startsWith('/property-dev');
   const { tab, setTab, projectId, setProjectId, projects } = useConstructionNav();
   const { tab: rentalTab, setTab: setRentalTab }           = useRentalNav();
-  const navigate = useNavigate();
   const { tab: propDevTab, setTab: setPropDevTab }         = usePropDevNav();
 
-  return (
-    <div className="dark-app flex h-screen overflow-hidden" style={{ background: '#ECE9E3' }}>
-      {/* ── Sidebar ─────────────────────────────────────────────────────── */}
-      <aside className="w-64 flex flex-col shrink-0 h-screen overflow-hidden"
-        style={{ background: '#161310', borderRight: '1px solid rgba(212,175,55,0.15)' }}>
+  // Close sidebar on any navigation (mobile UX)
+  useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
 
-        {/* Brand */}
-        <div className="p-5" style={{ borderBottom: '1px solid rgba(212,175,55,0.12)' }}>
-          <h1 className="text-xl font-bold tracking-tight" style={{ color: '#F5F5F4' }}>All in one MIS</h1>
-          <p className="text-xs mt-1 truncate" style={{ color: '#D4AF37' }}>{profile?.company_name}</p>
+  const closeSidebar = () => setSidebarOpen(false);
+
+  // Current page label for mobile header
+  const currentPage = NAV.find(n => location.pathname.startsWith(n.to))?.label ?? 'All in one MIS';
+
+  return (
+    <div className="flex h-screen overflow-hidden" style={{ background: '#ECE9E3' }}>
+
+      {/* ── Mobile backdrop ───────────────────────────────────────────── */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 md:hidden"
+          style={{ background: 'rgba(0,0,0,0.55)' }}
+          onClick={closeSidebar}
+        />
+      )}
+
+      {/* ── Sidebar ─────────────────────────────────────────────────────
+          Mobile:  fixed overlay drawer, hidden by default (-translate-x-full)
+          Desktop: static column, always visible (md:relative md:translate-x-0) */}
+      <aside
+        className={`
+          fixed inset-y-0 left-0 z-50 w-64 flex flex-col h-full
+          transition-transform duration-300 ease-in-out
+          md:relative md:translate-x-0 md:shrink-0
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+        `}
+        style={{ background: '#161310', borderRight: '1px solid rgba(212,175,55,0.15)' }}
+      >
+        {/* Brand + mobile close button */}
+        <div className="flex items-center justify-between p-5"
+          style={{ borderBottom: '1px solid rgba(212,175,55,0.12)' }}>
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold tracking-tight" style={{ color: '#F5F5F4' }}>All in one MIS</h1>
+            <p className="text-xs mt-1 truncate" style={{ color: '#D4AF37' }}>{profile?.company_name}</p>
+          </div>
+          <button
+            onClick={closeSidebar}
+            className="md:hidden ml-2 shrink-0 p-1 rounded hover:bg-white/10 transition-colors"
+            style={{ color: '#9C9893' }}
+          >
+            <X size={18} />
+          </button>
         </div>
 
         {/* Main nav */}
@@ -194,10 +233,32 @@ function SidebarInner() {
         </div>
       </aside>
 
-      {/* ── Main content ─────────────────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto p-4 lg:p-6" style={{ background: '#ECE9E3' }}>
-        <Outlet />
-      </main>
+      {/* ── Right side: mobile header + main content ─────────────────── */}
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+
+        {/* Mobile top bar (hidden on md+) */}
+        <header
+          className="md:hidden flex items-center gap-3 px-4 shrink-0"
+          style={{ height: 48, background: '#161310', borderBottom: '1px solid rgba(212,175,55,0.15)' }}
+        >
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-1 rounded hover:bg-white/10 transition-colors"
+            style={{ color: '#D4AF37' }}
+            aria-label="Open menu"
+          >
+            <Menu size={22} />
+          </button>
+          <span className="text-sm font-semibold truncate" style={{ color: '#F5F5F4' }}>
+            {currentPage}
+          </span>
+        </header>
+
+        {/* Main content — full width when sidebar is hidden on mobile */}
+        <main className="dark-app flex-1 overflow-y-auto p-4 lg:p-6" style={{ background: '#ECE9E3' }}>
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
