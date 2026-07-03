@@ -12,17 +12,17 @@ const MARKET_RATE = 0.065;
 
 const DSCR_STYLE = { green: 'bg-green-100 text-green-800', amber: 'bg-amber-100 text-amber-800', red: 'bg-red-100 text-red-800', grey: 'bg-gray-100 text-gray-600' };
 
-// Parchment theme tokens
+// Cream/amber theme tokens (matches app-wide palette)
 const PT = {
-  pageBg:   '#F7F1E6',
-  cardBg:   '#FBF6EE',
-  border:   '#E8DEC8',
-  hdrBg:    '#EFE0C8',
-  hdrText:  '#5C5043',
-  rowOdd:   '#F7F1E6',
-  rowEven:  '#FBF6EE',
-  text:     '#262626',
-  muted:    '#6B6B6B',
+  pageBg:   '#ECE9E3',
+  cardBg:   '#F7F5F0',
+  border:   '#DDD8CC',
+  hdrBg:    '#F0EDE5',
+  hdrText:  '#44403C',
+  rowOdd:   '#ECE9E3',
+  rowEven:  '#F7F5F0',
+  text:     '#1C1917',
+  muted:    '#78716C',
 };
 
 
@@ -471,16 +471,20 @@ export default function RentalLoanTracker() {
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
-          { label: 'Total Loan Portfolio', value: fmtUSD(kpis.portfolio ?? 0) },
+          { label: 'Total Loan Portfolio', value: fmtUSD(kpis.portfolio ?? 0), hero: true },
           { label: 'Total Monthly EMI', value: fmtUSD(kpis.emi ?? 0) },
           { label: 'Weighted Avg Rate', value: `${((kpis.wAvg ?? 0) * 100).toFixed(2)}%` },
           { label: 'Next Maturity', value: kpis.nextMat?.loan_maturity_date ?? '—', sub: kpis.nextMat?.property_name },
           { label: 'Total Outstanding', value: fmtUSD(filtered.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0) ?? 0) },
         ].map(k => (
-          <div key={k.label} style={{ background: PT.cardBg, border: `0.5px solid ${PT.border}`, borderRadius: 8, padding: '16px 16px 12px' }}>
-            <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 8 }}>{k.label}</p>
-            <p style={{ fontSize: 28, fontWeight: 700, color: PT.text, lineHeight: 1.2, fontVariantNumeric: 'tabular-nums lining-nums' }}>{k.value}</p>
-            {k.sub && <p style={{ fontSize: 12, color: PT.muted, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.sub}</p>}
+          <div key={k.label} style={{
+            background: k.hero ? 'linear-gradient(135deg,#D4AF37,#B8860B)' : PT.cardBg,
+            border: k.hero ? '1px solid #D4AF37' : `1px solid ${PT.border}`,
+            borderRadius: 12, padding: '16px 18px',
+          }}>
+            <p style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: k.hero ? 'rgba(255,255,255,0.85)' : PT.muted, marginBottom: 4 }}>{k.label}</p>
+            <p style={{ fontSize: 30, fontWeight: 700, color: k.hero ? '#fff' : PT.text, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums lining-nums' }}>{k.value}</p>
+            {k.sub && <p style={{ fontSize: 12, color: k.hero ? 'rgba(255,255,255,0.75)' : PT.muted, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.sub}</p>}
           </div>
         ))}
       </div>
@@ -488,67 +492,67 @@ export default function RentalLoanTracker() {
       {/* ── Second KPI row ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Portfolio DSCR */}
-        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 8, padding: '16px 16px 12px',
+        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 12, padding: '16px 18px',
           borderLeft: extKpis.portfolioDscr == null ? `3px solid ${PT.border}` : extKpis.portfolioDscr > 1.25 ? '3px solid #22A06B' : extKpis.portfolioDscr >= 1.0 ? '3px solid #F2C94C' : '3px solid #EB5757' }}>
-          <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 8 }}>Portfolio DSCR</p>
+          <p style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 4 }}>Portfolio DSCR</p>
           {extKpis.portfolioDscr != null ? (
             <>
-              <p style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.2, fontVariantNumeric: 'tabular-nums lining-nums',
+              <p style={{ fontSize: 30, fontWeight: 700, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums lining-nums',
                 color: extKpis.portfolioDscr > 1.25 ? '#22A06B' : extKpis.portfolioDscr >= 1.0 ? '#F2C94C' : '#EB5757' }}>
                 {extKpis.portfolioDscr.toFixed(2)}x
               </p>
-              <p style={{ fontSize: 11, color: PT.muted, marginTop: 4 }}>NOI {fmtUSD(extKpis.totalNoi)}/yr ÷ DS {fmtUSD(extKpis.totalDebtService)}/yr</p>
+              <p style={{ fontSize: 12, color: PT.muted, marginTop: 4 }}>NOI {fmtUSD(extKpis.totalNoi)}/yr ÷ DS {fmtUSD(extKpis.totalDebtService)}/yr</p>
             </>
           ) : (
             <>
-              <p style={{ fontSize: 16, fontWeight: 600, color: PT.muted }}>Not available</p>
-              <p style={{ fontSize: 11, color: PT.muted, marginTop: 4 }}>Add NOI Annual to loans for DSCR</p>
+              <p style={{ fontSize: 17, fontWeight: 600, color: PT.muted }}>Not available</p>
+              <p style={{ fontSize: 12, color: PT.muted, marginTop: 4 }}>Add NOI Annual to loans for DSCR</p>
             </>
           )}
         </div>
 
         {/* Weighted Avg Remaining Term */}
-        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 8, padding: '16px 16px 12px' }}>
-          <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 8 }}>Wtd Avg Remaining Term</p>
+        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 12, padding: '16px 18px' }}>
+          <p style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 4 }}>Wtd Avg Remaining Term</p>
           {extKpis.weightedAvgTerm != null ? (
             <>
-              <p style={{ fontSize: 28, fontWeight: 700, color: extKpis.weightedAvgTerm < 12 ? '#EB5757' : extKpis.weightedAvgTerm < 36 ? '#F2C94C' : PT.text, lineHeight: 1.2, fontVariantNumeric: 'tabular-nums lining-nums' }}>
+              <p style={{ fontSize: 30, fontWeight: 700, color: extKpis.weightedAvgTerm < 12 ? '#EB5757' : extKpis.weightedAvgTerm < 36 ? '#F2C94C' : PT.text, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums lining-nums' }}>
                 {Math.round(extKpis.weightedAvgTerm)}mo
               </p>
-              <p style={{ fontSize: 11, color: PT.muted, marginTop: 4 }}>~{(extKpis.weightedAvgTerm / 12).toFixed(1)} yrs · weighted by balance</p>
+              <p style={{ fontSize: 12, color: PT.muted, marginTop: 4 }}>~{(extKpis.weightedAvgTerm / 12).toFixed(1)} yrs · weighted by balance</p>
             </>
           ) : (
-            <p style={{ fontSize: 16, fontWeight: 600, color: PT.muted }}>No maturity dates</p>
+            <p style={{ fontSize: 17, fontWeight: 600, color: PT.muted }}>No maturity dates</p>
           )}
         </div>
 
         {/* Maturing in 12 months */}
-        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 8, padding: '16px 16px 12px',
+        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 12, padding: '16px 18px',
           borderLeft: extKpis.maturingCount > 0 ? '3px solid #EB5757' : `1px solid ${PT.border}` }}>
-          <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 8 }}>Maturing ≤12 Months</p>
-          <p style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.2, color: extKpis.maturingCount > 0 ? '#EB5757' : '#22A06B' }}>
+          <p style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 4 }}>Maturing ≤12 Months</p>
+          <p style={{ fontSize: 30, fontWeight: 700, lineHeight: 1.1, color: extKpis.maturingCount > 0 ? '#EB5757' : '#22A06B' }}>
             {extKpis.maturingCount} loan{extKpis.maturingCount !== 1 ? 's' : ''}
           </p>
-          <p style={{ fontSize: 11, color: PT.muted, marginTop: 4 }}>
+          <p style={{ fontSize: 12, color: PT.muted, marginTop: 4 }}>
             {extKpis.maturingCount > 0 ? fmtUSD(extKpis.maturingAmt) + ' coming due' : 'No near-term maturities'}
           </p>
         </div>
 
         {/* Average LTV / Concentration */}
-        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 8, padding: '16px 16px 12px' }}>
-          <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 8 }}>Average LTV</p>
+        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 12, padding: '16px 18px' }}>
+          <p style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 4 }}>Average LTV</p>
           {extKpis.avgLtv != null ? (
             <>
-              <p style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.2, fontVariantNumeric: 'tabular-nums lining-nums',
+              <p style={{ fontSize: 30, fontWeight: 700, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums lining-nums',
                 color: extKpis.avgLtv <= 75 ? '#22A06B' : extKpis.avgLtv <= 85 ? '#F2C94C' : '#EB5757' }}>
                 {extKpis.avgLtv.toFixed(1)}%
               </p>
-              <p style={{ fontSize: 11, color: PT.muted, marginTop: 4 }}>{extKpis.ltvCount} of {filtered.length} loans have property value</p>
+              <p style={{ fontSize: 12, color: PT.muted, marginTop: 4 }}>{extKpis.ltvCount} of {filtered.length} loans have property value</p>
             </>
           ) : (
             <>
-              <p style={{ fontSize: 16, fontWeight: 600, color: PT.muted }}>Not available</p>
-              <p style={{ fontSize: 11, color: PT.muted, marginTop: 4 }}>Add Property Value to loans for LTV</p>
+              <p style={{ fontSize: 17, fontWeight: 600, color: PT.muted }}>Not available</p>
+              <p style={{ fontSize: 12, color: PT.muted, marginTop: 4 }}>Add Property Value to loans for LTV</p>
             </>
           )}
         </div>
@@ -556,32 +560,32 @@ export default function RentalLoanTracker() {
 
       {/* Concentration Risk + Fixed/Floating row */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 8, padding: '16px 16px 12px' }}>
-          <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 10 }}>Building Concentration Risk</p>
+        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 12, padding: '16px 18px' }}>
+          <p style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 4 }}>Building Concentration Risk</p>
           {extKpis.topBuildingPct != null ? (
             <>
-              <p style={{ fontSize: 22, fontWeight: 700, color: extKpis.topBuildingPct > 50 ? '#EB5757' : extKpis.topBuildingPct > 33 ? '#F2C94C' : '#22A06B', fontVariantNumeric: 'tabular-nums lining-nums' }}>
+              <p style={{ fontSize: 30, fontWeight: 700, color: extKpis.topBuildingPct > 50 ? '#EB5757' : extKpis.topBuildingPct > 33 ? '#F2C94C' : '#22A06B', fontVariantNumeric: 'tabular-nums lining-nums', lineHeight: 1.1 }}>
                 {extKpis.topBuildingPct.toFixed(0)}%
               </p>
               <p style={{ fontSize: 12, color: PT.muted, marginTop: 4 }}>Largest: {extKpis.topBuilding}</p>
             </>
-          ) : <p style={{ fontSize: 14, color: PT.muted }}>—</p>}
+          ) : <p style={{ fontSize: 17, color: PT.muted }}>—</p>}
         </div>
-        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 8, padding: '16px 16px 12px' }}>
-          <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 10 }}>Lender Concentration Risk</p>
+        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 12, padding: '16px 18px' }}>
+          <p style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 4 }}>Lender Concentration Risk</p>
           {extKpis.topLenderPct != null ? (
             <>
-              <p style={{ fontSize: 22, fontWeight: 700, color: extKpis.topLenderPct > 60 ? '#EB5757' : extKpis.topLenderPct > 40 ? '#F2C94C' : '#22A06B', fontVariantNumeric: 'tabular-nums lining-nums' }}>
+              <p style={{ fontSize: 30, fontWeight: 700, color: extKpis.topLenderPct > 60 ? '#EB5757' : extKpis.topLenderPct > 40 ? '#F2C94C' : '#22A06B', fontVariantNumeric: 'tabular-nums lining-nums', lineHeight: 1.1 }}>
                 {extKpis.topLenderPct.toFixed(0)}%
               </p>
               <p style={{ fontSize: 12, color: PT.muted, marginTop: 4 }}>Largest lender: {extKpis.topLender}</p>
             </>
-          ) : <p style={{ fontSize: 14, color: PT.muted }}>—</p>}
+          ) : <p style={{ fontSize: 17, color: PT.muted }}>—</p>}
         </div>
-        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 8, padding: '16px 16px 12px' }}>
-          <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 10 }}>Fixed vs Floating Split</p>
-          <p style={{ fontSize: 16, fontWeight: 600, color: PT.muted }}>Not available</p>
-          <p style={{ fontSize: 11, color: PT.muted, marginTop: 4 }}>Rate type not tracked per loan</p>
+        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 12, padding: '16px 18px' }}>
+          <p style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 4 }}>Fixed vs Floating Split</p>
+          <p style={{ fontSize: 17, fontWeight: 600, color: PT.muted }}>Not available</p>
+          <p style={{ fontSize: 12, color: PT.muted, marginTop: 4 }}>Rate type not tracked per loan</p>
         </div>
       </div>
 

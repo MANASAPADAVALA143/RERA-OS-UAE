@@ -383,10 +383,10 @@ export default function RentalArDashboard() {
       {!!port && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8,1fr)', gap: 8 }}>
           {kpis.map((t, i) => (
-            <div key={i} style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, padding: '10px 12px', borderLeft: `3px solid ${t.border}` }}>
-              <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: '#6B6B6B', marginBottom: 5, lineHeight: 1.2 }}>{t.label}</div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: '#262626', fontFamily: 'monospace' }}>{t.value}</div>
-              <div style={{ fontSize: 10, marginTop: 4, color: '#6B6B6B', lineHeight: 1.3 }}>{t.sub}</div>
+            <div key={i} style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 10, padding: '12px 14px', borderLeft: `3px solid ${t.border}` }}>
+              <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#6B6B6B', marginBottom: 4, lineHeight: 1.2 }}>{t.label}</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: '#262626', fontVariantNumeric: 'tabular-nums lining-nums', lineHeight: 1.1 }}>{t.value}</div>
+              <div style={{ fontSize: 11, marginTop: 4, color: '#6B6B6B', lineHeight: 1.3 }}>{t.sub}</div>
             </div>
           ))}
         </div>

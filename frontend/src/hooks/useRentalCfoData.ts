@@ -50,6 +50,7 @@ export interface LoanRow {
   loan_maturity_date: string | null;
   loan_emi_day: number | null;
   noi_annual: number | null;
+  current_property_value: number | null;
   dscr: number | null;
   context_type: string;
 }
