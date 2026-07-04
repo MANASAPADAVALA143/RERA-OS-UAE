@@ -304,12 +304,31 @@ function StatusBadge({ status, onClick }: { status: string; onClick: () => void 
 
 // ── inline suites table (no modals — modals handled by parent) ────────────────
 
-function unitForMonth(u: UnitRow, month: string): { status: string; rent: number } {
+const ALL_MONTHS = [
+  'Jan-2026','Feb-2026','Mar-2026','Apr-2026','May-2026','Jun-2026',
+  'Jul-2026','Aug-2026','Sep-2026','Oct-2026','Nov-2026','Dec-2026',
+];
+
+function unitForMonth(u: UnitRow, month: string): { status: string; rent: number; vacancyLoss: number } {
   const h = u.rent_history;
-  if (!h || !month) return { status: u.status, rent: u.monthly_rent };
-  const val = h[month] ?? null;
-  if (val === null) return { status: u.status, rent: u.monthly_rent };
-  return { status: val > 0 ? 'occupied' : 'vacant', rent: val };
+  if (!h || !month) return { status: u.status, rent: u.monthly_rent, vacancyLoss: 0 };
+  const val = h[month] ?? null; // null = future month not in history
+  const isFuture = val === null;
+  const rent = isFuture ? 0 : val;
+  const occupied = rent > 0;
+
+  let vacancyLoss = 0;
+  if (!occupied) {
+    const idx = ALL_MONTHS.indexOf(month);
+    const prevMonths = idx >= 0 ? ALL_MONTHS.slice(0, idx) : ALL_MONTHS;
+    const lookback = prevMonths.slice().reverse()
+      .map(m => h[m] ?? 0).filter(v => v > 0).slice(0, 3);
+    if (lookback.length) {
+      vacancyLoss = Math.round(lookback.reduce((a, b) => a + b, 0) / lookback.length);
+    }
+  }
+
+  return { status: isFuture ? 'vacant' : (occupied ? 'occupied' : 'vacant'), rent, vacancyLoss };
 }
 
 function InlineSuites({
@@ -605,12 +624,13 @@ function InlineSuites({
                                         <th className="text-left px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Unit Name</th>
                                         <th className="text-left px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Status</th>
                                         <th className="text-right px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Rent / mo</th>
+                                        <th className="text-right px-3 py-1.5 text-xs font-semibold text-orange-400 uppercase tracking-wide">Vacancy Loss</th>
                                         {canWrite && <th className="text-center px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Actions</th>}
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
                                       {unitsMap[s.id].map((u, j) => {
-                                        const { status: dispStatus, rent: dispRent } = unitForMonth(u, viewMonth);
+                                        const { status: dispStatus, rent: dispRent, vacancyLoss } = unitForMonth(u, viewMonth);
                                         return (
                                         <tr key={u.id}
                                           className="hover:bg-indigo-50/20"
@@ -674,6 +694,11 @@ function InlineSuites({
                                                 ? `$${dispRent.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
                                                 : '—'
                                             )}
+                                          </td>
+                                          <td className="px-3 py-1.5 text-right font-mono">
+                                            {vacancyLoss > 0
+                                              ? <span className="text-orange-500">${vacancyLoss.toLocaleString()}</span>
+                                              : <span className="text-gray-300">—</span>}
                                           </td>
                                           {canWrite && (
                                             <td className="px-3 py-1.5 text-center">
