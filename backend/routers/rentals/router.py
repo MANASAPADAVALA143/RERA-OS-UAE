@@ -1651,15 +1651,10 @@ async def confirm_rent_receivable(
                 current_amount = unit_data['current_amount']
                 unit_vac_loss = unit_data['vacancy_loss']
                 history = unit_data['history']
+                rent = current_amount if not is_vacant else unit_vac_loss
 
-                # Split combined names like "Unit E, F, G" or "Unit E & F"
-                parts = [p.strip() for p in raw_name.replace('&', ',').split(',') if p.strip()]
-                n_parts = len(parts) or 1
-                per_unit_rent = current_amount / n_parts if current_amount > 0 else 0.0
-                per_unit_vac_loss = unit_vac_loss / n_parts
-
-                for part in parts:
-                    # Try exact match
+                for part in [raw_name]:
+                    # Try exact match (unit name as-is from Excel)
                     unit = db.query(RentalUnit).filter(
                         RentalUnit.company_id == company.id,
                         func.lower(func.trim(RentalUnit.unit_number)) == part.lower(),
@@ -1674,10 +1669,9 @@ async def confirm_rent_receivable(
 
                     if unit:
                         unit.status = 'vacant' if is_vacant else 'occupied'
-                        # For vacant units, keep the expected rent (vacancy_loss), not 0
-                        unit.monthly_rent = per_unit_rent if not is_vacant else (per_unit_vac_loss or unit.monthly_rent)
+                        unit.monthly_rent = rent if not is_vacant else (unit_vac_loss or unit.monthly_rent)
                         unit.rent_history = history
-                        unit.vacancy_loss = per_unit_vac_loss
+                        unit.vacancy_loss = unit_vac_loss
 
             db.commit()
             updated.append(co_name)
@@ -1942,35 +1936,27 @@ async def preview_portfolio_import(
             current_amount: float = unit_data["current_amount"]
             vacancy_loss: float = unit_data["vacancy_loss"]
 
-            parts = [p.strip() for p in raw_name.replace("&", ",").split(",") if p.strip()]
-            n_parts = max(len(parts), 1)
-            per_unit_rent = current_amount / n_parts
-            per_unit_vac = vacancy_loss / n_parts
-            best_rent = per_unit_rent if (not is_vacant and per_unit_rent > 0) else per_unit_vac
+            # Keep combined names (e.g. "Unit E, F") as ONE unit — do not split
+            best_rent = current_amount if (not is_vacant and current_amount > 0) else vacancy_loss
             if best_rent == 0 and history:
                 sorted_nz = [m for m in MONTHS_ORDER if history.get(m, 0) > 0]
                 if sorted_nz:
-                    best_rent = history[sorted_nz[-1]] / n_parts
+                    best_rent = history[sorted_nz[-1]]
 
-            for part in parts:
-                norm_unit = part.strip().lower()
-                ex_unit = ex_unit_map.get(norm_unit)
-                if not ex_unit and not norm_unit.startswith("unit "):
-                    ex_unit = ex_unit_map.get(f"unit {norm_unit}")
-                if not ex_unit and norm_unit.startswith("unit "):
-                    ex_unit = ex_unit_map.get(norm_unit[5:].strip())
+            norm_unit = raw_name.lower()
+            ex_unit = ex_unit_map.get(norm_unit)
 
-                if ex_unit:
-                    unit_action = (
-                        "update_rent" if (ex_unit.monthly_rent == 0 and best_rent > 0) else "skip"
-                    )
-                else:
-                    unit_action = "create"
+            if ex_unit:
+                unit_action = (
+                    "update_rent" if (ex_unit.monthly_rent == 0 and best_rent > 0) else "skip"
+                )
+            else:
+                unit_action = "create"
 
-                units_preview.append({
+            units_preview.append({
                     "label": raw_name,
-                    "unit_name": part,
-                    "suite_name": unit_data.get("suite", ""),   # ← from col A
+                    "unit_name": raw_name,
+                    "suite_name": unit_data.get("suite", ""),
                     "action": unit_action,
                     "monthly_rent": round(best_rent, 2),
                     "status": "vacant" if is_vacant else "occupied",
