@@ -1986,6 +1986,37 @@ async def preview_portfolio_import(
     }
 
 
+def _wipe_company_units_and_suites(company_id: uuid.UUID, tid: uuid.UUID, db: Session):
+    """Delete all units (+ child records) and suites for a company, keeping the company row."""
+    unit_ids = [
+        u.id for u in db.query(RentalUnit).filter(
+            RentalUnit.company_id == company_id, RentalUnit.tenant_id == tid
+        ).all()
+    ]
+    if unit_ids:
+        db.query(MaintenanceRequest).filter(MaintenanceRequest.unit_id.in_(unit_ids)).delete(synchronize_session=False)
+        insp_ids = [
+            i.id for i in db.query(UnitInspection).filter(UnitInspection.unit_id.in_(unit_ids)).all()
+        ]
+        if insp_ids:
+            db.query(UnitInspectionPhoto).filter(UnitInspectionPhoto.inspection_id.in_(insp_ids)).delete(synchronize_session=False)
+            db.query(UnitInspectionChecklistItem).filter(UnitInspectionChecklistItem.inspection_id.in_(insp_ids)).delete(synchronize_session=False)
+        db.query(UnitInspection).filter(UnitInspection.unit_id.in_(unit_ids)).delete(synchronize_session=False)
+        inv_ids = [i.id for i in db.query(RentalInvoice).filter(RentalInvoice.unit_id.in_(unit_ids)).all()]
+        if inv_ids:
+            db.query(RentalCollection).filter(RentalCollection.invoice_id.in_(inv_ids)).delete(synchronize_session=False)
+        db.query(RentalInvoice).filter(RentalInvoice.unit_id.in_(unit_ids)).delete(synchronize_session=False)
+        db.query(RentalLease).filter(RentalLease.unit_id.in_(unit_ids)).delete(synchronize_session=False)
+        db.query(RentalTenant).filter(RentalTenant.unit_id.in_(unit_ids)).delete(synchronize_session=False)
+        db.query(RentalUnit).filter(RentalUnit.company_id == company_id, RentalUnit.tenant_id == tid).delete(synchronize_session=False)
+    # Delete all suites
+    suite_ids = [s.id for s in db.query(RentalProp).filter(RentalProp.company_id == company_id, RentalProp.tenant_id == tid).all()]
+    if suite_ids:
+        db.query(RentalExpense).filter(RentalExpense.property_id.in_(suite_ids)).delete(synchronize_session=False)
+        db.query(RentalProp).filter(RentalProp.company_id == company_id, RentalProp.tenant_id == tid).delete(synchronize_session=False)
+    db.flush()
+
+
 @router.post("/import-portfolio/confirm")
 async def confirm_portfolio_import(
     payload: dict,
@@ -1993,13 +2024,15 @@ async def confirm_portfolio_import(
     db: Session = Depends(get_db),
 ):
     """
-    Commit previewed import — create new companies/suites/units.
-    Only fills monthly_rent when the existing value is 0 (never silently overwrites).
+    Commit previewed import.
+    force_replace=true: for matched companies, wipe existing units/suites and recreate from Excel.
     """
     tid = current_user.tenant_id
     companies_data = payload.get("companies", [])
+    force_replace: bool = bool(payload.get("force_replace", False))
 
     created_companies = 0
+    replaced_companies = 0
     created_suites = 0
     created_units = 0
     updated_units = 0
@@ -2009,6 +2042,7 @@ async def confirm_portfolio_import(
         for co in companies_data:
             try:
                 co_action = co.get("action")
+                suite_cache: dict[str, uuid.UUID] = {}
 
                 if co_action == "create":
                     new_co = RentalCompany(
@@ -2021,16 +2055,21 @@ async def confirm_portfolio_import(
                     db.flush()
                     company_id = new_co.id
                     created_companies += 1
-                    suite_cache: dict[str, uuid.UUID] = {}
 
                 elif co_action == "match" and co.get("match_id"):
                     company_id = uuid.UUID(co["match_id"])
-                    # Pre-load existing suites so we can reuse them by name
-                    existing_suites = db.query(RentalProp).filter(
-                        RentalProp.company_id == company_id,
-                        RentalProp.tenant_id == tid,
-                    ).all()
-                    suite_cache = {s.property_name.strip().lower(): s.id for s in existing_suites}
+                    if force_replace:
+                        # Wipe existing suites/units so we can recreate cleanly
+                        _wipe_company_units_and_suites(company_id, tid, db)
+                        replaced_companies += 1
+                        # suite_cache starts empty — all suites will be created fresh
+                    else:
+                        # Soft mode: reuse existing suites by name
+                        existing_suites = db.query(RentalProp).filter(
+                            RentalProp.company_id == company_id,
+                            RentalProp.tenant_id == tid,
+                        ).all()
+                        suite_cache = {s.property_name.strip().lower(): s.id for s in existing_suites}
 
                 else:
                     continue
@@ -2055,7 +2094,7 @@ async def confirm_portfolio_import(
                     unit_action = unit.get("action")
                     property_id = _get_or_create_suite(unit.get("suite_name", ""))
 
-                    if unit_action == "create":
+                    if unit_action == "create" or force_replace:
                         db.add(RentalUnit(
                             tenant_id=tid,
                             property_id=property_id,
@@ -2088,16 +2127,18 @@ async def confirm_portfolio_import(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Import failed: {exc}")
 
+    total_new = created_companies + replaced_companies
     return {
         "status": "success",
         "created_companies": created_companies,
+        "replaced_companies": replaced_companies,
         "created_suites": created_suites,
         "created_units": created_units,
         "updated_units": updated_units,
         "errors": errors,
         "message": (
-            f"Created {created_companies} companies, {created_suites} suites, "
-            f"{created_units} units. Updated {updated_units} rents."
+            f"Imported {total_new} companies ({replaced_companies} replaced), "
+            f"{created_suites} suites, {created_units} units."
         ),
     }
 

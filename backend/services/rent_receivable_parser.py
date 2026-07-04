@@ -193,12 +193,15 @@ def parse_sheet(ws, sheet_name: str, target_month: str) -> Dict:
         ) else current_suite
 
         current_amt = safe_float(row[target_col]) if (target_col is not None and target_col < len(row)) else 0.0
-        is_vacant = current_amt == 0
 
         history = {
             m: safe_float(row[col]) if col < len(row) else 0.0
             for m, col in month_col_map.items()
         }
+
+        # Vacant if ALL months are $0; occupied if ANY month has a payment
+        any_nonzero = any(v > 0 for v in history.values())
+        is_vacant = not any_nonzero
 
         # Vacancy-loss: average last 2-3 non-zero months before target
         vacancy_loss = 0.0

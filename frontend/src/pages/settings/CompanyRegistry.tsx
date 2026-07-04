@@ -783,6 +783,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
   const [importState, setImportState] = useState<'idle' | 'parsing' | 'review' | 'confirming'>('idle');
   const [importPreview, setImportPreview] = useState<PortfolioPreview | null>(null);
   const [expandedPreviewCo, setExpandedPreviewCo] = useState<string | null>(null);
+  const [forceReplace, setForceReplace] = useState(false);
 
   const initTab = (searchParams.get('tab') as ModuleId | null) ?? 'rental';
   const [activeId, setActiveId] = useState<ModuleId>(
@@ -868,6 +869,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
     try {
       const res = await api.post<{ message: string }>('/api/rentals/import-portfolio/confirm', {
         companies: importPreview.companies,
+        force_replace: forceReplace,
       });
       push(res.data.message ?? 'Portfolio imported!', true);
       setImportState('idle');
@@ -1498,12 +1500,22 @@ export default function CompanyRegistry({ embedded = false }: Props) {
 
             {/* Footer */}
             <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 flex-shrink-0 bg-gray-50/50">
-              <p className="text-xs text-gray-500 max-w-sm">
-                No existing company or unit data will be overwritten. Only new records will be created.
-              </p>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={forceReplace}
+                  onChange={e => setForceReplace(e.target.checked)}
+                  className="w-4 h-4 rounded accent-rose-600"
+                />
+                <span className="text-xs text-gray-600">
+                  {forceReplace
+                    ? 'Replace mode — existing units & suites will be wiped and recreated'
+                    : 'Replace existing data (wipe & recreate units from Excel)'}
+                </span>
+              </label>
               <div className="flex gap-3">
                 <button
-                  onClick={() => { setImportState('idle'); setImportPreview(null); }}
+                  onClick={() => { setImportState('idle'); setImportPreview(null); setForceReplace(false); }}
                   className="text-sm border border-gray-200 text-gray-600 px-5 py-2.5 rounded-xl hover:bg-gray-100">
                   Cancel
                 </button>
@@ -1511,9 +1523,13 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                   onClick={handleConfirmImport}
                   disabled={importState === 'confirming'}
                   className="flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-xl disabled:opacity-50 transition-colors"
-                  style={{ background: '#059669', color: '#fff' }}>
+                  style={{ background: forceReplace ? '#DC2626' : '#059669', color: '#fff' }}>
                   <Check size={14} />
-                  {importState === 'confirming' ? 'Importing…' : `Confirm Import (${importPreview.summary.companies_to_create + importPreview.summary.units_to_create} new records)`}
+                  {importState === 'confirming'
+                    ? 'Importing…'
+                    : forceReplace
+                      ? `Replace & Import (${importPreview.summary.companies_to_match} companies)`
+                      : `Confirm Import (${importPreview.summary.companies_to_create + importPreview.summary.units_to_create} new records)`}
                 </button>
               </div>
             </div>
