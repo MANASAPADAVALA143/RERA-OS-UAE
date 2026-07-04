@@ -856,9 +856,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('target_month', importMonth);
-      const res = await api.post<PortfolioPreview>('/api/rentals/import-portfolio/preview', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const res = await api.post<PortfolioPreview>('/api/rentals/import-portfolio/preview', formData);
       setImportPreview(res.data);
       setExpandedPreviewCo(res.data.companies[0]?.excel_name ?? null);
       setImportState('review');
