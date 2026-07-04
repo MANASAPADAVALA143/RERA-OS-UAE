@@ -120,10 +120,10 @@ const MODULES: ModuleDef[] = [
       const occCell: ReactNode = syncTotal != null ? (
         <div className="min-w-[110px]">
           <div className="flex items-center justify-between mb-0.5">
-            <span className="text-xs font-mono font-medium" style={{ color: '#1C1917' }}>
+            <span className="text-sm font-mono font-medium" style={{ color: '#1C1917' }}>
               {syncOcc ?? '?'} / {syncTotal}
             </span>
-            <span className="text-[10px] font-medium ml-2"
+            <span className="text-xs font-medium ml-2"
               style={{ color: occPct != null && occPct >= 85 ? '#059669' : occPct != null && occPct >= 70 ? '#D97706' : '#DC2626' }}>
               {occPct != null ? `${occPct}%` : ''}
             </span>
@@ -137,29 +137,29 @@ const MODULES: ModuleDef[] = [
           </div>
         </div>
       ) : (c.total_units as number) != null ? (
-        <span className="text-gray-400 text-xs">— / {c.total_units}</span>
+        <span className="text-gray-400 text-sm">— / {c.total_units}</span>
       ) : '—';
 
       const syncCell: ReactNode = lastSync ? (
         <div>
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+          <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
             style={{ background: 'rgba(212,175,55,0.15)', color: '#92400E' }}>
             {lastSync}
           </span>
         </div>
-      ) : <span className="text-gray-400 text-xs">Not synced</span>;
+      ) : <span className="text-gray-400 text-sm">Not synced</span>;
 
       const collCell: ReactNode = syncColl != null ? (
         <div>
-          <div className="text-xs font-mono font-medium" style={{ color: '#1C1917' }}>
+          <div className="text-sm font-mono font-medium" style={{ color: '#1C1917' }}>
             ${Math.round(syncColl).toLocaleString()}
           </div>
-          <div className="text-[10px] mt-0.5" style={{ color: '#A8A29E' }}>
+          <div className="text-xs mt-0.5" style={{ color: '#A8A29E' }}>
             {collPct != null ? `${collPct}% collected` : ''}
             {syncVac != null && syncVac > 0 ? ` · $${Math.round(syncVac).toLocaleString()} vac loss` : ''}
           </div>
         </div>
-      ) : <span className="text-gray-400 text-xs">—</span>;
+      ) : <span className="text-gray-400 text-sm">—</span>;
 
       return [c.company_name, (c.property_type as string) || '—', occCell, syncCell, collCell, null];
     },
@@ -259,7 +259,7 @@ function StatusBadge({ status, onClick }: { status: string; onClick: () => void 
   const active = !status || status === 'active';
   return (
     <button onClick={onClick}
-      className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors cursor-pointer
+      className={`text-sm px-3 py-1 rounded-full font-medium transition-colors cursor-pointer
         ${active ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
       {active ? 'Active' : 'Inactive'}
     </button>
@@ -975,8 +975,8 @@ export default function CompanyRegistry({ embedded = false }: Props) {
     <div className="space-y-6">
       {!embedded && (
         <div>
-          <h1 className="text-2xl font-bold text-charcoal">Company Registry</h1>
-          <p className="text-sm text-gray-500 mt-1">Add, edit, and manage companies across all modules.</p>
+          <h1 className="text-3xl font-bold text-charcoal">Company Registry</h1>
+          <p className="text-base text-gray-500 mt-1">Add, edit, and manage companies across all modules.</p>
         </div>
       )}
 
@@ -984,7 +984,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
       <div className="flex gap-1 bg-white border border-gray-100 shadow-sm rounded-xl p-1 w-fit">
         {MODULES.map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => switchTab(id)}
-            className={`flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg font-medium transition-all
+            className={`flex items-center gap-1.5 text-base px-4 py-2.5 rounded-lg font-medium transition-all
               ${activeId === id ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'}`}>
             <Icon size={14} /> {label}
           </button>
@@ -1004,14 +1004,14 @@ export default function CompanyRegistry({ embedded = false }: Props) {
           <div className="flex items-center justify-between px-4 py-2.5 rounded-xl"
             style={{ background: 'rgba(212,175,55,0.10)', border: '1px solid rgba(212,175,55,0.30)' }}>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#92400E' }}>Live Sync</span>
-              <span className="text-xs font-semibold" style={{ color: '#1C1917' }}>{lastMonth}</span>
-              <span className="text-xs" style={{ color: '#78716C' }}>·</span>
-              <span className="text-xs" style={{ color: '#1C1917' }}>{totalOcc}/{totalUnits} occupied</span>
-              <span className="text-xs" style={{ color: '#78716C' }}>·</span>
-              <span className="text-xs font-medium" style={{ color: '#059669' }}>${Math.round(totalColl).toLocaleString()} collected</span>
-              <span className="text-xs" style={{ color: '#78716C' }}>·</span>
-              <span className="text-xs font-medium" style={{ color: collPct >= 95 ? '#059669' : '#D97706' }}>{collPct}% collection rate</span>
+              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#92400E' }}>Live Sync</span>
+              <span className="text-sm font-semibold" style={{ color: '#1C1917' }}>{lastMonth}</span>
+              <span className="text-sm" style={{ color: '#78716C' }}>·</span>
+              <span className="text-sm" style={{ color: '#1C1917' }}>{totalOcc}/{totalUnits} occupied</span>
+              <span className="text-sm" style={{ color: '#78716C' }}>·</span>
+              <span className="text-sm font-medium" style={{ color: '#059669' }}>${Math.round(totalColl).toLocaleString()} collected</span>
+              <span className="text-sm" style={{ color: '#78716C' }}>·</span>
+              <span className="text-sm font-medium" style={{ color: collPct >= 95 ? '#059669' : '#D97706' }}>{collPct}% collection rate</span>
             </div>
             <span className="text-[10px]" style={{ color: '#A8A29E' }}>{synced.length} companies synced</span>
           </div>
@@ -1068,15 +1068,15 @@ export default function CompanyRegistry({ embedded = false }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide w-8">#</th>
+                  <th className="text-left px-4 py-3 text-sm font-semibold text-gray-400 uppercase tracking-wide w-8">#</th>
                   {mod.tableCols.map(col => (
-                    <th key={col} className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">{col}</th>
+                    <th key={col} className="text-left px-4 py-3 text-sm font-semibold text-gray-400 uppercase tracking-wide">{col}</th>
                   ))}
                   {activeId === 'rental' && (
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Suites</th>
+                    <th className="text-left px-4 py-3 text-sm font-semibold text-gray-400 uppercase tracking-wide">Suites</th>
                   )}
                   {canWrite && (
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Actions</th>
+                    <th className="text-right px-4 py-3 text-sm font-semibold text-gray-400 uppercase tracking-wide">Actions</th>
                   )}
                 </tr>
               </thead>
@@ -1087,9 +1087,9 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                   return (
                     <Fragment key={c.id}>
                       <tr className={`border-b border-gray-50 transition-colors ${isExpanded ? 'bg-blue-50/30' : 'hover:bg-gray-50/60'}`} style={isExpanded ? { background: 'rgba(212,175,55,0.05)' } : {}}>
-                        <td className="px-4 py-3 text-xs text-gray-400">{idx + 1}</td>
+                        <td className="px-4 py-3 text-sm text-gray-400">{idx + 1}</td>
                         {cells.map((cell, ci) => (
-                          <td key={ci} className={`px-4 py-3 ${ci === 0 ? 'font-medium text-gray-800' : 'text-gray-500'}`}>
+                          <td key={ci} className={`px-4 py-3 ${ci === 0 ? 'text-base font-semibold text-gray-900' : 'text-sm text-gray-600'}`}>
                             {cell === null
                               ? <StatusBadge status={c.status ?? 'active'} onClick={() => canWrite && toggleStatus(c)} />
                               : cell}
