@@ -1,24 +1,48 @@
 """
-Standardized Rent Receivable Parser
-Reads EstateCFO_Rent_Template_ByCompany.xlsx
-Simple, reliable — no format detection needed.
+Rent Receivable Parser — flexible header detection.
 
-Sheet structure (fixed, never changes):
-  Row 1: Title
-  Row 2: Instructions
-  Row 3: Headers → "Unit Name" | "Jan-2026" | ... | "Dec-2026" | "Jun Total"
-  Row 4+: Unit rows
-  Last row: "TOTAL" (skipped)
+Supports two sheet layouts:
+  Layout A (old):  col 0 = "Unit Name",          cols 1-12 = Jan-2026…Dec-2026
+  Layout B (real): col 0 = "SUITE NAMES",  col 1 = "Name Of the Unit",
+                   then alternating Mon-YYYY / Sec Dep pairs
+
+Header detection scans the first 10 rows × first 20 columns looking for a
+cell whose text matches UNIT_NAME_LABELS.  Whatever column that cell is in
+becomes `unit_name_col`.  Month columns are found by matching MON-YYYY
+patterns anywhere in the same header row — Sec Dep columns are ignored
+automatically because they never match the month pattern.
 """
 
+import re
 import openpyxl
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
+# All recognised header labels for the "unit name" column (case-insensitive)
+UNIT_NAME_LABELS = {'unit name', 'name of the unit', 'unit'}
+
+# Recognise any Mon-YYYY value in a header cell (supports any year)
+_MONTH_RE = re.compile(
+    r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-(\d{4})$',
+    re.IGNORECASE,
+)
+
+# Canonical 2026 order (used for vacancy-loss lookback sorting)
 MONTHS = [
     'Jan-2026', 'Feb-2026', 'Mar-2026', 'Apr-2026',
     'May-2026', 'Jun-2026', 'Jul-2026', 'Aug-2026',
     'Sep-2026', 'Oct-2026', 'Nov-2026', 'Dec-2026',
 ]
+
+_MONTH_ORDER_MAP = {m: i for i, m in enumerate(MONTHS)}
+
+
+def _month_sort_key(m: str) -> Tuple[int, int]:
+    """Sort key for any Mon-YYYY string, regardless of year."""
+    mo = re.match(r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-(\d{4})$', m, re.I)
+    if not mo:
+        return (9999, 99)
+    month_names = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec']
+    return (int(mo.group(2)), month_names.index(mo.group(1).lower()))
 
 
 def count_physical_units(unit_name: str) -> int:
@@ -39,88 +63,106 @@ def safe_float(val) -> float:
         return 0.0
 
 
-def is_unit_row(row) -> bool:
-    """Skip TOTAL, stats rows, blank rows, and the header row."""
-    if not row[0]:
+def _find_header(rows: list) -> Optional[Tuple[int, int]]:
+    """
+    Return (row_index, unit_name_col) of the first cell matching
+    UNIT_NAME_LABELS within the first 10 rows × 20 columns.
+    Returns None if not found.
+    """
+    for i, row in enumerate(rows[:10]):
+        for j, cell in enumerate(row[:20]):
+            if cell and str(cell).strip().lower() in UNIT_NAME_LABELS:
+                return (i, j)
+    return None
+
+
+def _is_unit_row(row, unit_name_col: int) -> bool:
+    """Return True if this row looks like a real unit data row."""
+    if unit_name_col >= len(row):
         return False
-    name = str(row[0]).strip()
+    cell = row[unit_name_col]
+    if not cell:
+        return False
+    name = str(cell).strip()
     if not name:
         return False
     if name.upper() == 'TOTAL':
         return False
-    if name == 'Unit Name':
+    # Skip any header-like cells
+    if name.lower() in UNIT_NAME_LABELS:
         return False
     # Skip stats summary rows like "Jun 2026 — Occupied: 19..."
     if '—' in name or '–' in name or 'Occupied' in name or 'Collected' in name:
         return False
+    # Skip rows that look like suite-group headers (col 0 has text, unit col is blank)
     return True
 
 
+def _empty_result(co_name: str, error: str) -> Dict:
+    return {
+        'company': co_name, 'error': error,
+        'units': [], 'monthly_totals': {}, 'collected': 0,
+        'gross_potential': 0, 'total_physical_units': 0,
+        'occupied_count': 0, 'vacant_count': 0,
+        'occupancy_rate': 0, 'vacancy_loss': 0, 'vacant_units': [],
+    }
+
+
 def parse_sheet(ws, sheet_name: str, target_month: str) -> Dict:
-    """Parse one company sheet. target_month e.g. 'Jun-2026'."""
+    """Parse one company sheet.  target_month e.g. 'Jun-2026'."""
     rows = list(ws.iter_rows(values_only=True))
     co_name = sheet_name.strip()
 
-    # Find header row: col A = "Unit Name"
-    hdr_row_idx: Optional[int] = None
-    for i, row in enumerate(rows[:6]):
-        if row[0] == 'Unit Name':
-            hdr_row_idx = i
-            break
+    # ── 1. Locate header row and unit-name column ─────────────────────────────
+    found = _find_header(rows)
+    if found is None:
+        return _empty_result(co_name, 'header not found (no "Unit Name" or "Name Of the Unit" cell)')
 
-    if hdr_row_idx is None:
-        return {
-            'company': co_name, 'error': 'header not found',
-            'units': [], 'monthly_totals': {}, 'collected': 0,
-            'gross_potential': 0, 'total_physical_units': 0,
-            'occupied_count': 0, 'vacant_count': 0,
-            'occupancy_rate': 0, 'vacancy_loss': 0, 'vacant_units': [],
-        }
-
-    # Map month label → column index
+    hdr_row_idx, unit_name_col = found
     hdr = rows[hdr_row_idx]
+
+    # ── 2. Map month label → column index (skip Sec Dep and other cols) ───────
     month_col_map: Dict[str, int] = {}
     for j, val in enumerate(hdr):
-        if val and str(val).strip() in MONTHS:
-            month_col_map[str(val).strip()] = j
+        if val:
+            s = str(val).strip()
+            # Normalise capitalisation (e.g. "jan-2026" → "Jan-2026")
+            mo = _MONTH_RE.match(s)
+            if mo:
+                canonical = f"{mo.group(1).capitalize()}-{mo.group(2)}"
+                month_col_map[canonical] = j
 
     if not month_col_map:
-        return {
-            'company': co_name, 'error': 'no month columns found',
-            'units': [], 'monthly_totals': {}, 'collected': 0,
-            'gross_potential': 0, 'total_physical_units': 0,
-            'occupied_count': 0, 'vacant_count': 0,
-            'occupancy_rate': 0, 'vacancy_loss': 0, 'vacant_units': [],
-        }
+        return _empty_result(co_name, 'no month columns found')
 
-    # Resolve target column
+    # ── 3. Resolve target column (fallback to latest available month) ─────────
     tgt = target_month
     if tgt not in month_col_map:
-        available = sorted(month_col_map.keys(), key=lambda m: MONTHS.index(m) if m in MONTHS else 99)
+        available = sorted(month_col_map.keys(), key=_month_sort_key)
         tgt = available[-1] if available else None
 
     target_col = month_col_map.get(tgt) if tgt else None
+    sorted_months = sorted(month_col_map.keys(), key=_month_sort_key)
 
-    # Sorted months for vacancy-loss lookback
-    sorted_months = sorted(month_col_map.keys(), key=lambda m: MONTHS.index(m) if m in MONTHS else 99)
-
-    # Parse unit rows
+    # ── 4. Parse unit rows ────────────────────────────────────────────────────
     units: List[Dict] = []
     for row in rows[hdr_row_idx + 1:]:
-        if not is_unit_row(row):
+        if not _is_unit_row(row, unit_name_col):
             continue
 
-        unit_name = str(row[0]).strip()
-        current_amt = safe_float(row[target_col]) if target_col is not None else 0.0
+        unit_name = str(row[unit_name_col]).strip()
+        current_amt = safe_float(row[target_col]) if (target_col is not None and target_col < len(row)) else 0.0
         is_vacant = current_amt == 0
 
-        history = {m: safe_float(row[col]) for m, col in month_col_map.items()}
+        history = {
+            m: safe_float(row[col]) if col < len(row) else 0.0
+            for m, col in month_col_map.items()
+        }
 
+        # Vacancy-loss: average last 2-3 non-zero months before target
         vacancy_loss = 0.0
         if is_vacant and tgt and tgt in sorted_months:
             target_idx = sorted_months.index(tgt)
-            # Average the last 2-3 non-zero months so a single catch-up / multi-month
-            # payment doesn't inflate the expected-rent proxy.
             lookback: list[float] = []
             for prev_m in reversed(sorted_months[:target_idx]):
                 prev_amt = history.get(prev_m, 0)
@@ -140,7 +182,7 @@ def parse_sheet(ws, sheet_name: str, target_month: str) -> Dict:
             'history': history,
         })
 
-    # Fill vacancy_loss = 0 gaps with suite average of occupied units
+    # Fill vacancy_loss = 0 gaps with suite average
     occupied_units = [u for u in units if not u['is_vacant']]
     if occupied_units:
         suite_avg = sum(u['current_amount'] for u in occupied_units) / len(occupied_units)
@@ -148,10 +190,10 @@ def parse_sheet(ws, sheet_name: str, target_month: str) -> Dict:
             if u['is_vacant'] and u['vacancy_loss'] == 0:
                 u['vacancy_loss'] = round(suite_avg)
 
-    total_physical = sum(u['physical_units'] for u in units)
+    total_physical    = sum(u['physical_units'] for u in units)
     occupied_physical = sum(u['physical_units'] for u in units if not u['is_vacant'])
-    vacant_physical = sum(u['physical_units'] for u in units if u['is_vacant'])
-    collected = sum(u['current_amount'] for u in units)
+    vacant_physical   = sum(u['physical_units'] for u in units if u['is_vacant'])
+    collected         = sum(u['current_amount'] for u in units)
     vacancy_loss_total = sum(u['vacancy_loss'] for u in units)
 
     monthly_totals = {m: sum(u['history'].get(m, 0) for u in units) for m in sorted_months}
@@ -176,7 +218,8 @@ def parse_sheet(ws, sheet_name: str, target_month: str) -> Dict:
 def parse_rent_receivable_file(file_path: str, target_month: str = 'Jun-2026') -> Dict:
     """
     Main entry point.
-    target_month: 'Mon-YYYY' matching the template header (e.g. 'Jun-2026').
+    target_month: 'Mon-YYYY' (e.g. 'Jun-2026').  If not found in the file the
+    parser auto-falls-back to the latest available month.
     """
     wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
 
@@ -185,7 +228,7 @@ def parse_rent_receivable_file(file_path: str, target_month: str = 'Jun-2026') -
 
     for sheet_name in wb.sheetnames:
         co_name = sheet_name.strip()
-        if co_name == 'SUMMARY':
+        if co_name.upper() in ('SUMMARY', 'INSTRUCTIONS', 'TEMPLATE'):
             continue
 
         ws = wb[sheet_name]
@@ -198,16 +241,21 @@ def parse_rent_receivable_file(file_path: str, target_month: str = 'Jun-2026') -
         else:
             skipped.append(f"{co_name}: no units found")
 
-    total_units = sum(d['total_physical_units'] for d in results.values())
+    all_months = sorted(
+        {m for d in results.values() for m in d['monthly_totals']},
+        key=_month_sort_key,
+    )
+
+    total_units    = sum(d['total_physical_units'] for d in results.values())
     total_occupied = sum(d['occupied_count'] for d in results.values())
-    total_vacant = sum(d['vacant_count'] for d in results.values())
+    total_vacant   = sum(d['vacant_count'] for d in results.values())
     total_collected = sum(d['collected'] for d in results.values())
-    total_gross = sum(d['gross_potential'] for d in results.values())
-    total_vacancy_loss = sum(d['vacancy_loss'] for d in results.values())
+    total_gross    = sum(d['gross_potential'] for d in results.values())
+    total_vac_loss = sum(d['vacancy_loss'] for d in results.values())
 
     portfolio_monthly = {
         m: sum(d['monthly_totals'].get(m, 0) for d in results.values())
-        for m in MONTHS
+        for m in all_months
     }
 
     portfolio = {
@@ -217,7 +265,7 @@ def parse_rent_receivable_file(file_path: str, target_month: str = 'Jun-2026') -
         'vacant': total_vacant,
         'total_collected': total_collected,
         'gross_potential': total_gross,
-        'total_vacancy_loss': total_vacancy_loss,
+        'total_vacancy_loss': total_vac_loss,
         'collection_rate': round(total_collected / total_gross * 100, 1) if total_gross > 0 else 0,
         'occupancy_rate': round(total_occupied / total_units * 100, 1) if total_units > 0 else 0,
         'monthly_totals': portfolio_monthly,
