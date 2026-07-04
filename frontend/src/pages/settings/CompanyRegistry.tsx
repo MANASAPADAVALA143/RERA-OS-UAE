@@ -36,6 +36,7 @@ interface UnitRow {
 interface UnitPreview {
   label: string;
   unit_name: string;
+  suite_name?: string;
   action: 'create' | 'skip' | 'update_rent';
   monthly_rent: number;
   status: 'occupied' | 'vacant';
@@ -1435,6 +1436,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                         <table className="w-full text-xs mt-2">
                           <thead>
                             <tr className="text-gray-400 uppercase tracking-wide">
+                              <th className="text-left py-1.5 font-semibold">Suite</th>
                               <th className="text-left py-1.5 font-semibold">Unit</th>
                               <th className="text-left py-1.5 font-semibold">Action</th>
                               <th className="text-left py-1.5 font-semibold">Status</th>
@@ -1444,6 +1446,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                           <tbody className="divide-y divide-gray-100">
                             {co.units.map((u, i) => (
                               <tr key={i} className="hover:bg-white/60">
+                                <td className="py-1.5 text-gray-400">{u.suite_name || '—'}</td>
                                 <td className="py-1.5 font-medium text-gray-800">{u.unit_name}</td>
                                 <td className="py-1.5">
                                   {u.action === 'create' && (

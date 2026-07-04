@@ -144,13 +144,31 @@ def parse_sheet(ws, sheet_name: str, target_month: str) -> Dict:
     target_col = month_col_map.get(tgt) if tgt else None
     sorted_months = sorted(month_col_map.keys(), key=_month_sort_key)
 
-    # ── 4. Parse unit rows ────────────────────────────────────────────────────
+    # ── 4. Parse unit rows — track suite name from col 0 ─────────────────────
+    # Col 0 = "SUITE NAMES": may contain a suite label on its own row (suite
+    # header) or alongside the unit name.  We inherit the last seen suite name
+    # so even rows where col 0 is blank get the right suite assigned.
+    SUITE_NAME_COL = 0
     units: List[Dict] = []
+    current_suite: str = ''
+
     for row in rows[hdr_row_idx + 1:]:
+        # Read col 0 as suite name candidate
+        col0_raw = row[SUITE_NAME_COL] if SUITE_NAME_COL < len(row) else None
+        col0 = str(col0_raw).strip() if col0_raw else ''
+        # Update tracked suite when col 0 has a real value (not a header/total)
+        if col0 and col0.upper() not in ('SUITE NAMES', 'TOTAL', '') \
+                and col0.lower() not in UNIT_NAME_LABELS:
+            current_suite = col0
+
         if not _is_unit_row(row, unit_name_col):
             continue
 
         unit_name = str(row[unit_name_col]).strip()
+        # Suite for this unit: col 0 if populated, else inherited
+        suite_name = col0 if col0 and col0.upper() not in ('SUITE NAMES', 'TOTAL') \
+                          and col0.lower() not in UNIT_NAME_LABELS else current_suite
+
         current_amt = safe_float(row[target_col]) if (target_col is not None and target_col < len(row)) else 0.0
         is_vacant = current_amt == 0
 
@@ -175,6 +193,7 @@ def parse_sheet(ws, sheet_name: str, target_month: str) -> Dict:
 
         units.append({
             'name': unit_name,
+            'suite': suite_name,          # ← suite from col A
             'physical_units': count_physical_units(unit_name),
             'current_amount': current_amt,
             'is_vacant': is_vacant,

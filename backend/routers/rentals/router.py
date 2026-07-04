@@ -1944,6 +1944,7 @@ async def preview_portfolio_import(
                 units_preview.append({
                     "label": raw_name,
                     "unit_name": part,
+                    "suite_name": unit_data.get("suite", ""),   # ← from col A
                     "action": unit_action,
                     "monthly_rent": round(best_rent, 2),
                     "status": "vacant" if is_vacant else "occupied",
@@ -2015,39 +2016,40 @@ async def confirm_portfolio_import(
                     db.flush()
                     company_id = new_co.id
                     created_companies += 1
-                    suite = RentalProp(
-                        tenant_id=tid,
-                        company_id=company_id,
-                        property_name=co["excel_name"].strip(),
-                    )
-                    db.add(suite)
-                    db.flush()
-                    property_id = suite.id
-                    created_suites += 1
+                    suite_cache: dict[str, uuid.UUID] = {}
 
                 elif co_action == "match" and co.get("match_id"):
                     company_id = uuid.UUID(co["match_id"])
-                    suite = (
-                        db.query(RentalProp)
-                        .filter(RentalProp.company_id == company_id, RentalProp.tenant_id == tid)
-                        .first()
-                    )
-                    if not suite:
-                        suite = RentalProp(
-                            tenant_id=tid,
-                            company_id=company_id,
-                            property_name=co["display_name"],
-                        )
-                        db.add(suite)
-                        db.flush()
-                        created_suites += 1
-                    property_id = suite.id
+                    # Pre-load existing suites so we can reuse them by name
+                    existing_suites = db.query(RentalProp).filter(
+                        RentalProp.company_id == company_id,
+                        RentalProp.tenant_id == tid,
+                    ).all()
+                    suite_cache = {s.property_name.strip().lower(): s.id for s in existing_suites}
 
                 else:
                     continue
 
+                def _get_or_create_suite(suite_name: str) -> uuid.UUID:
+                    nonlocal created_suites
+                    prop_name = suite_name.strip() if suite_name.strip() else co.get("display_name", co["excel_name"]).strip()
+                    key = prop_name.lower()
+                    if key not in suite_cache:
+                        new_suite = RentalProp(
+                            tenant_id=tid,
+                            company_id=company_id,
+                            property_name=prop_name,
+                        )
+                        db.add(new_suite)
+                        db.flush()
+                        suite_cache[key] = new_suite.id
+                        created_suites += 1
+                    return suite_cache[key]
+
                 for unit in co.get("units", []):
                     unit_action = unit.get("action")
+                    property_id = _get_or_create_suite(unit.get("suite_name", ""))
+
                     if unit_action == "create":
                         db.add(RentalUnit(
                             tenant_id=tid,
