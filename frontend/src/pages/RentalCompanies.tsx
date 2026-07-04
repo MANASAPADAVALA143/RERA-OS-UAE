@@ -43,6 +43,25 @@ const COMPANY_STYLES: { Icon: IconComp; bg: string; text: string }[] = [
   { Icon: Factory,   bg: 'bg-slate-100',   text: 'text-slate-700'   },
 ];
 
+// Generate last 24 months + next 6 months for the selector
+function buildMonthOptions() {
+  const opts: { value: string; label: string }[] = [];
+  const now = new Date();
+  for (let i = -24; i <= 6; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+    opts.push({ value, label });
+  }
+  return opts;
+}
+
+const MONTH_OPTIONS = buildMonthOptions();
+const currentMonthValue = () => {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
+};
+
 export default function RentalCompanies() {
   const { selectedCompanyId, setSelectedCompanyId } = useRentalNav();
   const [companies, setCompanies] = useState<CompanyListItem[]>([]);
@@ -56,6 +75,7 @@ export default function RentalCompanies() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [renaming, setRenaming] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthValue);
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -153,15 +173,36 @@ export default function RentalCompanies() {
         `}</style>
       )}
       <div className="space-y-6">
-        {/* Header + Add button */}
-        <div className="flex items-center justify-between">
+        {/* Header + Month selector + Add button */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <h1 className="text-2xl font-bold text-charcoal">Companies</h1>
+          <div className="flex items-center gap-3 ml-auto">
+            <select
+              value={selectedMonth}
+              onChange={e => setSelectedMonth(e.target.value)}
+              style={{
+                padding: '6px 12px',
+                border: '1px solid #E8DEC8',
+                borderRadius: 8,
+                fontSize: 14,
+                fontWeight: 500,
+                background: '#FBF6EE',
+                color: '#1C1917',
+                outline: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              {MONTH_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
           <button
             onClick={() => { setShowAddForm(v => !v); setAddError(''); setNewName(''); }}
             className="flex items-center gap-2 bg-primary text-white text-sm px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors"
           >
             <Plus size={15} /> Add Company
           </button>
+          </div>
         </div>
 
         {/* Add company form */}
