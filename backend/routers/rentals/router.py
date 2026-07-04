@@ -1978,7 +1978,12 @@ async def preview_portfolio_import(
         ),
     }
 
-    return {"companies": companies_preview, "skipped": skipped, "summary": summary}
+    return {
+        "companies": companies_preview,
+        "skipped": skipped,
+        "summary": summary,
+        "_sheets_found": list(parsed["companies"].keys()),
+    }
 
 
 @router.post("/import-portfolio/confirm")

@@ -63,15 +63,23 @@ def safe_float(val) -> float:
         return 0.0
 
 
+def _norm(val) -> str:
+    """Normalise a cell value to a plain lowercase string.
+    Collapses all whitespace variants (including non-breaking spaces \\u00a0)
+    so Excel-formatted cells compare correctly against UNIT_NAME_LABELS.
+    """
+    return ' '.join(str(val).split()).lower() if val is not None else ''
+
+
 def _find_header(rows: list) -> Optional[Tuple[int, int]]:
     """
     Return (row_index, unit_name_col) of the first cell matching
-    UNIT_NAME_LABELS within the first 10 rows × 20 columns.
+    UNIT_NAME_LABELS within the first 20 rows × 30 columns.
     Returns None if not found.
     """
-    for i, row in enumerate(rows[:10]):
-        for j, cell in enumerate(row[:20]):
-            if cell and str(cell).strip().lower() in UNIT_NAME_LABELS:
+    for i, row in enumerate(rows[:20]):
+        for j, cell in enumerate(row[:30]):
+            if cell and _norm(cell) in UNIT_NAME_LABELS:
                 return (i, j)
     return None
 
@@ -83,18 +91,16 @@ def _is_unit_row(row, unit_name_col: int) -> bool:
     cell = row[unit_name_col]
     if not cell:
         return False
-    name = str(cell).strip()
+    name = _norm(cell)
     if not name:
         return False
-    if name.upper() == 'TOTAL':
+    if name == 'total':
         return False
-    # Skip any header-like cells
-    if name.lower() in UNIT_NAME_LABELS:
+    if name in UNIT_NAME_LABELS:
         return False
-    # Skip stats summary rows like "Jun 2026 — Occupied: 19..."
-    if '—' in name or '–' in name or 'Occupied' in name or 'Collected' in name:
+    raw = str(cell)
+    if '—' in raw or '–' in raw or 'Occupied' in raw or 'Collected' in raw:
         return False
-    # Skip rows that look like suite-group headers (col 0 has text, unit col is blank)
     return True
 
 
@@ -155,19 +161,22 @@ def parse_sheet(ws, sheet_name: str, target_month: str) -> Dict:
     for row in rows[hdr_row_idx + 1:]:
         # Read col 0 as suite name candidate
         col0_raw = row[SUITE_NAME_COL] if SUITE_NAME_COL < len(row) else None
-        col0 = str(col0_raw).strip() if col0_raw else ''
+        col0_norm = _norm(col0_raw) if col0_raw else ''
+        col0_display = str(col0_raw).strip() if col0_raw else ''
         # Update tracked suite when col 0 has a real value (not a header/total)
-        if col0 and col0.upper() not in ('SUITE NAMES', 'TOTAL', '') \
-                and col0.lower() not in UNIT_NAME_LABELS:
-            current_suite = col0
+        if col0_norm and col0_norm not in ('suite names', 'total') \
+                and col0_norm not in UNIT_NAME_LABELS:
+            current_suite = col0_display
 
         if not _is_unit_row(row, unit_name_col):
             continue
 
         unit_name = str(row[unit_name_col]).strip()
-        # Suite for this unit: col 0 if populated, else inherited
-        suite_name = col0 if col0 and col0.upper() not in ('SUITE NAMES', 'TOTAL') \
-                          and col0.lower() not in UNIT_NAME_LABELS else current_suite
+        # Suite for this unit: col 0 if populated (and not a header/total), else inherited
+        suite_name = col0_display if (
+            col0_norm and col0_norm not in ('suite names', 'total')
+            and col0_norm not in UNIT_NAME_LABELS
+        ) else current_suite
 
         current_amt = safe_float(row[target_col]) if (target_col is not None and target_col < len(row)) else 0.0
         is_vacant = current_amt == 0
