@@ -31,6 +31,7 @@ interface UnitRow {
   unit_number: string;
   status: string;
   monthly_rent: number;
+  rent_history?: Record<string, number>;
 }
 
 interface UnitPreview {
@@ -303,9 +304,28 @@ function StatusBadge({ status, onClick }: { status: string; onClick: () => void 
 
 // ── inline suites table (no modals — modals handled by parent) ────────────────
 
+function unitForMonth(u: UnitRow, month: string): { status: string; rent: number } {
+  const h = u.rent_history;
+  if (!h || !month) return { status: u.status, rent: u.monthly_rent };
+  const val = h[month] ?? null;
+  if (val === null) return { status: u.status, rent: u.monthly_rent };
+  const occupied = val > 0;
+  // vacancy loss: average of last 3 non-zero months before this one
+  let displayRent = val;
+  if (!occupied) {
+    const MONTHS = ['Jan-2026','Feb-2026','Mar-2026','Apr-2026','May-2026','Jun-2026',
+      'Jul-2026','Aug-2026','Sep-2026','Oct-2026','Nov-2026','Dec-2026'];
+    const idx = MONTHS.indexOf(month);
+    const lookback = MONTHS.slice(0, idx).reverse()
+      .map(m => h[m] ?? 0).filter(v => v > 0).slice(0, 3);
+    displayRent = lookback.length ? Math.round(lookback.reduce((a, b) => a + b, 0) / lookback.length) : 0;
+  }
+  return { status: occupied ? 'occupied' : 'vacant', rent: displayRent };
+}
+
 function InlineSuites({
   companyId, companyName, canWrite, push, totalCols,
-  onAdd, onEdit, onDelete, reloadKey,
+  onAdd, onEdit, onDelete, reloadKey, viewMonth,
 }: {
   companyId: string;
   companyName: string;
@@ -316,6 +336,7 @@ function InlineSuites({
   onEdit: (suite: Suite) => void;
   onDelete: (suite: Suite) => void;
   reloadKey: number;
+  viewMonth: string;
 }) {
   const [suites, setSuites] = useState<Suite[]>([]);
   const [loading, setLoading] = useState(true);
@@ -599,10 +620,12 @@ function InlineSuites({
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
-                                      {unitsMap[s.id].map((u, j) => (
+                                      {unitsMap[s.id].map((u, j) => {
+                                        const { status: dispStatus, rent: dispRent } = unitForMonth(u, viewMonth);
+                                        return (
                                         <tr key={u.id}
                                           className="hover:bg-indigo-50/20"
-                                          style={u.status === 'vacant' ? { background: 'rgba(239,68,68,0.04)' } : {}}>
+                                          style={dispStatus === 'vacant' ? { background: 'rgba(239,68,68,0.04)' } : {}}>
                                           <td className="px-3 py-1.5 text-gray-400">{j + 1}</td>
                                           <td className="px-3 py-1.5 font-medium text-gray-800">
                                             {unitEditId === u.id ? (
@@ -634,17 +657,17 @@ function InlineSuites({
                                               </select>
                                             ) : (
                                               <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${
-                                                u.status === 'occupied'
+                                                dispStatus === 'occupied'
                                                   ? 'bg-green-100 text-green-700'
-                                                  : u.status === 'notice'
+                                                  : dispStatus === 'notice'
                                                   ? 'bg-yellow-100 text-yellow-700'
-                                                  : u.status === 'reserved'
+                                                  : dispStatus === 'reserved'
                                                   ? 'bg-blue-100 text-blue-700'
-                                                  : u.status === 'maintenance_hold'
+                                                  : dispStatus === 'maintenance_hold'
                                                   ? 'bg-orange-100 text-orange-700'
                                                   : 'bg-gray-100 text-gray-500'
                                               }`}>
-                                                {u.status}
+                                                {dispStatus}
                                               </span>
                                             )}
                                           </td>
@@ -658,8 +681,8 @@ function InlineSuites({
                                                 className="text-xs border border-indigo-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-24 text-right"
                                               />
                                             ) : (
-                                              u.monthly_rent > 0
-                                                ? `$${u.monthly_rent.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+                                              dispRent > 0
+                                                ? `$${dispRent.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
                                                 : '—'
                                             )}
                                           </td>
@@ -702,7 +725,8 @@ function InlineSuites({
                                             </td>
                                           )}
                                         </tr>
-                                      ))}
+                                        );
+                                      })}
                                       {addingUnitSuiteId === s.id && (
                                         <tr className="bg-indigo-50/40 border-t border-indigo-200">
                                           <td className="px-3 py-2 text-gray-400 text-xs">—</td>
@@ -1242,6 +1266,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                           onEdit={openSuiteEdit}
                           onDelete={openSuiteDelete}
                           reloadKey={suiteReloadKey}
+                          viewMonth={importMonth}
                         />
                       )}
                     </Fragment>
