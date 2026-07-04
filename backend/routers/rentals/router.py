@@ -1850,6 +1850,251 @@ async def import_portfolio(
 
 # â”€â”€ hardcoded portfolio seed (no file upload needed) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+# ── portfolio import: preview + confirm (with review gate) ────────────────────
+
+@router.post("/import-portfolio/preview")
+async def preview_portfolio_import(
+    file: UploadFile = File(...),
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    """
+    Parse uploaded Rent Receivable Excel and return a diff-style preview
+    (companies/units to create vs match vs skip). Nothing is written to the DB.
+    """
+    import tempfile
+    from services.rent_receivable_parser import parse_rent_receivable_file
+
+    contents = await file.read()
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".xlsx")
+    try:
+        with os.fdopen(tmp_fd, "wb") as fh:
+            fh.write(contents)
+        try:
+            parsed = parse_rent_receivable_file(tmp_path, target_month="Dec-2026")
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Failed to parse file: {exc}")
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+    tid = current_user.tenant_id
+    MONTHS_ORDER = [
+        "Jan-2026", "Feb-2026", "Mar-2026", "Apr-2026", "May-2026", "Jun-2026",
+        "Jul-2026", "Aug-2026", "Sep-2026", "Oct-2026", "Nov-2026", "Dec-2026",
+    ]
+
+    existing_cos = db.query(RentalCompany).filter(RentalCompany.tenant_id == tid).all()
+    existing_co_map = {c.company_name.strip().lower(): c for c in existing_cos}
+
+    companies_preview = []
+
+    for co_name, data in parsed["companies"].items():
+        norm = co_name.strip().lower()
+        match_co = existing_co_map.get(norm)
+        if not match_co:
+            for k, v in existing_co_map.items():
+                if norm in k or k in norm:
+                    match_co = v
+                    break
+
+        co_action = "match" if match_co else "create"
+
+        ex_unit_map: dict = {}
+        if match_co:
+            ex_units = db.query(RentalUnit).filter(
+                RentalUnit.company_id == match_co.id,
+                RentalUnit.tenant_id == tid,
+            ).all()
+            ex_unit_map = {u.unit_number.strip().lower(): u for u in ex_units}
+
+        units_preview = []
+        for unit_data in data["units"]:
+            raw_name = unit_data["name"].strip()
+            history: dict = unit_data["history"]
+            is_vacant: bool = unit_data["is_vacant"]
+            current_amount: float = unit_data["current_amount"]
+            vacancy_loss: float = unit_data["vacancy_loss"]
+
+            parts = [p.strip() for p in raw_name.replace("&", ",").split(",") if p.strip()]
+            n_parts = max(len(parts), 1)
+            per_unit_rent = current_amount / n_parts
+            per_unit_vac = vacancy_loss / n_parts
+            best_rent = per_unit_rent if (not is_vacant and per_unit_rent > 0) else per_unit_vac
+            if best_rent == 0 and history:
+                sorted_nz = [m for m in MONTHS_ORDER if history.get(m, 0) > 0]
+                if sorted_nz:
+                    best_rent = history[sorted_nz[-1]] / n_parts
+
+            for part in parts:
+                norm_unit = part.strip().lower()
+                ex_unit = ex_unit_map.get(norm_unit)
+                if not ex_unit and not norm_unit.startswith("unit "):
+                    ex_unit = ex_unit_map.get(f"unit {norm_unit}")
+                if not ex_unit and norm_unit.startswith("unit "):
+                    ex_unit = ex_unit_map.get(norm_unit[5:].strip())
+
+                if ex_unit:
+                    unit_action = (
+                        "update_rent" if (ex_unit.monthly_rent == 0 and best_rent > 0) else "skip"
+                    )
+                else:
+                    unit_action = "create"
+
+                units_preview.append({
+                    "label": raw_name,
+                    "unit_name": part,
+                    "action": unit_action,
+                    "monthly_rent": round(best_rent, 2),
+                    "status": "vacant" if is_vacant else "occupied",
+                    "history": history,
+                    "match_unit_id": str(ex_unit.id) if ex_unit else None,
+                    "match_unit_rent": ex_unit.monthly_rent if ex_unit else None,
+                })
+
+        companies_preview.append({
+            "excel_name": co_name,
+            "display_name": match_co.company_name if match_co else co_name,
+            "action": co_action,
+            "match_id": str(match_co.id) if match_co else None,
+            "units": units_preview,
+            "total_units": data["total_physical_units"],
+            "occupied": data["occupied_count"],
+            "vacant": data["vacant_count"],
+            "target_month": data.get("target_month", ""),
+        })
+
+    skipped = parsed["portfolio"].get("skipped", [])
+    summary = {
+        "companies_to_create": sum(1 for c in companies_preview if c["action"] == "create"),
+        "companies_to_match": sum(1 for c in companies_preview if c["action"] == "match"),
+        "units_to_create": sum(
+            sum(1 for u in c["units"] if u["action"] == "create") for c in companies_preview
+        ),
+        "units_to_skip": sum(
+            sum(1 for u in c["units"] if u["action"] in ("skip", "update_rent"))
+            for c in companies_preview
+        ),
+    }
+
+    return {"companies": companies_preview, "skipped": skipped, "summary": summary}
+
+
+@router.post("/import-portfolio/confirm")
+async def confirm_portfolio_import(
+    payload: dict,
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    """
+    Commit previewed import — create new companies/suites/units.
+    Only fills monthly_rent when the existing value is 0 (never silently overwrites).
+    """
+    tid = current_user.tenant_id
+    companies_data = payload.get("companies", [])
+
+    created_companies = 0
+    created_suites = 0
+    created_units = 0
+    updated_units = 0
+    errors: list[str] = []
+
+    try:
+        for co in companies_data:
+            try:
+                co_action = co.get("action")
+
+                if co_action == "create":
+                    new_co = RentalCompany(
+                        tenant_id=tid,
+                        company_name=co["excel_name"].strip(),
+                        status="active",
+                        created_by=current_user.email,
+                    )
+                    db.add(new_co)
+                    db.flush()
+                    company_id = new_co.id
+                    created_companies += 1
+                    suite = RentalProp(
+                        tenant_id=tid,
+                        company_id=company_id,
+                        property_name=co["excel_name"].strip(),
+                    )
+                    db.add(suite)
+                    db.flush()
+                    property_id = suite.id
+                    created_suites += 1
+
+                elif co_action == "match" and co.get("match_id"):
+                    company_id = uuid.UUID(co["match_id"])
+                    suite = (
+                        db.query(RentalProp)
+                        .filter(RentalProp.company_id == company_id, RentalProp.tenant_id == tid)
+                        .first()
+                    )
+                    if not suite:
+                        suite = RentalProp(
+                            tenant_id=tid,
+                            company_id=company_id,
+                            property_name=co["display_name"],
+                        )
+                        db.add(suite)
+                        db.flush()
+                        created_suites += 1
+                    property_id = suite.id
+
+                else:
+                    continue
+
+                for unit in co.get("units", []):
+                    unit_action = unit.get("action")
+                    if unit_action == "create":
+                        db.add(RentalUnit(
+                            tenant_id=tid,
+                            property_id=property_id,
+                            company_id=company_id,
+                            unit_number=unit["unit_name"],
+                            status=unit["status"],
+                            monthly_rent=float(unit.get("monthly_rent", 0)),
+                            rent_history=unit.get("history", {}),
+                        ))
+                        created_units += 1
+                    elif unit_action == "update_rent" and unit.get("match_unit_id"):
+                        ex = (
+                            db.query(RentalUnit)
+                            .filter(
+                                RentalUnit.id == uuid.UUID(unit["match_unit_id"]),
+                                RentalUnit.tenant_id == tid,
+                            )
+                            .first()
+                        )
+                        if ex and ex.monthly_rent == 0:
+                            ex.monthly_rent = float(unit.get("monthly_rent", 0))
+                            updated_units += 1
+
+            except Exception as row_err:
+                errors.append(f"{co.get('excel_name', '?')}: {row_err}")
+
+        db.commit()
+
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Import failed: {exc}")
+
+    return {
+        "status": "success",
+        "created_companies": created_companies,
+        "created_suites": created_suites,
+        "created_units": created_units,
+        "updated_units": updated_units,
+        "errors": errors,
+        "message": (
+            f"Created {created_companies} companies, {created_suites} suites, "
+            f"{created_units} units. Updated {updated_units} rents."
+        ),
+    }
+
+
 PORTFOLIO_DATA = [
     {"company": "ABC LLC", "suites": [
         {"name": "Suite 789", "units": [

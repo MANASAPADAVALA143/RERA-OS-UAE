@@ -33,6 +33,40 @@ interface UnitRow {
   monthly_rent: number;
 }
 
+interface UnitPreview {
+  label: string;
+  unit_name: string;
+  action: 'create' | 'skip' | 'update_rent';
+  monthly_rent: number;
+  status: 'occupied' | 'vacant';
+  history: Record<string, number>;
+  match_unit_id: string | null;
+  match_unit_rent: number | null;
+}
+
+interface CompanyPreview {
+  excel_name: string;
+  display_name: string;
+  action: 'create' | 'match';
+  match_id: string | null;
+  units: UnitPreview[];
+  total_units: number;
+  occupied: number;
+  vacant: number;
+  target_month: string;
+}
+
+interface PortfolioPreview {
+  companies: CompanyPreview[];
+  skipped: string[];
+  summary: {
+    companies_to_create: number;
+    companies_to_match: number;
+    units_to_create: number;
+    units_to_skip: number;
+  };
+}
+
 interface FieldDef {
   name: string;
   label: string;
@@ -744,6 +778,10 @@ export default function CompanyRegistry({ embedded = false }: Props) {
   const { toasts, push } = useToast();
   const _ref = useRef<null>(null); void _ref;
   const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importState, setImportState] = useState<'idle' | 'parsing' | 'review' | 'confirming'>('idle');
+  const [importPreview, setImportPreview] = useState<PortfolioPreview | null>(null);
+  const [expandedPreviewCo, setExpandedPreviewCo] = useState<string | null>(null);
 
   const initTab = (searchParams.get('tab') as ModuleId | null) ?? 'rental';
   const [activeId, setActiveId] = useState<ModuleId>(
@@ -798,17 +836,46 @@ export default function CompanyRegistry({ embedded = false }: Props) {
 
   useEffect(() => { load(); }, [load]);
 
-  async function handleImport() {
-    setImporting(true);
+  function triggerFileInput() {
+    fileInputRef.current?.click();
+  }
+
+  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = ''; // allow re-selecting same file
+    setImportState('parsing');
     try {
-      const res = await api.post('/api/rentals/seed-portfolio');
-      push(res.data.message ?? 'Portfolio loaded!', true);
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await api.post<PortfolioPreview>('/api/rentals/import-portfolio/preview', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setImportPreview(res.data);
+      setExpandedPreviewCo(res.data.companies[0]?.excel_name ?? null);
+      setImportState('review');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      push(msg ?? 'Failed to parse file — check format', false);
+      setImportState('idle');
+    }
+  }
+
+  async function handleConfirmImport() {
+    if (!importPreview) return;
+    setImportState('confirming');
+    try {
+      const res = await api.post<{ message: string }>('/api/rentals/import-portfolio/confirm', {
+        companies: importPreview.companies,
+      });
+      push(res.data.message ?? 'Portfolio imported!', true);
+      setImportState('idle');
+      setImportPreview(null);
       load();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      push(msg ?? 'Seed failed — check backend logs', false);
-    } finally {
-      setImporting(false);
+      push(msg ?? 'Import failed', false);
+      setImportState('idle');
     }
   }
 
@@ -1029,13 +1096,23 @@ export default function CompanyRegistry({ embedded = false }: Props) {
         <div className="flex items-center gap-3">
           <span className="text-xs text-gray-400">{filtered.length} companies</span>
           {canWrite && activeId === 'rental' && (
-            <button
-              onClick={handleImport}
-              disabled={importing}
-              title="Load all 10 portfolio companies with suites and units"
-              className="flex items-center gap-2 bg-emerald-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-emerald-700 font-medium transition-colors disabled:opacity-60">
-              <Upload size={14} /> {importing ? 'Loading…' : 'Load Portfolio'}
-            </button>
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={handleFileSelected}
+              />
+              <button
+                onClick={triggerFileInput}
+                disabled={importState !== 'idle'}
+                title="Upload Rent Receivable Excel to auto-create companies and units"
+                className="flex items-center gap-2 bg-emerald-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-emerald-700 font-medium transition-colors disabled:opacity-60">
+                <Upload size={14} />
+                {importState === 'parsing' ? 'Parsing…' : importState === 'confirming' ? 'Importing…' : 'Load Portfolio'}
+              </button>
+            </>
           )}
           {canWrite && (
             <button onClick={openAdd}
@@ -1280,6 +1357,165 @@ export default function CompanyRegistry({ embedded = false }: Props) {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* ── PORTFOLIO IMPORT REVIEW MODAL ─────────────────────────────── */}
+      {importState === 'review' && importPreview && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl my-8 flex flex-col overflow-hidden">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Portfolio Import Preview</h2>
+                <p className="text-sm text-gray-500 mt-0.5">Review before anything is written to the database</p>
+              </div>
+              <button onClick={() => { setImportState('idle'); setImportPreview(null); }}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Summary bar */}
+            <div className="grid grid-cols-4 divide-x divide-gray-100 border-b border-gray-100 flex-shrink-0">
+              {[
+                { label: 'Companies to create', value: importPreview.summary.companies_to_create, color: '#059669' },
+                { label: 'Matched to existing', value: importPreview.summary.companies_to_match, color: '#D4AF37' },
+                { label: 'Units to create',     value: importPreview.summary.units_to_create,    color: '#3B82F6' },
+                { label: 'Units already exist', value: importPreview.summary.units_to_skip,      color: '#9CA3AF' },
+              ].map(s => (
+                <div key={s.label} className="px-5 py-3 text-center">
+                  <div className="text-2xl font-bold" style={{ color: s.color }}>{s.value}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Company list */}
+            <div className="overflow-y-auto flex-1" style={{ maxHeight: '55vh' }}>
+              {importPreview.companies.map(co => {
+                const isOpen = expandedPreviewCo === co.excel_name;
+                const unitCounts = {
+                  create: co.units.filter(u => u.action === 'create').length,
+                  skip: co.units.filter(u => u.action === 'skip').length,
+                  update: co.units.filter(u => u.action === 'update_rent').length,
+                };
+                return (
+                  <div key={co.excel_name} className="border-b border-gray-50 last:border-0">
+                    {/* Company row */}
+                    <button
+                      onClick={() => setExpandedPreviewCo(isOpen ? null : co.excel_name)}
+                      className="w-full flex items-center gap-3 px-6 py-3 hover:bg-gray-50 transition-colors text-left">
+                      <ChevronDown size={14} className={`text-gray-400 transition-transform flex-shrink-0 ${isOpen ? '' : '-rotate-90'}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-gray-900 text-sm">{co.display_name}</span>
+                          {co.action === 'create' ? (
+                            <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(5,150,105,0.12)', color: '#059669' }}>CREATE</span>
+                          ) : (
+                            <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(212,175,55,0.15)', color: '#92400E' }}>MATCH</span>
+                          )}
+                          {co.target_month && (
+                            <span className="text-xs text-gray-400">· {co.target_month}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500">
+                          <span>{co.total_units} units</span>
+                          <span>{co.occupied} occupied · {co.vacant} vacant</span>
+                          {unitCounts.create > 0 && <span className="text-blue-600 font-medium">+{unitCounts.create} to create</span>}
+                          {unitCounts.skip > 0 && <span className="text-gray-400">{unitCounts.skip} skip</span>}
+                          {unitCounts.update > 0 && <span className="text-amber-600 font-medium">{unitCounts.update} rent update</span>}
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Unit rows (expanded) */}
+                    {isOpen && (
+                      <div className="bg-gray-50/60 border-t border-gray-100 px-6 pb-2">
+                        <table className="w-full text-xs mt-2">
+                          <thead>
+                            <tr className="text-gray-400 uppercase tracking-wide">
+                              <th className="text-left py-1.5 font-semibold">Unit</th>
+                              <th className="text-left py-1.5 font-semibold">Action</th>
+                              <th className="text-left py-1.5 font-semibold">Status</th>
+                              <th className="text-right py-1.5 font-semibold">Monthly Rent</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {co.units.map((u, i) => (
+                              <tr key={i} className="hover:bg-white/60">
+                                <td className="py-1.5 font-medium text-gray-800">{u.unit_name}</td>
+                                <td className="py-1.5">
+                                  {u.action === 'create' && (
+                                    <span className="px-1.5 py-0.5 rounded font-semibold" style={{ background: 'rgba(59,130,246,0.1)', color: '#2563EB' }}>+ Create</span>
+                                  )}
+                                  {u.action === 'skip' && (
+                                    <span className="px-1.5 py-0.5 rounded text-gray-400">Skip</span>
+                                  )}
+                                  {u.action === 'update_rent' && (
+                                    <span className="px-1.5 py-0.5 rounded font-semibold" style={{ background: 'rgba(212,175,55,0.15)', color: '#92400E' }}>Fill rent</span>
+                                  )}
+                                </td>
+                                <td className="py-1.5">
+                                  <span className={u.status === 'occupied' ? 'text-green-600 font-medium' : 'text-gray-400'}>
+                                    {u.status}
+                                  </span>
+                                </td>
+                                <td className="py-1.5 text-right font-mono text-gray-700">
+                                  {u.monthly_rent > 0 ? `$${u.monthly_rent.toLocaleString()}` : '—'}
+                                  {u.action === 'update_rent' && u.match_unit_rent !== null && (
+                                    <span className="text-gray-400 ml-1">(was $0)</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Skipped / flagged */}
+              {importPreview.skipped.length > 0 && (
+                <div className="px-6 py-4 border-t border-amber-100" style={{ background: 'rgba(251,191,36,0.06)' }}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#92400E' }}>
+                      {importPreview.skipped.length} sheet{importPreview.skipped.length !== 1 ? 's' : ''} could not be parsed
+                    </span>
+                  </div>
+                  {importPreview.skipped.map((s, i) => (
+                    <div key={i} className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-1.5 mb-1">{s}</div>
+                  ))}
+                  <p className="text-xs text-gray-400 mt-2">These sheets will be skipped — add them manually if needed.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 flex-shrink-0 bg-gray-50/50">
+              <p className="text-xs text-gray-500 max-w-sm">
+                No existing company or unit data will be overwritten. Only new records will be created.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setImportState('idle'); setImportPreview(null); }}
+                  className="text-sm border border-gray-200 text-gray-600 px-5 py-2.5 rounded-xl hover:bg-gray-100">
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmImport}
+                  disabled={importState === 'confirming'}
+                  className="flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-xl disabled:opacity-50 transition-colors"
+                  style={{ background: '#059669', color: '#fff' }}>
+                  <Check size={14} />
+                  {importState === 'confirming' ? 'Importing…' : `Confirm Import (${importPreview.summary.companies_to_create + importPreview.summary.units_to_create} new records)`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* TOAST STACK */}
