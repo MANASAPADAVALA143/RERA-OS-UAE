@@ -186,6 +186,11 @@ def parse_sheet(ws, sheet_name: str, target_month: str) -> Dict:
             continue
 
         unit_name = str(row[unit_name_col]).strip()
+
+        # Skip rows where col B repeats the suite name (suite header rows, not real units)
+        if col0_norm and _norm(unit_name) == col0_norm:
+            continue
+
         # Suite for this unit: col 0 if populated (and not a header/total), else inherited
         suite_name = col0_display if (
             col0_norm and col0_norm not in ('suite names', 'total')
