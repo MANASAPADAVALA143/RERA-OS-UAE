@@ -39,7 +39,7 @@ const NAV = [
 // ── Sub-nav shared styles ──────────────────────────────────────────────────
 const subActive   = { background: 'rgba(212,175,55,0.18)', color: '#D4AF37' } as const;
 const subInactive = { color: '#9C9893' } as const;
-const subBase     = 'w-full flex items-center gap-2 pl-7 pr-3 py-1.5 rounded-lg text-sm transition-colors text-left hover:bg-white/5';
+const subBase     = 'w-full flex items-center gap-2 pl-7 pr-3 py-1.5 rounded-lg text-base transition-colors text-left hover:bg-white/5';
 
 function SidebarInner() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -107,14 +107,14 @@ function SidebarInner() {
             <div key={to}>
               <NavLink
                 to={to}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors hover:bg-white/5"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-base transition-colors hover:bg-white/5"
                 style={({ isActive }) =>
                   isActive
                     ? { background: '#D4AF37', color: '#161310', fontWeight: 600 }
                     : { color: '#9C9893' }
                 }
               >
-                <Icon size={18} />
+                <Icon size={20} />
                 {label}
               </NavLink>
 
@@ -124,7 +124,7 @@ function SidebarInner() {
                   {RENTAL_TABS.filter((item) => !item.hidden).map(({ id, label: itemLabel, Icon: ItemIcon, groupLabel }) => (
                     <div key={id}>
                       {groupLabel && (
-                        <p className="pl-7 pr-3 pt-3 pb-1 text-xs uppercase tracking-wider font-medium"
+                        <p className="pl-7 pr-3 pt-3 pb-1 text-sm uppercase tracking-wider font-medium"
                           style={{ color: '#D4AF37', opacity: 0.7 }}>
                           ─── {groupLabel} ───
                         </p>
@@ -138,7 +138,7 @@ function SidebarInner() {
                         className={subBase}
                         style={rentalTab === id ? subActive : subInactive}
                       >
-                        <ItemIcon size={13} className="shrink-0" />
+                        <ItemIcon size={15} className="shrink-0" />
                         {itemLabel}
                       </button>
                     </div>
@@ -152,7 +152,7 @@ function SidebarInner() {
                   {PROPDEV_TABS.map(({ id, label: itemLabel, Icon: ItemIcon, groupLabel }) => (
                     <div key={id}>
                       {groupLabel && (
-                        <p className="pl-7 pr-3 pt-2 pb-0.5 text-xs uppercase tracking-wider font-medium"
+                        <p className="pl-7 pr-3 pt-2 pb-0.5 text-sm uppercase tracking-wider font-medium"
                           style={{ color: '#D4AF37', opacity: 0.7 }}>
                           ─── {groupLabel} ───
                         </p>
@@ -162,7 +162,7 @@ function SidebarInner() {
                         className={subBase}
                         style={propDevTab === id ? subActive : subInactive}
                       >
-                        <ItemIcon size={13} className="shrink-0" />
+                        <ItemIcon size={15} className="shrink-0" />
                         {itemLabel}
                       </button>
                     </div>
@@ -211,17 +211,17 @@ function SidebarInner() {
 
         {/* Footer */}
         <div className="p-4 space-y-3" style={{ borderTop: '1px solid rgba(212,175,55,0.12)' }}>
-          <div className="text-sm">
+          <div className="text-base">
             <p className="font-medium truncate" style={{ color: '#F5F5F4' }}>{profile?.email}</p>
             <Badge variant="accent">{profile?.role}</Badge>
           </div>
           <NavLink to="/settings"
-            className="flex items-center gap-2 text-sm hover:opacity-80 transition-opacity"
+            className="flex items-center gap-2 text-base hover:opacity-80 transition-opacity"
             style={{ color: '#9C9893' }}>
             <Settings size={16} /> Settings
           </NavLink>
           <NavLink to="/settings/companies"
-            className="flex items-center gap-2 text-sm hover:opacity-80 transition-opacity"
+            className="flex items-center gap-2 text-base hover:opacity-80 transition-opacity"
             style={{ color: '#9C9893' }}>
             <Database size={16} /> Company Registry
           </NavLink>
