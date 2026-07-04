@@ -784,6 +784,11 @@ export default function CompanyRegistry({ embedded = false }: Props) {
   const [importPreview, setImportPreview] = useState<PortfolioPreview | null>(null);
   const [expandedPreviewCo, setExpandedPreviewCo] = useState<string | null>(null);
   const [forceReplace, setForceReplace] = useState(false);
+  const [importMonth, setImportMonth] = useState('Jun-2026');
+  const IMPORT_MONTHS = [
+    'Jan-2026','Feb-2026','Mar-2026','Apr-2026','May-2026','Jun-2026',
+    'Jul-2026','Aug-2026','Sep-2026','Oct-2026','Nov-2026','Dec-2026',
+  ];
 
   const initTab = (searchParams.get('tab') as ModuleId | null) ?? 'rental';
   const [activeId, setActiveId] = useState<ModuleId>(
@@ -850,6 +855,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('target_month', importMonth);
       const res = await api.post<PortfolioPreview>('/api/rentals/import-portfolio/preview', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
@@ -1107,6 +1113,15 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                 className="hidden"
                 onChange={handleFileSelected}
               />
+              <select
+                value={importMonth}
+                onChange={e => setImportMonth(e.target.value)}
+                disabled={importState !== 'idle'}
+                className="text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 disabled:opacity-60">
+                {IMPORT_MONTHS.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
               <button
                 onClick={triggerFileInput}
                 disabled={importState !== 'idle'}

@@ -1855,6 +1855,7 @@ async def import_portfolio(
 @router.post("/import-portfolio/preview")
 async def preview_portfolio_import(
     file: UploadFile = File(...),
+    target_month: str = Form(default="Jun-2026"),
     current_user: CurrentUser = Depends(require_write_access()),
     db: Session = Depends(get_db),
 ):
@@ -1865,13 +1866,21 @@ async def preview_portfolio_import(
     import tempfile
     from services.rent_receivable_parser import parse_rent_receivable_file
 
+    # Normalise month: accept "Jun-2026" or "2026-06"
+    if target_month and len(target_month) == 7 and target_month[4] == "-":
+        from datetime import datetime as _ddt
+        try:
+            target_month = _ddt.strptime(target_month, "%Y-%m").strftime("%b-%Y")
+        except ValueError:
+            pass
+
     contents = await file.read()
     tmp_fd, tmp_path = tempfile.mkstemp(suffix=".xlsx")
     try:
         with os.fdopen(tmp_fd, "wb") as fh:
             fh.write(contents)
         try:
-            parsed = parse_rent_receivable_file(tmp_path, target_month="Dec-2026")
+            parsed = parse_rent_receivable_file(tmp_path, target_month=target_month)
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"Failed to parse file: {exc}")
     finally:

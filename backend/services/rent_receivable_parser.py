@@ -199,9 +199,8 @@ def parse_sheet(ws, sheet_name: str, target_month: str) -> Dict:
             for m, col in month_col_map.items()
         }
 
-        # Vacant if ALL months are $0; occupied if ANY month has a payment
-        any_nonzero = any(v > 0 for v in history.values())
-        is_vacant = not any_nonzero
+        # Vacant if selected month's rent is $0; occupied if > $0
+        is_vacant = current_amt == 0
 
         # Vacancy-loss: average last 2-3 non-zero months before target
         vacancy_loss = 0.0
