@@ -309,18 +309,7 @@ function unitForMonth(u: UnitRow, month: string): { status: string; rent: number
   if (!h || !month) return { status: u.status, rent: u.monthly_rent };
   const val = h[month] ?? null;
   if (val === null) return { status: u.status, rent: u.monthly_rent };
-  const occupied = val > 0;
-  // vacancy loss: average of last 3 non-zero months before this one
-  let displayRent = val;
-  if (!occupied) {
-    const MONTHS = ['Jan-2026','Feb-2026','Mar-2026','Apr-2026','May-2026','Jun-2026',
-      'Jul-2026','Aug-2026','Sep-2026','Oct-2026','Nov-2026','Dec-2026'];
-    const idx = MONTHS.indexOf(month);
-    const lookback = MONTHS.slice(0, idx).reverse()
-      .map(m => h[m] ?? 0).filter(v => v > 0).slice(0, 3);
-    displayRent = lookback.length ? Math.round(lookback.reduce((a, b) => a + b, 0) / lookback.length) : 0;
-  }
-  return { status: occupied ? 'occupied' : 'vacant', rent: displayRent };
+  return { status: val > 0 ? 'occupied' : 'vacant', rent: val };
 }
 
 function InlineSuites({
