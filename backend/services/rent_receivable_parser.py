@@ -15,6 +15,7 @@ automatically because they never match the month pattern.
 
 import re
 import openpyxl
+from datetime import datetime as _dt
 from typing import Dict, List, Optional, Tuple
 
 # All recognised header labels for the "unit name" column (case-insensitive)
@@ -61,6 +62,21 @@ def safe_float(val) -> float:
         return float(val)
     except (ValueError, TypeError):
         return 0.0
+
+
+def _cell_to_month(val) -> str:
+    """Convert a header cell to 'Mon-YYYY' if possible, else empty string.
+    Handles both plain-text 'Jan-2026' and Excel date objects (datetime).
+    """
+    if val is None:
+        return ''
+    if isinstance(val, _dt):
+        return val.strftime('%b-%Y')   # datetime(2026,1,1) → 'Jan-2026'
+    s = ' '.join(str(val).split())     # normalise whitespace / NBSP
+    mo = _MONTH_RE.match(s)
+    if mo:
+        return f"{mo.group(1).capitalize()}-{mo.group(2)}"
+    return ''
 
 
 def _norm(val) -> str:
@@ -128,14 +144,12 @@ def parse_sheet(ws, sheet_name: str, target_month: str) -> Dict:
     hdr = rows[hdr_row_idx]
 
     # ── 2. Map month label → column index (skip Sec Dep and other cols) ───────
+    # Cells may be plain text "Jan-2026" OR Excel date objects → use _cell_to_month
     month_col_map: Dict[str, int] = {}
     for j, val in enumerate(hdr):
         if val:
-            s = str(val).strip()
-            # Normalise capitalisation (e.g. "jan-2026" → "Jan-2026")
-            mo = _MONTH_RE.match(s)
-            if mo:
-                canonical = f"{mo.group(1).capitalize()}-{mo.group(2)}"
+            canonical = _cell_to_month(val)
+            if canonical:
                 month_col_map[canonical] = j
 
     if not month_col_map:
