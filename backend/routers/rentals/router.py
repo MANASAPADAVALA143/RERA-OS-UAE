@@ -911,7 +911,7 @@ def update_unit(
     u = db.query(RentalUnit).filter(RentalUnit.id == unit_id, RentalUnit.tenant_id == current_user.tenant_id).first()
     if not u:
         raise HTTPException(404)
-    for field in ("unit_number", "status", "monthly_rent"):
+    for field in ("unit_number", "status", "monthly_rent", "vacancy_loss"):
         if field in body:
             setattr(u, field, body[field])
     if "status_changed_at" in body:

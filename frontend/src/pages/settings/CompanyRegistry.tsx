@@ -32,6 +32,7 @@ interface UnitRow {
   status: string;
   monthly_rent: number;
   rent_history?: Record<string, number>;
+  vacancy_loss?: number;
 }
 
 interface UnitPreview {
@@ -319,12 +320,17 @@ function unitForMonth(u: UnitRow, month: string): { status: string; rent: number
 
   let vacancyLoss = 0;
   if (!occupied) {
-    const idx = ALL_MONTHS.indexOf(month);
-    const prevMonths = idx >= 0 ? ALL_MONTHS.slice(0, idx) : ALL_MONTHS;
-    const lookback = prevMonths.slice().reverse()
-      .map(m => h[m] ?? 0).filter(v => v > 0).slice(0, 3);
-    if (lookback.length) {
-      vacancyLoss = Math.round(lookback.reduce((a, b) => a + b, 0) / lookback.length);
+    // Use manually saved value if set, otherwise auto-calculate from history
+    if (u.vacancy_loss != null && u.vacancy_loss > 0) {
+      vacancyLoss = u.vacancy_loss;
+    } else {
+      const idx = ALL_MONTHS.indexOf(month);
+      const prevMonths = idx >= 0 ? ALL_MONTHS.slice(0, idx) : ALL_MONTHS;
+      const lookback = prevMonths.slice().reverse()
+        .map(m => h[m] ?? 0).filter(v => v > 0).slice(0, 3);
+      if (lookback.length) {
+        vacancyLoss = Math.round(lookback.reduce((a, b) => a + b, 0) / lookback.length);
+      }
     }
   }
 
@@ -358,6 +364,7 @@ function InlineSuites({
   const [unitEditVal, setUnitEditVal] = useState('');
   const [unitEditStatus, setUnitEditStatus] = useState('');
   const [unitEditRent, setUnitEditRent] = useState('');
+  const [unitEditVacLoss, setUnitEditVacLoss] = useState('');
   const [unitSaving, setUnitSaving] = useState(false);
 
   // add unit inline form state
@@ -419,6 +426,7 @@ function InlineSuites({
         unit_number: unitEditVal.trim(),
         status: unitEditStatus,
         monthly_rent: parseFloat(unitEditRent) || 0,
+        vacancy_loss: parseFloat(unitEditVacLoss) || 0,
       });
       setUnitEditId(null);
       push('Unit updated');
@@ -696,9 +704,20 @@ function InlineSuites({
                                             )}
                                           </td>
                                           <td className="px-3 py-1.5 text-right font-mono">
-                                            {vacancyLoss > 0
-                                              ? <span className="text-orange-500">${vacancyLoss.toLocaleString()}</span>
-                                              : <span className="text-gray-300">—</span>}
+                                            {unitEditId === u.id ? (
+                                              <input
+                                                type="number"
+                                                value={unitEditVacLoss}
+                                                onChange={e => setUnitEditVacLoss(e.target.value)}
+                                                disabled={unitSaving}
+                                                placeholder="0"
+                                                className="text-xs border border-orange-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-orange-400 w-24 text-right"
+                                              />
+                                            ) : (
+                                              vacancyLoss > 0
+                                                ? <span className="text-orange-500">${vacancyLoss.toLocaleString()}</span>
+                                                : <span className="text-gray-300">—</span>
+                                            )}
                                           </td>
                                           {canWrite && (
                                             <td className="px-3 py-1.5 text-center">
@@ -721,6 +740,7 @@ function InlineSuites({
                                                       setUnitEditVal(u.unit_number);
                                                       setUnitEditStatus(u.status);
                                                       setUnitEditRent(String(u.monthly_rent));
+                                                      setUnitEditVacLoss(String(vacancyLoss || 0));
                                                     }}
                                                     className="p-1 rounded text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
                                                     title="Edit unit"
