@@ -619,6 +619,23 @@ def delete_company(
     db.commit()
 
 
+@router.delete("/companies", status_code=200)
+def delete_all_companies(
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    """Delete ALL companies and their cascading data for this tenant."""
+    tid = current_user.tenant_id
+    companies = db.query(RentalCompany).filter(RentalCompany.tenant_id == tid).all()
+    for co in companies:
+        _wipe_company_units_and_suites(co.id, tid, db)
+    count = len(companies)
+    db.query(RentalOwnership).filter(RentalOwnership.tenant_id == tid).delete(synchronize_session=False)
+    db.query(RentalCompany).filter(RentalCompany.tenant_id == tid).delete(synchronize_session=False)
+    db.commit()
+    return {"deleted": count, "message": f"Deleted {count} companies and all associated data."}
+
+
 @router.get("/companies/{company_id}/dashboard")
 def company_dashboard(
     company_id: uuid.UUID,

@@ -1123,6 +1123,22 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                 ))}
               </select>
               <button
+                onClick={async () => {
+                  if (!window.confirm('Delete ALL companies and their units? This cannot be undone.')) return;
+                  try {
+                    await api.delete('/api/rentals/companies');
+                    push('All companies cleared — now upload your Excel to reimport.', true);
+                    load();
+                  } catch {
+                    push('Failed to clear companies', false);
+                  }
+                }}
+                disabled={importState !== 'idle'}
+                title="Delete all companies and units, then reimport from Excel"
+                className="flex items-center gap-2 border border-rose-300 text-rose-600 text-sm px-4 py-2 rounded-xl hover:bg-rose-50 font-medium transition-colors disabled:opacity-60">
+                Clear Registry
+              </button>
+              <button
                 onClick={triggerFileInput}
                 disabled={importState !== 'idle'}
                 title="Upload Rent Receivable Excel to auto-create companies and units"
