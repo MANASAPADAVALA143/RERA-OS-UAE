@@ -1,13 +1,14 @@
 """
-AR/AP aging router — periodic manual entry from entity aging reports.
-Not auto-derived from individual invoices/bills.
+AR/AP aging router — periodic manual entry + QB AR Aging Detail upload.
 """
+import os
+import tempfile
 import uuid
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -15,7 +16,9 @@ from database import get_db
 from middleware.auth import CurrentUser, get_current_user, require_write_access
 from models.rentals.ar_ap import RentalPayable, RentalReceivable
 from models.rentals.models import RentalCompany, RentalUnit
+from models.rentals.qb_ar_aging import QBArAgingRow, QBArAgingSnapshot
 from services.ar_ap_calculations import ap_total, ar_total, net_working_capital, rent_past_due_pct
+from services.qb_ar_aging_parser import match_row_to_unit, parse_qb_ar_aging
 from services.rental_calculations import company_summary
 
 router = APIRouter(prefix="/api/rentals", tags=["rentals-arap"])
@@ -455,3 +458,336 @@ def company_arap(
         "ar_history":        [_rec_dict(r) for r in recs],
         "ap_records":        [_pay_dict(p) for p in pays],
     }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# QB AR AGING DETAIL — upload, preview, confirm, history, latest
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _snapshot_dict(s: QBArAgingSnapshot) -> dict:
+    return {
+        "id":              str(s.id),
+        "as_of_date":      s.as_of_date.isoformat(),
+        "snapshot_month":  s.snapshot_month,
+        "uploaded_at":     s.uploaded_at.isoformat(),
+        "uploaded_by":     s.uploaded_by,
+        "row_count":       s.row_count,
+        "matched_count":   s.matched_count,
+        "unmatched_count": s.unmatched_count,
+    }
+
+
+def _row_dict(r: QBArAgingRow) -> dict:
+    return {
+        "id":                 str(r.id),
+        "building":           r.building_name,
+        "customer":           r.customer_name,
+        "unit_ref":           r.unit_ref,
+        "current":            float(r.current_amount),
+        "days_1_30":          float(r.days_1_30),
+        "days_31_60":         float(r.days_31_60),
+        "days_61_90":         float(r.days_61_90),
+        "days_91_plus":       float(r.days_91_plus),
+        "total":              float(r.total),
+        "has_credit":         r.has_credit,
+        "matched_unit_id":    str(r.matched_unit_id)    if r.matched_unit_id    else None,
+        "matched_company_id": str(r.matched_company_id) if r.matched_company_id else None,
+        "is_unmatched":       r.is_unmatched,
+    }
+
+
+@router.post("/ar-ap/qb-aging/preview")
+async def qb_aging_preview(
+    file: UploadFile = File(...),
+    as_of_date: str  = Form(...),           # ISO date "2026-06-30"
+    snapshot_month: str = Form(""),         # "Jun-2026" display label
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    """
+    Parse a QB AR Aging Detail Excel and return a preview with match results.
+    Nothing is saved — call /confirm to persist.
+    """
+    contents = await file.read()
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".xlsx")
+    try:
+        with os.fdopen(tmp_fd, "wb") as fh:
+            fh.write(contents)
+        result = parse_qb_ar_aging(tmp_path)
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["error"])
+
+    tid = current_user.tenant_id
+
+    # Load all companies and units for matching
+    companies = db.query(RentalCompany).filter(RentalCompany.tenant_id == tid).all()
+    all_units  = db.query(RentalUnit).filter(RentalUnit.tenant_id == tid).all()
+
+    co_list = [{"id": str(c.id), "company_name": c.company_name} for c in companies]
+    units_by_co: dict[str, list] = defaultdict(list)
+    for u in all_units:
+        units_by_co[str(u.company_id)].append({
+            "id": str(u.id), "unit_number": u.unit_number, "company_id": str(u.company_id)
+        })
+
+    matched, unmatched = [], []
+    preview_rows = []
+    for row in result["rows"]:
+        uid, cid = match_row_to_unit(row, units_by_co, co_list)
+        enriched = {**row, "matched_unit_id": uid, "matched_company_id": cid, "is_unmatched": uid is None}
+        preview_rows.append(enriched)
+        if uid is None:
+            unmatched.append({"customer": row["customer"], "unit_ref": row.get("unit_ref"), "building": row["building"]})
+        else:
+            matched.append(row["customer"])
+
+    credit_rows = [r for r in preview_rows if r["has_credit"]]
+
+    # Portfolio-level bucket totals
+    totals = {
+        "current":     sum(r["current"]     for r in preview_rows),
+        "days_1_30":   sum(r["days_1_30"]   for r in preview_rows),
+        "days_31_60":  sum(r["days_31_60"]  for r in preview_rows),
+        "days_61_90":  sum(r["days_61_90"]  for r in preview_rows),
+        "days_91_plus": sum(r["days_91_plus"] for r in preview_rows),
+        "total":       sum(r["total"]        for r in preview_rows),
+    }
+
+    # Derive snapshot_month from as_of_date if not supplied
+    if not snapshot_month:
+        try:
+            d = date.fromisoformat(as_of_date)
+            snapshot_month = d.strftime("%b-%Y")
+        except ValueError:
+            snapshot_month = as_of_date
+
+    return {
+        "as_of_date":      as_of_date,
+        "snapshot_month":  snapshot_month,
+        "rows":            preview_rows,
+        "row_count":       len(preview_rows),
+        "matched_count":   len(matched),
+        "unmatched_count": len(unmatched),
+        "unmatched":       unmatched,
+        "credit_rows":     [{"customer": r["customer"], "has_credit": True,
+                              "days_61_90": r["days_61_90"], "days_91_plus": r["days_91_plus"]}
+                             for r in credit_rows],
+        "skipped_subtotals": result["skipped_subtotals"],
+        "portfolio_totals":  totals,
+    }
+
+
+@router.post("/ar-ap/qb-aging/confirm", status_code=201)
+def qb_aging_confirm(
+    body: dict,
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    """
+    Persist a QB AR Aging snapshot from preview data.
+    Each call creates a NEW snapshot (history preserved).
+    """
+    as_of_date_str  = body.get("as_of_date", "")
+    snapshot_month  = body.get("snapshot_month", "")
+    rows_data: list = body.get("rows", [])
+
+    try:
+        as_of = date.fromisoformat(as_of_date_str)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid as_of_date — use ISO format YYYY-MM-DD")
+
+    tid = current_user.tenant_id
+
+    matched_count   = sum(1 for r in rows_data if not r.get("is_unmatched"))
+    unmatched_count = sum(1 for r in rows_data if r.get("is_unmatched"))
+
+    snapshot = QBArAgingSnapshot(
+        tenant_id       = tid,
+        as_of_date      = as_of,
+        snapshot_month  = snapshot_month or as_of.strftime("%b-%Y"),
+        uploaded_by     = current_user.email,
+        row_count       = len(rows_data),
+        matched_count   = matched_count,
+        unmatched_count = unmatched_count,
+    )
+    db.add(snapshot)
+    db.flush()  # get snapshot.id before creating rows
+
+    for r in rows_data:
+        uid  = uuid.UUID(r["matched_unit_id"])    if r.get("matched_unit_id")    else None
+        cid  = uuid.UUID(r["matched_company_id"]) if r.get("matched_company_id") else None
+        row  = QBArAgingRow(
+            snapshot_id        = snapshot.id,
+            tenant_id          = tid,
+            building_name      = r.get("building", ""),
+            customer_name      = r.get("customer", ""),
+            unit_ref           = r.get("unit_ref"),
+            current_amount     = float(r.get("current", 0)),
+            days_1_30          = float(r.get("days_1_30", 0)),
+            days_31_60         = float(r.get("days_31_60", 0)),
+            days_61_90         = float(r.get("days_61_90", 0)),
+            days_91_plus       = float(r.get("days_91_plus", 0)),
+            total              = float(r.get("total", 0)),
+            has_credit         = bool(r.get("has_credit", False)),
+            matched_unit_id    = uid,
+            matched_company_id = cid,
+            is_unmatched       = bool(r.get("is_unmatched", True)),
+        )
+        db.add(row)
+
+    db.commit()
+    db.refresh(snapshot)
+    return {"message": f"Saved {len(rows_data)} rows — snapshot {snapshot.snapshot_month}", "snapshot": _snapshot_dict(snapshot)}
+
+
+@router.get("/ar-ap/qb-aging/snapshots")
+def qb_aging_snapshots(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List all QB AR aging snapshots for this tenant, newest first."""
+    snaps = (
+        db.query(QBArAgingSnapshot)
+        .filter(QBArAgingSnapshot.tenant_id == current_user.tenant_id)
+        .order_by(QBArAgingSnapshot.as_of_date.desc())
+        .all()
+    )
+    return [_snapshot_dict(s) for s in snaps]
+
+
+@router.get("/ar-ap/qb-aging/latest")
+def qb_aging_latest(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Return aggregated aging data from the most recent snapshot.
+    Also returns per-company breakdowns and trend history.
+    """
+    tid = current_user.tenant_id
+
+    # All snapshots ordered newest-first
+    snapshots = (
+        db.query(QBArAgingSnapshot)
+        .filter(QBArAgingSnapshot.tenant_id == tid)
+        .order_by(QBArAgingSnapshot.as_of_date.desc())
+        .all()
+    )
+
+    snapshot_count = len(snapshots)
+
+    if not snapshots:
+        return {
+            "has_data": False,
+            "snapshot_count": 0,
+            "portfolio_totals": None,
+            "by_company": [],
+            "unmatched": [],
+            "credit_rows": [],
+            "trend": [],
+            "trend_ready": False,
+        }
+
+    latest = snapshots[0]
+    rows = (
+        db.query(QBArAgingRow)
+        .filter(QBArAgingRow.snapshot_id == latest.id)
+        .all()
+    )
+
+    def _sum_rows(rlist):
+        return {
+            "current":     round(sum(float(r.current_amount) for r in rlist), 2),
+            "days_1_30":   round(sum(float(r.days_1_30)      for r in rlist), 2),
+            "days_31_60":  round(sum(float(r.days_31_60)     for r in rlist), 2),
+            "days_61_90":  round(sum(float(r.days_61_90)     for r in rlist), 2),
+            "days_91_plus": round(sum(float(r.days_91_plus)  for r in rlist), 2),
+            "total":       round(sum(float(r.total)           for r in rlist), 2),
+        }
+
+    port_totals = _sum_rows(rows)
+    port_totals["overdue"] = round(
+        port_totals["days_1_30"] + port_totals["days_31_60"] +
+        port_totals["days_61_90"] + port_totals["days_91_plus"], 2
+    )
+
+    # Weighted DSO estimate using bucket midpoints
+    # Current=0d, 1-30=15d, 31-60=45d, 61-90=75d, 91+=105d
+    total_bal = port_totals["total"]
+    if total_bal > 0:
+        weighted = (
+            port_totals["current"]     * 0   +
+            port_totals["days_1_30"]   * 15  +
+            port_totals["days_31_60"]  * 45  +
+            port_totals["days_61_90"]  * 75  +
+            port_totals["days_91_plus"]* 105
+        ) / total_bal
+        dso_estimate = round(weighted, 1)
+    else:
+        dso_estimate = None
+
+    # By-company breakdown (matched rows only)
+    co_groups: dict[str, list] = defaultdict(list)
+    for r in rows:
+        if r.matched_company_id:
+            co_groups[str(r.matched_company_id)].append(r)
+
+    companies = db.query(RentalCompany).filter(RentalCompany.tenant_id == tid).all()
+    co_map = {str(c.id): c.company_name for c in companies}
+
+    by_company = []
+    for cid, crows in co_groups.items():
+        s = _sum_rows(crows)
+        s["overdue"] = round(s["days_1_30"] + s["days_31_60"] + s["days_61_90"] + s["days_91_plus"], 2)
+        by_company.append({
+            "company_id":   cid,
+            "company_name": co_map.get(cid, cid),
+            **s,
+        })
+    by_company.sort(key=lambda x: x["overdue"], reverse=True)
+
+    unmatched = [_row_dict(r) for r in rows if r.is_unmatched]
+    credit_rows = [_row_dict(r) for r in rows if r.has_credit]
+
+    # Trend: aggregate bucket totals per snapshot (all snapshots, not just latest)
+    trend = []
+    for snap in reversed(snapshots):  # oldest first
+        snap_rows = db.query(QBArAgingRow).filter(QBArAgingRow.snapshot_id == snap.id).all()
+        s = _sum_rows(snap_rows)
+        s["overdue"] = round(s["days_1_30"] + s["days_31_60"] + s["days_61_90"] + s["days_91_plus"], 2)
+        s["month"] = snap.snapshot_month
+        s["as_of_date"] = snap.as_of_date.isoformat()
+        trend.append(s)
+
+    return {
+        "has_data":        True,
+        "snapshot_count":  snapshot_count,
+        "latest_snapshot": _snapshot_dict(latest),
+        "portfolio_totals": port_totals,
+        "dso_estimate":    dso_estimate,
+        "by_company":      by_company,
+        "unmatched":       unmatched,
+        "credit_rows":     credit_rows,
+        "trend":           trend,
+        "trend_ready":     snapshot_count >= 3,
+    }
+
+
+@router.delete("/ar-ap/qb-aging/snapshots/{snap_id}", status_code=204)
+def delete_qb_snapshot(
+    snap_id: uuid.UUID,
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    snap = db.query(QBArAgingSnapshot).filter(
+        QBArAgingSnapshot.id == snap_id,
+        QBArAgingSnapshot.tenant_id == current_user.tenant_id,
+    ).first()
+    if not snap:
+        raise HTTPException(404)
+    db.delete(snap)
+    db.commit()

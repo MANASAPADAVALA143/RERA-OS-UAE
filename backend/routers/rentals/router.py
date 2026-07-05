@@ -423,6 +423,29 @@ def get_portfolio_summary(
         portfolio_collected_source = "rent_receivable"
 
     aging = arrears_aging(all_inv_dicts, today)
+
+    # If invoice-based aging is empty, fall back to latest QB AR snapshot
+    if all(v == 0.0 for v in aging.values()):
+        try:
+            from models.rentals.qb_ar_aging import QBArAgingRow as _QBRow, QBArAgingSnapshot as _QBSnap
+            latest_snap = (
+                db.query(_QBSnap)
+                .filter(_QBSnap.tenant_id == tid)
+                .order_by(_QBSnap.as_of_date.desc())
+                .first()
+            )
+            if latest_snap:
+                qb_rows = db.query(_QBRow).filter(_QBRow.snapshot_id == latest_snap.id).all()
+                aging = {
+                    "current":  round(sum(float(r.current_amount) for r in qb_rows), 2),
+                    "1_30":     round(sum(float(r.days_1_30)      for r in qb_rows), 2),
+                    "31_60":    round(sum(float(r.days_31_60)     for r in qb_rows), 2),
+                    "61_90":    round(sum(float(r.days_61_90)     for r in qb_rows), 2),
+                    "90_plus":  round(sum(float(r.days_91_plus)   for r in qb_rows), 2),
+                }
+        except Exception:
+            pass  # never break the portfolio summary over a QB import failure
+
     trend = income_trend(all_inv_dicts, all_exp_dicts, months=6)
     expiry = lease_expiry_pipeline([_lease_dict(l) for l in all_leases_raw], today, window_days=90)
 

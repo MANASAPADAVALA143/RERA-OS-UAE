@@ -250,6 +250,16 @@ export default function RentalOverview() {
   const [error, setError]                 = useState('');
   const isFirstLoad = useRef(true);
 
+  // QB aging DSO — fetched once, independent of month filter
+  const [qbDso, setQbDso] = useState<number | null>(null);
+  useEffect(() => {
+    api.get<{ has_data: boolean; dso_estimate?: number | null; portfolio_totals?: Record<string, number> }>(
+      '/api/rentals/ar-ap/qb-aging/latest'
+    ).then(r => {
+      if (r.data.has_data && r.data.dso_estimate != null) setQbDso(r.data.dso_estimate);
+    }).catch(() => {});
+  }, []);
+
   // ── data fetching ──────────────────────────────────────────────────────────
 
   const fetchData = useCallback(async (month: string) => {
@@ -622,9 +632,9 @@ export default function RentalOverview() {
           />
           <SecTile
             label="Arrears Days Outstanding"
-            value="Not available"
-            sub="Awaiting aging data"
-            na
+            value={qbDso != null ? `${Math.round(qbDso)} days` : 'Not available'}
+            sub={qbDso != null ? 'Weighted estimate · QB aging buckets' : 'Upload QB AR Aging in AR Dashboard'}
+            na={qbDso == null}
           />
           <SecTile
             label="Vacant > 30 Days"
@@ -882,10 +892,10 @@ export default function RentalOverview() {
           ) : (
             <div className="flex flex-col items-center justify-center py-12 gap-3">
               <span style={{ fontSize: 32, opacity: 0.4 }}>📊</span>
-              <span style={{ fontSize: 14, fontWeight: 600, color: '#9B9B9B' }}>Awaiting aging data upload</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: '#9B9B9B' }}>Awaiting QB Aging upload</span>
               <span style={{ fontSize: 12, color: '#B5B5B5', maxWidth: 320, textAlign: 'center' }}>
-                Arrears aging buckets (Current / 1–30d / 31–60d / 61–90d / 90+d) will appear here
-                once aging data is uploaded from the AR system.
+                Upload QB "AR Aging Detail by Customer" in the AR Dashboard tab to populate
+                Current / 1–30d / 31–60d / 61–90d / 90+d buckets here.
               </span>
             </div>
           )}
@@ -930,7 +940,7 @@ export default function RentalOverview() {
                         </span>
                       </td>
                       <td className="py-2.5 px-3" style={{ color: '#B0B0B0', fontSize: 13 }}>
-                        Awaiting aging data
+                        {qbDso != null ? `~${Math.round(qbDso)}d (portfolio avg)` : 'Upload QB aging'}
                       </td>
                       <td className="py-2.5 px-3">
                         <span style={{

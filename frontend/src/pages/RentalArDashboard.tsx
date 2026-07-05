@@ -1,12 +1,39 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ComposedChart, Line, Area,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell, Legend,
+  ResponsiveContainer, Cell, Legend, AreaChart,
 } from 'recharts';
 import api from '../services/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+interface QBAgingTotals {
+  current: number; days_1_30: number; days_31_60: number;
+  days_61_90: number; days_91_plus: number; total: number; overdue: number;
+}
+interface QBAgingCompany extends QBAgingTotals { company_id: string; company_name: string; }
+interface QBAgingTrendPoint extends QBAgingTotals { month: string; as_of_date: string; }
+interface QBAgingLatest {
+  has_data: boolean;
+  snapshot_count: number;
+  latest_snapshot?: { snapshot_month: string; uploaded_at: string; row_count: number; unmatched_count: number };
+  portfolio_totals?: QBAgingTotals;
+  dso_estimate?: number | null;
+  by_company: QBAgingCompany[];
+  unmatched: { customer: string; unit_ref?: string; building: string }[];
+  credit_rows: { customer: string; has_credit: boolean; days_61_90: number; days_91_plus: number }[];
+  trend: QBAgingTrendPoint[];
+  trend_ready: boolean;
+}
+interface QBPreview {
+  as_of_date: string; snapshot_month: string;
+  rows: unknown[]; row_count: number; matched_count: number; unmatched_count: number;
+  unmatched: { customer: string; unit_ref?: string; building: string }[];
+  credit_rows: { customer: string; has_credit: boolean; days_61_90: number; days_91_plus: number }[];
+  skipped_subtotals: number;
+  portfolio_totals: QBAgingTotals;
+}
 
 interface MonthlyDetail {
   month: string;
@@ -113,6 +140,64 @@ export default function RentalArDashboard() {
   const [statusFlt, setStatusFlt] = useState('All');
   const [showUnmatched, setShowUnmatched] = useState(false);
   const [chartMonth, setChartMonth] = useState(''); // click-to-filter from chart
+
+  // ── QB AR Aging state ─────────────────────────────────────────────────────
+  const [qbAging, setQbAging] = useState<QBAgingLatest | null>(null);
+  const [qbLoading, setQbLoading] = useState(true);
+  const [qbFile, setQbFile] = useState<File | null>(null);
+  const [qbAsOfDate, setQbAsOfDate] = useState('');
+  const [qbPreview, setQbPreview] = useState<QBPreview | null>(null);
+  const [qbUploading, setQbUploading] = useState(false);
+  const [qbConfirming, setQbConfirming] = useState(false);
+  const [qbError, setQbError] = useState('');
+  const [showQbPanel, setShowQbPanel] = useState(false);
+  const [showQbUnmatched, setShowQbUnmatched] = useState(false);
+  const qbFileRef = useRef<HTMLInputElement>(null);
+
+  const fetchQbAging = () => {
+    setQbLoading(true);
+    api.get<QBAgingLatest>('/api/rentals/ar-ap/qb-aging/latest')
+      .then(r => setQbAging(r.data))
+      .catch(() => setQbAging(null))
+      .finally(() => setQbLoading(false));
+  };
+
+  useEffect(() => { fetchQbAging(); }, []);
+
+  const handleQbPreview = async () => {
+    if (!qbFile || !qbAsOfDate) { setQbError('Select a file and set the as-of date.'); return; }
+    setQbError(''); setQbUploading(true); setQbPreview(null);
+    const fd = new FormData();
+    fd.append('file', qbFile);
+    fd.append('as_of_date', qbAsOfDate);
+    fd.append('snapshot_month', qbAsOfDate.slice(0, 7)); // YYYY-MM
+    try {
+      const r = await api.post<QBPreview>('/api/rentals/ar-ap/qb-aging/preview', fd);
+      setQbPreview(r.data);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setQbError(msg || 'Preview failed.');
+    } finally { setQbUploading(false); }
+  };
+
+  const handleQbConfirm = async () => {
+    if (!qbFile || !qbAsOfDate) return;
+    setQbConfirming(true); setQbError('');
+    const fd = new FormData();
+    fd.append('file', qbFile);
+    fd.append('as_of_date', qbAsOfDate);
+    fd.append('snapshot_month', qbAsOfDate.slice(0, 7));
+    try {
+      await api.post('/api/rentals/ar-ap/qb-aging/confirm', fd);
+      setQbPreview(null); setQbFile(null); setQbAsOfDate('');
+      if (qbFileRef.current) qbFileRef.current.value = '';
+      setShowQbPanel(false);
+      fetchQbAging();
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setQbError(msg || 'Confirm failed.');
+    } finally { setQbConfirming(false); }
+  };
 
   // Fetch when month changes (company filter is client-side)
   useEffect(() => {
@@ -689,6 +774,276 @@ export default function RentalArDashboard() {
           </div>
         </div>
       )}
+
+      {/* ══════════════════════════════════════════════════════════════════
+           QB AR AGING SECTION
+         ══════════════════════════════════════════════════════════════════ */}
+      <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 10, overflow: 'hidden' }}>
+        {/* Header bar */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #E8DEC8', background: '#F5F0E8' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#262626' }}>📊 QB AR Aging Detail</span>
+            {qbAging?.has_data && (
+              <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: '#DCFCE7', color: '#166534', border: '1px solid #BBF7D0' }}>
+                {qbAging.snapshot_count} snapshot{qbAging.snapshot_count !== 1 ? 's' : ''} · latest {qbAging.latest_snapshot?.snapshot_month}
+              </span>
+            )}
+            {qbLoading && <span style={{ fontSize: 11, color: '#9CA3AF' }}>Loading…</span>}
+            {!qbLoading && !qbAging?.has_data && (
+              <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D' }}>
+                No data — upload QB "AR Aging Detail by Customer" below
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => setShowQbPanel(v => !v)}
+            style={{ fontSize: 12, padding: '5px 12px', borderRadius: 6, border: '1px solid #D4AF37', background: '#FBF6EE', color: '#5C5043', cursor: 'pointer', fontWeight: 600 }}
+          >
+            {showQbPanel ? '▲ Hide Upload' : '▲ Upload QB Aging'}
+          </button>
+        </div>
+
+        {/* Upload panel */}
+        {showQbPanel && (
+          <div style={{ padding: 16, borderBottom: '1px solid #E8DEC8', background: '#FFFDF7' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#5C5043', marginBottom: 4 }}>QB Excel File (AR Aging Detail by Customer)</div>
+                <input
+                  ref={qbFileRef}
+                  type="file" accept=".xlsx,.xls"
+                  onChange={e => { setQbFile(e.target.files?.[0] ?? null); setQbPreview(null); }}
+                  style={{ fontSize: 12 }}
+                />
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#5C5043', marginBottom: 4 }}>Report As-Of Date</div>
+                <input
+                  type="date" value={qbAsOfDate} onChange={e => { setQbAsOfDate(e.target.value); setQbPreview(null); }}
+                  style={{ ...SEL, padding: '6px 10px' }}
+                />
+              </div>
+              <button
+                onClick={handleQbPreview}
+                disabled={!qbFile || !qbAsOfDate || qbUploading}
+                style={{ padding: '7px 16px', borderRadius: 6, border: 'none', background: '#D4AF37', color: '#fff', fontWeight: 600, fontSize: 12, cursor: 'pointer', opacity: (!qbFile || !qbAsOfDate || qbUploading) ? 0.5 : 1 }}
+              >
+                {qbUploading ? 'Parsing…' : 'Preview'}
+              </button>
+            </div>
+            {qbError && <div style={{ marginTop: 8, fontSize: 12, color: '#B91C1C' }}>{qbError}</div>}
+
+            {/* Preview results */}
+            {qbPreview && (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 12 }}>
+                  {[
+                    { label: 'Rows parsed', value: qbPreview.row_count },
+                    { label: 'Matched to units', value: qbPreview.matched_count, color: '#166534' },
+                    { label: 'Unmatched', value: qbPreview.unmatched_count, color: qbPreview.unmatched_count > 0 ? '#B91C1C' : '#166534' },
+                    { label: 'Subtotals skipped', value: qbPreview.skipped_subtotals },
+                    { label: 'Credit rows', value: qbPreview.credit_rows.length, color: qbPreview.credit_rows.length > 0 ? '#7C3AED' : undefined },
+                  ].map(k => (
+                    <div key={k.label} style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: k.color ?? '#262626' }}>{k.value}</div>
+                      <div style={{ fontSize: 11, color: '#6B6B6B' }}>{k.label}</div>
+                    </div>
+                  ))}
+                </div>
+                {/* Portfolio totals preview */}
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+                  {[
+                    { label: 'Current', v: qbPreview.portfolio_totals.current, c: '#22A06B' },
+                    { label: '1-30 days', v: qbPreview.portfolio_totals.days_1_30, c: '#F5A623' },
+                    { label: '31-60 days', v: qbPreview.portfolio_totals.days_31_60, c: '#E97316' },
+                    { label: '61-90 days', v: qbPreview.portfolio_totals.days_61_90, c: '#DC2626' },
+                    { label: '91+ days', v: qbPreview.portfolio_totals.days_91_plus, c: '#991B1B' },
+                  ].map(b => (
+                    <div key={b.label} style={{ background: '#FBF6EE', border: `1px solid ${b.c}33`, borderRadius: 6, padding: '8px 14px', textAlign: 'center' }}>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: b.c }}>{fmt$(b.v)}</div>
+                      <div style={{ fontSize: 10, color: '#6B6B6B' }}>{b.label}</div>
+                    </div>
+                  ))}
+                </div>
+                {qbPreview.unmatched.length > 0 && (
+                  <div style={{ background: '#FFF7ED', border: '1px solid #FDBA74', borderRadius: 6, padding: '8px 12px', fontSize: 11, marginBottom: 10 }}>
+                    <strong style={{ color: '#9A3412' }}>⚠️ {qbPreview.unmatched.length} unmatched customer(s) — will be saved as unmatched:</strong>
+                    <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {qbPreview.unmatched.slice(0, 8).map((u, i) => (
+                        <span key={i} style={{ fontFamily: 'monospace', color: '#92400E' }}>{u.customer}{u.unit_ref ? ` (unit: ${u.unit_ref})` : ''} — {u.building}</span>
+                      ))}
+                      {qbPreview.unmatched.length > 8 && <span style={{ color: '#6B6B6B' }}>…and {qbPreview.unmatched.length - 8} more</span>}
+                    </div>
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    onClick={handleQbConfirm}
+                    disabled={qbConfirming}
+                    style={{ padding: '7px 18px', borderRadius: 6, border: 'none', background: '#22A06B', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', opacity: qbConfirming ? 0.6 : 1 }}
+                  >
+                    {qbConfirming ? 'Saving…' : '✔ Confirm & Save'}
+                  </button>
+                  <button
+                    onClick={() => { setQbPreview(null); setQbFile(null); setQbAsOfDate(''); if (qbFileRef.current) qbFileRef.current.value = ''; }}
+                    style={{ padding: '7px 14px', borderRadius: 6, border: '1px solid #E8DEC8', background: '#FBF6EE', color: '#374151', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* QB KPIs */}
+        {qbAging?.has_data && qbAging.portfolio_totals && (
+          <div style={{ padding: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10, marginBottom: 14 }}>
+              {[
+                { label: 'Overdue AR (30+)', value: fmt$(qbAging.portfolio_totals.overdue), border: '#D9534F', sub: 'Excludes current bucket' },
+                { label: '30+ Days Overdue', value: fmt$(qbAging.portfolio_totals.days_1_30 + qbAging.portfolio_totals.days_31_60 + qbAging.portfolio_totals.days_61_90 + qbAging.portfolio_totals.days_91_plus), border: '#F5A623', sub: '1-30 + 31-60 + 61-90 + 91+' },
+                { label: '60+ Days Overdue', value: fmt$(qbAging.portfolio_totals.days_61_90 + qbAging.portfolio_totals.days_91_plus), border: '#E97316', sub: '61-90 + 91+ days' },
+                { label: '90+ Days Overdue', value: fmt$(qbAging.portfolio_totals.days_91_plus), border: '#991B1B', sub: 'Critical — 91+ days' },
+                { label: 'Est. Days to Collect', value: qbAging.dso_estimate != null ? `${Math.round(qbAging.dso_estimate)} days` : '—', border: '#2F80ED', sub: qbAging.trend_ready ? `${qbAging.snapshot_count} snapshots` : `${qbAging.snapshot_count} of 3 needed for trend` },
+              ].map((t, i) => (
+                <div key={i} style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, padding: '12px 14px', borderLeft: `3px solid ${t.border}` }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#6B6B6B', marginBottom: 4, lineHeight: 1.2 }}>{t.label}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: '#262626', fontVariantNumeric: 'tabular-nums lining-nums' }}>{t.value}</div>
+                  <div style={{ fontSize: 10, marginTop: 3, color: '#9CA3AF' }}>{t.sub}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* AR Aging by Bucket stacked bar chart */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div style={CARD}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#262626', marginBottom: 2 }}>AR Aging by Bucket — Portfolio</div>
+                <div style={{ fontSize: 11, color: '#6B6B6B', marginBottom: 12 }}>All tenants · as of {qbAging.latest_snapshot?.snapshot_month}</div>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart
+                    data={[{
+                      name: 'Portfolio',
+                      Current: qbAging.portfolio_totals.current,
+                      '1-30': qbAging.portfolio_totals.days_1_30,
+                      '31-60': qbAging.portfolio_totals.days_31_60,
+                      '61-90': qbAging.portfolio_totals.days_61_90,
+                      '91+': qbAging.portfolio_totals.days_91_plus,
+                    }]}
+                    layout="vertical" margin={{ left: 10, right: 20, top: 5, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+                    <XAxis type="number" tickFormatter={v => `$${(v/1000).toFixed(0)}K`} tick={{ fontSize: 10 }} />
+                    <YAxis type="category" dataKey="name" width={60} tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(v: number) => fmt$(v)} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Bar dataKey="Current"  stackId="a" fill="#22A06B" />
+                    <Bar dataKey="1-30"    stackId="a" fill="#F5A623" />
+                    <Bar dataKey="31-60"   stackId="a" fill="#E97316" />
+                    <Bar dataKey="61-90"   stackId="a" fill="#DC2626" />
+                    <Bar dataKey="91+"     stackId="a" fill="#991B1B" radius={[0,4,4,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* By-company table */}
+              <div style={CARD}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#262626', marginBottom: 2 }}>Aging by Company</div>
+                <div style={{ fontSize: 11, color: '#6B6B6B', marginBottom: 10 }}>Sorted by overdue amount (30+)</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
+                  {[...qbAging.by_company]
+                    .sort((a, b) => b.overdue - a.overdue)
+                    .map((co, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, background: '#F5F0E8', borderRadius: 5, padding: '6px 10px' }}>
+                        <span style={{ fontWeight: 600, color: '#1C1917', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{co.company_name}</span>
+                        <span style={{ color: '#22A06B', marginLeft: 8, minWidth: 60, textAlign: 'right' }}>{fmt$(co.current)}</span>
+                        <span style={{ color: co.overdue > 0 ? '#D9534F' : '#9CA3AF', marginLeft: 6, minWidth: 60, textAlign: 'right', fontWeight: co.overdue > 0 ? 700 : 400 }}>{co.overdue > 0 ? fmt$(co.overdue) : '—'}</span>
+                      </div>
+                    ))
+                  }
+                </div>
+                <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 10, color: '#9CA3AF' }}>
+                  <span style={{ color: '#22A06B' }}>■ Current</span>
+                  <span style={{ color: '#D9534F' }}>■ Overdue (30+)</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Trend section — only when 3+ snapshots */}
+            {qbAging.trend_ready && qbAging.trend.length >= 3 && (
+              <div style={{ ...CARD, marginTop: 14 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#262626', marginBottom: 2 }}>AR Aging Trend — {qbAging.snapshot_count} Months</div>
+                <div style={{ fontSize: 11, color: '#6B6B6B', marginBottom: 12 }}>Monthly overdue bucket breakdown</div>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={qbAging.trend.map(t => ({
+                    month: t.month.slice(0, 7),
+                    Current: t.current,
+                    '1-30': t.days_1_30,
+                    '31-60': t.days_31_60,
+                    '61-90': t.days_61_90,
+                    '91+': t.days_91_plus,
+                  }))} margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+                    <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                    <YAxis tickFormatter={v => `$${(v/1000).toFixed(0)}K`} tick={{ fontSize: 10 }} />
+                    <Tooltip formatter={(v: number) => fmt$(v)} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Bar dataKey="Current" stackId="a" fill="#22A06B" />
+                    <Bar dataKey="1-30"   stackId="a" fill="#F5A623" />
+                    <Bar dataKey="31-60"  stackId="a" fill="#E97316" />
+                    <Bar dataKey="61-90"  stackId="a" fill="#DC2626" />
+                    <Bar dataKey="91+"    stackId="a" fill="#991B1B" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            {!qbAging.trend_ready && (
+              <div style={{ marginTop: 10, fontSize: 11, color: '#9CA3AF', textAlign: 'center', padding: '8px 0' }}>
+                📈 Trend chart available after {3 - qbAging.snapshot_count} more monthly upload{3 - qbAging.snapshot_count !== 1 ? 's' : ''} ({qbAging.snapshot_count}/3 collected)
+              </div>
+            )}
+
+            {/* Credit rows warning */}
+            {qbAging.credit_rows.length > 0 && (
+              <div style={{ marginTop: 10, background: '#F3E8FF', border: '1px solid #C4B5FD', borderRadius: 8, padding: '10px 14px' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#5B21B6', marginBottom: 6 }}>
+                  💜 {qbAging.credit_rows.length} tenant(s) have credit balances (negative buckets)
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {qbAging.credit_rows.map((r, i) => (
+                    <span key={i} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 20, background: '#EDE9FE', color: '#4C1D95', border: '1px solid #C4B5FD' }}>
+                      {r.customer}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Unmatched rows */}
+            {qbAging.unmatched.length > 0 && (
+              <div style={{ marginTop: 10, background: '#FFF7ED', border: '1px solid #FDBA74', borderRadius: 8, padding: '10px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#9A3412' }}>
+                    ⚠️ {qbAging.unmatched.length} QB row(s) not matched to any unit in registry
+                  </span>
+                  <button onClick={() => setShowQbUnmatched(v => !v)} style={{ fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', color: '#9A3412', textDecoration: 'underline' }}>
+                    {showQbUnmatched ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                {showQbUnmatched && (
+                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {qbAging.unmatched.map((u, i) => (
+                      <div key={i} style={{ fontSize: 11, fontFamily: 'monospace', color: '#92400E' }}>
+                        {u.customer}{u.unit_ref ? ` · ${u.unit_ref}` : ''} — {u.building}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* ── UNMATCHED P&L LINES ──────────────────────────────────────────── */}
       {(rawData?.unmatched_lines?.length ?? 0) > 0 && (

@@ -62,6 +62,7 @@ import models.rentals.maintenance  # noqa: F401
 import models.rentals.unit_inspection  # noqa: F401
 import models.rentals.vendor  # noqa: F401
 import models.rentals.ar_ap  # noqa: F401
+import models.rentals.qb_ar_aging  # noqa: F401
 import models.propdev.company  # noqa: F401
 import models.propdev.lot  # noqa: F401
 import models.propdev.partner  # noqa: F401
