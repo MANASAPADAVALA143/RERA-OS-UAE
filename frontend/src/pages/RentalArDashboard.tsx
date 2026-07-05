@@ -778,118 +778,189 @@ export default function RentalArDashboard() {
       {/* ══════════════════════════════════════════════════════════════════
            QB AR AGING SECTION
          ══════════════════════════════════════════════════════════════════ */}
-      <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 10, overflow: 'hidden' }}>
-        {/* Header bar */}
+      <div style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
+
+        {/* ── Header bar ─────────────────────────────────────────────────── */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #E8DEC8', background: '#F5F0E8' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: '#262626' }}>📊 QB AR Aging Detail</span>
-            {qbAging?.has_data && (
-              <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: '#DCFCE7', color: '#166534', border: '1px solid #BBF7D0' }}>
-                {qbAging.snapshot_count} snapshot{qbAging.snapshot_count !== 1 ? 's' : ''} · latest {qbAging.latest_snapshot?.snapshot_month}
+            {qbLoading && <span style={{ fontSize: 11, color: '#9CA3AF' }}>Loading…</span>}
+            {!qbLoading && qbAging?.has_data && (
+              <span style={{ fontSize: 11, padding: '2px 10px', borderRadius: 20, background: '#DCFCE7', color: '#166534', border: '1px solid #BBF7D0', fontWeight: 600 }}>
+                ✓ {qbAging.snapshot_count} upload{qbAging.snapshot_count !== 1 ? 's' : ''} · latest {qbAging.latest_snapshot?.snapshot_month}
               </span>
             )}
-            {qbLoading && <span style={{ fontSize: 11, color: '#9CA3AF' }}>Loading…</span>}
             {!qbLoading && !qbAging?.has_data && (
-              <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D' }}>
-                No data — upload QB "AR Aging Detail by Customer" below
+              <span style={{ fontSize: 11, padding: '2px 10px', borderRadius: 20, background: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D', fontWeight: 600 }}>
+                No data yet — upload QB "AR Aging Detail by Customer"
               </span>
             )}
           </div>
-          <button
-            onClick={() => setShowQbPanel(v => !v)}
-            style={{ fontSize: 12, padding: '5px 12px', borderRadius: 6, border: '1px solid #D4AF37', background: '#FBF6EE', color: '#5C5043', cursor: 'pointer', fontWeight: 600 }}
-          >
-            {showQbPanel ? '▲ Hide Upload' : '▲ Upload QB Aging'}
-          </button>
+          {/* Collapsed: show compact "Update" row; Expanded: show Hide */}
+          {qbAging?.has_data && !showQbPanel ? (
+            <button
+              onClick={() => setShowQbPanel(true)}
+              style={{ fontSize: 12, padding: '5px 14px', borderRadius: 6, border: '1px solid #D4AF37', background: 'linear-gradient(135deg,#D4AF37,#B8860B)', color: '#fff', cursor: 'pointer', fontWeight: 600, letterSpacing: '0.02em' }}
+            >
+              + Upload Next Month
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowQbPanel(v => !v)}
+              style={{ fontSize: 12, padding: '5px 14px', borderRadius: 6, border: '1px solid #D4AF37', background: '#FBF6EE', color: '#5C5043', cursor: 'pointer', fontWeight: 600 }}
+            >
+              {showQbPanel ? '▲ Hide Upload' : '▲ Upload QB Aging'}
+            </button>
+          )}
         </div>
 
-        {/* Upload panel */}
-        {showQbPanel && (
-          <div style={{ padding: 16, borderBottom: '1px solid #E8DEC8', background: '#FFFDF7' }}>
+        {/* ── Monthly upload history strip ────────────────────────────────── */}
+        {!qbLoading && qbAging?.has_data && (qbAging.trend?.length ?? 0) > 0 && (
+          <div style={{ padding: '8px 16px', borderBottom: '1px solid #E8DEC8', background: '#FDFAF4', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: 4 }}>Upload History:</span>
+            {qbAging.trend.map((t, i) => (
+              <span key={i} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: '#DCFCE7', color: '#166534', border: '1px solid #BBF7D0', fontWeight: 500 }}>
+                ✓ {t.month.slice(0, 7)}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* ── Upload panel — shown when no data yet OR user clicked Upload ── */}
+        {(!qbAging?.has_data || showQbPanel) && (
+          <div style={{ padding: 16, borderBottom: '1px solid #E8DEC8', background: '#FDFAF4' }}>
+
+            {/* File + date + preview row */}
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#5C5043', marginBottom: 4 }}>QB Excel File (AR Aging Detail by Customer)</div>
-                <input
-                  ref={qbFileRef}
-                  type="file" accept=".xlsx,.xls"
-                  onChange={e => { setQbFile(e.target.files?.[0] ?? null); setQbPreview(null); }}
-                  style={{ fontSize: 12 }}
-                />
+              <div style={{ flex: 1, minWidth: 220 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#5C5043', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>QB Excel File</div>
+                <label style={{
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px',
+                  border: '1px solid #E8DEC8', borderRadius: 6, background: '#FBF6EE',
+                  cursor: 'pointer', fontSize: 12, color: '#5C5043', fontWeight: 500,
+                }}>
+                  <span>📎</span>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {qbFile ? qbFile.name : 'Choose AR Aging Detail by Customer.xlsx'}
+                  </span>
+                  <input ref={qbFileRef} type="file" accept=".xlsx,.xls"
+                    onChange={e => { setQbFile(e.target.files?.[0] ?? null); setQbPreview(null); }}
+                    style={{ display: 'none' }} />
+                </label>
               </div>
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#5C5043', marginBottom: 4 }}>Report As-Of Date</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#5C5043', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Report As-Of Date</div>
                 <input
-                  type="date" value={qbAsOfDate} onChange={e => { setQbAsOfDate(e.target.value); setQbPreview(null); }}
-                  style={{ ...SEL, padding: '6px 10px' }}
+                  type="date" value={qbAsOfDate}
+                  onChange={e => { setQbAsOfDate(e.target.value); setQbPreview(null); }}
+                  style={{ ...SEL, padding: '7px 12px', fontSize: 12 }}
                 />
               </div>
               <button
                 onClick={handleQbPreview}
                 disabled={!qbFile || !qbAsOfDate || qbUploading}
-                style={{ padding: '7px 16px', borderRadius: 6, border: 'none', background: '#D4AF37', color: '#fff', fontWeight: 600, fontSize: 12, cursor: 'pointer', opacity: (!qbFile || !qbAsOfDate || qbUploading) ? 0.5 : 1 }}
+                style={{
+                  padding: '7px 20px', borderRadius: 6, border: 'none',
+                  background: (!qbFile || !qbAsOfDate || qbUploading) ? '#D4AF3766' : 'linear-gradient(135deg,#D4AF37,#B8860B)',
+                  color: '#fff', fontWeight: 700, fontSize: 13, cursor: (!qbFile || !qbAsOfDate || qbUploading) ? 'not-allowed' : 'pointer',
+                  letterSpacing: '0.02em',
+                }}
               >
-                {qbUploading ? 'Parsing…' : 'Preview'}
+                {qbUploading ? '⏳ Parsing…' : '🔍 Preview'}
               </button>
             </div>
-            {qbError && <div style={{ marginTop: 8, fontSize: 12, color: '#B91C1C' }}>{qbError}</div>}
+
+            {/* Error banner — styled like attention pill */}
+            {qbError && (
+              <div style={{ marginTop: 10, display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 14px', borderRadius: 8, background: '#FEF2F2', border: '1px solid #FECACA' }}>
+                <span style={{ fontSize: 16, lineHeight: 1 }}>⚠️</span>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#991B1B', marginBottom: 2 }}>Upload Error</div>
+                  <div style={{ fontSize: 12, color: '#B91C1C' }}>{qbError}</div>
+                </div>
+              </div>
+            )}
 
             {/* Preview results */}
             {qbPreview && (
-              <div style={{ marginTop: 14 }}>
-                <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 12 }}>
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#5C5043', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Parse Summary</div>
+
+                {/* Stats row */}
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
                   {[
-                    { label: 'Rows parsed', value: qbPreview.row_count },
-                    { label: 'Matched to units', value: qbPreview.matched_count, color: '#166534' },
-                    { label: 'Unmatched', value: qbPreview.unmatched_count, color: qbPreview.unmatched_count > 0 ? '#B91C1C' : '#166534' },
-                    { label: 'Subtotals skipped', value: qbPreview.skipped_subtotals },
-                    { label: 'Credit rows', value: qbPreview.credit_rows.length, color: qbPreview.credit_rows.length > 0 ? '#7C3AED' : undefined },
+                    { label: 'Rows Parsed', value: qbPreview.row_count, c: '#262626' },
+                    { label: 'Matched', value: qbPreview.matched_count, c: '#166534' },
+                    { label: 'Unmatched', value: qbPreview.unmatched_count, c: qbPreview.unmatched_count > 0 ? '#B91C1C' : '#166534' },
+                    { label: 'Subtotals Skipped', value: qbPreview.skipped_subtotals, c: '#6B6B6B' },
+                    { label: 'Credit Rows', value: qbPreview.credit_rows.length, c: qbPreview.credit_rows.length > 0 ? '#7C3AED' : '#6B6B6B' },
                   ].map(k => (
-                    <div key={k.label} style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 20, fontWeight: 700, color: k.color ?? '#262626' }}>{k.value}</div>
-                      <div style={{ fontSize: 11, color: '#6B6B6B' }}>{k.label}</div>
+                    <div key={k.label} style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, padding: '10px 16px', textAlign: 'center', minWidth: 90 }}>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: k.c, fontVariantNumeric: 'tabular-nums lining-nums' }}>{k.value}</div>
+                      <div style={{ fontSize: 10, color: '#6B6B6B', marginTop: 2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{k.label}</div>
                     </div>
                   ))}
                 </div>
-                {/* Portfolio totals preview */}
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+
+                {/* Bucket totals */}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
                   {[
                     { label: 'Current', v: qbPreview.portfolio_totals.current, c: '#22A06B' },
-                    { label: '1-30 days', v: qbPreview.portfolio_totals.days_1_30, c: '#F5A623' },
-                    { label: '31-60 days', v: qbPreview.portfolio_totals.days_31_60, c: '#E97316' },
-                    { label: '61-90 days', v: qbPreview.portfolio_totals.days_61_90, c: '#DC2626' },
-                    { label: '91+ days', v: qbPreview.portfolio_totals.days_91_plus, c: '#991B1B' },
+                    { label: '1–30 Days', v: qbPreview.portfolio_totals.days_1_30, c: '#F5A623' },
+                    { label: '31–60 Days', v: qbPreview.portfolio_totals.days_31_60, c: '#E97316' },
+                    { label: '61–90 Days', v: qbPreview.portfolio_totals.days_61_90, c: '#DC2626' },
+                    { label: '91+ Days', v: qbPreview.portfolio_totals.days_91_plus, c: '#991B1B' },
                   ].map(b => (
-                    <div key={b.label} style={{ background: '#FBF6EE', border: `1px solid ${b.c}33`, borderRadius: 6, padding: '8px 14px', textAlign: 'center' }}>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: b.c }}>{fmt$(b.v)}</div>
-                      <div style={{ fontSize: 10, color: '#6B6B6B' }}>{b.label}</div>
+                    <div key={b.label} style={{ flex: 1, minWidth: 90, background: '#FBF6EE', border: `2px solid ${b.c}33`, borderRadius: 8, padding: '10px 12px', textAlign: 'center', borderTop: `3px solid ${b.c}` }}>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: b.c, fontVariantNumeric: 'tabular-nums lining-nums' }}>{fmt$(b.v)}</div>
+                      <div style={{ fontSize: 10, color: '#6B6B6B', marginTop: 2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{b.label}</div>
                     </div>
                   ))}
                 </div>
+
+                {/* Unmatched warning */}
                 {qbPreview.unmatched.length > 0 && (
-                  <div style={{ background: '#FFF7ED', border: '1px solid #FDBA74', borderRadius: 6, padding: '8px 12px', fontSize: 11, marginBottom: 10 }}>
-                    <strong style={{ color: '#9A3412' }}>⚠️ {qbPreview.unmatched.length} unmatched customer(s) — will be saved as unmatched:</strong>
-                    <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      {qbPreview.unmatched.slice(0, 8).map((u, i) => (
-                        <span key={i} style={{ fontFamily: 'monospace', color: '#92400E' }}>{u.customer}{u.unit_ref ? ` (unit: ${u.unit_ref})` : ''} — {u.building}</span>
-                      ))}
-                      {qbPreview.unmatched.length > 8 && <span style={{ color: '#6B6B6B' }}>…and {qbPreview.unmatched.length - 8} more</span>}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 14px', borderRadius: 8, background: '#FFF7ED', border: '1px solid #FDBA74', marginBottom: 12 }}>
+                    <span style={{ fontSize: 16, lineHeight: 1 }}>⚠️</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#9A3412', marginBottom: 4 }}>
+                        {qbPreview.unmatched.length} customer{qbPreview.unmatched.length !== 1 ? 's' : ''} not matched to any unit — will be saved as unmatched
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {qbPreview.unmatched.slice(0, 6).map((u, i) => (
+                          <span key={i} style={{ fontSize: 11, fontFamily: 'monospace', color: '#92400E' }}>
+                            {u.customer}{u.unit_ref ? ` · ${u.unit_ref}` : ''} — {u.building}
+                          </span>
+                        ))}
+                        {qbPreview.unmatched.length > 6 && <span style={{ fontSize: 11, color: '#78716C' }}>…and {qbPreview.unmatched.length - 6} more</span>}
+                      </div>
                     </div>
                   </div>
                 )}
-                <div style={{ display: 'flex', gap: 10 }}>
+
+                {/* Action buttons */}
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   <button
                     onClick={handleQbConfirm}
                     disabled={qbConfirming}
-                    style={{ padding: '7px 18px', borderRadius: 6, border: 'none', background: '#22A06B', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', opacity: qbConfirming ? 0.6 : 1 }}
+                    style={{
+                      padding: '8px 22px', borderRadius: 6, border: 'none',
+                      background: qbConfirming ? '#86EFAC' : 'linear-gradient(135deg,#22A06B,#16A34A)',
+                      color: '#fff', fontWeight: 700, fontSize: 13, cursor: qbConfirming ? 'not-allowed' : 'pointer',
+                      letterSpacing: '0.02em',
+                    }}
                   >
-                    {qbConfirming ? 'Saving…' : '✔ Confirm & Save'}
+                    {qbConfirming ? '⏳ Saving…' : '✔ Confirm & Save'}
                   </button>
                   <button
                     onClick={() => { setQbPreview(null); setQbFile(null); setQbAsOfDate(''); if (qbFileRef.current) qbFileRef.current.value = ''; }}
-                    style={{ padding: '7px 14px', borderRadius: 6, border: '1px solid #E8DEC8', background: '#FBF6EE', color: '#374151', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}
+                    style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #E8DEC8', background: '#FBF6EE', color: '#5C5043', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}
                   >
                     Cancel
                   </button>
+                  <span style={{ fontSize: 11, color: '#9CA3AF', marginLeft: 4 }}>
+                    This creates a new monthly snapshot — existing history is preserved.
+                  </span>
                 </div>
               </div>
             )}
