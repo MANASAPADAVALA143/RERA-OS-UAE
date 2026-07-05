@@ -181,21 +181,24 @@ export default function RentalArDashboard() {
   };
 
   const handleQbConfirm = async () => {
-    if (!qbFile || !qbAsOfDate) return;
+    if (!qbPreview || !qbAsOfDate) return;
     setQbConfirming(true); setQbError('');
-    const fd = new FormData();
-    fd.append('file', qbFile);
-    fd.append('as_of_date', qbAsOfDate);
-    fd.append('snapshot_month', qbAsOfDate.slice(0, 7));
     try {
-      await api.post('/api/rentals/ar-ap/qb-aging/confirm', fd);
+      // Send the already-parsed preview rows as JSON — no re-upload needed
+      await api.post('/api/rentals/ar-ap/qb-aging/confirm', {
+        as_of_date:     qbAsOfDate,
+        snapshot_month: qbPreview.snapshot_month,
+        rows:           qbPreview.rows,
+      });
       setQbPreview(null); setQbFile(null); setQbAsOfDate('');
       if (qbFileRef.current) qbFileRef.current.value = '';
       setShowQbPanel(false);
       fetchQbAging();
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setQbError(msg || 'Confirm failed.');
+      const err = e as { response?: { data?: { detail?: string | object } } };
+      const raw = err?.response?.data?.detail;
+      const msg = typeof raw === 'string' ? raw : raw ? JSON.stringify(raw) : 'Confirm failed — check server logs.';
+      setQbError(msg);
     } finally { setQbConfirming(false); }
   };
 
