@@ -1,10 +1,36 @@
-﻿import { useState, useMemo } from 'react';
+﻿import { useEffect, useRef, useState, useMemo } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import { useRentalPortfolio, sumMetrics } from '../contexts/RentalPortfolioContext';
 import type { EntityArAp } from '../contexts/RentalPortfolioContext';
 import { useRentalNav } from '../contexts/RentalNavContext';
+import api from '../services/api';
+
+// ── QB AP Aging types ─────────────────────────────────────────────────────────
+interface QBApTotals {
+  current: number; days_1_30: number; days_31_60: number;
+  days_60_plus: number; total: number; overdue: number;
+}
+interface QBApPreview {
+  as_of_date: string; snapshot_month: string;
+  rows: unknown[]; row_count: number;
+  matched_count: number; seeded_count: number;
+  vendors_to_seed: string[];
+  credit_rows: { vendor_name: string; has_credit: boolean; days_31_60: number; days_60_plus: number }[];
+  skipped_subtotals: number;
+  portfolio_totals: QBApTotals;
+}
+interface QBApLatest {
+  has_data: boolean; snapshot_count: number;
+  latest_snapshot?: { snapshot_month: string; uploaded_at: string; row_count: number; seeded_count: number };
+  portfolio_totals?: QBApTotals;
+  dpo_estimate?: number | null;
+  by_vendor: { vendor_name: string; overdue: number; total: number; has_credit: boolean; was_seeded: boolean }[];
+  credit_rows: { vendor_name: string }[];
+  trend: { month: string; overdue: number; total: number }[];
+  trend_ready: boolean;
+}
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 const $$ = (n: number) =>
@@ -128,6 +154,59 @@ export default function RentalApDashboard() {
   const { setTab }    = useRentalNav();
   const port          = sumMetrics(portfolio.entities);
 
+  // ── QB AP Aging upload state ──────────────────────────────────────────────
+  const [qbAp, setQbAp]               = useState<QBApLatest | null>(null);
+  const [qbApFile, setQbApFile]        = useState<File | null>(null);
+  const [qbApDate, setQbApDate]        = useState('');
+  const [qbApPreview, setQbApPreview]  = useState<QBApPreview | null>(null);
+  const [qbApUploading, setQbApUploading] = useState(false);
+  const [qbApConfirming, setQbApConfirming] = useState(false);
+  const [qbApError, setQbApError]      = useState('');
+  const [showQbApPanel, setShowQbApPanel] = useState(false);
+  const qbApFileRef = useRef<HTMLInputElement>(null);
+
+  const fetchQbAp = () => {
+    api.get<QBApLatest>('/api/rentals/ar-ap/qb-ap-aging/latest')
+      .then(r => setQbAp(r.data))
+      .catch(() => setQbAp(null));
+  };
+  useEffect(() => { fetchQbAp(); }, []);
+
+  const handleQbApPreview = async () => {
+    if (!qbApFile || !qbApDate) { setQbApError('Select a file and set the report date.'); return; }
+    setQbApError(''); setQbApUploading(true); setQbApPreview(null);
+    const fd = new FormData();
+    fd.append('file', qbApFile);
+    fd.append('as_of_date', qbApDate);
+    try {
+      const r = await api.post<QBApPreview>('/api/rentals/ar-ap/qb-ap-aging/preview', fd);
+      setQbApPreview(r.data);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setQbApError(msg || 'Preview failed.');
+    } finally { setQbApUploading(false); }
+  };
+
+  const handleQbApConfirm = async () => {
+    if (!qbApPreview || !qbApDate) return;
+    setQbApConfirming(true); setQbApError('');
+    try {
+      await api.post('/api/rentals/ar-ap/qb-ap-aging/confirm', {
+        as_of_date:     qbApDate,
+        snapshot_month: qbApPreview.snapshot_month,
+        rows:           qbApPreview.rows,
+      });
+      setQbApPreview(null); setQbApFile(null); setQbApDate('');
+      if (qbApFileRef.current) qbApFileRef.current.value = '';
+      setShowQbApPanel(false);
+      fetchQbAp();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string | object } } };
+      const raw = err?.response?.data?.detail;
+      setQbApError(typeof raw === 'string' ? raw : raw ? JSON.stringify(raw) : 'Confirm failed.');
+    } finally { setQbApConfirming(false); }
+  };
+
   // section 4 action state
   const [actioned, setActioned] = useState<Set<string>>(new Set());
   const [notes, setNotes]       = useState<Record<string, string>>({});
@@ -209,6 +288,206 @@ export default function RentalApDashboard() {
         <p className="text-xs uppercase tracking-wider font-sans" style={{ color: '#B8860B' }}>AP Dashboard</p>
         <h1 className="text-3xl font-bold text-gray-900 mt-1">Accounts Payable</h1>
         <p className="text-sm text-gray-400 font-sans mt-1">Aging, payment planning, and vendor relationship management</p>
+      </div>
+
+      {/* ══ QB AP AGING UPLOAD PANEL ════════════════════════════════════════ */}
+      <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+        {/* header bar */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50">
+          <div>
+            <p className="text-xs font-sans font-semibold uppercase tracking-wider text-gray-400">QuickBooks · AP Aging Detail by Vendor</p>
+            {qbAp?.has_data && qbAp.latest_snapshot && (
+              <p className="text-xs text-gray-500 font-sans mt-0.5">
+                Latest: {qbAp.latest_snapshot.snapshot_month} · {qbAp.latest_snapshot.row_count} vendors
+              </p>
+            )}
+          </div>
+          {qbAp?.has_data && !showQbApPanel && (
+            <button onClick={() => setShowQbApPanel(true)}
+              className="text-xs font-sans font-medium px-3 py-1.5 rounded-lg border border-[#0E3B36] text-[#0E3B36] hover:bg-[#0E3B36] hover:text-white transition-colors">
+              + Upload Next Month
+            </button>
+          )}
+        </div>
+
+        {/* upload form */}
+        {(!qbAp?.has_data || showQbApPanel) && (
+          <div className="px-6 py-5 space-y-4">
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
+              {/* file chooser */}
+              <div className="flex-1">
+                <label className="block text-xs font-sans font-medium text-gray-500 mb-1">QB AP Aging Excel file</label>
+                <label className="flex items-center gap-2 cursor-pointer border border-dashed border-gray-300 rounded-lg px-4 py-3 hover:border-[#0E3B36] transition-colors">
+                  <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                  <span className="text-sm text-gray-500 font-sans truncate">
+                    {qbApFile ? qbApFile.name : 'Choose .xlsx file…'}
+                  </span>
+                  <input ref={qbApFileRef} type="file" accept=".xlsx,.xls" className="hidden"
+                    onChange={e => { setQbApFile(e.target.files?.[0] ?? null); setQbApPreview(null); }} />
+                </label>
+              </div>
+              {/* date */}
+              <div>
+                <label className="block text-xs font-sans font-medium text-gray-500 mb-1">Report "As of" date</label>
+                <input type="date" value={qbApDate} onChange={e => { setQbApDate(e.target.value); setQbApPreview(null); }}
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#0E3B36]" />
+              </div>
+              {/* preview button */}
+              <button onClick={handleQbApPreview} disabled={!qbApFile || !qbApDate || qbApUploading}
+                className="px-5 py-2.5 rounded-lg bg-[#0E3B36] text-white text-sm font-sans font-medium hover:bg-[#1A5249] disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap">
+                {qbApUploading ? 'Parsing…' : 'Preview Import'}
+              </button>
+            </div>
+
+            {/* error */}
+            {qbApError && (
+              <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 font-sans">
+                {qbApError}
+              </div>
+            )}
+
+            {/* preview results */}
+            {qbApPreview && (
+              <div className="space-y-4">
+                {/* stats strip */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Vendors parsed', val: qbApPreview.row_count, color: 'gray' },
+                    { label: 'Matched existing', val: qbApPreview.matched_count, color: 'green' },
+                    { label: 'Will be created', val: qbApPreview.seeded_count, color: qbApPreview.seeded_count > 0 ? 'amber' : 'gray' },
+                    { label: 'Subtotals skipped', val: qbApPreview.skipped_subtotals, color: 'gray' },
+                  ].map(({ label, val, color }) => (
+                    <div key={label} className={`rounded-xl border p-4 ${
+                      color === 'green' ? 'bg-green-50 border-green-200' :
+                      color === 'amber' ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-200'}`}>
+                      <p className="text-xs font-sans text-gray-500">{label}</p>
+                      <p className={`text-2xl font-bold font-mono mt-1 ${
+                        color === 'green' ? 'text-green-800' :
+                        color === 'amber' ? 'text-amber-800' : 'text-gray-800'}`}>{val}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* totals by bucket */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  {[
+                    { label: 'Current', val: qbApPreview.portfolio_totals.current, color: 'green' },
+                    { label: '1–30 days', val: qbApPreview.portfolio_totals.days_1_30, color: 'green' },
+                    { label: '31–60 days', val: qbApPreview.portfolio_totals.days_31_60, color: 'amber' },
+                    { label: '60+ days', val: qbApPreview.portfolio_totals.days_60_plus, color: 'red' },
+                    { label: 'Total AP', val: qbApPreview.portfolio_totals.total, color: 'gray' },
+                  ].map(({ label, val, color }) => (
+                    <div key={label} className={`rounded-xl border p-4 ${
+                      color === 'green' ? 'bg-green-50 border-green-200' :
+                      color === 'amber' ? 'bg-amber-50 border-amber-200' :
+                      color === 'red'   ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
+                      <p className="text-xs font-sans text-gray-500">{label}</p>
+                      <p className={`text-lg font-bold font-mono mt-1 ${
+                        color === 'green' ? 'text-green-800' :
+                        color === 'amber' ? 'text-amber-800' :
+                        color === 'red'   ? 'text-red-800' : 'text-gray-800'}`}>{$$(val)}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* vendors to be seeded */}
+                {qbApPreview.seeded_count > 0 && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4">
+                    <p className="text-sm font-sans font-semibold text-amber-800 mb-2">
+                      {qbApPreview.seeded_count} new vendor{qbApPreview.seeded_count > 1 ? 's' : ''} will be created in Vendor Registry
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {qbApPreview.vendors_to_seed.map(v => (
+                        <span key={v} className="text-xs font-sans bg-amber-100 text-amber-800 border border-amber-300 rounded px-2 py-0.5">{v}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* credit rows warning */}
+                {qbApPreview.credit_rows.length > 0 && (
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 px-5 py-3 text-sm font-sans text-blue-700">
+                    {qbApPreview.credit_rows.length} vendor{qbApPreview.credit_rows.length > 1 ? 's have' : ' has'} credit balances (negative values). These will be imported as-is.
+                  </div>
+                )}
+
+                {/* confirm / cancel */}
+                <div className="flex gap-3">
+                  <button onClick={handleQbApConfirm} disabled={qbApConfirming}
+                    className="px-6 py-2.5 rounded-lg bg-[#0E3B36] text-white text-sm font-sans font-medium hover:bg-[#1A5249] disabled:opacity-40 transition-colors">
+                    {qbApConfirming ? 'Saving…' : `Confirm & Save — ${qbApPreview.snapshot_month}`}
+                  </button>
+                  <button onClick={() => { setQbApPreview(null); setQbApFile(null); setQbApDate(''); if (qbApFileRef.current) qbApFileRef.current.value = ''; }}
+                    className="px-4 py-2.5 rounded-lg border border-gray-300 text-gray-600 text-sm font-sans hover:bg-gray-50 transition-colors">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* KPI tiles — shown when data exists */}
+        {qbAp?.has_data && qbAp.portfolio_totals && (
+          <div className="px-6 pb-6 pt-4 space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: 'Overdue AP (30+)', val: qbAp.portfolio_totals.overdue, color: 'red' },
+                { label: '31–60 days', val: qbAp.portfolio_totals.days_31_60, color: 'amber' },
+                { label: '60+ days', val: qbAp.portfolio_totals.days_60_plus, color: 'red' },
+                { label: 'Est. Days Payable Outstanding', val: qbAp.dpo_estimate != null ? `${Math.round(qbAp.dpo_estimate)}d` : '–', color: 'gray', raw: true },
+              ].map(({ label, val, color, raw }) => (
+                <div key={label} className={`rounded-xl border p-5 ${
+                  color === 'red' ? 'bg-red-50 border-red-200' :
+                  color === 'amber' ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-200'}`}>
+                  <p className="text-xs font-sans text-gray-500">{label}</p>
+                  <p className={`text-2xl font-bold font-mono mt-1 ${
+                    color === 'red' ? 'text-red-800' :
+                    color === 'amber' ? 'text-amber-800' : 'text-gray-800'}`}>
+                    {raw ? val : $$(val as number)}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {/* vendor table */}
+            {qbAp.by_vendor.length > 0 && (
+              <div>
+                <p className="text-xs font-sans font-semibold uppercase tracking-wider text-gray-400 mb-2">By Vendor</p>
+                <div className="overflow-x-auto rounded-xl border border-gray-200">
+                  <table className="min-w-full text-sm font-sans">
+                    <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+                      <tr>
+                        <th className="px-4 py-3 text-left">Vendor</th>
+                        <th className="px-4 py-3 text-right">Overdue</th>
+                        <th className="px-4 py-3 text-right">Total AP</th>
+                        <th className="px-4 py-3 text-center">Flags</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {qbAp.by_vendor.map(v => (
+                        <tr key={v.vendor_name} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-gray-800">
+                            {v.vendor_name}
+                            {v.was_seeded && <span className="ml-2 text-xs text-amber-600">(new)</span>}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono text-red-700">{v.overdue > 0 ? $$(v.overdue) : '–'}</td>
+                          <td className="px-4 py-3 text-right font-mono text-gray-700">{$$(v.total)}</td>
+                          <td className="px-4 py-3 text-center text-xs">
+                            {v.has_credit && <span className="bg-blue-100 text-blue-700 rounded px-1.5 py-0.5">credit</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ══ SECTION 1 — KPI Cards ══════════════════════════════════════════ */}
