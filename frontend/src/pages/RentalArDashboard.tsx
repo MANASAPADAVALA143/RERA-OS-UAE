@@ -382,6 +382,64 @@ export default function RentalArDashboard() {
     return tb > 0 ? tc / tb * 100 : null;
   }, [trendData]);
 
+  // ── Part A/B additional memos ─────────────────────────────────────────────
+  const currentMonthShortfall = useMemo(() => {
+    if (!trendData.length) return null;
+    const latest = trendData[trendData.length - 1];
+    return { month: latest.full, shortfall: Math.max(0, latest.billed - latest.collected), billed: latest.billed, collected: latest.collected };
+  }, [trendData]);
+
+  const partialPayCount = useMemo(() =>
+    companies.filter(c => c.latest_collected > 0 && c.latest_collected < c.billed_per_month).length,
+    [companies],
+  );
+
+  const top5Outstanding = useMemo(() =>
+    [...companies]
+      .filter(c => c.latest_outstanding > 0)
+      .sort((a, b) => b.latest_outstanding - a.latest_outstanding)
+      .slice(0, 5),
+    [companies],
+  );
+
+  const occupiedBillingGap = useMemo(() => {
+    const withBilling    = companies.filter(c => c.billed_per_month > 0).reduce((s, c) => s + c.occupied_units, 0);
+    const withoutBilling = companies.filter(c => c.billed_per_month === 0).reduce((s, c) => s + c.occupied_units, 0);
+    return { billed: withBilling, unbilled: withoutBilling };
+  }, [companies]);
+
+  const heatmapData = useMemo(() => {
+    const MNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const monthSet = new Set<string>();
+    for (const co of companies) for (const m of co.monthly) monthSet.add(m.month);
+    const months = [...monthSet].sort((a, b) => {
+      const [am, ay] = a.split('-'); const [bm, by] = b.split('-');
+      return (parseInt(ay) - parseInt(by)) || (MNAMES.indexOf(am) - MNAMES.indexOf(bm));
+    });
+    const rows = companies.map(co => ({
+      company: co.company_name,
+      cells: months.map(m => {
+        const md = co.monthly.find(mm => mm.month === m);
+        return md ? { rate: md.collection_rate, collected: md.collected, billed: md.billed, has_data: true } : { rate: null as number | null, collected: 0, billed: 0, has_data: false };
+      }),
+    }));
+    return { months, rows };
+  }, [companies]);
+
+  const payDistribution = useMemo(() => {
+    if (!companies.length) return [];
+    const zeroPay      = companies.filter(c => c.billed_per_month > 0 && c.latest_collected === 0).length;
+    const partial      = companies.filter(c => c.latest_collected > 0 && c.latest_collected < c.billed_per_month).length;
+    const fullPay      = companies.filter(c => c.billed_per_month > 0 && c.latest_collected >= c.billed_per_month).length;
+    const noBilledCnt  = companies.filter(c => c.billed_per_month === 0).length;
+    return [
+      { name: 'Zero-Pay',         count: zeroPay,      fill: '#D9534F' },
+      { name: 'Partial-Pay',      count: partial,       fill: '#F5A623' },
+      { name: 'Fully Paid',       count: fullPay,       fill: '#22A06B' },
+      ...(noBilledCnt > 0 ? [{ name: 'No Billing Data', count: noBilledCnt, fill: '#D1D5DB' }] : []),
+    ].filter(d => d.count > 0);
+  }, [companies]);
+
   // ── Recon flags ───────────────────────────────────────────────────────────
   const reconFlags = useMemo(() =>
     companies.flatMap(c =>
@@ -452,6 +510,38 @@ export default function RentalArDashboard() {
         return b ? `${pct(b.latest_rate)} · ${fmt$(b.latest_collected)}` : 'No data yet';
       })(),
       border: '#22A06B',
+    },
+    {
+      label: `Month-End Shortfall${currentMonthShortfall ? ' · ' + short(currentMonthShortfall.month) : ''}`,
+      value: currentMonthShortfall ? fmt$(currentMonthShortfall.shortfall) : '—',
+      sub: currentMonthShortfall
+        ? `${fmt$(currentMonthShortfall.collected)} collected of ${fmt$(currentMonthShortfall.billed)} billed`
+        : 'No monthly data',
+      border: (currentMonthShortfall?.shortfall ?? 0) > 0 ? '#D9534F' : '#22A06B',
+    },
+    {
+      label: 'Partial-Pay Companies',
+      value: String(partialPayCount),
+      sub: partialPayCount > 0
+        ? companies.filter(c => c.latest_collected > 0 && c.latest_collected < c.billed_per_month).map(c => c.company_name).slice(0, 3).join(', ')
+        : 'All paying in full or zero-pay',
+      border: partialPayCount > 0 ? '#F5A623' : '#22A06B',
+    },
+    {
+      label: 'Top 5 by Outstanding AR',
+      value: top5Outstanding.length > 0 ? fmt$(top5Outstanding[0].latest_outstanding) : '—',
+      sub: top5Outstanding.length > 0
+        ? top5Outstanding.map((c, i) => `${i + 1}. ${c.company_name.length > 12 ? c.company_name.slice(0, 11) + '…' : c.company_name}`).join(' · ')
+        : 'No outstanding AR',
+      border: top5Outstanding.length > 0 ? '#D9534F' : '#22A06B',
+    },
+    {
+      label: 'Occupied — Billing Gap',
+      value: `${occupiedBillingGap.billed}/${occupiedBillingGap.billed + occupiedBillingGap.unbilled}`,
+      sub: occupiedBillingGap.unbilled > 0
+        ? `⚠ ${occupiedBillingGap.unbilled} occupied units have no billing data`
+        : '✓ All occupied units have billing data',
+      border: occupiedBillingGap.unbilled > 0 ? '#F5A623' : '#22A06B',
     },
   ] : [];
 
@@ -530,7 +620,7 @@ export default function RentalArDashboard() {
 
       {/* ── 8 KPI TILES ─────────────────────────────────────────────────── */}
       {!!port && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8,1fr)', gap: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))', gap: 8 }}>
           {kpis.map((t, i) => (
             <div key={i} style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 10, padding: '12px 14px', borderLeft: `3px solid ${t.border}` }}>
               <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#6B6B6B', marginBottom: 4, lineHeight: 1.2 }}>{t.label}</div>
@@ -681,6 +771,42 @@ export default function RentalArDashboard() {
         </div>
       )}
 
+      {/* ── VACANCY LOSS TREND ───────────────────────────────────────────── */}
+      {!!port && trendData.length > 0 && port.vacLoss > 0 && (
+        <div style={CARD}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>Revenue vs Vacancy Loss</div>
+          <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 14 }}>
+            Actual billed vs maximum potential · current vacancy loss: <strong style={{ color: '#D9534F' }}>{fmt$(port.vacLoss)}/mo</strong> · based on registry occupancy snapshot
+          </div>
+          <ResponsiveContainer width="100%" height={180}>
+            <ComposedChart
+              data={trendData.map(d => ({ ...d, vacancyLoss: port.vacLoss, potential: d.billed + port.vacLoss }))}
+              margin={{ top: 8, right: 12, bottom: 0, left: 0 }}
+            >
+              <CartesianGrid vertical={false} stroke="#E5E7EB" strokeDasharray="3 3" />
+              <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6B7280' }} axisLine={false} tickLine={false} interval={Math.max(1, Math.floor(trendData.length / 10))} />
+              <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} tickFormatter={(v: number) => v === 0 ? '$0' : v >= 1_000_000 ? `$${(v/1_000_000).toFixed(1)}M` : `$${(v/1000).toFixed(0)}k`} axisLine={false} tickLine={false} width={44} />
+              <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #E8DEC8', background: '#FBF6EE' }} formatter={(v: number, name: string) => [fmt$(v), name]} />
+              <Area type="monotone" dataKey="billed"        stackId="vac" fill="transparent"            stroke="none" legendType="none" />
+              <Area type="monotone" dataKey="vacancyLoss"   stackId="vac" fill="rgba(217,83,79,0.12)"  stroke="rgba(217,83,79,0.3)" strokeWidth={0.5} name="Vacancy Loss" />
+              <Line type="monotone" dataKey="potential"     name="Potential Revenue" stroke="#9CA3AF" strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
+              <Line type="monotone" dataKey="billed"        name="Actual Billed"    stroke="#4E79A7" strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 1.5, stroke: '#4E79A7', fill: '#fff' }} />
+            </ComposedChart>
+          </ResponsiveContainer>
+          <div style={{ display: 'flex', gap: 20, marginTop: 8, fontSize: 12, color: '#4B5563', flexWrap: 'wrap' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ width: 20, height: 3, background: '#4E79A7', borderRadius: 2, display: 'inline-block' }} />Actual Billed
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ width: 20, height: 2, background: '#9CA3AF', borderRadius: 2, display: 'inline-block', borderTop: '2px dashed #9CA3AF' }} />Potential Revenue
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ width: 12, height: 10, background: 'rgba(217,83,79,0.20)', borderRadius: 2, display: 'inline-block' }} />Vacancy Loss Gap
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* ── OUTSTANDING AR BY COMPANY ─────────────────────────────────────── */}
       {!!port && outstandingData.length > 0 && (
         <div style={CARD}>
@@ -705,6 +831,113 @@ export default function RentalArDashboard() {
       {!!port && outstandingData.length === 0 && companies.some(c => c.latest_collected > 0) && (
         <div style={{ ...CARD, textAlign: 'center', color: '#22A06B', fontSize: 13, fontWeight: 600 }}>
           ✅ No outstanding AR — all companies current
+        </div>
+      )}
+
+      {/* ══ PART B — HEATMAP + ZERO-PAY DISTRIBUTION ═════════════════════════ */}
+      {!!port && companies.some(c => c.monthly.length > 0) && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+
+          {/* Company × Month Collection Rate Heatmap */}
+          {heatmapData.months.length > 0 && heatmapData.rows.length > 0 && (() => {
+            const heatBg = (rate: number | null) => {
+              if (rate === null) return '#F3F4F6';
+              if (rate >= 95)   return '#22A06B';
+              if (rate >= 80)   return '#86EFAC';
+              if (rate >= 60)   return '#FCD34D';
+              if (rate >= 30)   return '#F5A623';
+              return '#D9534F';
+            };
+            const heatFg = (rate: number | null) => {
+              if (rate === null) return '#9CA3AF';
+              if (rate >= 80)    return '#fff';
+              return '#1C1917';
+            };
+            const displayMonths = heatmapData.months.slice(-12);
+            const startIdx = heatmapData.months.length - displayMonths.length;
+            return (
+              <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, padding: 16, overflowX: 'auto' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>Collection Rate Heatmap</div>
+                <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 12 }}>
+                  Company × Month · green = high collection rate · red = low · last {displayMonths.length} months
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ borderCollapse: 'separate', borderSpacing: 2, fontSize: 10 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'left', padding: '3px 8px 3px 4px', fontSize: 10, color: '#6B6B6B', fontWeight: 600, whiteSpace: 'nowrap', minWidth: 100 }}>Company</th>
+                        {displayMonths.map(m => (
+                          <th key={m} style={{ padding: '3px 2px', fontSize: 9, color: '#6B6B6B', fontWeight: 600, textAlign: 'center', minWidth: 36 }}>{short(m)}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {heatmapData.rows.map((row, ri) => (
+                        <tr key={ri}>
+                          <td style={{ padding: '2px 8px 2px 4px', fontSize: 10, color: '#374151', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                            {row.company.length > 15 ? row.company.slice(0, 13) + '…' : row.company}
+                          </td>
+                          {row.cells.slice(startIdx).map((cell, ci) => (
+                            <td key={ci} style={{
+                              padding: '4px 3px', textAlign: 'center', borderRadius: 4,
+                              background: heatBg(cell.has_data ? cell.rate : null),
+                              color: heatFg(cell.has_data ? cell.rate : null),
+                              fontSize: 9, fontWeight: 700, minWidth: 36,
+                            }}>
+                              {cell.has_data ? `${Math.round(cell.rate ?? 0)}%` : '—'}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', fontSize: 10, color: '#6B6B6B', flexWrap: 'wrap' }}>
+                  {([['#22A06B','≥95%'],['#86EFAC','80–94%'],['#FCD34D','60–79%'],['#F5A623','30–59%'],['#D9534F','<30%'],['#F3F4F6','No data']] as [string,string][]).map(([c, l]) => (
+                    <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: 2, background: c, display: 'inline-block', border: '1px solid rgba(0,0,0,0.1)' }} />
+                      {l}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Zero-Pay / Partial-Pay / Fully Paid Distribution */}
+          {payDistribution.length > 0 && (
+            <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>Pay Distribution — Current Period</div>
+              <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 14 }}>
+                {selMonth || 'Latest month'} · {companies.filter(c => c.billed_per_month > 0).length} companies with billing data
+              </div>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={payDistribution} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#374151' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} allowDecimals={false} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #E8DEC8', background: '#FBF6EE' }}
+                    formatter={(v: number, _name: string, p: { payload?: { name: string } }) => [`${v} compan${v === 1 ? 'y' : 'ies'}`, p.payload?.name ?? '']}
+                  />
+                  <Bar dataKey="count" radius={[4, 4, 0, 0]} label={{ position: 'top', fontSize: 12, fontWeight: 700, fill: '#374151' }}>
+                    {payDistribution.map((d, i) => <Cell key={i} fill={d.fill} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+                {payDistribution.map((d, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: 2, background: d.fill, display: 'inline-block' }} />
+                      <span style={{ color: '#374151' }}>{d.name}</span>
+                    </span>
+                    <span style={{ fontWeight: 700, color: '#1C1917' }}>{d.count} compan{d.count === 1 ? 'y' : 'ies'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
