@@ -395,7 +395,11 @@ function calcAllRatios(fin: LiveFin, activeYear?: number): { profitability: Rati
   const ni    = yv(pl,/^net\s+income$/i,lastY);
   const intEx = Math.abs(yv(pl,/^total\s+for\s+interest\s+paid$/i,lastY) || si(pl,/interest/i,lastY));
   const depAm = Math.abs(si(pl,/depreciation|amortization/i,lastY));
-  const noi   = yv(pl,/^net\s+operating\s+income$/i,lastY) || (rev - exp + intEx);
+  // Always derive NOI as (revenue − expenses + interest-add-back) — same formula as calcKpis in
+  // RentalFinancials.tsx. Ignoring QBO's explicit "Net Operating Income" row because QBO defines
+  // it as post-interest (revenue − ALL expenses including interest = $88.56K), which produces
+  // a different NOI than the real-estate convention (pre-interest = $161K).
+  const noi   = rev - exp + intEx;
   const ebitda = noi + depAm;
 
   // BS figures
