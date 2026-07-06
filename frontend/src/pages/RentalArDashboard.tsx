@@ -5,6 +5,9 @@ import {
   ResponsiveContainer, Cell, Legend, AreaChart,
 } from 'recharts';
 import api from '../services/api';
+import { ParchmentKpiTile } from '../components/ui/ParchmentKpiTile';
+
+type ArViewTab = 'overview' | 'collection';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -153,6 +156,7 @@ export default function RentalArDashboard() {
   const [statusFlt, setStatusFlt] = useState('All');
   const [showUnmatched, setShowUnmatched] = useState(false);
   const [chartMonth, setChartMonth] = useState(''); // click-to-filter from chart
+  const [arView, setArView] = useState<ArViewTab>('overview');
 
   // ── QB AR Aging state ─────────────────────────────────────────────────────
   const [qbAging, setQbAging] = useState<QBAgingLatest | null>(null);
@@ -464,43 +468,43 @@ export default function RentalArDashboard() {
       label: 'Total Billed / Month',
       value: fmt$(port.totalBilled),
       sub: `${port.occupied} occupied units · registry`,
-      border: '#2F80ED',
+      accent: false, warn: false,
     },
     {
       label: selMonth ? `Collected · ${selMonth}` : 'Collected (Latest Mo)',
       value: fmt$(port.totalCollected),
       sub: `${pct(port.rate)} collection rate`,
-      border: '#166534',
+      accent: true, warn: false,
     },
     {
       label: 'Outstanding AR',
       value: fmt$(port.totalOutstanding),
       sub: `${companies.filter(c => c.latest_outstanding > 0).length} companies with gaps`,
-      border: '#B91C1C',
+      accent: false, warn: true,
     },
     {
       label: 'Collection Rate',
       value: pct(port.rate),
       sub: port.rate >= 95 ? '✅ On Target' : '⚠️ Below 95% target',
-      border: port.rate >= 95 ? '#166534' : '#F5A623',
+      accent: port.rate >= 95, warn: port.rate < 95,
     },
     {
       label: 'Vacancy Loss / Month',
       value: fmt$(port.vacLoss),
       sub: `${port.total - port.occupied} vacant / notice units`,
-      border: '#B91C1C',
+      accent: false, warn: port.vacLoss > 0,
     },
     {
       label: 'Total Units',
       value: String(port.total),
       sub: `${port.occupied} occupied · ${port.total - port.occupied} vacant`,
-      border: '#2F80ED',
+      accent: false, warn: false,
     },
     {
       label: 'Zero-Pay Companies',
       value: String(companies.filter(c => c.billed_per_month > 0 && c.latest_collected === 0).length),
       sub: companies.filter(c => c.billed_per_month > 0 && c.latest_collected === 0).map(c => c.company_name).join(', ') || 'None',
-      border: '#B91C1C',
+      accent: false, warn: companies.some(c => c.billed_per_month > 0 && c.latest_collected === 0),
     },
     {
       label: 'Best Performer',
@@ -509,7 +513,7 @@ export default function RentalArDashboard() {
         const b = [...companies].filter(c => c.latest_collected > 0).sort((a, b) => b.latest_rate - a.latest_rate)[0];
         return b ? `${pct(b.latest_rate)} · ${fmt$(b.latest_collected)}` : 'No data yet';
       })(),
-      border: '#166534',
+      accent: true, warn: false,
     },
     {
       label: `Month-End Shortfall${currentMonthShortfall ? ' · ' + short(currentMonthShortfall.month) : ''}`,
@@ -517,7 +521,7 @@ export default function RentalArDashboard() {
       sub: currentMonthShortfall
         ? `${fmt$(currentMonthShortfall.collected)} collected of ${fmt$(currentMonthShortfall.billed)} billed`
         : 'No monthly data',
-      border: (currentMonthShortfall?.shortfall ?? 0) > 0 ? '#B91C1C' : '#166534',
+      accent: false, warn: (currentMonthShortfall?.shortfall ?? 0) > 0,
     },
     {
       label: 'Partial-Pay Companies',
@@ -525,7 +529,7 @@ export default function RentalArDashboard() {
       sub: partialPayCount > 0
         ? companies.filter(c => c.latest_collected > 0 && c.latest_collected < c.billed_per_month).map(c => c.company_name).slice(0, 3).join(', ')
         : 'All paying in full or zero-pay',
-      border: partialPayCount > 0 ? '#F5A623' : '#166534',
+      accent: false, warn: partialPayCount > 0,
     },
     {
       label: 'Top 5 by Outstanding AR',
@@ -533,7 +537,7 @@ export default function RentalArDashboard() {
       sub: top5Outstanding.length > 0
         ? top5Outstanding.map((c, i) => `${i + 1}. ${c.company_name.length > 12 ? c.company_name.slice(0, 11) + '…' : c.company_name}`).join(' · ')
         : 'No outstanding AR',
-      border: top5Outstanding.length > 0 ? '#B91C1C' : '#166534',
+      accent: false, warn: top5Outstanding.length > 0,
     },
     {
       label: 'Occupied — Billing Gap',
@@ -541,13 +545,24 @@ export default function RentalArDashboard() {
       sub: occupiedBillingGap.unbilled > 0
         ? `⚠ ${occupiedBillingGap.unbilled} occupied units have no billing data`
         : '✓ All occupied units have billing data',
-      border: occupiedBillingGap.unbilled > 0 ? '#F5A623' : '#166534',
+      accent: occupiedBillingGap.unbilled === 0, warn: occupiedBillingGap.unbilled > 0,
     },
   ] : [];
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: 20, background: '#F5F0E8', minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={{ padding: 20, background: '#F7F1E6', minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <style>{`
+        .ar-kpi-tile { transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
+        .ar-kpi-tile:hover { transform: scale(1.02); box-shadow: 0 6px 12px rgba(0,0,0,0.08); }
+      `}</style>
+
+      <div>
+        <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1C1917' }}>AR Dashboard</h1>
+        <p style={{ fontSize: 13, color: '#A8A29E', marginTop: 2 }}>
+          Collections, billing gaps, and AR aging — billed from registry · collected from Rent Receivable
+        </p>
+      </div>
 
       {/* Spinner */}
       {loading && (
@@ -610,6 +625,31 @@ export default function RentalArDashboard() {
         </span>
       </div>
 
+      {/* ── VIEW TABS ───────────────────────────────────────────────────── */}
+      {!!port && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {([
+            { id: 'overview' as const, label: 'Overview' },
+            { id: 'collection' as const, label: 'Collection Details' },
+          ]).map(tab => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setArView(tab.id)}
+              style={{
+                padding: '8px 18px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                border: `1px solid ${arView === tab.id ? '#D4AF37' : '#E8DEC8'}`,
+                background: arView === tab.id ? 'linear-gradient(135deg,#FBF6EE,#F7F1E6)' : '#FBF6EE',
+                color: arView === tab.id ? '#1C1917' : '#78716C',
+                boxShadow: arView === tab.id ? '0 2px 8px rgba(212,175,55,0.2)' : 'none',
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* No data */}
       {!loading && !rawData && (
         <div style={{ ...CARD, textAlign: 'center', padding: '40px 24px' }}>
@@ -618,21 +658,26 @@ export default function RentalArDashboard() {
         </div>
       )}
 
-      {/* ── 8 KPI TILES ─────────────────────────────────────────────────── */}
-      {!!port && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))', gap: 8 }}>
+      {/* ── KPI TILES (Overview only) ───────────────────────────────────── */}
+      {!!port && arView === 'overview' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 10 }}>
           {kpis.map((t, i) => (
-            <div key={i} style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 10, padding: '12px 14px', borderLeft: `3px solid ${t.border}` }}>
-              <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#6B6B6B', marginBottom: 4, lineHeight: 1.2 }}>{t.label}</div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: '#262626', fontVariantNumeric: 'tabular-nums lining-nums', lineHeight: 1.1 }}>{t.value}</div>
-              <div style={{ fontSize: 11, marginTop: 4, color: '#6B6B6B', lineHeight: 1.3 }}>{t.sub}</div>
+            <div key={i} className="ar-kpi-tile">
+              <ParchmentKpiTile
+                compact
+                label={t.label}
+                value={t.value}
+                sub={t.sub}
+                accent={t.accent}
+                warn={t.warn}
+              />
             </div>
           ))}
         </div>
       )}
 
-      {/* ── TREND + COLLECTION RATE ──────────────────────────────────────── */}
-      {!!port && (
+      {arView === 'overview' && (
+      <>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
 
           {/* Billed vs Collected dual-line trend */}
@@ -769,7 +814,6 @@ export default function RentalArDashboard() {
             <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 10 }}>💡 Click a company to filter the whole dashboard</div>
           </div>
         </div>
-      )}
 
       {/* ── VACANCY LOSS TREND ───────────────────────────────────────────── */}
       {!!port && trendData.length > 0 && port.vacLoss > 0 && (
@@ -1148,15 +1192,18 @@ export default function RentalArDashboard() {
         </div>
       )}
 
-      {/* ── COMPANY × MONTH DETAIL TABLE ─────────────────────────────────── */}
-      {!!port && (
+      </>
+      )}
+
+      {/* ── COLLECTION DETAILS TAB ─────────────────────────────────────── */}
+      {!!port && arView === 'collection' && (
         <div style={{ background: '#fff', border: '1px solid #E8DEC8', borderRadius: 10, padding: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1917' }}>
+              <div style={{ fontSize: 16, fontWeight: 600, color: '#1C1917' }}>
                 Collection detail — {selCoName || 'All Companies'} · {chartMonth || selMonth || 'All Months'}
               </div>
-              <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>
+              <div style={{ fontSize: 13, color: '#A8A29E', marginTop: 2 }}>
                 Every company × every month · billed from registry · collected from Rent Receivable or P&L
               </div>
             </div>
@@ -1261,8 +1308,9 @@ export default function RentalArDashboard() {
       )}
 
       {/* ══════════════════════════════════════════════════════════════════
-           QB AR AGING SECTION
+           QB AR AGING SECTION (Overview only)
          ══════════════════════════════════════════════════════════════════ */}
+      {arView === 'overview' && (
       <div style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
 
         {/* ── Header bar ─────────────────────────────────────────────────── */}
@@ -1600,9 +1648,10 @@ export default function RentalArDashboard() {
           </div>
         )}
       </div>
+      )}
 
       {/* ── UNMATCHED P&L LINES ──────────────────────────────────────────── */}
-      {(rawData?.unmatched_lines?.length ?? 0) > 0 && (
+      {arView === 'overview' && (rawData?.unmatched_lines?.length ?? 0) > 0 && (
         <div style={{ background: '#FFF7ED', border: '1px solid #FDBA74', borderRadius: 10, padding: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#9A3412' }}>
