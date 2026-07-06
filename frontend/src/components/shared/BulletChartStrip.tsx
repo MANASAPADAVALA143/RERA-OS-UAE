@@ -81,7 +81,7 @@ export function BulletChartStrip({ cards, defs, title = 'Benchmark Comparison', 
             </div>
 
             <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: fill, fontVariantNumeric: 'tabular-nums lining-nums' }}>
-              {current > 0 ? `${current.toFixed(1)}${def.unit}` : '—'}
+              {card.value && card.value !== '0%' && card.value !== '0' ? card.value : '—'}
             </div>
           </div>
         ))}
