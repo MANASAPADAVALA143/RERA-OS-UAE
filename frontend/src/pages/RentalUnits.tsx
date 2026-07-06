@@ -38,6 +38,16 @@ const ALL_MONTHS = [
   'Jul-2026','Aug-2026','Sep-2026','Oct-2026','Nov-2026','Dec-2026',
 ];
 
+// Cap to months up to and including the current calendar month so future
+// months with no data don't show as "Vacant" (they simply don't exist yet).
+const _now = new Date();
+const _curMonthAbbrev = _now.toLocaleString('default', { month: 'short' }) + '-' + _now.getFullYear();
+const PAST_AND_CURRENT_MONTHS = ALL_MONTHS.filter(m => {
+  const [mon, yr] = m.split('-');
+  const mDate = new Date(`${mon} 1, ${yr}`);
+  return mDate <= new Date(_curMonthAbbrev.replace('-', ' 1, '));
+});
+
 const STATUS_PILL: Record<string, string> = {
   occupied:         'bg-green-100 text-green-800',
   vacant:           'bg-red-100 text-red-800',
@@ -50,15 +60,15 @@ const STATUS_PILL: Record<string, string> = {
 
 const fmtN = (n: number) => '$' + Math.round(n).toLocaleString('en-US');
 
-/** All months for which ≥ 1 unit has rent_history data */
+/** All months for which ≥ 1 unit has rent_history data — capped at current month */
 function getAvailableMonths(units: UnitRow[]): string[] {
   const set = new Set<string>();
   for (const u of units) {
     for (const m of Object.keys(u.rent_history ?? {})) {
-      if (ALL_MONTHS.includes(m)) set.add(m);
+      if (PAST_AND_CURRENT_MONTHS.includes(m)) set.add(m);
     }
   }
-  return ALL_MONTHS.filter(m => set.has(m));
+  return PAST_AND_CURRENT_MONTHS.filter(m => set.has(m));
 }
 
 interface UnitLtm {
@@ -80,7 +90,9 @@ interface UnitLtm {
 
 function computeUnitLtm(unit: UnitRow, months: string[]): UnitLtm {
   const hist = unit.rent_history ?? {};
-  const monthData = months.map(m => ({
+  // Only include months that have an actual rent entry — never infer "vacant"
+  // for a future or missing month purely because it has no data.
+  const monthData = months.filter(m => m in hist).map(m => ({
     month: m,
     rent: hist[m] ?? 0,
     status: ((hist[m] ?? 0) > 0 ? 'occupied' : 'vacant') as 'occupied' | 'vacant',
