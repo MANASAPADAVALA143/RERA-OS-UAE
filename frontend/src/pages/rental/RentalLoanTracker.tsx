@@ -206,20 +206,24 @@ export default function RentalLoanTracker() {
     }
   }
 
-  const buildingOptions = useMemo(() => {
-    const names = new Set(loans.map(l => l.property_name));
+  // Unique company names from loans (source of truth — avoids UUID→name lookup mismatch)
+  const companyOptions = useMemo(() => {
+    const names = new Set(loans.map(l => l.company_name).filter(Boolean));
     return [...names].sort();
   }, [loans]);
 
+  const buildingOptions = useMemo(() => {
+    const src = companyFilter !== 'all' ? loans.filter(l => l.company_name === companyFilter) : loans;
+    const names = new Set(src.map(l => l.property_name));
+    return [...names].sort();
+  }, [loans, companyFilter]);
+
   const filtered = useMemo(() => {
     let rows = loans;
-    if (companyFilter !== 'all') {
-      const co = companies.find(c => c.id === companyFilter);
-      if (co) rows = rows.filter(l => l.company_name === co.company_name);
-    }
+    if (companyFilter !== 'all') rows = rows.filter(l => l.company_name === companyFilter);
     if (buildingFilter !== 'all') rows = rows.filter(l => l.property_name === buildingFilter);
     return rows;
-  }, [loans, companyFilter, buildingFilter, companies]);
+  }, [loans, companyFilter, buildingFilter]);
 
   const kpis = useMemo(() => {
     const portfolio = filtered.reduce((s, l) => s + (l.loan_balance_as_of ?? l.loan_amount), 0);
@@ -438,7 +442,7 @@ export default function RentalLoanTracker() {
           <select value={companyFilter} onChange={e => { setCompanyFilter(e.target.value); setBuildingFilter('all'); }}
             className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm">
             <option value="all">All Companies</option>
-            {companies.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
+            {companyOptions.map(name => <option key={name} value={name}>{name}</option>)}
           </select>
           <select value={buildingFilter} onChange={e => setBuildingFilter(e.target.value)}
             className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm">
