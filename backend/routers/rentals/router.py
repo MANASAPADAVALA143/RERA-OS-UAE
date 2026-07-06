@@ -662,17 +662,26 @@ def delete_all_companies(
 @router.get("/companies/{company_id}/dashboard")
 def company_dashboard(
     company_id: uuid.UUID,
+    month: str = Query(None, description="YYYY-MM; defaults to current month"),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     tid = current_user.tenant_id
     today = date.today()
+    if month:
+        try:
+            selected = date.fromisoformat(f"{month}-01")
+        except ValueError:
+            raise HTTPException(400, "month must be YYYY-MM format")
+    else:
+        selected = today.replace(day=1)
+
     co = db.query(RentalCompany).filter(RentalCompany.id == company_id, RentalCompany.tenant_id == tid).first()
     if not co:
         raise HTTPException(404, "Company not found")
 
-    month_abbrev = today.strftime("%b-%Y")  # e.g. "Jul-2026"
-    cur_month    = today.strftime("%Y-%m")  # e.g. "2026-07"
+    month_abbrev = selected.strftime("%b-%Y")  # e.g. "Jul-2026"
+    cur_month    = selected.strftime("%Y-%m")  # e.g. "2026-07"
 
     units, inv_dicts, exp_dicts = _load_company_data(co.id, tid, db)
     inv_by_unit: dict[str, list[dict]] = defaultdict(list)

@@ -101,7 +101,23 @@ const TABS: { id: DashTab; label: string }[] = [
   { id: 'inspections',  label: 'Inspections'  },
 ];
 
+// ── month selector helpers ────────────────────────────────────────────────────
+function buildMonthOptions(count = 24) {
+  const opts: { value: string; label: string }[] = [];
+  const now = new Date();
+  for (let i = 0; i < count; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+    opts.push({ value, label });
+  }
+  return opts;
+}
+const MONTH_OPTS = buildMonthOptions(24);
+const THIS_MONTH = MONTH_OPTS[0].value;
+
 export default function RentalCompanyDashboard({ companyId }: Props) {
+  const [selectedMonth, setSelectedMonth] = useState(THIS_MONTH);
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -116,7 +132,7 @@ export default function RentalCompanyDashboard({ companyId }: Props) {
     setError('');
     try {
       const [dashRes, finRes] = await Promise.allSettled([
-        api.get<DashboardData>(`/api/rentals/companies/${companyId}/dashboard`),
+        api.get<DashboardData>(`/api/rentals/companies/${companyId}/dashboard?month=${selectedMonth}`),
         api.get<{ company_name: string; pl: FinItem[] }>(`/api/rentals/financials/${companyId}`),
       ]);
       if (dashRes.status === 'fulfilled') setData(dashRes.value.data);
@@ -125,7 +141,7 @@ export default function RentalCompanyDashboard({ companyId }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [companyId]);
+  }, [companyId, selectedMonth]);
 
   useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
 
@@ -182,11 +198,27 @@ export default function RentalCompanyDashboard({ companyId }: Props) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h2 className="text-xl font-bold text-charcoal">{data.company_name}</h2>
-        <p className="text-sm text-gray-500">
-          {data.property_name} · {data.total_units} units · {data.occupied_units} occupied · {data.vacant_units} vacant
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold text-charcoal">{data.company_name}</h2>
+          <p className="text-sm text-gray-500">
+            {data.property_name} · {data.total_units} units · {data.occupied_units} occupied · {data.vacant_units} vacant
+          </p>
+        </div>
+        {/* Month / Year selector */}
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-sans text-gray-500 whitespace-nowrap">Viewing month</label>
+          <select
+            value={selectedMonth}
+            onChange={e => setSelectedMonth(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm font-sans bg-white focus:outline-none focus:ring-2 focus:ring-[#0E3B36] cursor-pointer"
+          >
+            {MONTH_OPTS.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          {loading && <span className="text-xs text-gray-400 font-sans">Loading…</span>}
+        </div>
       </div>
 
       {/* Sub-tab bar */}
