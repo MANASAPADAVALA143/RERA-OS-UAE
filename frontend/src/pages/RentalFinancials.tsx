@@ -883,7 +883,7 @@ function KPITab({ fin }: { fin: ParsedFinancials }) {
     { name: 'Repair % of Revenue', value: `${repP.toFixed(1)}%`,                              status: toBS(repP<=5?'good':repP<=10?'warn':'bad') },
   ];
   const balanceBulletCards: BulletCard[] = [
-    { name: 'LTV',                 value: ltv > 0 ? `${ltv.toFixed(1)}%` : '0%',             status: ltv > 0 ? toBS(ltv<=75?'good':ltv<=85?'warn':'bad') : 'info' },
+    { name: 'LTV',                 value: ltv > 0 ? `${ltv.toFixed(1)}%` : 'No bldg value',  status: ltv > 0 ? toBS(ltv<=75?'good':ltv<=85?'warn':'bad') : 'info' },
     { name: 'Asset/Liability',     value: `${alR.toFixed(2)}x`,                               status: toBS(alR>=1.5?'good':alR>=1?'warn':'bad') },
     { name: 'Debt-to-Equity',      value: `${dte.toFixed(2)}x`,                               status: toBS(dte>0&&dte<=2?'good':dte<=4?'warn':'bad') },
   ];

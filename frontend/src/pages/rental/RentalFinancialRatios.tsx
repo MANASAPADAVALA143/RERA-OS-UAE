@@ -57,7 +57,13 @@ function LiveDataPanel({ fin, activeYear }: { fin: LiveFin; activeYear?: number 
   const totalLiabilities = getYV(bs,/^total\s+(for\s+)?liabilities$/i,lastY);
   const equity = getYV(bs,/^total\s+(for\s+)?equity$/i,lastY);
   const cash = getYV(bs,/^total\s+(for\s+)?bank/i,lastY) || sumI(bs,/^bank|checking|savings/i,lastY);
-  const buildings = Math.abs(getYV(bs,/^buildings$/i,lastY));
+  const buildings = Math.abs(
+    getYV(bs,/^buildings$/i,lastY) ||
+    getYV(bs,/^property\s*(and|&)?\s*equipment/i,lastY) ||
+    getYV(bs,/^fixed\s*assets/i,lastY) ||
+    getYV(bs,/^land\s*(and|&)?\s*buildings/i,lastY) ||
+    getYV(bs,/^real\s+estate/i,lastY)
+  );
   const loans = Math.abs(getYV(bs,/^total\s+for\s+long.term/i,lastY) || sumI(bs,/long.term.*loan/i,lastY));
   const noiM = totalRevenue > 0 ? noi / totalRevenue * 100 : 0;
   const netM = totalRevenue > 0 ? netIncome / totalRevenue * 100 : 0;
@@ -83,7 +89,7 @@ function LiveDataPanel({ fin, activeYear }: { fin: LiveFin; activeYear?: number 
     { label: 'Net Margin', value: `${netM.toFixed(1)}%`, status: netM>=10?'good':netM>=0?'watch':'monitor' as const },
     { label: 'Revenue', value: fmtV(totalRevenue), status: 'info' as const },
     { label: 'NOI', value: fmtV(noi), status: noi>=0?'good':'critical' as const },
-    { label: 'LTV', value: ltv > 0 ? `${ltv.toFixed(1)}%` : '—', status: ltv<=75?'good':ltv<=85?'watch':'monitor' as const },
+    { label: 'LTV', value: ltv > 0 ? `${ltv.toFixed(1)}%` : buildings === 0 ? 'No bldg value' : '—', status: ltv<=75?'good':ltv<=85?'watch':'monitor' as const },
     { label: 'Int. Coverage', value: iCov > 0 ? `${iCov.toFixed(2)}x` : '—', status: iCov>=2?'good':iCov>=1.2?'watch':'critical' as const },
     { label: 'D/E Ratio', value: dte > 0 ? `${dte.toFixed(1)}x` : '—', status: dte<=3?'good':dte<=6?'watch':'monitor' as const },
     { label: 'Expense Ratio', value: expR > 0 ? `${expR.toFixed(1)}%` : '—', status: expR<=70?'good':expR<=85?'watch':'critical' as const },
@@ -409,7 +415,13 @@ function calcAllRatios(fin: LiveFin, activeYear?: number): { profitability: Rati
   const cash        = yv(bs,/^total\s+(for\s+)?bank/i,lastY) || si(bs,/^bank|checking|savings|prosperity/i,lastY);
   const currAssets  = yv(bs,/^total\s+for\s+current\s+assets$/i,lastY) || yv(bs,/^total\s+current\s+assets$/i,lastY) || (cash + Math.abs(si(bs,/receivable/i,lastY)));
   const currLiab    = yv(bs,/^total\s+for\s+current\s+liabilities$/i,lastY) || yv(bs,/^total\s+current\s+liabilities$/i,lastY) || Math.abs(si(bs,/payable/i,lastY));
-  const buildings   = Math.abs(yv(bs,/^buildings$/i,lastY));
+  const buildings   = Math.abs(
+    yv(bs,/^buildings$/i,lastY) ||
+    yv(bs,/^property\s*(and|&)?\s*equipment/i,lastY) ||
+    yv(bs,/^fixed\s*assets/i,lastY) ||
+    yv(bs,/^land\s*(and|&)?\s*buildings/i,lastY) ||
+    yv(bs,/^real\s+estate/i,lastY)
+  );
   const loans       = Math.abs(yv(bs,/^total\s+for\s+long.term\s+liabilities$/i,lastY) || si(bs,/long.term.*loan|loan\s+from|independent\s+bank/i,lastY));
 
   // CF figures
@@ -472,7 +484,7 @@ function calcAllRatios(fin: LiveFin, activeYear?: number): { profitability: Rati
     { name: 'Debt-to-Asset',      formula: 'Total Liabilities / Assets',    value: totalAssets>0 ? fmtPct(dta) : '—', benchmark: '<80%', ...pill(dta<=70, dta<=85) },
     { name: 'Equity Ratio',       formula: 'Equity / Total Assets',         value: totalAssets>0 ? fmtPct(equR) : '—', benchmark: '>20%', ...pill(equR>=20, equR>=10) },
     { name: 'Interest Coverage',  formula: 'NOI / Interest Expense',        value: intEx>0 ? fmtX(iCov) : '—',    benchmark: '>1.5x',   ...pill(iCov>=1.5, iCov>=1.0), spark: spark(y => { const r = yv(pl,/^total\s+(for\s+)?income$/i,y)||si(pl,/income|revenue|rent/i,y); const e = yv(pl,/^total\s+(for\s+)?expenses?$/i,y); const ie = Math.abs(si(pl,/interest/i,y)); return ie>0?(r-e+ie)/ie:0; }) },
-    { name: 'LTV',                formula: 'Mortgage / Property Value',     value: buildings>0 ? fmtPct(ltv) : '—', benchmark: '<80%',  ...pill(ltv<=70, ltv<=85), spark: spark(y => { const b = Math.abs(yv(bs,/^buildings$/i,y)); const l = Math.abs(yv(bs,/^total\s+for\s+long.term/i,y)||si(bs,/long.term.*loan|loan\s+from|independent\s+bank/i,y)); return b>0?l/b*100:0; }) },
+    { name: 'LTV',                formula: 'Mortgage / Property Value',     value: buildings>0 ? fmtPct(ltv) : 'No bldg value', benchmark: '<80%',  ...pill(ltv<=70, ltv<=85), spark: spark(y => { const b = Math.abs(yv(bs,/^buildings$/i,y)||yv(bs,/^property\s*(and|&)?\s*equipment/i,y)||yv(bs,/^fixed\s*assets/i,y)||yv(bs,/^land\s*(and|&)?\s*buildings/i,y)||yv(bs,/^real\s+estate/i,y)); const l = Math.abs(yv(bs,/^total\s+for\s+long.term/i,y)||si(bs,/long.term.*loan|loan\s+from|independent\s+bank/i,y)); return b>0?l/b*100:0; }) },
     { name: 'Net Debt',           formula: 'Long-term Loans − Cash',       value: fmtDollar(netDebt),              benchmark: 'Monitor', status: 'info', statusLabel: 'ℹ Info' },
     { name: 'DSCR (Est.)',        formula: 'NOI / (Interest × 1.2)',        value: dscr>0 ? fmtX(dscr) : '—',     benchmark: '>1.25x',  ...pill(dscr>=1.25, dscr>=1.0) },
     { name: 'Total Assets',       formula: 'Balance Sheet Total',           value: fmtDollar(totalAssets),          benchmark: 'Trend',   status: 'info', statusLabel: 'ℹ Info' },
