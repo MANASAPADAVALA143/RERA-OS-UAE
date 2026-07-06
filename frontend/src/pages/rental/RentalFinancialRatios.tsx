@@ -43,9 +43,10 @@ function sumI(items: FinItem[], pat: RegExp, year: number): number {
 }
 function fmtV(n: number) { if (n === 0) return '—'; const a = Math.abs(n); const s = a >= 1_000_000 ? `$${(a/1_000_000).toFixed(2)}M` : a >= 1_000 ? `$${(a/1_000).toFixed(0)}K` : `$${a.toFixed(0)}`; return n < 0 ? `(${s})` : s; }
 
-function LiveDataPanel({ fin }: { fin: LiveFin }) {
-  const lastY = fin.years[fin.years.length - 1];
-  const prevY = fin.years.length >= 2 ? fin.years[fin.years.length - 2] : null;
+function LiveDataPanel({ fin, activeYear }: { fin: LiveFin; activeYear?: number }) {
+  const lastY = activeYear && fin.years.includes(activeYear) ? activeYear : fin.years[fin.years.length - 1];
+  const lastYIdx = fin.years.indexOf(lastY);
+  const prevY = lastYIdx > 0 ? fin.years[lastYIdx - 1] : null;
   const pl = fin.pl; const bs = fin.bs;
   const totalRevenue = getYV(pl,/^total\s+(for\s+)?income$/i,lastY) || sumI(pl,/income|revenue|rent/i,lastY);
   const totalExpenses = getYV(pl,/^total\s+(for\s+)?expenses?$/i,lastY);
@@ -378,9 +379,9 @@ function fmtDollar(n: number) {
   return n < 0 ? `(${s})` : s;
 }
 
-function calcAllRatios(fin: LiveFin): { profitability: RatioCard[]; liquidity: RatioCard[]; solvency: RatioCard[] } {
+function calcAllRatios(fin: LiveFin, activeYear?: number): { profitability: RatioCard[]; liquidity: RatioCard[]; solvency: RatioCard[] } {
   const pl = fin.pl; const bs = fin.bs; const cf = fin.cf;
-  const lastY = fin.years[fin.years.length - 1];
+  const lastY = activeYear && fin.years.includes(activeYear) ? activeYear : fin.years[fin.years.length - 1];
 
   // Helpers
   const yv = (items: FinItem[], pat: RegExp, y: number) =>
@@ -883,6 +884,9 @@ function CostOfCapitalTab({ loanData }: { loanData: any[] }) {
 
 const RATIO_TABS: RatioTab[] = ['Profitability', 'Liquidity', 'Solvency', 'Rental KPIs', 'Cost of Capital'];
 
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const NOW = new Date();
+
 export default function RentalFinancialRatios() {
   const [activeTab, setActiveTab] = useState<RatioTab>('Profitability');
   const [companies, setCompanies] = useState<CoOption[]>([]);
@@ -893,6 +897,13 @@ export default function RentalFinancialRatios() {
   const [loanData, setLoanData] = useState<any[]>([]);
   const [trendData, setTrendData] = useState<any[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [selectedYear, setSelectedYear] = useState<number>(NOW.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(NOW.getMonth() + 1);
+
+  // Available years: from liveData if present, else current year ± 4
+  const availableYears = liveData?.years.length
+    ? [...liveData.years].sort((a, b) => b - a)
+    : Array.from({ length: 5 }, (_, i) => NOW.getFullYear() - i);
 
   useEffect(() => {
     api.get<CoOption[]>('/api/rentals/companies')
@@ -905,10 +916,10 @@ export default function RentalFinancialRatios() {
     const fetchData = async () => {
       try {
         setLoadingData(true);
-        // Fetch companies and portfolio summary for metrics
+        const periodParams = `?year=${selectedYear}&month=${selectedMonth}`;
         const [companiesRes, portfolioRes, loansRes] = await Promise.all([
           api.get<any[]>('/api/rentals/companies'),
-          api.get<any>('/api/rentals/portfolio-summary'),
+          api.get<any>(`/api/rentals/portfolio-summary${periodParams}`),
           api.get<any>('/api/real-estate/loans'),
         ]);
 
@@ -958,7 +969,7 @@ export default function RentalFinancialRatios() {
       }
     };
     fetchData();
-  }, []);
+  }, [selectedYear, selectedMonth]);
 
   useEffect(() => {
     if (!selectedId) { setLiveData(null); return; }
@@ -978,7 +989,7 @@ export default function RentalFinancialRatios() {
         <p className="text-sm text-gray-500 mt-1">Rental Portfolio — Solvency, Profitability, Liquidity &amp; Rental KPIs</p>
       </div>
 
-      {/* Company selector */}
+      {/* Company + Period selectors */}
       <div className="flex gap-3 flex-wrap items-center">
         <select
           value={selectedId}
@@ -988,6 +999,30 @@ export default function RentalFinancialRatios() {
           <option value="">All Companies (Portfolio Benchmarks)</option>
           {companies.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
         </select>
+
+        {/* Year picker */}
+        <select
+          value={selectedYear}
+          onChange={e => setSelectedYear(Number(e.target.value))}
+          className="px-3 py-1.5 rounded-lg border border-amber-300 text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          style={{ minWidth: 80 }}
+        >
+          {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+
+        {/* Month picker */}
+        <select
+          value={selectedMonth}
+          onChange={e => setSelectedMonth(Number(e.target.value))}
+          className="px-3 py-1.5 rounded-lg border border-amber-300 text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          style={{ minWidth: 80 }}
+        >
+          {MONTHS.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
+        </select>
+
+        <span style={{ fontSize: 11, color: '#92400E', background: '#FFF7EE', border: '1px solid #F2994A', borderRadius: 6, padding: '3px 8px' }}>
+          {MONTHS[selectedMonth - 1]} {selectedYear}
+        </span>
         {selectedId && !liveData && !loadingLive && (
           <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
             No financials uploaded for this company — go to Financials to upload P&amp;L/BS/CF
@@ -997,13 +1032,13 @@ export default function RentalFinancialRatios() {
       </div>
 
       {/* Live data panel — shown when company has uploaded financials */}
-      {liveData && <LiveDataPanel fin={liveData} />}
+      {liveData && <LiveDataPanel fin={liveData} activeYear={selectedYear} />}
 
       {/* Live data badge */}
       {liveData && (
         <div style={{ background: '#F4FFF3', border: '1px solid #22A06B', borderRadius: 8, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 11, color: '#22A06B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>● Live Data Active</span>
-          <span style={{ fontSize: 12, color: '#262626' }}>Ratio cards below are calculated from <strong>{liveData.company_name}</strong>'s uploaded financial statements ({liveData.years.join(', ')})</span>
+          <span style={{ fontSize: 12, color: '#262626' }}>Ratio cards below are calculated from <strong>{liveData.company_name}</strong> · year <strong>{liveData.years.includes(selectedYear) ? selectedYear : liveData.years[liveData.years.length - 1]}</strong> · {MONTHS[selectedMonth - 1]} {selectedYear}</span>
         </div>
       )}
       {!selectedId && (
@@ -1033,7 +1068,7 @@ export default function RentalFinancialRatios() {
 
       {/* Tab content */}
       {(() => {
-        const liveRatios = liveData ? calcAllRatios(liveData) : null;
+        const liveRatios = liveData ? calcAllRatios(liveData, selectedYear) : null;
         return (
           <div>
             {activeTab === 'Profitability'   && <ProfitabilityTab coData={coData} trendData={trendData} liveCards={liveRatios?.profitability} liveFin={liveData ?? undefined} />}
