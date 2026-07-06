@@ -101,6 +101,80 @@ const TABS: { id: DashTab; label: string }[] = [
   { id: 'inspections',  label: 'Inspections'  },
 ];
 
+// ── Unit filter + table sub-component ────────────────────────────────────────
+function UnitFilterBar({ units }: { units: UnitDetail[] }) {
+  const [statusFilter, setStatusFilter] = useState('');
+  const filtered = statusFilter ? units.filter(u => u.status === statusFilter) : units;
+  const statusCounts = units.reduce<Record<string, number>>((acc, u) => {
+    acc[u.status] = (acc[u.status] ?? 0) + 1; return acc;
+  }, {});
+
+  return (
+    <div className="space-y-3">
+      {/* status filter pills */}
+      <div className="flex flex-wrap gap-2">
+        {[
+          { key: '',                label: `All (${units.length})` },
+          { key: 'occupied',        label: `Occupied (${statusCounts['occupied'] ?? 0})` },
+          { key: 'vacant',          label: `Vacant (${statusCounts['vacant'] ?? 0})` },
+          { key: 'notice',          label: `Notice (${statusCounts['notice'] ?? 0})` },
+          { key: 'reserved',        label: `Reserved (${statusCounts['reserved'] ?? 0})` },
+          { key: 'maintenance_hold',label: `Maint. Hold (${statusCounts['maintenance_hold'] ?? 0})` },
+        ].filter(o => o.key === '' || statusCounts[o.key]).map(o => (
+          <button key={o.key} onClick={() => setStatusFilter(o.key)}
+            className={`text-xs px-3 py-1 rounded-full border font-medium transition-colors ${
+              statusFilter === o.key
+                ? 'bg-[#0E3B36] text-white border-[#0E3B36]'
+                : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-gray-400'
+            }`}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+      {/* table */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-200 text-left text-gray-500">
+              <th className="py-2 px-2 font-medium">Unit</th>
+              <th className="py-2 px-2 font-medium">Status</th>
+              <th className="py-2 px-2 font-medium">Tenant</th>
+              <th className="py-2 px-2 font-medium">Lease End</th>
+              <th className="py-2 px-2 font-medium">Monthly Rent</th>
+              <th className="py-2 px-2 font-medium">Arrears</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(u => (
+              <tr key={u.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                <td className="py-2 px-2 font-mono">{u.unit_number}</td>
+                <td className="py-2 px-2">
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                    u.status === 'occupied'         ? 'bg-green-100 text-green-800' :
+                    u.status === 'vacant'           ? 'bg-red-100 text-red-800' :
+                    u.status === 'notice'           ? 'bg-amber-100 text-amber-800' :
+                    u.status === 'reserved'         ? 'bg-blue-100 text-blue-800' :
+                    u.status === 'maintenance_hold' ? 'bg-gray-100 text-gray-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>{u.status.replace(/_/g, ' ')}</span>
+                </td>
+                <td className="py-2 px-2">{u.tenant_name || '—'}</td>
+                <td className="py-2 px-2">{u.lease_end || '—'}</td>
+                <td className="py-2 px-2 font-mono">{fmtUSD(u.monthly_rent)}</td>
+                <td className="py-2 px-2">
+                  {u.arrears > 0
+                    ? <span className="text-red-600 font-medium font-mono">{fmtUSD(u.arrears)}</span>
+                    : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ── month selector helpers ────────────────────────────────────────────────────
 function buildMonthOptions(count = 24) {
   const opts: { value: string; label: string }[] = [];
@@ -288,41 +362,8 @@ export default function RentalCompanyDashboard({ companyId }: Props) {
             </Card>
           </div>
 
-          <Card title="Unit Occupancy">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200 text-left text-gray-500">
-                    <th className="py-2 px-2 font-medium">Unit</th>
-                    <th className="py-2 px-2 font-medium">Status</th>
-                    <th className="py-2 px-2 font-medium">Tenant</th>
-                    <th className="py-2 px-2 font-medium">Lease End</th>
-                    <th className="py-2 px-2 font-medium">Monthly Rent</th>
-                    <th className="py-2 px-2 font-medium">Arrears</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.units.map((u) => (
-                    <tr key={u.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                      <td className="py-2 px-2 font-mono">{u.unit_number}</td>
-                      <td className="py-2 px-2">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_PILL[u.status] ?? 'bg-gray-100 text-gray-800'}`}>
-                          {u.status}
-                        </span>
-                      </td>
-                      <td className="py-2 px-2">{u.tenant_name || '—'}</td>
-                      <td className="py-2 px-2">{u.lease_end || '—'}</td>
-                      <td className="py-2 px-2">{fmtUSD(u.monthly_rent)}</td>
-                      <td className="py-2 px-2">
-                        {u.arrears > 0
-                          ? <span className="text-red-600 font-medium">{fmtUSD(u.arrears)}</span>
-                          : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <Card title={`Unit Occupancy — ${MONTH_OPTS.find(o => o.value === selectedMonth)?.label ?? selectedMonth}`}>
+            <UnitFilterBar units={data.units} />
           </Card>
 
           <Card title="Ownership & Partner NOI Share">

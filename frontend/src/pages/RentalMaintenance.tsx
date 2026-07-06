@@ -438,6 +438,20 @@ function AddWorkOrderPanel({
   );
 }
 
+// ── Month helpers ─────────────────────────────────────────────────────────────
+function buildMaintMonthOptions(count = 24) {
+  const opts: { value: string; label: string }[] = [{ value: '', label: 'All Months' }];
+  const now = new Date();
+  for (let i = 0; i < count; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+    opts.push({ value, label });
+  }
+  return opts;
+}
+const MAINT_MONTH_OPTS = buildMaintMonthOptions(24);
+
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function RentalMaintenance() {
   const [response, setResponse] = useState<MaintResponse | null>(null);
@@ -449,6 +463,7 @@ export default function RentalMaintenance() {
   const [filterCompany,  setFilterCompany]  = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterStatus,   setFilterStatus]   = useState('');
+  const [filterMonth,    setFilterMonth]    = useState('');
 
   // Fetch available units for the work-order form
   useEffect(() => {
@@ -489,9 +504,10 @@ export default function RentalMaintenance() {
       if (filterCompany  && i.company_name !== filterCompany)  return false;
       if (filterCategory && i.category     !== filterCategory) return false;
       if (filterStatus   && i.status       !== filterStatus)   return false;
+      if (filterMonth    && i.reported_date && !i.reported_date.startsWith(filterMonth)) return false;
       return true;
     });
-  }, [allItems, filterCompany, filterCategory, filterStatus]);
+  }, [allItems, filterCompany, filterCategory, filterStatus, filterMonth]);
 
   // Group filtered items by company
   const byCompany = useMemo(() => {
@@ -571,9 +587,20 @@ export default function RentalMaintenance() {
             {f.options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
         ))}
+        {/* Month / Year filter */}
+        <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)}
+          style={{ padding: '6px 10px', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13, background: '#FBF6EE', color: '#1C1917', outline: 'none' }}>
+          {MAINT_MONTH_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
         <button onClick={load} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13, background: '#FBF6EE', color: '#78716C', cursor: 'pointer' }}>
           <RefreshCw size={13} /> Refresh
         </button>
+        {filterMonth && (
+          <button onClick={() => setFilterMonth('')}
+            style={{ fontSize: 12, color: '#78716C', padding: '4px 8px', border: '1px solid #E8DEC8', borderRadius: 6, background: '#FBF6EE', cursor: 'pointer' }}>
+            Clear month
+          </button>
+        )}
       </div>
 
       {/* Empty state */}
