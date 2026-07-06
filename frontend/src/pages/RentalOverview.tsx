@@ -21,10 +21,10 @@ const C_CARD  = '#FBF6EE';
 const C_BORD  = '#E8DEC8';
 const OCCUPANCY_TARGET = 92; // percent
 
-/** Distinct bar colors per company — estate palette with varied hues */
+/** Distinct bar colors per company — vivid palette, gold/teal first (not red) */
 const COMPANY_BAR_COLORS = [
-  '#E76F6F', '#D4AF37', '#18B7A0', '#7B68AD', '#E9A358',
-  '#5B9BD5', '#C75B7A', '#6B8E6B', '#D97B4A', '#4A90A4',
+  '#D4AF37', '#18B7A0', '#7B68AD', '#5B9BD5', '#E9A358',
+  '#6B8E6B', '#C75B7A', '#D97B4A', '#4A90A4', '#E76F6F',
 ];
 
 const AGING_BUCKET_COLORS = ['#22A06B', '#F5A623', '#E97316', '#DC2626', '#991B1B'];
@@ -218,10 +218,17 @@ function PriTile({
 function SecTile({
   label, value, sub, warn, na,
 }: { label: string; value: string; sub?: string; warn?: boolean; na?: boolean }) {
+  const displayValue = na && (value === 'NA' || value === '—') ? 'NA' : value;
   return (
     <div style={CARD} className="ov-tile">
       <div style={KPI_LBL}>{label}</div>
-      <div style={{ ...KPI_VAL_SEC, color: na ? '#B0B0B0' : (warn ? C_RED : '#1F1F1F') }}>{value}</div>
+      <div style={{
+        ...KPI_VAL_SEC,
+        color: na ? '#9CA3AF' : (warn ? C_RED : '#1F1F1F'),
+        letterSpacing: na ? '0.08em' : undefined,
+      }}>
+        {displayValue}
+      </div>
       {sub && <div style={{ ...KPI_HELP, color: na ? '#C0C0C0' : '#7A7A7A' }}>{sub}</div>}
     </div>
   );
