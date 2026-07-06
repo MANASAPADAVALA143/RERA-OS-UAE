@@ -363,6 +363,9 @@ export default function RentalCompanyDashboard({ companyId }: Props) {
           </div>
 
           <Card title={`Unit Occupancy — ${MONTH_OPTS.find(o => o.value === selectedMonth)?.label ?? selectedMonth}`}>
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3 font-sans">
+              Unit status and tenant data reflect the <strong>current state</strong> in the registry — not a historical snapshot for the selected month. KPI tiles above (Collected, NOI, Billed) are correctly filtered by month.
+            </p>
             <UnitFilterBar units={data.units} />
           </Card>
 
