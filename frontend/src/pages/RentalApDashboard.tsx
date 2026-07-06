@@ -267,18 +267,8 @@ export default function RentalApDashboard() {
     }, 900);
   }
 
-  // ── no data guard ─────────────────────────────────────────────────────────
-  if (!portfolio.loaded || arAp.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <p className="text-gray-500 text-sm">No AP data loaded yet.</p>
-        <button onClick={() => setTab('portfolio-upload')}
-          className="bg-[#0E3B36] text-white px-5 py-2 rounded-lg text-sm hover:bg-[#1A5249]">
-          ← Upload Portfolio Data
-        </button>
-      </div>
-    );
-  }
+  // ── no portfolio data — still show QB AP upload panel ────────────────────
+  const hasPortfolioData = portfolio.loaded && arAp.length > 0;
 
   return (
     <div className="space-y-10" style={{ fontFamily: 'Georgia, serif' }}>
@@ -490,7 +480,15 @@ export default function RentalApDashboard() {
         )}
       </div>
 
+      {/* ── Portfolio data note when not uploaded yet ─────────────────────── */}
+      {!hasPortfolioData && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-sans text-amber-800">
+          Portfolio AP data not uploaded yet — KPI tiles and charts will appear after uploading via <strong>Portfolio Upload</strong>. You can still upload QB AP Aging above independently.
+        </div>
+      )}
+
       {/* ══ SECTION 1 — KPI Cards ══════════════════════════════════════════ */}
+      {hasPortfolioData && <>
       <div>
         <p className="text-xs font-sans font-semibold text-gray-400 uppercase tracking-wider mb-3">01 — Payables Summary</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -831,6 +829,8 @@ export default function RentalApDashboard() {
           </table>
         </div>
       </div>
+
+      </>}
 
     </div>
   );
