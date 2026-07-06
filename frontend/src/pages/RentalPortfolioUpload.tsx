@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../services/api';
+import QbArAgingUploadPanel, { type QBAgingLatest } from '../components/rental/QbArAgingUploadPanel';
 
 const MONTH_OPTIONS = [
   { value: 'Jan-2026', label: 'January 2026' },
@@ -62,6 +63,19 @@ export default function RentalPortfolioUpload() {
   const [showPreview, setShowPreview] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [toast, setToast] = useState('');
+
+  const [qbAging, setQbAging] = useState<QBAgingLatest | null>(null);
+  const [qbLoading, setQbLoading] = useState(true);
+
+  const fetchQbAging = useCallback(() => {
+    setQbLoading(true);
+    api.get<QBAgingLatest>('/api/rentals/ar-ap/qb-aging/latest')
+      .then(r => setQbAging(r.data))
+      .catch(() => setQbAging(null))
+      .finally(() => setQbLoading(false));
+  }, []);
+
+  useEffect(() => { fetchQbAging(); }, [fetchQbAging]);
 
   function showMsg(msg: string) {
     setToast(msg);
@@ -173,6 +187,35 @@ export default function RentalPortfolioUpload() {
         </div>
       </div>
 
+      {/* AR Aging upload — populates Overview aging chart + arrears days */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6 max-w-2xl">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+            style={{ background: 'rgba(212,175,55,0.15)' }}>
+            <span className="text-xl">📋</span>
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-gray-800">QB AR Aging Sync</div>
+            <div className="text-xs text-gray-400">
+              Upload QuickBooks AR Aging Detail by Customer.xlsx
+            </div>
+          </div>
+        </div>
+        <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+          Separate from Rent Receivable — required to populate <strong>Overview → Arrears Aging by Bucket</strong>,
+          <strong> Arrears Days Outstanding</strong>, and <strong>Top Risk Companies</strong> arrears days.
+        </p>
+        <QbArAgingUploadPanel
+          qbAging={qbAging}
+          qbLoading={qbLoading}
+          onRefresh={() => {
+            fetchQbAging();
+            showMsg('✅ AR Aging saved — Overview aging sections updated');
+          }}
+          defaultExpanded
+        />
+      </div>
+
       {/* What gets updated */}
       <div className="rounded-xl p-4 max-w-2xl mb-6"
         style={{ background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.25)' }}>
@@ -180,6 +223,9 @@ export default function RentalPortfolioUpload() {
           ✅ After upload, these sections update automatically:
         </div>
         <div className="grid grid-cols-2 gap-1">
+          <div className="text-xs font-semibold col-span-2 mb-1" style={{ color: '#92400E' }}>
+            Rent Receivable upload updates:
+          </div>
           {[
             'Company Registry — units, suites, company list',
             'Overview — occupancy, collected, NOI',
@@ -192,6 +238,20 @@ export default function RentalPortfolioUpload() {
           ].map(item => (
             <div key={item} className="text-xs flex items-center gap-1.5" style={{ color: '#92400E' }}>
               <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#D4AF37' }} />
+              {item}
+            </div>
+          ))}
+          <div className="text-xs font-semibold col-span-2 mt-3 mb-1" style={{ color: '#92400E' }}>
+            AR Aging upload updates:
+          </div>
+          {[
+            'Overview — Arrears Aging by Bucket chart',
+            'Overview — Arrears Days Outstanding KPI',
+            'Overview — Top Risk Companies arrears days',
+            'AR Dashboard — tenant aging & bucket breakdown',
+          ].map(item => (
+            <div key={item} className="text-xs flex items-center gap-1.5" style={{ color: '#92400E' }}>
+              <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#18B7A0' }} />
               {item}
             </div>
           ))}

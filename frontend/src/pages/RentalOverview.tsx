@@ -733,6 +733,119 @@ export default function RentalOverview() {
         </div>
       )}
 
+      {/* ── QB AR Aging upload + Arrears Aging + Top Risk (needs AR Aging file) ─ */}
+      {!fetching && (
+        <div className="space-y-3">
+          <QbArAgingUploadPanel
+            qbAging={qbAging}
+            qbLoading={qbLoading}
+            onRefresh={fetchQbAging}
+            defaultExpanded={!qbAging?.has_data}
+          />
+          <ChartCard title="Arrears Aging by Bucket">
+            {hasAgingData ? (
+              <>
+                {agingFromQb && qbAging?.latest_snapshot?.snapshot_month && (
+                  <p style={{ fontSize: 11, color: '#78716C', marginBottom: 8 }}>
+                    From QB AR Aging upload · as of {qbAging.latest_snapshot.snapshot_month}
+                  </p>
+                )}
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={agingData}>
+                    <XAxis dataKey="bucket" tick={TICK} />
+                    <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} tick={TICK} />
+                    <Tooltip formatter={(v: number) => fmtUSD(v)} {...TT} />
+                    <Bar dataKey="amount" name="Arrears" radius={[4, 4, 0, 0]}>
+                      {agingData.map((_, idx) => (
+                        <Cell key={idx} fill={AGING_BUCKET_COLORS[idx % AGING_BUCKET_COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-10 gap-2">
+                <span style={{ fontSize: 28, opacity: 0.4 }}>📊</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#9B9B9B' }}>Awaiting AR Aging upload</span>
+                <span style={{ fontSize: 12, color: '#B5B5B5', maxWidth: 380, textAlign: 'center' }}>
+                  Upload QB <strong>AR Aging Detail by Customer</strong> (.xlsx) in the panel above.
+                  Populates Current / 1–30d / 31–60d / 61–90d / 90+d buckets, Arrears Days KPI, and Top Risk table.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setTab('portfolio-upload')}
+                  style={{
+                    marginTop: 8, padding: '7px 16px', borderRadius: 8, border: 'none',
+                    background: 'linear-gradient(135deg,#D4AF37,#B8860B)', color: '#fff',
+                    fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                  }}
+                >
+                  Or upload via Portfolio Upload page →
+                </button>
+              </div>
+            )}
+          </ChartCard>
+          {riskCompanies.length > 0 && (
+            <div style={CARD}>
+              <h3 className="ov-section-title">Top Risk Companies</h3>
+              <p style={{ fontSize: 12, color: '#7A7A7A', marginBottom: 12 }}>
+                Ranked by combined arrears + vacancy exposure
+                {qbAging?.has_data ? ' · Arrears days from QB aging upload' : ' · Upload AR Aging above for arrears days'}
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full" style={{ fontSize: 14, borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: `1px solid ${C_BORD}` }}>
+                      {['Company', 'Arrears', 'Vacancy Loss', 'Occupancy', 'Arrears Days', 'Risk'].map(h => (
+                        <th key={h} className="py-2 px-3 text-left"
+                          style={{ fontSize: 13, fontWeight: 600, color: '#5A4B35' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {riskCompanies.map((c, i) => {
+                      const flag = riskFlag(c);
+                      const occColor = c.occupancy_pct >= 0.92 ? C_GREEN : c.occupancy_pct >= 0.82 ? C_AMBER : C_RED;
+                      return (
+                        <tr key={i} style={{ borderBottom: `1px solid ${C_BORD}22` }}
+                          className="hover:bg-[rgba(0,0,0,0.02)] cursor-pointer"
+                          onClick={() => setCompany(c.company_id)}>
+                          <td className="py-2.5 px-3" style={{ fontWeight: 500, color: '#262626' }}>{c.company_name}</td>
+                          <td className="py-2.5 px-3" style={{ ...TAB_NUM, color: c.arrears_total > 5000 ? C_RED : '#262626' }}>
+                            {fmtUSD(c.arrears_total)}
+                          </td>
+                          <td className="py-2.5 px-3" style={{ ...TAB_NUM, color: c.vacancy_loss > 0 ? C_RED : '#6B6B6B' }}>
+                            {c.vacancy_loss > 0 ? fmtUSD(c.vacancy_loss) : '—'}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span style={{ ...TAB_NUM, color: occColor, fontWeight: 600 }}>
+                              {(c.occupancy_pct * 100).toFixed(1)}%
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3" style={{ color: '#6B6B6B', fontSize: 13, ...TAB_NUM }}>
+                            {qbDsoByCompany.has(c.company_id)
+                              ? `~${qbDsoByCompany.get(c.company_id)}d`
+                              : 'NA'}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span style={{
+                              fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
+                              color: flag.color, background: flag.bg,
+                            }}>
+                              {flag.label}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Attention Now ────────────────────────────────────────────────────── */}
       {data.attention_now.length > 0 && (
         <div style={CARD}>
@@ -922,110 +1035,6 @@ export default function RentalOverview() {
               </div>
             )}
           </ChartCard>
-        </div>
-      )}
-
-      {/* ── QB AR Aging upload + Arrears Aging chart ─────────────────────────── */}
-      {!fetching && (
-        <div className="space-y-3">
-          <QbArAgingUploadPanel
-            qbAging={qbAging}
-            qbLoading={qbLoading}
-            onRefresh={fetchQbAging}
-            defaultExpanded={!qbAging?.has_data}
-          />
-          <ChartCard title="Arrears Aging by Bucket">
-            {hasAgingData ? (
-              <>
-                {agingFromQb && qbAging?.latest_snapshot?.snapshot_month && (
-                  <p style={{ fontSize: 11, color: '#78716C', marginBottom: 8 }}>
-                    From QB AR Aging upload · as of {qbAging.latest_snapshot.snapshot_month}
-                  </p>
-                )}
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={agingData}>
-                    <XAxis dataKey="bucket" tick={TICK} />
-                    <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} tick={TICK} />
-                    <Tooltip formatter={(v: number) => fmtUSD(v)} {...TT} />
-                    <Bar dataKey="amount" name="Arrears" radius={[4, 4, 0, 0]}>
-                      {agingData.map((_, idx) => (
-                        <Cell key={idx} fill={AGING_BUCKET_COLORS[idx % AGING_BUCKET_COLORS.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-10 gap-2">
-                <span style={{ fontSize: 28, opacity: 0.4 }}>📊</span>
-                <span style={{ fontSize: 14, fontWeight: 600, color: '#9B9B9B' }}>Awaiting AR Aging upload</span>
-                <span style={{ fontSize: 12, color: '#B5B5B5', maxWidth: 340, textAlign: 'center' }}>
-                  Use the upload panel above to add your QB AR Aging Summary report.
-                  Buckets (Current / 1–30d / 31–60d / 61–90d / 90+d) will appear here.
-                </span>
-              </div>
-            )}
-          </ChartCard>
-        </div>
-      )}
-
-      {/* ── Top Risk Companies table (Chart 7 / Exception table) ─────────────── */}
-      {!fetching && riskCompanies.length > 0 && (
-        <div style={CARD}>
-          <h3 className="ov-section-title">Top Risk Companies</h3>
-          <p style={{ fontSize: 12, color: '#7A7A7A', marginBottom: 12 }}>
-            Ranked by combined arrears + vacancy exposure
-            {qbAging?.has_data ? ' · Arrears days from QB aging upload' : ' · Upload AR Aging above for arrears days'}
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full" style={{ fontSize: 14, borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${C_BORD}` }}>
-                  {['Company', 'Arrears', 'Vacancy Loss', 'Occupancy', 'Arrears Days', 'Risk'].map(h => (
-                    <th key={h} className="py-2 px-3 text-left"
-                      style={{ fontSize: 13, fontWeight: 600, color: '#5A4B35' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {riskCompanies.map((c, i) => {
-                  const flag = riskFlag(c);
-                  const occColor = c.occupancy_pct >= 0.92 ? C_GREEN : c.occupancy_pct >= 0.82 ? C_AMBER : C_RED;
-                  return (
-                    <tr key={i} style={{ borderBottom: `1px solid ${C_BORD}22` }}
-                      className="hover:bg-[rgba(0,0,0,0.02)] cursor-pointer"
-                      onClick={() => setCompany(c.company_id)}>
-                      <td className="py-2.5 px-3" style={{ fontWeight: 500, color: '#262626' }}>{c.company_name}</td>
-                      <td className="py-2.5 px-3" style={{ ...TAB_NUM, color: c.arrears_total > 5000 ? C_RED : '#262626' }}>
-                        {fmtUSD(c.arrears_total)}
-                      </td>
-                      <td className="py-2.5 px-3" style={{ ...TAB_NUM, color: c.vacancy_loss > 0 ? C_RED : '#6B6B6B' }}>
-                        {c.vacancy_loss > 0 ? fmtUSD(c.vacancy_loss) : '—'}
-                      </td>
-                      <td className="py-2.5 px-3">
-                        <span style={{ ...TAB_NUM, color: occColor, fontWeight: 600 }}>
-                          {(c.occupancy_pct * 100).toFixed(1)}%
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-3" style={{ color: '#6B6B6B', fontSize: 13, ...TAB_NUM }}>
-                        {qbDsoByCompany.has(c.company_id)
-                          ? `~${qbDsoByCompany.get(c.company_id)}d`
-                          : 'NA'}
-                      </td>
-                      <td className="py-2.5 px-3">
-                        <span style={{
-                          fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
-                          color: flag.color, background: flag.bg,
-                        }}>
-                          {flag.label}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
         </div>
       )}
 
