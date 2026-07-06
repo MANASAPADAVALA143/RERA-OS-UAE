@@ -89,9 +89,16 @@ interface Props {
   qbLoading: boolean;
   onRefresh: () => void;
   defaultExpanded?: boolean;
+  /** Company filter for viewing aging data (Overview AR section) */
+  viewCompanyId?: string;
+  onViewCompanyChange?: (id: string) => void;
+  viewCompanies?: { id: string; name: string }[];
 }
 
-export default function QbArAgingUploadPanel({ qbAging, qbLoading, onRefresh, defaultExpanded = false }: Props) {
+export default function QbArAgingUploadPanel({
+  qbAging, qbLoading, onRefresh, defaultExpanded = false,
+  viewCompanyId = '', onViewCompanyChange, viewCompanies = [],
+}: Props) {
   const [expanded, setExpanded] = useState(defaultExpanded || !qbAging?.has_data);
   const [uploadMode, setUploadMode] = useState<'company' | 'portfolio'>('company');
   const [companies, setCompanies] = useState<CompanyRow[]>([]);
@@ -238,7 +245,24 @@ export default function QbArAgingUploadPanel({ qbAging, qbLoading, onRefresh, de
             </span>
           )}
         </div>
-        <button
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {viewCompanies.length > 0 && onViewCompanyChange && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#5C5043' }}>COMPANY</span>
+              <select
+                value={viewCompanyId}
+                onChange={e => onViewCompanyChange(e.target.value)}
+                style={{ ...SEL, fontSize: 12, padding: '5px 10px' }}
+                title="Filter AR aging view by company"
+              >
+                <option value="">All Companies</option>
+                {viewCompanies.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <button
           type="button"
           onClick={() => setExpanded(v => !v)}
           style={{
@@ -251,6 +275,7 @@ export default function QbArAgingUploadPanel({ qbAging, qbLoading, onRefresh, de
         >
           {expanded ? '▲ Hide' : qbAging?.has_data ? '+ Update AR Aging' : '▲ Upload AR Aging'}
         </button>
+        </div>
       </div>
 
       {expanded && (

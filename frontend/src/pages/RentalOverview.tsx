@@ -235,13 +235,40 @@ function SecTile({
   );
 }
 
-function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
+function ChartCard({ title, children, compact, headerRight }: {
+  title: string; children: React.ReactNode; compact?: boolean; headerRight?: React.ReactNode;
+}) {
   return (
-    <div style={CARD}>
-      <h3 style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 16 }}>{title}</h3>
+    <div style={{ ...CARD, padding: compact ? '12px 14px' : CARD.padding }}>
+      <div style={{
+        display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+        gap: 10, flexWrap: 'wrap', marginBottom: compact ? 10 : 16,
+      }}>
+        <h3 style={{
+          fontSize: compact ? 13 : 15,
+          fontWeight: 600,
+          color: '#1C1917',
+          marginBottom: 0,
+        }}>{title}</h3>
+        {headerRight}
+      </div>
       {children}
     </div>
   );
+}
+
+const COMPACT_CHART_H = 175;
+
+function agingBucketsFromTotals(t: {
+  current: number; days_1_30: number; days_31_60: number; days_61_90: number; days_91_plus: number;
+}) {
+  return [
+    { bucket: 'Current', amount: t.current },
+    { bucket: '1–30d', amount: t.days_1_30 },
+    { bucket: '31–60d', amount: t.days_31_60 },
+    { bucket: '61–90d', amount: t.days_61_90 },
+    { bucket: '90+d', amount: t.days_91_plus },
+  ];
 }
 
 // ── SELECT styles ─────────────────────────────────────────────────────────────
@@ -270,6 +297,7 @@ export default function RentalOverview() {
   // QB AR Aging — drives aging chart, DSO KPIs, and risk table arrears days
   const [qbAging, setQbAging] = useState<QBAgingLatest | null>(null);
   const [qbLoading, setQbLoading] = useState(true);
+  const [arCoId, setArCoId] = useState('');
 
   const fetchQbAging = useCallback(() => {
     setQbLoading(true);
@@ -280,6 +308,16 @@ export default function RentalOverview() {
   }, []);
 
   useEffect(() => { fetchQbAging(); }, [fetchQbAging]);
+
+  const arCompanyOptions = useMemo(() => {
+    if (qbAging?.has_data && qbAging.by_company.length > 0) {
+      return qbAging.by_company.map(c => ({ id: c.company_id, name: c.company_name }));
+    }
+    if (!data) return [];
+    return data.by_company.map(c => ({ id: c.company_id, name: c.company_name }));
+  }, [qbAging, data]);
+
+  const arCoName = arCompanyOptions.find(c => c.id === arCoId)?.name ?? '';
 
   const qbDso = qbAging?.has_data ? (qbAging.dso_estimate ?? null) : null;
 
@@ -445,12 +483,13 @@ export default function RentalOverview() {
   // Top risk companies (by combined arrears + vacancy_loss)
   const riskCompanies = useMemo(() => {
     if (!data) return [];
-    const source = selectedCo ? [selectedCo] : data.by_company;
+    let source = selectedCo ? [selectedCo] : data.by_company;
+    if (arCoId) source = source.filter(c => c.company_id === arCoId);
     return [...source]
       .filter(c => c.arrears_total > 0 || c.vacancy_loss > 0 || c.occupancy_pct < 0.85)
       .sort((a, b) => (b.arrears_total + b.vacancy_loss) - (a.arrears_total + a.vacancy_loss))
       .slice(0, 8);
-  }, [data, selectedCo]);
+  }, [data, selectedCo, arCoId]);
 
   // Sparkline data: last 6 collected values and NOI values from trend
   const sparkCollected = useMemo(() => trendData.map(d => d.collected).filter(v => v > 0), [trendData]);
@@ -458,25 +497,28 @@ export default function RentalOverview() {
 
   // Arrears aging — prefer QB upload buckets; fall back to portfolio-summary
   const agingData = useMemo(() => {
-    if (qbAging?.has_data && qbAging.portfolio_totals) {
-      const t = qbAging.portfolio_totals;
-      return [
-        { bucket: 'Current', amount: t.current },
-        { bucket: '1–30d', amount: t.days_1_30 },
-        { bucket: '31–60d', amount: t.days_31_60 },
-        { bucket: '61–90d', amount: t.days_61_90 },
-        { bucket: '90+d', amount: t.days_91_plus },
-      ];
+    if (qbAging?.has_data) {
+      const totals = arCoId
+        ? qbAging.by_company.find(c => c.company_id === arCoId)
+        : qbAging.portfolio_totals;
+      if (totals) return agingBucketsFromTotals(totals);
     }
     if (!data) return [];
-    return [
-      { bucket: 'Current', amount: data.arrears_aging['current'] ?? data.arrears_aging['0_30'] ?? 0 },
-      { bucket: '1–30d', amount: data.arrears_aging['1_30'] ?? data.arrears_aging['0_30'] ?? 0 },
-      { bucket: '31–60d', amount: data.arrears_aging['31_60'] ?? 0 },
-      { bucket: '61–90d', amount: data.arrears_aging['61_90'] ?? 0 },
-      { bucket: '90+d', amount: data.arrears_aging['90_plus'] ?? 0 },
-    ];
-  }, [qbAging, data]);
+    if (arCoId) {
+      const co = data.by_company.find(c => c.company_id === arCoId);
+      if (co && co.arrears_total > 0) {
+        return [{ bucket: 'Outstanding', amount: co.arrears_total }];
+      }
+      return [];
+    }
+    return agingBucketsFromTotals({
+      current: data.arrears_aging['current'] ?? data.arrears_aging['0_30'] ?? 0,
+      days_1_30: data.arrears_aging['1_30'] ?? data.arrears_aging['0_30'] ?? 0,
+      days_31_60: data.arrears_aging['31_60'] ?? 0,
+      days_61_90: data.arrears_aging['61_90'] ?? 0,
+      days_91_plus: data.arrears_aging['90_plus'] ?? 0,
+    });
+  }, [qbAging, data, arCoId]);
   const hasAgingData = agingData.some(d => d.amount > 0);
   const agingFromQb = qbAging?.has_data ?? false;
 
@@ -742,6 +784,9 @@ export default function RentalOverview() {
             qbLoading={qbLoading}
             onRefresh={fetchQbAging}
             defaultExpanded={!qbAging?.has_data}
+            viewCompanyId={arCoId}
+            onViewCompanyChange={setArCoId}
+            viewCompanies={arCompanyOptions}
           />
           <ChartCard title="Arrears Aging by Bucket">
             {hasAgingData ? (
@@ -749,6 +794,7 @@ export default function RentalOverview() {
                 {agingFromQb && qbAging?.latest_snapshot?.snapshot_month && (
                   <p style={{ fontSize: 11, color: '#78716C', marginBottom: 8 }}>
                     From QB AR Aging upload · as of {qbAging.latest_snapshot.snapshot_month}
+                    {arCoName ? ` · ${arCoName}` : ''}
                   </p>
                 )}
                 <ResponsiveContainer width="100%" height={220}>
@@ -767,10 +813,14 @@ export default function RentalOverview() {
             ) : (
               <div className="flex flex-col items-center justify-center py-10 gap-2">
                 <span style={{ fontSize: 28, opacity: 0.4 }}>📊</span>
-                <span style={{ fontSize: 14, fontWeight: 600, color: '#9B9B9B' }}>Awaiting AR Aging upload</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#9B9B9B' }}>
+                  {arCoId && !agingFromQb ? 'No company aging data' : 'Awaiting AR Aging upload'}
+                </span>
                 <span style={{ fontSize: 12, color: '#B5B5B5', maxWidth: 380, textAlign: 'center' }}>
-                  Upload QB <strong>AR Aging Detail by Customer</strong> (.xlsx) in the panel above.
-                  Populates Current / 1–30d / 31–60d / 61–90d / 90+d buckets, Arrears Days KPI, and Top Risk table.
+                  {arCoId && !agingFromQb
+                    ? 'Upload company-wise QB AR Aging files to view per-company buckets.'
+                    : <>Upload QB <strong>AR Aging Detail by Customer</strong> (.xlsx) in the panel above.
+                  Populates Current / 1–30d / 31–60d / 61–90d / 90+d buckets, Arrears Days KPI, and Top Risk table.</>}
                 </span>
                 <button
                   type="button"
@@ -788,7 +838,14 @@ export default function RentalOverview() {
           </ChartCard>
           {riskCompanies.length > 0 && (
             <div style={CARD}>
-              <h3 className="ov-section-title">Top Risk Companies</h3>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                <h3 className="ov-section-title" style={{ marginBottom: 0 }}>Top Risk Companies</h3>
+                {arCoName && (
+                  <span style={{ fontSize: 11, padding: '2px 10px', borderRadius: 20, background: '#EFF6FF', color: '#1E40AF', border: '1px solid #BFDBFE' }}>
+                    {arCoName}
+                  </span>
+                )}
+              </div>
               <p style={{ fontSize: 12, color: '#7A7A7A', marginBottom: 12 }}>
                 Ranked by combined arrears + vacancy exposure
                 {qbAging?.has_data ? ' · Arrears days from QB aging upload' : ' · Upload AR Aging above for arrears days'}
@@ -971,13 +1028,13 @@ export default function RentalOverview() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
           {/* Chart 3: Vacancy Loss by Company */}
-          <ChartCard title="Vacancy Loss by Company">
+          <ChartCard title="Vacancy Loss by Company" compact>
             {vacancyByCompany.length > 0 ? (
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height={COMPACT_CHART_H}>
                 <BarChart layout="vertical" data={vacancyByCompany}
-                  margin={{ left: 4, right: 16, top: 4, bottom: 4 }}>
-                  <XAxis type="number" tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} tick={TICK} />
-                  <YAxis type="category" dataKey="name" width={84} tick={{ ...TICK, fontSize: 10 }} />
+                  margin={{ left: 4, right: 12, top: 2, bottom: 2 }}>
+                  <XAxis type="number" tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} tick={{ ...TICK, fontSize: 10 }} />
+                  <YAxis type="category" dataKey="name" width={72} tick={{ ...TICK, fontSize: 9 }} />
                   <Tooltip formatter={(v: number) => fmtUSD(v)} {...TT} />
                   <Bar dataKey="loss" name="Vacancy Loss" radius={[0, 4, 4, 0]}>
                     {vacancyByCompany.map((_, idx) => (
@@ -987,10 +1044,10 @@ export default function RentalOverview() {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex flex-col items-center justify-center h-40 gap-2">
-                <span style={{ fontSize: 28 }}>✅</span>
-                <span style={{ fontSize: 13, color: C_GREEN, fontWeight: 600 }}>No vacancy loss</span>
-                <span style={{ fontSize: 12, color: '#7A7A7A' }}>All units occupied</span>
+              <div className="flex flex-col items-center justify-center h-32 gap-1">
+                <span style={{ fontSize: 22 }}>✅</span>
+                <span style={{ fontSize: 12, color: C_GREEN, fontWeight: 600 }}>No vacancy loss</span>
+                <span style={{ fontSize: 11, color: '#7A7A7A' }}>All units occupied</span>
               </div>
             )}
           </ChartCard>
@@ -1041,16 +1098,16 @@ export default function RentalOverview() {
 
       {/* ── Occupancy by Company bar (existing, retained) ─────────────────────── */}
       {!fetching && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <ChartCard title={selectedCoName ? `Occupancy — ${selectedCoName}` : 'Occupancy by Company'}>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <ChartCard title={selectedCoName ? `Occupancy — ${selectedCoName}` : 'Occupancy by Company'} compact>
             {!selectedCoId && (
-              <p style={{ fontSize: 12, color: '#A8A29E', marginBottom: 8 }}>Click a bar to drill into that company</p>
+              <p style={{ fontSize: 11, color: '#A8A29E', marginBottom: 6 }}>Click a bar to drill into that company</p>
             )}
-            <ResponsiveContainer width="100%" height={220}>
+            <ResponsiveContainer width="100%" height={COMPACT_CHART_H}>
               <BarChart data={occupancyChartData}
                 onClick={d => handleBarClick(d?.activePayload?.[0]?.payload)}
                 style={{ cursor: 'pointer' }}>
-                <XAxis dataKey="name" tick={{ ...TICK, fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={60} />
+                <XAxis dataKey="name" tick={{ ...TICK, fontSize: 9 }} interval={0} angle={-20} textAnchor="end" height={50} />
                 <YAxis domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} tick={TICK} />
                 <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} {...TT} />
                 <Bar dataKey="occupancy_pct" name="Occupancy %" radius={[4, 4, 0, 0]}>
@@ -1068,11 +1125,11 @@ export default function RentalOverview() {
           </ChartCard>
 
           {/* NOI by Company */}
-          <ChartCard title={selectedCoName ? `NOI — ${selectedCoName}` : 'NOI by Company'}>
+          <ChartCard title={selectedCoName ? `NOI — ${selectedCoName}` : 'NOI by Company'} compact>
             {!selectedCoId && (
-              <p style={{ fontSize: 12, color: '#A8A29E', marginBottom: 8 }}>Click a bar to drill into that company</p>
+              <p style={{ fontSize: 11, color: '#A8A29E', marginBottom: 6 }}>Click a bar to drill into that company</p>
             )}
-            <ResponsiveContainer width="100%" height={220}>
+            <ResponsiveContainer width="100%" height={COMPACT_CHART_H}>
               <BarChart data={(() => {
                 if (!data) return [];
                 return data.by_company.map(c => ({
@@ -1083,7 +1140,7 @@ export default function RentalOverview() {
               })()}
                 onClick={d => handleBarClick(d?.activePayload?.[0]?.payload)}
                 style={{ cursor: 'pointer' }}>
-                <XAxis dataKey="name" tick={{ ...TICK, fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={60} />
+                <XAxis dataKey="name" tick={{ ...TICK, fontSize: 9 }} interval={0} angle={-20} textAnchor="end" height={50} />
                 <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} tick={TICK} />
                 <Tooltip formatter={(v: number) => fmtUSD(v)} {...TT} />
                 <Bar dataKey="noi" name="NOI" radius={[4, 4, 0, 0]}>
