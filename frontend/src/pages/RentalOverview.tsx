@@ -34,33 +34,33 @@ const CARD: React.CSSProperties = {
   background: C_CARD,
   border: '1px solid #E8DEC8',
   borderRadius: 12,
-  padding: '16px 18px',
+  padding: '14px 16px',
 };
 
 const KPI_LBL: React.CSSProperties = {
-  fontSize: 13, fontWeight: 600, letterSpacing: '0.05em',
-  textTransform: 'uppercase', color: '#78716C', marginBottom: 4,
+  fontSize: 12, fontWeight: 600, letterSpacing: '0.05em',
+  textTransform: 'uppercase', color: '#78716C', marginBottom: 3,
 };
 
 const KPI_VAL_PRI: React.CSSProperties = {
-  fontSize: 32, fontWeight: 700, color: '#1C1917', lineHeight: 1.1,
-  fontVariantNumeric: 'tabular-nums lining-nums',
-};
-
-const KPI_VAL_SEC: React.CSSProperties = {
   fontSize: 28, fontWeight: 700, color: '#1C1917', lineHeight: 1.1,
   fontVariantNumeric: 'tabular-nums lining-nums',
 };
 
+const KPI_VAL_SEC: React.CSSProperties = {
+  fontSize: 24, fontWeight: 700, color: '#1C1917', lineHeight: 1.1,
+  fontVariantNumeric: 'tabular-nums lining-nums',
+};
+
 const KPI_HELP: React.CSSProperties = {
-  fontSize: 12, fontWeight: 400, color: '#A8A29E', marginTop: 4,
+  fontSize: 11, fontWeight: 400, color: '#A8A29E', marginTop: 3,
 };
 
 const TAB_NUM: React.CSSProperties = { fontVariantNumeric: 'tabular-nums lining-nums' };
 
-const TICK  = { fill: '#6B6B6B', fontSize: 12 };
+const TICK  = { fill: '#6B6B6B', fontSize: 11 };
 const TT    = {
-  contentStyle: { background: C_CARD, border: `1px solid ${C_BORD}`, color: '#262626', borderRadius: 8, fontSize: 13 },
+  contentStyle: { background: C_CARD, border: `1px solid ${C_BORD}`, color: '#262626', borderRadius: 8, fontSize: 12 },
   labelStyle:   { color: '#5A4B35', fontWeight: 600 },
 };
 
@@ -245,7 +245,7 @@ function ChartCard({ title, children, compact, headerRight }: {
         gap: 10, flexWrap: 'wrap', marginBottom: compact ? 10 : 16,
       }}>
         <h3 style={{
-          fontSize: compact ? 13 : 15,
+          fontSize: compact ? 12 : 14,
           fontWeight: 600,
           color: '#1C1917',
           marginBottom: 0,
@@ -275,7 +275,7 @@ function agingBucketsFromTotals(t: {
 
 const SEL_STYLE: React.CSSProperties = {
   background: '#F7F5F0', border: `1px solid ${C_BORD}`, color: '#1C1917',
-  borderRadius: '0.5rem', padding: '0.375rem 0.75rem', fontSize: '0.875rem',
+  borderRadius: '0.5rem', padding: '0.35rem 0.65rem', fontSize: '0.8125rem',
 };
 
 // ── main component ────────────────────────────────────────────────────────────
@@ -576,17 +576,17 @@ export default function RentalOverview() {
       <style>{`
         .ov-tile { transition: transform 0.14s ease, box-shadow 0.14s ease; }
         .ov-tile:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.08) !important; }
-        .ov-row-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #6B6B6B; }
-        .ov-section-title { font-size: 16px; font-weight: 600; color: #3A2F1F; margin-bottom: 10px; }
+        .ov-row-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #6B6B6B; }
+        .ov-section-title { font-size: 14px; font-weight: 600; color: #3A2F1F; margin-bottom: 8px; }
       `}</style>
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1C1917', lineHeight: 1.2 }}>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: '#1C1917', lineHeight: 1.2 }}>
             Rental Portfolio Overview
           </h1>
-          <p style={{ fontSize: 13, fontWeight: 400, color: '#A8A29E', marginTop: 3 }}>
+          <p style={{ fontSize: 12, fontWeight: 400, color: '#A8A29E', marginTop: 3 }}>
             Portfolio drill-down · {monthLabel}
           </p>
         </div>
@@ -788,16 +788,17 @@ export default function RentalOverview() {
             onViewCompanyChange={setArCoId}
             viewCompanies={arCompanyOptions}
           />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
           <ChartCard title="Arrears Aging by Bucket">
             {hasAgingData ? (
               <>
                 {agingFromQb && qbAging?.latest_snapshot?.snapshot_month && (
-                  <p style={{ fontSize: 11, color: '#78716C', marginBottom: 8 }}>
+                  <p style={{ fontSize: 10, color: '#78716C', marginBottom: 6 }}>
                     From QB AR Aging upload · as of {qbAging.latest_snapshot.snapshot_month}
                     {arCoName ? ` · ${arCoName}` : ''}
                   </p>
                 )}
-                <ResponsiveContainer width="100%" height={220}>
+                <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={agingData}>
                     <XAxis dataKey="bucket" tick={TICK} />
                     <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} tick={TICK} />
@@ -811,12 +812,12 @@ export default function RentalOverview() {
                 </ResponsiveContainer>
               </>
             ) : (
-              <div className="flex flex-col items-center justify-center py-10 gap-2">
-                <span style={{ fontSize: 28, opacity: 0.4 }}>📊</span>
-                <span style={{ fontSize: 14, fontWeight: 600, color: '#9B9B9B' }}>
+              <div className="flex flex-col items-center justify-center py-8 gap-2">
+                <span style={{ fontSize: 24, opacity: 0.4 }}>📊</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#9B9B9B' }}>
                   {arCoId && !agingFromQb ? 'No company aging data' : 'Awaiting AR Aging upload'}
                 </span>
-                <span style={{ fontSize: 12, color: '#B5B5B5', maxWidth: 380, textAlign: 'center' }}>
+                <span style={{ fontSize: 11, color: '#B5B5B5', maxWidth: 320, textAlign: 'center' }}>
                   {arCoId && !agingFromQb
                     ? 'Upload company-wise QB AR Aging files to view per-company buckets.'
                     : <>Upload QB <strong>AR Aging Detail by Customer</strong> (.xlsx) in the panel above.
@@ -836,27 +837,28 @@ export default function RentalOverview() {
               </div>
             )}
           </ChartCard>
-          {riskCompanies.length > 0 && (
-            <div style={CARD}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-                <h3 className="ov-section-title" style={{ marginBottom: 0 }}>Top Risk Companies</h3>
-                {arCoName && (
-                  <span style={{ fontSize: 11, padding: '2px 10px', borderRadius: 20, background: '#EFF6FF', color: '#1E40AF', border: '1px solid #BFDBFE' }}>
-                    {arCoName}
-                  </span>
-                )}
-              </div>
-              <p style={{ fontSize: 12, color: '#7A7A7A', marginBottom: 12 }}>
-                Ranked by combined arrears + vacancy exposure
-                {qbAging?.has_data ? ' · Arrears days from QB aging upload' : ' · Upload AR Aging above for arrears days'}
-              </p>
+
+          <div style={CARD}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+              <h3 className="ov-section-title" style={{ marginBottom: 0 }}>Top Risk Companies</h3>
+              {arCoName && (
+                <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: '#EFF6FF', color: '#1E40AF', border: '1px solid #BFDBFE' }}>
+                  {arCoName}
+                </span>
+              )}
+            </div>
+            <p style={{ fontSize: 11, color: '#7A7A7A', marginBottom: 10 }}>
+              Ranked by combined arrears + vacancy exposure
+              {qbAging?.has_data ? ' · Arrears days from QB aging upload' : ' · Upload AR Aging above for arrears days'}
+            </p>
+            {riskCompanies.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full" style={{ fontSize: 14, borderCollapse: 'collapse' }}>
+                <table className="w-full" style={{ fontSize: 12, borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ borderBottom: `1px solid ${C_BORD}` }}>
                       {['Company', 'Arrears', 'Vacancy Loss', 'Occupancy', 'Arrears Days', 'Risk'].map(h => (
-                        <th key={h} className="py-2 px-3 text-left"
-                          style={{ fontSize: 13, fontWeight: 600, color: '#5A4B35' }}>{h}</th>
+                        <th key={h} className="py-1.5 px-2 text-left"
+                          style={{ fontSize: 11, fontWeight: 600, color: '#5A4B35' }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -868,26 +870,26 @@ export default function RentalOverview() {
                         <tr key={i} style={{ borderBottom: `1px solid ${C_BORD}22` }}
                           className="hover:bg-[rgba(0,0,0,0.02)] cursor-pointer"
                           onClick={() => setCompany(c.company_id)}>
-                          <td className="py-2.5 px-3" style={{ fontWeight: 500, color: '#262626' }}>{c.company_name}</td>
-                          <td className="py-2.5 px-3" style={{ ...TAB_NUM, color: c.arrears_total > 5000 ? C_RED : '#262626' }}>
+                          <td className="py-2 px-2" style={{ fontWeight: 500, color: '#262626', fontSize: 12 }}>{c.company_name}</td>
+                          <td className="py-2 px-2" style={{ ...TAB_NUM, color: c.arrears_total > 5000 ? C_RED : '#262626', fontSize: 12 }}>
                             {fmtUSD(c.arrears_total)}
                           </td>
-                          <td className="py-2.5 px-3" style={{ ...TAB_NUM, color: c.vacancy_loss > 0 ? C_RED : '#6B6B6B' }}>
+                          <td className="py-2 px-2" style={{ ...TAB_NUM, color: c.vacancy_loss > 0 ? C_RED : '#6B6B6B', fontSize: 12 }}>
                             {c.vacancy_loss > 0 ? fmtUSD(c.vacancy_loss) : '—'}
                           </td>
-                          <td className="py-2.5 px-3">
-                            <span style={{ ...TAB_NUM, color: occColor, fontWeight: 600 }}>
+                          <td className="py-2 px-2">
+                            <span style={{ ...TAB_NUM, color: occColor, fontWeight: 600, fontSize: 12 }}>
                               {(c.occupancy_pct * 100).toFixed(1)}%
                             </span>
                           </td>
-                          <td className="py-2.5 px-3" style={{ color: '#6B6B6B', fontSize: 13, ...TAB_NUM }}>
+                          <td className="py-2 px-2" style={{ color: '#6B6B6B', fontSize: 11, ...TAB_NUM }}>
                             {qbDsoByCompany.has(c.company_id)
                               ? `~${qbDsoByCompany.get(c.company_id)}d`
                               : 'NA'}
                           </td>
-                          <td className="py-2.5 px-3">
+                          <td className="py-2 px-2">
                             <span style={{
-                              fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
+                              fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20,
                               color: flag.color, background: flag.bg,
                             }}>
                               {flag.label}
@@ -899,8 +901,14 @@ export default function RentalOverview() {
                   </tbody>
                 </table>
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="flex flex-col items-center justify-center py-10 gap-1" style={{ color: '#9CA3AF' }}>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>No risk flags</span>
+                <span style={{ fontSize: 11 }}>All companies within arrears and occupancy thresholds</span>
+              </div>
+            )}
+          </div>
+          </div>
         </div>
       )}
 
