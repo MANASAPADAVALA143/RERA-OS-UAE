@@ -1409,7 +1409,7 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
               <XAxis dataKey="year" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 9 }} tickFormatter={v => fmt(v as number)} />
               <Tooltip formatter={(v: number) => fmtFull(v)} />
-              <Line type="monotone" dataKey="netIncome" stroke="#22A06B" strokeWidth={2} dot={{ fill: '#22A06B' }} name="Net Income" />
+              <Line type="monotone" dataKey="netIncome" stroke="#22C55E" strokeWidth={2} dot={{ fill: '#22C55E', r: 4 }} activeDot={{ r: 6, fill: '#22C55E' }} name="Net Income" />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -1421,7 +1421,7 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
               <XAxis dataKey="year" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 9 }} tickFormatter={v => `${(v as number).toFixed(0)}%`} />
               <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} />
-              <Line type="monotone" dataKey="ratio" stroke="#F2994A" strokeWidth={2} dot={{ fill: '#F2994A' }} name="Expense %" />
+              <Line type="monotone" dataKey="ratio" stroke="#F59E0B" strokeWidth={2} dot={{ fill: '#F59E0B', r: 4 }} activeDot={{ r: 6, fill: '#F59E0B' }} name="Expense %" />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -1434,8 +1434,8 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
               <YAxis tick={{ fontSize: 9 }} tickFormatter={v => fmt(v as number)} />
               <Tooltip formatter={(v: number) => fmtFull(v)} />
               <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-              <Bar dataKey="Revenue"  fill="#D4AF37" radius={[4,4,0,0]} />
-              <Bar dataKey="Expenses" fill="#D9534F" radius={[4,4,0,0]} />
+              <Bar dataKey="Revenue"  fill="#3B82F6" radius={[4,4,0,0]} />
+              <Bar dataKey="Expenses" fill="#EF4444" radius={[4,4,0,0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -1447,7 +1447,7 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
               <XAxis dataKey="year" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 9 }} tickFormatter={v => fmt(v as number)} />
               <Tooltip formatter={(v: number) => fmtFull(v)} />
-              <Line type="monotone" dataKey="cash" stroke="#2F80ED" strokeWidth={2} dot={{ fill: '#2F80ED' }} name="Cash" />
+              <Line type="monotone" dataKey="cash" stroke="#8B5CF6" strokeWidth={2} dot={{ fill: '#8B5CF6', r: 4 }} activeDot={{ r: 6, fill: '#8B5CF6' }} name="Cash" />
             </LineChart>
           </ResponsiveContainer>
         </div>
