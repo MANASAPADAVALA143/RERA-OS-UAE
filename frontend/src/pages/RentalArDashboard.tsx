@@ -35,6 +35,19 @@ interface QBPreview {
   portfolio_totals: QBAgingTotals;
 }
 
+interface TenantAgingRow {
+  customer: string; unit_ref: string; building: string;
+  lease_end: string | null; last_payment_date: string | null;
+  current: number; days_1_30: number; days_31_60: number;
+  days_61_90: number; days_91_plus: number;
+  total: number; overdue: number;
+  has_credit: boolean; is_unmatched: boolean;
+  matched_company_id: string | null; action_status: 'Review' | 'Monitor' | 'Current';
+}
+interface TenantAgingResponse {
+  has_data: boolean; snapshot_month: string | null; rows: TenantAgingRow[];
+}
+
 interface MonthlyDetail {
   month: string;
   billed: number;
@@ -180,6 +193,18 @@ export default function RentalArDashboard() {
     } finally { setQbUploading(false); }
   };
 
+  // ── Tenant Aging state ───────────────────────────────────────────────────
+  const [tenantAging, setTenantAging] = useState<TenantAgingResponse | null>(null);
+  const [tenantSortCol, setTenantSortCol] = useState<keyof TenantAgingRow>('total');
+  const [tenantSortAsc, setTenantSortAsc] = useState(false);
+
+  const fetchTenantAging = () => {
+    api.get<TenantAgingResponse>('/api/rentals/ar-ap/qb-aging/tenants')
+      .then(r => setTenantAging(r.data))
+      .catch(() => setTenantAging(null));
+  };
+  useEffect(() => { fetchTenantAging(); }, []);
+
   const handleQbConfirm = async () => {
     if (!qbPreview || !qbAsOfDate) return;
     setQbConfirming(true); setQbError('');
@@ -194,6 +219,7 @@ export default function RentalArDashboard() {
       if (qbFileRef.current) qbFileRef.current.value = '';
       setShowQbPanel(false);
       fetchQbAging();
+      fetchTenantAging();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string | object } } };
       const raw = err?.response?.data?.detail;
@@ -313,6 +339,42 @@ export default function RentalArDashboard() {
       return getStatus(r.rate, r.collected).label === statusFlt;
     });
   }, [detailRows, statusFlt, chartMonth]);
+
+  // ── Sorted tenant rows ────────────────────────────────────────────────────
+  const sortedTenants = useMemo(() => {
+    const rows = tenantAging?.rows ?? [];
+    return [...rows].sort((a, b) => {
+      const av = a[tenantSortCol] ?? 0;
+      const bv = b[tenantSortCol] ?? 0;
+      const cmp = typeof av === 'string' ? av.localeCompare(bv as string) : (av as number) - (bv as number);
+      return tenantSortAsc ? cmp : -cmp;
+    });
+  }, [tenantAging, tenantSortCol, tenantSortAsc]);
+
+  // ── Property treemap data (ranked bar fallback) ────────────────────────────
+  const propertyBarData = useMemo(() =>
+    [...companies]
+      .filter(c => c.latest_outstanding > 0 || c.billed_per_month > 0)
+      .sort((a, b) => b.latest_outstanding - a.latest_outstanding)
+      .map(c => ({
+        company:     c.company_name,
+        company_id:  c.company_id,
+        outstanding: c.latest_outstanding,
+        rate:        c.latest_rate,
+      })),
+    [companies],
+  );
+
+  // ── Overdue bucket trend (31-60 / 61-90 / 91+) from QB snapshots ──────────
+  const bucketTrend = useMemo(() => {
+    if (!qbAging?.trend || qbAging.trend.length < 3) return [];
+    return qbAging.trend.map(pt => ({
+      month:     pt.month,
+      '31–60':   pt.days_31_60,
+      '61–90':   pt.days_61_90,
+      '91+':     pt.days_91_plus,
+    }));
+  }, [qbAging]);
 
   // Overall realization % across all trend months
   const realizationPct = useMemo(() => {
@@ -645,6 +707,180 @@ export default function RentalArDashboard() {
         <div style={{ ...CARD, textAlign: 'center', color: '#22A06B', fontSize: 13, fontWeight: 600 }}>
           ✅ No outstanding AR — all companies current
         </div>
+      )}
+
+      {/* ══ NEW SECTION 1 — TENANT AGING TABLE ═══════════════════════════════ */}
+      {!!port && tenantAging?.has_data && sortedTenants.length > 0 && (() => {
+        const thStyle = (col: keyof TenantAgingRow): React.CSSProperties => ({
+          padding: '8px 10px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
+          letterSpacing: '0.04em', color: '#6B6B6B', whiteSpace: 'nowrap',
+          cursor: 'pointer', userSelect: 'none',
+          background: tenantSortCol === col ? '#F0EDE5' : '#FBF6EE',
+          borderBottom: '1px solid #E8DEC8', textAlign: 'right' as const,
+        });
+        const thL = (col: keyof TenantAgingRow): React.CSSProperties => ({ ...thStyle(col), textAlign: 'left' as const });
+        const arrow = (col: keyof TenantAgingRow) => tenantSortCol === col ? (tenantSortAsc ? ' ▲' : ' ▼') : '';
+        const sort = (col: keyof TenantAgingRow) => {
+          if (tenantSortCol === col) setTenantSortAsc(a => !a);
+          else { setTenantSortCol(col); setTenantSortAsc(false); }
+        };
+        const ACTION_STYLE: Record<string, React.CSSProperties> = {
+          Review:  { background: '#FEE2E2', color: '#991B1B', border: '1px solid rgba(220,38,38,0.25)' },
+          Monitor: { background: '#FEF3C7', color: '#92400E', border: '1px solid rgba(245,158,11,0.3)' },
+          Current: { background: '#DCFCE7', color: '#166534', border: '1px solid rgba(34,197,94,0.3)'  },
+        };
+        return (
+          <div style={{ background: '#fff', border: '1px solid #E8DEC8', borderRadius: 10, overflow: 'hidden' }}>
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid #E8DEC8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1917' }}>Tenant AR Aging — {tenantAging.snapshot_month}</div>
+                <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>
+                  {sortedTenants.length} tenants · from QB AR Aging Detail upload · click column header to sort
+                </div>
+              </div>
+              <div style={{ fontSize: 11, color: '#78716C' }}>Last Payment Date: not captured in QB AR Aging export</div>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    {([
+                      ['customer',    'Tenant Name',      thL],
+                      ['unit_ref',    'Unit',             thL],
+                      ['lease_end',   'Lease End',        thL],
+                      ['current',     'Current',          thStyle],
+                      ['days_1_30',   '1–30',             thStyle],
+                      ['days_31_60',  '31–60',            thStyle],
+                      ['days_61_90',  '61–90',            thStyle],
+                      ['days_91_plus','91+',              thStyle],
+                      ['total',       'Total Due',        thStyle],
+                      ['action_status','Action Status',   thL],
+                    ] as [keyof TenantAgingRow, string, (c: keyof TenantAgingRow) => React.CSSProperties][]).map(([col, label, styleFn]) => (
+                      <th key={col} style={styleFn(col)} onClick={() => sort(col)}>
+                        {label}{arrow(col)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedTenants.map((row, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #F5F0E8', background: i % 2 === 0 ? '#fff' : '#FDFAF5' }}>
+                      <td style={{ padding: '8px 10px', color: '#1C1917', fontWeight: 500, whiteSpace: 'nowrap' }}>{row.customer}</td>
+                      <td style={{ padding: '8px 10px', color: '#78716C', whiteSpace: 'nowrap' }}>{row.unit_ref}</td>
+                      <td style={{ padding: '8px 10px', color: '#78716C', whiteSpace: 'nowrap' }}>
+                        {row.lease_end ?? <span style={{ color: '#D4AF37', fontStyle: 'italic' }}>Not tracked</span>}
+                      </td>
+                      {[row.current, row.days_1_30, row.days_31_60, row.days_61_90, row.days_91_plus, row.total].map((v, vi) => (
+                        <td key={vi} style={{ padding: '8px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums',
+                          color: vi >= 2 && v > 0 ? (vi >= 3 ? '#B91C1C' : '#92400E') : '#374151',
+                          fontWeight: vi === 5 ? 700 : 400 }}>
+                          {v > 0 ? fmt$(v) : '—'}
+                        </td>
+                      ))}
+                      <td style={{ padding: '8px 10px' }}>
+                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, fontWeight: 600, ...ACTION_STYLE[row.action_status] }}>
+                          {row.action_status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ══ NEW SECTION 2 — AR BY PROPERTY (ranked bar, color = collection rate) ═ */}
+      {!!port && propertyBarData.length > 0 && (() => {
+        const rateColor = (rate: number) =>
+          rate >= 95 ? '#22A06B' : rate >= 75 ? '#F5A623' : '#D9534F';
+        const maxOutstanding = Math.max(...propertyBarData.map(d => d.outstanding), 1);
+        return (
+          <div style={CARD}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>AR by Property — Outstanding ranked</div>
+            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 14 }}>
+              Bar size = Outstanding AR · Color = Collection Rate · Click to filter dashboard
+              <span style={{ marginLeft: 12 }}>
+                <span style={{ color: '#22A06B', fontWeight: 600 }}>■</span> ≥95%
+                <span style={{ color: '#F5A623', fontWeight: 600, marginLeft: 8 }}>■</span> 75–94%
+                <span style={{ color: '#D9534F', fontWeight: 600, marginLeft: 8 }}>■</span> &lt;75%
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {propertyBarData.map(d => {
+                const isSelected = selCoId === d.company_id;
+                const pct100 = maxOutstanding > 0 ? (d.outstanding / maxOutstanding) * 100 : 0;
+                return (
+                  <div key={d.company_id}
+                    style={{ opacity: selCoId && !isSelected ? 0.45 : 1, cursor: 'pointer' }}
+                    onClick={() => setSelCoId(isSelected ? '' : d.company_id)}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontSize: 12, color: isSelected ? '#1C1917' : '#374151', fontWeight: isSelected ? 700 : 500 }}>
+                        {d.company}
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 11, color: '#6B6B6B', fontVariantNumeric: 'tabular-nums lining-nums' }}>
+                          {d.outstanding > 0 ? fmt$(d.outstanding) : '—'} outstanding
+                        </span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: rateColor(d.rate) }}>
+                          {d.rate > 0 ? `${d.rate.toFixed(1)}%` : 'No data'}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ height: 10, background: '#E8DEC8', borderRadius: 6, overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%', borderRadius: 6, transition: 'width 0.4s',
+                        width: `${Math.max(pct100, d.outstanding > 0 ? 1.5 : 0)}%`,
+                        background: rateColor(d.rate),
+                      }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ══ NEW SECTION 3 — OVERDUE TREND BY BUCKET (gated: 3+ snapshots) ════ */}
+      {!!port && qbAging?.has_data && (
+        bucketTrend.length >= 3 ? (
+          <div style={CARD}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>Overdue Trend by Aging Bucket</div>
+            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 14 }}>
+              Three distinct overdue buckets over time — shows whether the worst-aged AR is growing or resolving
+            </div>
+            <ResponsiveContainer width="100%" height={220}>
+              <ComposedChart data={bucketTrend} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+                <CartesianGrid vertical={false} stroke="#E5E7EB" strokeDasharray="3 3" />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6B7280' }} axisLine={false} tickLine={false} />
+                <YAxis
+                  tick={{ fontSize: 11, fill: '#6B7280' }}
+                  tickFormatter={(v: number) => v === 0 ? '$0' : v >= 1_000_000 ? `$${(v/1_000_000).toFixed(1)}M` : `$${(v/1000).toFixed(0)}k`}
+                  axisLine={false} tickLine={false} width={44}
+                />
+                <Tooltip
+                  contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #E8DEC8', background: '#FBF6EE' }}
+                  formatter={(v: number, name: string) => [fmt$(v), name]}
+                />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Line type="monotone" dataKey="31–60" name="31–60 days" stroke="#F5A623" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="61–90" name="61–90 days" stroke="#EB5757" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="91+"   name="91+ days"   stroke="#991B1B" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div style={{ ...CARD, textAlign: 'center', padding: '28px 16px' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1917', marginBottom: 6 }}>Overdue Trend by Bucket</div>
+            <div style={{ fontSize: 12, color: '#9CA3AF' }}>
+              Collecting history — chart appears after 3 monthly snapshots.
+              Currently {qbAging.snapshot_count ?? 0} of 3 required.
+            </div>
+          </div>
+        )
       )}
 
       {/* ── COMPANY × MONTH DETAIL TABLE ─────────────────────────────────── */}
