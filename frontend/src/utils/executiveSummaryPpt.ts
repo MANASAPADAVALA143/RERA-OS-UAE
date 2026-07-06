@@ -14,9 +14,9 @@ const C = {
   text: '1C1917',
   muted: '78716C',
   sidebar: '3A2F1F',
-  green: '22A06B',
+  green: '166534',
   amber: 'F5A623',
-  red: 'D9534F',
+  red: 'B91C1C',
 };
 
 const STATUS_FILL: Record<KpiStatus, string> = {

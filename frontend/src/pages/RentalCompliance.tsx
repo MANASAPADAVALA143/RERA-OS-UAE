@@ -75,8 +75,8 @@ export default function RentalCompliance() {
           <p className="text-2xl font-bold text-amber-700 font-mono mt-1">{inProgress}</p>
         </div>
         <div className="bg-green-50 rounded-xl p-4 border border-green-200">
-          <p className="text-xs text-green-700">Filed / Paid</p>
-          <p className="text-2xl font-bold text-green-700 font-mono mt-1">{complete}</p>
+          <p className="text-xs text-green-800">Filed / Paid</p>
+          <p className="text-2xl font-bold text-green-800 font-mono mt-1">{complete}</p>
         </div>
       </div>
 

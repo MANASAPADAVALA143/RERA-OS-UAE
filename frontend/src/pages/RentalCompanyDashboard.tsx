@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell,
@@ -147,7 +147,7 @@ function UnitFilterBar({ units }: { units: UnitDetail[] }) {
                 <td className="py-2 px-2 font-mono">{fmtUSD(u.monthly_rent)}</td>
                 <td className="py-2 px-2">
                   {u.arrears > 0
-                    ? <span className="text-red-600 font-medium font-mono">{fmtUSD(u.arrears)}</span>
+                    ? <span className="text-red-700 font-medium font-mono">{fmtUSD(u.arrears)}</span>
                     : '—'}
                 </td>
               </tr>
@@ -243,7 +243,7 @@ export default function RentalCompanyDashboard({ companyId }: Props) {
   }, [dashTab, companyId, maintenance]);
 
   if (loading) return <LoadingSkeleton rows={8} />;
-  if (error || !data) return <div className="text-red-600 p-4">{error || 'No data'}</div>;
+  if (error || !data) return <div className="text-red-700 p-4">{error || 'No data'}</div>;
 
   return (
     <div className="space-y-6">
@@ -308,8 +308,8 @@ export default function RentalCompanyDashboard({ companyId }: Props) {
                   <Tooltip formatter={(v: number) => fmtUSD(v)} />
                   <Legend />
                   <Line type="monotone" dataKey="billed"    stroke="#D4AF37" name="Billed"    strokeWidth={2} dot={false} connectNulls />
-                  <Line type="monotone" dataKey="collected" stroke="#22A06B" name="Collected" strokeWidth={2} dot={false} connectNulls />
-                  <Line type="monotone" dataKey="expense"   stroke="#EB5757" name="Expense"   strokeWidth={2} dot={false} connectNulls />
+                  <Line type="monotone" dataKey="collected" stroke="#166534" name="Collected" strokeWidth={2} dot={false} connectNulls />
+                  <Line type="monotone" dataKey="expense"   stroke="#C0392B" name="Expense"   strokeWidth={2} dot={false} connectNulls />
                 </LineChart>
               </ResponsiveContainer>
             </Card>
@@ -359,7 +359,7 @@ export default function RentalCompanyDashboard({ companyId }: Props) {
                       {p.partner_name}{' '}
                       <span className="text-gray-400 font-normal text-xs">({p.role.replace(/_/g, ' ')})</span>
                     </span>
-                    <span className={p.is_shortfall ? 'text-red-600' : 'text-green-700'}>{fmtUSD(p.noi_share)}</span>
+                    <span className={p.is_shortfall ? 'text-red-700' : 'text-green-800'}>{fmtUSD(p.noi_share)}</span>
                   </div>
                   <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                     <div className="h-full bg-primary rounded-full" style={{ width: `${(p.ownership_pct * 100).toFixed(1)}%` }} />
@@ -409,7 +409,7 @@ export default function RentalCompanyDashboard({ companyId }: Props) {
                       </td>
                       <td className="py-2 px-2">
                         {u.arrears > 0
-                          ? <span className="text-red-600 font-medium">{fmtUSD(u.arrears)}</span>
+                          ? <span className="text-red-700 font-medium">{fmtUSD(u.arrears)}</span>
                           : '—'}
                       </td>
                     </tr>

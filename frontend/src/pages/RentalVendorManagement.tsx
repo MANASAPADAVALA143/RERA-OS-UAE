@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { Plus, X, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -454,7 +454,7 @@ export default function RentalVendorManagement() {
           </select>
         </div>
 
-        {error && <p className="text-red-600 text-sm p-4 font-sans">{error}</p>}
+        {error && <p className="text-red-700 text-sm p-4 font-sans">{error}</p>}
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm font-sans">
@@ -494,7 +494,7 @@ export default function RentalVendorManagement() {
                     <td className="px-4 py-2.5 font-medium text-gray-900">{v.vendor_name}</td>
                     <td className="px-4 py-2.5 text-gray-500">{v.vendor_category ? (CAT_LABELS[v.vendor_category] ?? v.vendor_category) : '—'}</td>
                     <td className="px-4 py-2.5 text-right font-mono">{$$(ytd)}</td>
-                    <td className={`px-4 py-2.5 text-right font-mono ${ap > 0 ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>{$$(ap)}</td>
+                    <td className={`px-4 py-2.5 text-right font-mono ${ap > 0 ? 'text-red-700 font-semibold' : 'text-gray-400'}`}>{$$(ap)}</td>
                     <td className="px-4 py-2.5 text-center">
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${req1099 ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-500'}`}>
                         {req1099 ? 'YES' : 'NO'}
@@ -595,7 +595,7 @@ export default function RentalVendorManagement() {
                     <tr key={v.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                       <td className="px-4 py-2.5 font-medium text-gray-900">{v.vendor_name}</td>
                       <td className="px-4 py-2.5 text-gray-500">{v.vendor_category ? (CAT_LABELS[v.vendor_category] ?? v.vendor_category) : '—'}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{loc?.ein || <span className="text-red-500">⚠ Missing</span>}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{loc?.ein || <span className="text-red-700">⚠ Missing</span>}</td>
                       <td className="px-4 py-2.5 text-right font-mono">{$$(loc?.ytd_paid ?? 0)}</td>
                       <td className="px-4 py-2.5 text-center">
                         <select value={taxType}

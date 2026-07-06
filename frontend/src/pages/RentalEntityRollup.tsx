@@ -1,4 +1,4 @@
-﻿import { useRentalPortfolio, computeEntityMetrics, sumMetrics } from '../contexts/RentalPortfolioContext';
+import { useRentalPortfolio, computeEntityMetrics, sumMetrics } from '../contexts/RentalPortfolioContext';
 import { useRentalNav } from '../contexts/RentalNavContext';
 
 const $ = (n: number) =>
@@ -8,9 +8,9 @@ const x2 = (n: number | null) => (n == null ? '—' : n.toFixed(2) + 'x');
 
 function dscrClass(v: number | null) {
   if (v == null) return 'text-gray-400';
-  if (v >= 1.30) return 'text-green-600 font-semibold';
+  if (v >= 1.30) return 'text-green-800 font-semibold';
   if (v >= 1.10) return 'text-amber-600 font-semibold';
-  return 'text-red-600 font-semibold';
+  return 'text-red-700 font-semibold';
 }
 
 export default function RentalEntityRollup() {
@@ -95,11 +95,11 @@ export default function RentalEntityRollup() {
                   <td className={`px-3 py-2 text-right font-mono ${dscrClass(m.dscr)}`}>{x2(m.dscr)}</td>
                   <td className="px-3 py-2 text-right font-mono">{pct(m.cap_rate)}</td>
                   <td className="px-3 py-2 text-right font-mono">{pct(m.ltv)}</td>
-                  <td className={`px-3 py-2 text-right font-mono ${m.cash_flow < 0 ? 'text-red-600' : 'text-green-700'}`}>{$(m.cash_flow)}</td>
+                  <td className={`px-3 py-2 text-right font-mono ${m.cash_flow < 0 ? 'text-red-700' : 'text-green-800'}`}>{$(m.cash_flow)}</td>
                   <td className="px-3 py-2 text-right font-mono">{$(arTotal)}</td>
                   <td className="px-3 py-2 text-right font-mono">{$(apTotal)}</td>
-                  <td className={`px-3 py-2 text-right font-mono ${pastDue > 0 ? 'text-red-600' : ''}`}>{$(pastDue)}</td>
-                  <td className={`px-3 py-2 text-right font-mono ${nwc < 0 ? 'text-red-600' : 'text-green-700'}`}>{$(nwc)}</td>
+                  <td className={`px-3 py-2 text-right font-mono ${pastDue > 0 ? 'text-red-700' : ''}`}>{$(pastDue)}</td>
+                  <td className={`px-3 py-2 text-right font-mono ${nwc < 0 ? 'text-red-700' : 'text-green-800'}`}>{$(nwc)}</td>
                 </tr>
               ))}
             </tbody>
@@ -166,14 +166,14 @@ export default function RentalEntityRollup() {
                       <td className="px-3 py-2 font-medium">{r.entity_name}</td>
                       <td className="px-3 py-2 text-right font-mono">{$(r.ar_current)}</td>
                       <td className="px-3 py-2 text-right font-mono">{$(r.ar_1_30)}</td>
-                      <td className={`px-3 py-2 text-right font-mono ${r.ar_31_60 > 0 ? 'text-red-600' : ''}`}>{$(r.ar_31_60)}</td>
-                      <td className={`px-3 py-2 text-right font-mono ${r.ar_61_90 > 0 ? 'text-red-600' : ''}`}>{$(r.ar_61_90)}</td>
-                      <td className={`px-3 py-2 text-right font-mono ${r.ar_90_plus > 0 ? 'text-red-600 font-semibold' : ''}`}>{$(r.ar_90_plus)}</td>
+                      <td className={`px-3 py-2 text-right font-mono ${r.ar_31_60 > 0 ? 'text-red-700' : ''}`}>{$(r.ar_31_60)}</td>
+                      <td className={`px-3 py-2 text-right font-mono ${r.ar_61_90 > 0 ? 'text-red-700' : ''}`}>{$(r.ar_61_90)}</td>
+                      <td className={`px-3 py-2 text-right font-mono ${r.ar_90_plus > 0 ? 'text-red-700 font-semibold' : ''}`}>{$(r.ar_90_plus)}</td>
                       <td className="px-3 py-2 text-right font-mono font-semibold">{$(arTotal)}</td>
                       <td className="px-3 py-2 text-right font-mono">{$(r.ap_current)}</td>
                       <td className="px-3 py-2 text-right font-mono">{$(r.ap_1_30)}</td>
-                      <td className={`px-3 py-2 text-right font-mono ${r.ap_31_60 > 0 ? 'text-red-600' : ''}`}>{$(r.ap_31_60)}</td>
-                      <td className={`px-3 py-2 text-right font-mono ${r.ap_60_plus > 0 ? 'text-red-600' : ''}`}>{$(r.ap_60_plus)}</td>
+                      <td className={`px-3 py-2 text-right font-mono ${r.ap_31_60 > 0 ? 'text-red-700' : ''}`}>{$(r.ap_31_60)}</td>
+                      <td className={`px-3 py-2 text-right font-mono ${r.ap_60_plus > 0 ? 'text-red-700' : ''}`}>{$(r.ap_60_plus)}</td>
                       <td className="px-3 py-2 text-right font-mono font-semibold">{$(apTotal)}</td>
                     </tr>
                   );

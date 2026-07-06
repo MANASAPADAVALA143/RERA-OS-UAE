@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Zap, AlertTriangle } from 'lucide-react';
 import { useRentalCfoData } from '../../hooks/useRentalCfoData';
 import { LoadingSkeleton } from '../../components/ui/Table';
@@ -108,7 +108,7 @@ export default function RentalCfoPortfolio() {
   }
 
   if (loading) return <LoadingSkeleton rows={10} />;
-  if (error) return <div className="text-red-600 p-4">{error}<button className="ml-3 underline" onClick={reload}>Retry</button></div>;
+  if (error) return <div className="text-red-700 p-4">{error}<button className="ml-3 underline" onClick={reload}>Retry</button></div>;
 
   const slicerClass = (active: boolean) =>
     `px-3 py-1.5 rounded-full text-xs border transition-colors ${active ? 'bg-amber-100 border-amber-600 text-amber-900' : 'border-amber-300 text-gray-600 hover:bg-amber-50'}`;

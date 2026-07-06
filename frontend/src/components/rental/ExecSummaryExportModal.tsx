@@ -143,7 +143,7 @@ export default function ExecSummaryExportModal({
         </p>
 
         {error && (
-          <p style={{ fontSize: 12, color: '#D9534F', marginBottom: 12 }}>{error}</p>
+          <p style={{ fontSize: 12, color: '#B91C1C', marginBottom: 12 }}>{error}</p>
         )}
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>

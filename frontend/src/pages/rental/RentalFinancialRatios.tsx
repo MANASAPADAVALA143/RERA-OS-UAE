@@ -25,9 +25,9 @@ interface RatioCard {
 
 // Parchment palette for ratio cards
 const S: Record<StatusType, { borderColor: string; bg: string; pillBg: string; pillColor: string }> = {
-  good:     { borderColor: '#22A06B', bg: '#F4FFF3', pillBg: '#22A06B', pillColor: '#fff' },
+  good:     { borderColor: '#166534', bg: '#F4FFF3', pillBg: '#166534', pillColor: '#fff' },
   watch:    { borderColor: '#F5A623', bg: '#FFFBF0', pillBg: '#F5A623', pillColor: '#fff' },
-  critical: { borderColor: '#D9534F', bg: '#FFF0F0', pillBg: '#D9534F', pillColor: '#fff' },
+  critical: { borderColor: '#B91C1C', bg: '#FFF0F0', pillBg: '#B91C1C', pillColor: '#fff' },
   monitor:  { borderColor: '#F2994A', bg: '#FFF7EE', pillBg: '#F2994A', pillColor: '#fff' },
   info:     { borderColor: '#2F80ED', bg: '#F0F6FF', pillBg: '#2F80ED', pillColor: '#fff' },
 };
@@ -258,7 +258,7 @@ function ProfTrendChart({ data }: { data: ProfPt[] }) {
         <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} tickFormatter={v => `${v}%`} axisLine={false} tickLine={false} width={38} />
         <Tooltip contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 12 }} formatter={(v: number) => [`${v?.toFixed(1)}%`]} />
         <Legend wrapperStyle={{ fontSize: 11 }} />
-        <Line type="monotone" dataKey="noi"    name="NOI Margin"        stroke="#22A06B" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+        <Line type="monotone" dataKey="noi"    name="NOI Margin"        stroke="#166534" strokeWidth={2} dot={{ r: 3 }} connectNulls />
         <Line type="monotone" dataKey="ebitda" name="EBITDA Margin"     stroke="#D4AF37" strokeWidth={2} dot={{ r: 3 }} connectNulls />
         <Line type="monotone" dataKey="npm"    name="Net Profit Margin" stroke="#1C1917" strokeWidth={2} dot={{ r: 3 }} strokeDasharray="5 3" connectNulls />
       </LineChart>
@@ -276,7 +276,7 @@ function RetTrendChart({ data }: { data: RetPt[] }) {
         <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} tickFormatter={v => `${v}%`} axisLine={false} tickLine={false} width={38} />
         <Tooltip contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 12 }} formatter={(v: number) => [`${v?.toFixed(1)}%`]} />
         <Legend wrapperStyle={{ fontSize: 11 }} />
-        <Line type="monotone" dataKey="roa" name="Return on Assets" stroke="#18B7A0" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+        <Line type="monotone" dataKey="roa" name="Return on Assets" stroke="#0F766E" strokeWidth={2} dot={{ r: 3 }} connectNulls />
         <Line type="monotone" dataKey="roe" name="Return on Equity" stroke="#4E79A7" strokeWidth={2} dot={{ r: 3 }} connectNulls />
         <Line type="monotone" dataKey="coc" name="Cash-on-Cash"     stroke="#F2C14E" strokeWidth={2} dot={{ r: 3 }} connectNulls />
       </LineChart>
@@ -599,9 +599,9 @@ function buildLiqTrendFromSparks(cards: RatioCard[]): { liqTrend: LiqPt[]; cashT
   const cl     = wcV / (currRv - 1);
   const ca     = cl * currRv;
   const wcData: WcRow[] = [
-    { label: 'Curr. Assets',  invisible: 0,              bar: Math.round(ca),  fill: '#18B7A0' },
-    { label: '− Liabilities', invisible: Math.round(wcV), bar: Math.round(cl),  fill: '#EB5757' },
-    { label: 'Working Cap.',  invisible: 0,              bar: Math.round(wcV), fill: '#22A06B' },
+    { label: 'Curr. Assets',  invisible: 0,              bar: Math.round(ca),  fill: '#0F766E' },
+    { label: '− Liabilities', invisible: Math.round(wcV), bar: Math.round(cl),  fill: '#C0392B' },
+    { label: 'Working Cap.',  invisible: 0,              bar: Math.round(wcV), fill: '#166534' },
   ];
   return { liqTrend, cashTrend, wcData };
 }
@@ -627,9 +627,9 @@ function buildLiqTrendFromLive(fin: LiveFin): { liqTrend: LiqPt[]; cashTrend: { 
   const last = pts[pts.length - 1] ?? { ca: 0, cl: 0, wc: 0 };
   const wc = Math.max(0, last.wc ?? 0);
   const wcData: WcRow[] = [
-    { label: 'Curr. Assets',  invisible: 0,              bar: Math.round(last.ca ?? 0), fill: '#18B7A0' },
-    { label: '− Liabilities', invisible: Math.round(wc), bar: Math.round(last.cl ?? 0), fill: '#EB5757' },
-    { label: 'Working Cap.',  invisible: 0,              bar: Math.round(wc),            fill: '#22A06B' },
+    { label: 'Curr. Assets',  invisible: 0,              bar: Math.round(last.ca ?? 0), fill: '#0F766E' },
+    { label: '− Liabilities', invisible: Math.round(wc), bar: Math.round(last.cl ?? 0), fill: '#C0392B' },
+    { label: 'Working Cap.',  invisible: 0,              bar: Math.round(wc),            fill: '#166534' },
   ];
   return { liqTrend: pts, cashTrend, wcData };
 }
@@ -640,9 +640,9 @@ const LIQ_H3    = { fontSize: 13, color: '#1C1917', fontWeight: 600, marginBotto
 function LiqRatiosTrendChart({ data }: { data: LiqPt[] }) {
   if (!data.length) return null;
   const LINES: { key: keyof LiqPt; label: string; color: string }[] = [
-    { key: 'currR',  label: 'Current Ratio',  color: '#18B7A0' },
+    { key: 'currR',  label: 'Current Ratio',  color: '#0F766E' },
     { key: 'quickR', label: 'Quick Ratio',    color: '#D4AF37' },
-    { key: 'cashR',  label: 'Cash Ratio',     color: '#E76F6F' },
+    { key: 'cashR',  label: 'Cash Ratio',     color: '#C0392B' },
     { key: 'ocfR',   label: 'OCF Ratio',      color: '#4E79A7' },
   ];
   return (
@@ -654,8 +654,8 @@ function LiqRatiosTrendChart({ data }: { data: LiqPt[] }) {
           <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#78716C' }} />
           <YAxis tick={{ fontSize: 10, fill: '#78716C' }} tickFormatter={v => `${v}x`} width={36} />
           <Tooltip formatter={(v: number, name: string) => [`${(+v).toFixed(2)}x`, name]} contentStyle={{ fontSize: 11 }} />
-          <ReferenceLine y={1.5} stroke="#18B7A0" strokeDasharray="4 2" strokeWidth={1} />
-          <ReferenceLine y={1.0} stroke="#E76F6F" strokeDasharray="4 2" strokeWidth={1} />
+          <ReferenceLine y={1.5} stroke="#0F766E" strokeDasharray="4 2" strokeWidth={1} />
+          <ReferenceLine y={1.0} stroke="#C0392B" strokeDasharray="4 2" strokeWidth={1} />
           {LINES.map(l => (
             <Line key={l.key} type="monotone" dataKey={l.key as string} name={l.label}
               stroke={l.color} strokeWidth={2} dot={{ r: 3, fill: l.color }}
@@ -677,7 +677,7 @@ function LiqRatiosTrendChart({ data }: { data: LiqPt[] }) {
 }
 
 function DaysCashChart({ data }: { data: { label: string; days: number }[] }) {
-  const colored = data.map(d => ({ ...d, fill: d.days < 30 ? '#EB5757' : d.days < 60 ? '#F2C94C' : '#22A06B' }));
+  const colored = data.map(d => ({ ...d, fill: d.days < 30 ? '#C0392B' : d.days < 60 ? '#F2C94C' : '#166534' }));
   return (
     <div style={LIQ_PANEL}>
       <h3 style={LIQ_H3}>Days Cash on Hand — Runway</h3>
@@ -689,15 +689,15 @@ function DaysCashChart({ data }: { data: { label: string; days: number }[] }) {
           <Tooltip formatter={(v: number) => [`${v} days`, 'Days Cash on Hand']} contentStyle={{ fontSize: 11 }} />
           <ReferenceLine y={60} stroke="#D4AF37" strokeDasharray="5 3" strokeWidth={1.5}
             label={{ value: '60d floor', position: 'right', fontSize: 9, fill: '#B8860B' }} />
-          <ReferenceLine y={30} stroke="#EB5757" strokeDasharray="4 2" strokeWidth={1}
-            label={{ value: '30d min', position: 'right', fontSize: 9, fill: '#EB5757' }} />
+          <ReferenceLine y={30} stroke="#C0392B" strokeDasharray="4 2" strokeWidth={1}
+            label={{ value: '30d min', position: 'right', fontSize: 9, fill: '#C0392B' }} />
           <Bar dataKey="days" name="Days Cash" radius={[4, 4, 0, 0]} maxBarSize={40}>
             {colored.map((d, i) => <Cell key={i} fill={d.fill} />)}
           </Bar>
         </BarChart>
       </ResponsiveContainer>
       <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 11, color: '#57534E' }}>
-        {[['#22A06B', '> 60 days'], ['#F2C94C', '30–60 days'], ['#EB5757', '< 30 days']].map(([bg, label]) => (
+        {[['#166534', '> 60 days'], ['#F2C94C', '30–60 days'], ['#C0392B', '< 30 days']].map(([bg, label]) => (
           <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <span style={{ background: bg, display: 'inline-block', width: 10, height: 10, borderRadius: 2 }} />{label}
           </span>
@@ -729,7 +729,7 @@ function WcCompositionChart({ data }: { data: WcRow[] }) {
         </BarChart>
       </ResponsiveContainer>
       <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 11, color: '#57534E' }}>
-        {[['#18B7A0', 'Current Assets'], ['#EB5757', 'Current Liabilities'], ['#22A06B', 'Working Capital']].map(([bg, label]) => (
+        {[['#0F766E', 'Current Assets'], ['#C0392B', 'Current Liabilities'], ['#166534', 'Working Capital']].map(([bg, label]) => (
           <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <span style={{ background: bg, display: 'inline-block', width: 10, height: 10, borderRadius: 2 }} />{label}
           </span>
@@ -789,11 +789,11 @@ function SolvencyTab({ coData, liveCards }: { coData: any[]; liveCards?: RatioCa
               <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}x`} />
               <Tooltip formatter={(v: number) => [`${v.toFixed(2)}x`]} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <ReferenceLine y={1.25} stroke="#22A06B" strokeDasharray="4 2" label={{ value: '1.25x DSCR floor', position: 'right', fontSize: 9, fill: '#22A06B' }} />
+              <ReferenceLine y={1.25} stroke="#166534" strokeDasharray="4 2" label={{ value: '1.25x DSCR floor', position: 'right', fontSize: 9, fill: '#166534' }} />
               <ReferenceLine y={1.5}  stroke="#B8860B" strokeDasharray="4 2" label={{ value: '1.5x ICR benchmark', position: 'right', fontSize: 9, fill: '#B8860B' }} />
               <Bar dataKey="dscr" name="DSCR" radius={[3, 3, 0, 0]}>
                 {dscrData.map((d, i) => (
-                  <Cell key={i} fill={d.dscr >= 1.25 ? '#22A06B' : d.dscr >= 1.0 ? '#F5A623' : '#D9534F'} />
+                  <Cell key={i} fill={d.dscr >= 1.25 ? '#166534' : d.dscr >= 1.0 ? '#F5A623' : '#B91C1C'} />
                 ))}
               </Bar>
               <Bar dataKey="icr"  name="Interest Coverage" fill="#B8860B" radius={[3, 3, 0, 0]} />
@@ -821,10 +821,10 @@ function RentalKPIsTab({ coData }: { coData: any[] }) {
                 <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-35} textAnchor="end" interval={0} />
                 <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} domain={[60, 100]} />
                 <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'Occupancy']} />
-                <ReferenceLine y={90} stroke="#D9534F" strokeDasharray="4 2" label={{ value: '90% target', position: 'right', fontSize: 9, fill: '#D9534F' }} />
+                <ReferenceLine y={90} stroke="#B91C1C" strokeDasharray="4 2" label={{ value: '90% target', position: 'right', fontSize: 9, fill: '#B91C1C' }} />
                 <Bar dataKey="occ" name="Occupancy %" radius={[3, 3, 0, 0]}>
                   {occData.map((d, i) => (
-                    <Cell key={i} fill={d.occ >= 90 ? '#22A06B' : d.occ >= 75 ? '#F5A623' : '#D9534F'} />
+                    <Cell key={i} fill={d.occ >= 90 ? '#166534' : d.occ >= 75 ? '#F5A623' : '#B91C1C'} />
                   ))}
                 </Bar>
               </BarChart>); })()}
@@ -880,10 +880,10 @@ function CostOfCapitalTab({ loanData }: { loanData: any[] }) {
                   <tr key={l.company} className="hover:bg-gray-50">
                     <td style={{ fontSize: 12, fontWeight: 500, color: '#262626', padding: '8px 12px', whiteSpace: 'nowrap' }}>{l.company}</td>
                     <td style={{ fontSize: 12, color: '#262626', fontFamily: 'monospace', padding: '8px 12px', textAlign: 'right' }}>{fmt$(l.amount)}</td>
-                    <td style={{ fontSize: 12, color: l.rate > 7 ? '#D9534F' : l.rate > 5.5 ? '#F5A623' : '#22A06B', fontFamily: 'monospace', fontWeight: 600, padding: '8px 12px', textAlign: 'center' }}>{l.rate.toFixed(2)}%</td>
+                    <td style={{ fontSize: 12, color: l.rate > 7 ? '#B91C1C' : l.rate > 5.5 ? '#F5A623' : '#166534', fontFamily: 'monospace', fontWeight: 600, padding: '8px 12px', textAlign: 'center' }}>{l.rate.toFixed(2)}%</td>
                     <td style={{ fontSize: 12, color: '#262626', fontFamily: 'monospace', padding: '8px 12px', textAlign: 'right' }}>{fmt$(l.payment)}</td>
                     <td style={{ fontSize: 12, color: '#262626', fontFamily: 'monospace', padding: '8px 12px', textAlign: 'right' }}>{fmt$(l.balance)}</td>
-                    <td style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 600, padding: '8px 12px', textAlign: 'center', color: l.ltv === null ? '#B0B0B0' : l.ltv > 80 ? '#D9534F' : l.ltv > 60 ? '#F5A623' : '#22A06B' }}>
+                    <td style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 600, padding: '8px 12px', textAlign: 'center', color: l.ltv === null ? '#B0B0B0' : l.ltv > 80 ? '#B91C1C' : l.ltv > 60 ? '#F5A623' : '#166534' }}>
                       {l.ltv === null ? 'N/A' : `${l.ltv.toFixed(1)}%`}
                     </td>
                     <td style={{ fontSize: 12, color: '#262626', padding: '8px 12px', textAlign: 'center' }}>{l.maturity}</td>

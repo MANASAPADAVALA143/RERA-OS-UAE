@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import api from '../services/api';
 import { LoadingSkeleton } from '../components/ui/Table';
 import { fmtUSD } from '../components/ProtectedRoute';
@@ -192,7 +192,7 @@ function NatureBadge({ nature }: { nature: string }) {
 function GainCell({ value }: { value: number }) {
   const pos = value >= 0;
   return (
-    <span className={`font-mono font-semibold ${pos ? 'text-green-700' : 'text-red-600'}`}>
+    <span className={`font-mono font-semibold ${pos ? 'text-green-800' : 'text-red-700'}`}>
       {pos ? '+' : '-'}{fmt(value)}
     </span>
   );
@@ -396,7 +396,7 @@ export default function RentalOwnership() {
 
   // ── Render ───────────────────────────────────────────────────────────────────
   if (loading) return <LoadingSkeleton rows={8} />;
-  if (error)   return <div className="text-red-600 p-4">{error}<button className="ml-3 underline" onClick={loadData}>Retry</button></div>;
+  if (error)   return <div className="text-red-700 p-4">{error}<button className="ml-3 underline" onClick={loadData}>Retry</button></div>;
 
   const avgROI = kpis.avgROI;
 
@@ -455,7 +455,7 @@ export default function RentalOwnership() {
           { label: 'Total Capital Raised', value: fmtK(kpis.totalCapital),       icon: <DollarSign size={18} />,  color: 'text-blue-700',   sub: 'contributed' },
           { label: 'Portfolio Market Value', value: fmtK(kpis.totalMV),         icon: <Building2 size={18} />,   color: 'text-green-800',  sub: 'at 5.5% cap rate' },
           { label: 'Total Equity',          value: fmtK(kpis.totalEquity),       icon: <TrendingUp size={18} />,  color: 'text-amber-700',  sub: 'market value − debt (60% LTV)' },
-          { label: 'Avg Partner ROI',       value: `${avgROI.toFixed(1)}%`,      icon: <TrendingUp size={18} />,  color: avgROI >= 20 ? 'text-green-700' : 'text-amber-700', sub: 'weighted by cost basis' },
+          { label: 'Avg Partner ROI',       value: `${avgROI.toFixed(1)}%`,      icon: <TrendingUp size={18} />,  color: avgROI >= 20 ? 'text-green-800' : 'text-amber-700', sub: 'weighted by cost basis' },
         ].map(({ label, value, icon, color, sub }) => (
           <div key={label} className="bg-white rounded-xl border border-gray-200 p-4">
             <div className="flex items-center justify-between mb-2">
@@ -532,7 +532,7 @@ export default function RentalOwnership() {
                     <td className="px-3 py-3 text-right"><GainCell value={f.unrealizedGain} /></td>
                     <td className="px-3 py-3 text-right font-mono text-xs text-blue-700">{fmtK(f.returnToDate)}</td>
                     <td className="px-3 py-3 text-right">
-                      <span className={`font-semibold text-xs ${f.roi >= 20 ? 'text-green-700' : f.roi >= 10 ? 'text-amber-600' : 'text-red-600'}`}>
+                      <span className={`font-semibold text-xs ${f.roi >= 20 ? 'text-green-800' : f.roi >= 10 ? 'text-amber-600' : 'text-red-700'}`}>
                         {f.roi.toFixed(1)}%
                       </span>
                     </td>
@@ -588,7 +588,7 @@ export default function RentalOwnership() {
                   <div>
                     <p className="font-bold text-gray-900 text-lg">{selectedPartner}</p>
                     <NatureBadge nature={selNature} />
-                    <span className="ml-2 text-xs text-green-700">● Active</span>
+                    <span className="ml-2 text-xs text-green-800">● Active</span>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-4 flex-1 min-w-0">
@@ -601,12 +601,12 @@ export default function RentalOwnership() {
                 </div>
                 <div className="text-sm space-y-1 border-l border-gray-200 pl-6">
                   <p><span className="text-gray-500">Unrealized Gain: </span>
-                    <span className={`font-semibold ${selF.unrealizedGain >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                    <span className={`font-semibold ${selF.unrealizedGain >= 0 ? 'text-green-800' : 'text-red-700'}`}>
                       {selF.unrealizedGain >= 0 ? '+' : '-'}{fmt(selF.unrealizedGain)} ({((selF.unrealizedGain / selF.costBasis) * 100).toFixed(1)}%)
                     </span>
                   </p>
                   <p><span className="text-gray-500">Return to Date: </span><span className="font-semibold text-blue-700">{fmtUSD(selF.returnToDate)}</span></p>
-                  <p><span className="text-gray-500">Total ROI: </span><span className="font-semibold text-green-700">{selF.roi.toFixed(1)}%</span></p>
+                  <p><span className="text-gray-500">Total ROI: </span><span className="font-semibold text-green-800">{selF.roi.toFixed(1)}%</span></p>
                 </div>
               </div>
             </div>
@@ -685,7 +685,7 @@ export default function RentalOwnership() {
                       <tr key={c.id} className="hover:bg-gray-50">
                         <td className="px-2 py-2 text-gray-600">{c.date}</td>
                         <td className="px-2 py-2">{c.type}</td>
-                        <td className={`px-2 py-2 text-right font-mono font-semibold ${c.amount >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                        <td className={`px-2 py-2 text-right font-mono font-semibold ${c.amount >= 0 ? 'text-green-800' : 'text-red-700'}`}>
                           {c.amount >= 0 ? '+' : ''}{fmtUSD(c.amount)}
                         </td>
                         <td className="px-2 py-2 text-right font-mono">{fmtUSD(c.cumulative)}</td>
@@ -807,8 +807,8 @@ export default function RentalOwnership() {
                 <div key={p.partner_name} className="bg-gray-50 rounded-lg px-3 py-2 text-xs border border-gray-200 min-w-[160px]">
                   <p className="font-semibold text-gray-800 truncate">{p.partner_name}</p>
                   <div className="flex gap-3 mt-1">
-                    <span className="text-green-700">In: {fmtK(totalIn)}</span>
-                    <span className="text-red-600">Out: {fmtK(totalOut)}</span>
+                    <span className="text-green-800">In: {fmtK(totalIn)}</span>
+                    <span className="text-red-700">Out: {fmtK(totalOut)}</span>
                   </div>
                   <p className="text-gray-500 mt-0.5">Net: <strong className="text-gray-800">{fmtK(totalIn - totalOut)}</strong></p>
                 </div>
@@ -833,12 +833,12 @@ export default function RentalOwnership() {
                   <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">{c.company}</td>
                   <td className="px-3 py-2.5 text-right text-gray-600 text-xs">{c.date}</td>
                   <td className="px-3 py-2.5 text-right font-mono text-xs">
-                    <span className={c.amount >= 0 ? 'text-green-700 font-semibold' : 'text-red-600 font-semibold'}>
+                    <span className={c.amount >= 0 ? 'text-green-800 font-semibold' : 'text-red-700 font-semibold'}>
                       {c.amount >= 0 ? '+' : ''}{fmtUSD(c.amount)}
                     </span>
                   </td>
                   <td className="px-3 py-2.5 text-right">
-                    <span className={`px-1.5 py-0.5 rounded text-xs ${c.amount < 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                    <span className={`px-1.5 py-0.5 rounded text-xs ${c.amount < 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-800'}`}>
                       {c.type}
                     </span>
                   </td>

@@ -1,4 +1,4 @@
-﻿import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
   LineChart, Line, Cell,
@@ -68,7 +68,7 @@ export default function RentalBuildingExpenses() {
   }, [kpis.total]);
 
   if (loading) return <LoadingSkeleton rows={10} />;
-  if (error) return <div className="text-red-600 p-4">{error}<button className="ml-3 underline" onClick={reload}>Retry</button></div>;
+  if (error) return <div className="text-red-700 p-4">{error}<button className="ml-3 underline" onClick={reload}>Retry</button></div>;
 
   return (
     <div className="space-y-6 -m-6 p-6" style={{ background: 'transparent' }}>
@@ -140,9 +140,9 @@ export default function RentalBuildingExpenses() {
                     <td className="px-3 py-2.5 text-right font-mono">{fmtK(b.rentIncome)}</td>
                     <td className="px-3 py-2.5 text-right font-mono">{fmtK(b.totalExpenses)}</td>
                     <td className="px-3 py-2.5 text-right font-mono">{(b.expenseRatio * 100).toFixed(1)}%</td>
-                    <td className="px-3 py-2.5 text-right font-mono text-green-700">{fmtK(b.noi)}</td>
+                    <td className="px-3 py-2.5 text-right font-mono text-green-800">{fmtK(b.noi)}</td>
                     <td className="px-3 py-2.5 text-right font-mono">{(b.noiMargin * 100).toFixed(1)}%</td>
-                    <td className={`px-3 py-2.5 text-right font-mono ${b.vsLastMonth >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                    <td className={`px-3 py-2.5 text-right font-mono ${b.vsLastMonth >= 0 ? 'text-green-800' : 'text-red-700'}`}>
                       {b.vsLastMonth >= 0 ? '+' : ''}{b.vsLastMonth.toFixed(1)}%
                     </td>
                     <td className="px-3 py-2.5 text-right">
@@ -165,7 +165,7 @@ export default function RentalBuildingExpenses() {
                                     <td className="py-1.5">{row.category}</td>
                                     <td className="py-1.5 text-right font-mono">{fmtUSD(row.budget)}</td>
                                     <td className="py-1.5 text-right font-mono">{fmtUSD(row.actual)}</td>
-                                    <td className={`py-1.5 text-right font-mono ${row.variance >= 0 ? 'text-green-700' : 'text-red-600'}`}>{fmtUSD(row.variance)}</td>
+                                    <td className={`py-1.5 text-right font-mono ${row.variance >= 0 ? 'text-green-800' : 'text-red-700'}`}>{fmtUSD(row.variance)}</td>
                                     <td className="py-1.5 text-right font-mono">{row.pct.toFixed(0)}%</td>
                                   </tr>
                                 ))}
@@ -187,7 +187,7 @@ export default function RentalBuildingExpenses() {
                                     <td className="py-1.5 text-right font-mono">{fmtUSD(u.maintenanceCost)}</td>
                                     <td className="py-1.5 text-right font-mono">{fmtUSD(u.repairCost)}</td>
                                     <td className="py-1.5 text-right font-mono">{fmtUSD(u.totalCost)}</td>
-                                    <td className={`py-1.5 text-right font-mono ${u.costRentPct > 15 ? 'text-red-600' : ''}`}>{u.costRentPct.toFixed(1)}%</td>
+                                    <td className={`py-1.5 text-right font-mono ${u.costRentPct > 15 ? 'text-red-700' : ''}`}>{u.costRentPct.toFixed(1)}%</td>
                                   </tr>
                                 ))}
                               </tbody>

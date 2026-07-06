@@ -9,13 +9,14 @@ import api from '../services/api';
 import { fmtUSD, fmtPct } from '../components/ProtectedRoute';
 import { useRentalNav } from '../contexts/RentalNavContext';
 import QbArAgingUploadPanel, { type QBAgingLatest, estimateDsoFromBuckets } from '../components/rental/QbArAgingUploadPanel';
+import { RENTAL_GREEN, RENTAL_TEAL, RENTAL_RED, RENTAL_CHART_GREEN } from '../utils/rentalPalette';
 
 // ── palette & style constants ─────────────────────────────────────────────────
 
-const C_TEAL  = '#18B7A0';
-const C_GREEN = '#26A65B';
+const C_TEAL  = RENTAL_TEAL;
+const C_GREEN = RENTAL_GREEN;
 const C_AMBER = '#F2C14E';
-const C_RED   = '#E76F6F';
+const C_RED   = RENTAL_RED;
 const C_GOLD  = '#D4AF37';
 const C_CARD  = '#FBF6EE';
 const C_BORD  = '#E8DEC8';
@@ -23,11 +24,11 @@ const OCCUPANCY_TARGET = 92; // percent
 
 /** Distinct bar colors per company — vivid palette, gold/teal first (not red) */
 const COMPANY_BAR_COLORS = [
-  '#D4AF37', '#18B7A0', '#7B68AD', '#5B9BD5', '#E9A358',
-  '#6B8E6B', '#C75B7A', '#D97B4A', '#4A90A4', '#E76F6F',
+  '#D4AF37', '#0F766E', '#7B68AD', '#5B9BD5', '#E9A358',
+  '#6B8E6B', '#C75B7A', '#D97B4A', '#4A90A4', '#C0392B',
 ];
 
-const AGING_BUCKET_COLORS = ['#22A06B', '#F5A623', '#E97316', '#DC2626', '#991B1B'];
+const AGING_BUCKET_COLORS = [RENTAL_CHART_GREEN, '#F5A623', '#E97316', '#DC2626', '#991B1B'];
 
 const CARD: React.CSSProperties = {
   background: C_CARD,
@@ -149,10 +150,10 @@ function short(name: string, max = 14): string {
 
 function riskFlag(c: CompanySummary): { label: string; color: string; bg: string } {
   if (c.arrears_total > 10000 || c.occupancy_pct < 0.70)
-    return { label: 'HIGH',   color: '#B91C1C', bg: 'rgba(231,111,111,0.15)' };
+    return { label: 'HIGH',   color: '#B91C1C', bg: 'rgba(192,57,43,0.15)' };
   if (c.arrears_total > 2000  || c.occupancy_pct < 0.85)
     return { label: 'MEDIUM', color: '#92400E', bg: 'rgba(242,193,78,0.18)'  };
-  return   { label: 'LOW',    color: '#166534', bg: 'rgba(38,166,91,0.14)'   };
+  return   { label: 'LOW',    color: '#166534', bg: 'rgba(21,128,61,0.14)'   };
 }
 
 // ── skeleton loaders ──────────────────────────────────────────────────────────
@@ -598,7 +599,7 @@ export default function RentalOverview() {
       {/* ── Sync banner ─────────────────────────────────────────────────────── */}
       {lastSyncMonth && (
         <div className="rounded-xl px-4 py-2.5 flex items-center gap-3"
-          style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)' }}>
+          style={{ background: 'rgba(15,118,110,0.08)', border: '1px solid rgba(15,118,110,0.25)' }}>
           <span className="text-sm font-semibold" style={{ color: '#1C1917' }}>
             ✅ Excel synced — {lastSyncMonth}
           </span>

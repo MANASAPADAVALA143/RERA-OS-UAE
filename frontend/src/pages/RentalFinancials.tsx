@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
@@ -729,8 +729,8 @@ function FinTable({ items, years, labelCol = 'Line Item', selectedYear, periods,
   const valueStyle = (item: FinItem, val: number): React.CSSProperties => {
     const isNeg = val < 0;
     let color = '#262626';
-    if (isGrandTotal(item)) color = isNeg ? '#D9534F' : '#1baf7a';
-    else if (isNeg) color = '#D9534F';
+    if (isGrandTotal(item)) color = isNeg ? '#B91C1C' : '#1baf7a';
+    else if (isNeg) color = '#B91C1C';
     else if (val === 0) color = '#B0B0B0';
     return {
       fontFamily: FIN_FONT,
@@ -1064,8 +1064,8 @@ function KPITab({ fin, kpiYear, kpiMonth }: { fin: ParsedFinancials; kpiYear: nu
             <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 }} />
             <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
             <Line type="monotone" dataKey="NOI Margin %"    stroke="#D4AF37" strokeWidth={2} dot={{ r: 3, fill: '#D4AF37' }} />
-            <Line type="monotone" dataKey="Net Margin %"    stroke="#22A06B" strokeWidth={2} dot={{ r: 3, fill: '#22A06B' }} />
-            <Line type="monotone" dataKey="Expense Ratio %" stroke="#EB5757" strokeWidth={2} strokeDasharray="5 3" dot={{ r: 3, fill: '#EB5757' }} />
+            <Line type="monotone" dataKey="Net Margin %"    stroke="#166534" strokeWidth={2} dot={{ r: 3, fill: '#166534' }} />
+            <Line type="monotone" dataKey="Expense Ratio %" stroke="#C0392B" strokeWidth={2} strokeDasharray="5 3" dot={{ r: 3, fill: '#C0392B' }} />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -1081,8 +1081,8 @@ function KPITab({ fin, kpiYear, kpiMonth }: { fin: ParsedFinancials; kpiYear: nu
             <Tooltip formatter={(v: number) => fmtFull(v)} contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 }} />
             <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
             <Line type="monotone" dataKey="Revenue"    stroke="#D4AF37" strokeWidth={2} dot={{ r: 3 }} />
-            <Line type="monotone" dataKey="Expenses"   stroke="#EB5757" strokeWidth={2} dot={{ r: 3 }} />
-            <Line type="monotone" dataKey="Net Income" stroke="#22A06B" strokeWidth={2} dot={{ r: 3 }} />
+            <Line type="monotone" dataKey="Expenses"   stroke="#C0392B" strokeWidth={2} dot={{ r: 3 }} />
+            <Line type="monotone" dataKey="Net Income" stroke="#166534" strokeWidth={2} dot={{ r: 3 }} />
             <Line type="monotone" dataKey="NOI"        stroke="#8B6914" strokeWidth={2} strokeDasharray="5 3" dot={{ r: 3 }} />
           </LineChart>
         </ResponsiveContainer>
@@ -1096,7 +1096,7 @@ function KPITab({ fin, kpiYear, kpiMonth }: { fin: ParsedFinancials; kpiYear: nu
             <PieChart>
               <Pie data={revenueAllocation} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value">
                 <Cell fill="#D4AF37" />
-                <Cell fill="#EB5757" />
+                <Cell fill="#C0392B" />
               </Pie>
               <Tooltip formatter={(v: number) => fmtFull(v)} contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 }} />
               <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
@@ -1242,7 +1242,7 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
     });
   }, [fin.pl, periodKeys]);
 
-  const OPEX_PALETTE = ['#D4AF37','#F2994A','#2F80ED','#22A06B','#D9534F','#9B59B6','#F2C94C','#E8DEC8'];
+  const OPEX_PALETTE = ['#D4AF37','#F2994A','#2F80ED','#166534','#B91C1C','#9B59B6','#F2C94C','#E8DEC8'];
 
   return (
     <div className="space-y-6">
@@ -1374,9 +1374,9 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
                     <YAxis tick={{ fontSize: 9 }} tickFormatter={v => `${(v as number).toFixed(0)}%`} />
                     <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} />
                     <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-                    <Line type="monotone" dataKey="grossMargin"     stroke="#22A06B" strokeWidth={2} dot={false} name="Gross Margin"     />
+                    <Line type="monotone" dataKey="grossMargin"     stroke="#166534" strokeWidth={2} dot={false} name="Gross Margin"     />
                     <Line type="monotone" dataKey="operatingMargin" stroke="#F2994A" strokeWidth={2} dot={false} name="Operating Margin" />
-                    <Line type="monotone" dataKey="netMargin"       stroke="#D9534F" strokeWidth={2} dot={false} name="Net Margin"       />
+                    <Line type="monotone" dataKey="netMargin"       stroke="#B91C1C" strokeWidth={2} dot={false} name="Net Margin"       />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
@@ -1470,11 +1470,11 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
                 <tr key={i} style={{ background: r.year === selectedYear ? '#EDE5D8' : i % 2 === 0 ? '#F7F1E6' : '#FBF6EE', borderTop:'1px solid #E8DEC8' }}>
                   <td style={{ padding:'8px 16px', fontSize:14, fontWeight: r.year === selectedYear ? 700 : 500, color:'#1C1917' }}>{r.year}{r.year === selectedYear ? ' ◀' : ''}</td>
                   <td style={{ padding:'8px 16px', textAlign:'right', fontFamily:'monospace', fontSize:14, color:'#1C1917' }}>{fmt(r.revenue)}</td>
-                  <td style={{ padding:'8px 16px', textAlign:'right', fontFamily:'monospace', fontSize:14, color:'#D9534F' }}>{fmt(r.expenses)}</td>
-                  <td style={{ padding:'8px 16px', textAlign:'right', fontFamily:'monospace', fontSize:14, fontWeight:600, color: r.netIncome>=0 ? '#1baf7a' : '#D9534F' }}>{r.netIncome < 0 ? `(${fmt(Math.abs(r.netIncome))})` : fmt(r.netIncome)}</td>
-                  <td style={{ padding:'8px 16px', textAlign:'right', fontFamily:'monospace', fontSize:14, color: r.noi>=0 ? '#2F80ED' : '#D9534F' }}>{r.noi < 0 ? `(${fmt(Math.abs(r.noi))})` : fmt(r.noi)}</td>
+                  <td style={{ padding:'8px 16px', textAlign:'right', fontFamily:'monospace', fontSize:14, color:'#B91C1C' }}>{fmt(r.expenses)}</td>
+                  <td style={{ padding:'8px 16px', textAlign:'right', fontFamily:'monospace', fontSize:14, fontWeight:600, color: r.netIncome>=0 ? '#1baf7a' : '#B91C1C' }}>{r.netIncome < 0 ? `(${fmt(Math.abs(r.netIncome))})` : fmt(r.netIncome)}</td>
+                  <td style={{ padding:'8px 16px', textAlign:'right', fontFamily:'monospace', fontSize:14, color: r.noi>=0 ? '#2F80ED' : '#B91C1C' }}>{r.noi < 0 ? `(${fmt(Math.abs(r.noi))})` : fmt(r.noi)}</td>
                   <td style={{ padding:'8px 16px', textAlign:'right', fontFamily:'monospace', fontSize:14, color:'#2F80ED' }}>{r.cash > 0 ? fmt(r.cash) : '—'}</td>
-                  <td style={{ padding:'8px 16px', textAlign:'right', fontFamily:'monospace', fontSize:14, color: r.margin>=0 ? '#1baf7a' : '#D9534F' }}>{r.margin.toFixed(1)}%</td>
+                  <td style={{ padding:'8px 16px', textAlign:'right', fontFamily:'monospace', fontSize:14, color: r.margin>=0 ? '#1baf7a' : '#B91C1C' }}>{r.margin.toFixed(1)}%</td>
                 </tr>
               ))}
             </tbody>
@@ -1558,7 +1558,7 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
           <ResponsiveContainer width="100%" height={210}>
             <PieChart>
               <Pie data={expPie} cx="50%" cy="50%" outerRadius={75} dataKey="value">
-                {expPie.map((_, i) => <Cell key={i} fill={['#D4AF37','#EB5757','#22A06B','#F2994A','#8B6914','#A8A29E','#C08B40','#78716C'][i % 8]} />)}
+                {expPie.map((_, i) => <Cell key={i} fill={['#D4AF37','#C0392B','#166534','#F2994A','#8B6914','#A8A29E','#C08B40','#78716C'][i % 8]} />)}
               </Pie>
               <Tooltip formatter={(v: number) => fmtFull(v)} contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 }} />
               <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
@@ -1571,12 +1571,12 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
       <div className="grid grid-cols-3 gap-4">
         <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
           <p style={{ fontSize: 11, color: '#6B6B6B', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Latest Net Income ({lastY})</p>
-          <p style={{ fontSize: 20, fontWeight: 700, color: latestRow.netIncome >= 0 ? '#1C1917' : '#D9534F', marginTop: 8 }}>{latestRow.netIncome < 0 ? `(${fmtFull(Math.abs(latestRow.netIncome))})` : fmtFull(latestRow.netIncome)}</p>
-          {prevRow && <p style={{ fontSize: 11, color: niChange >= 0 ? '#22A06B' : '#D9534F', marginTop: 4 }}>{niChange >= 0 ? '↑' : '↓'} {Math.abs(niChange).toFixed(1)}% vs {prevRow.year}</p>}
+          <p style={{ fontSize: 20, fontWeight: 700, color: latestRow.netIncome >= 0 ? '#1C1917' : '#B91C1C', marginTop: 8 }}>{latestRow.netIncome < 0 ? `(${fmtFull(Math.abs(latestRow.netIncome))})` : fmtFull(latestRow.netIncome)}</p>
+          {prevRow && <p style={{ fontSize: 11, color: niChange >= 0 ? '#166534' : '#B91C1C', marginTop: 4 }}>{niChange >= 0 ? '↑' : '↓'} {Math.abs(niChange).toFixed(1)}% vs {prevRow.year}</p>}
         </div>
         <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
           <p style={{ fontSize: 11, color: '#6B6B6B', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Avg Profit Margin</p>
-          <p style={{ fontSize: 20, fontWeight: 700, color: avgMargin >= 0 ? '#1C1917' : '#D9534F', marginTop: 8 }}>{avgMargin.toFixed(1)}%</p>
+          <p style={{ fontSize: 20, fontWeight: 700, color: avgMargin >= 0 ? '#1C1917' : '#B91C1C', marginTop: 8 }}>{avgMargin.toFixed(1)}%</p>
           <p style={{ fontSize: 11, color: '#6B6B6B', marginTop: 4 }}>Across {fin.years.length} years</p>
         </div>
         <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
@@ -1624,11 +1624,11 @@ function AllCompaniesSummary({ all }: { all: Record<string, ParsedFinancials> })
             </div>
             <div className="text-right shrink-0">
               <p className="text-xs text-gray-500">Net Income</p>
-              <p className={`font-mono font-bold text-sm ${k.netIncome>=0?'text-green-700':'text-red-600'}`}>{fmt(k.netIncome)}</p>
+              <p className={`font-mono font-bold text-sm ${k.netIncome>=0?'text-green-800':'text-red-700'}`}>{fmt(k.netIncome)}</p>
             </div>
             <div className="text-right shrink-0">
               <p className="text-xs text-gray-500">NOI</p>
-              <p className={`font-mono font-bold text-sm ${k.noi>=0?'text-blue-700':'text-red-600'}`}>{fmt(k.noi)}</p>
+              <p className={`font-mono font-bold text-sm ${k.noi>=0?'text-blue-700':'text-red-700'}`}>{fmt(k.noi)}</p>
             </div>
             <div className="text-right shrink-0">
               <p className="text-xs text-gray-500">LTV</p>
@@ -1984,7 +1984,7 @@ export default function RentalFinancials() {
           {currentFin && (
             <>
               <span className="text-xs text-gray-400">{currentFin.fileName} · {new Date(currentFin.uploadedAt).toLocaleDateString()}</span>
-              <button onClick={clearData} className="text-xs text-red-400 hover:text-red-600 transition-colors">Clear</button>
+              <button onClick={clearData} className="text-xs text-red-400 hover:text-red-700 transition-colors">Clear</button>
             </>
           )}
         </div>

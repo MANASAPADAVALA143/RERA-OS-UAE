@@ -13,7 +13,7 @@ function BridgeRow({ label, value, negative = false, bold = false, divider = fal
       <td className={`py-2 pr-4 text-sm ${bold ? 'font-bold text-gray-900' : 'text-gray-600'}`} style={bold ? { fontFamily: 'Georgia,serif' } : {}}>
         {label}
       </td>
-      <td className={`py-2 text-right text-sm font-mono ${bold ? 'font-bold text-gray-900' : negative ? 'text-red-600' : 'text-gray-800'}`}>
+      <td className={`py-2 text-right text-sm font-mono ${bold ? 'font-bold text-gray-900' : negative ? 'text-red-700' : 'text-gray-800'}`}>
         {negative ? `(${$(Math.abs(value))})` : $(value)}
       </td>
     </tr>
@@ -193,9 +193,9 @@ export default function RentalIncomeBridge() {
                       <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                         <td className="px-3 py-2 font-medium">{r.entity_name}</td>
                         <td className="px-3 py-2 text-right font-mono">{$(r.ar)}</td>
-                        <td className={`px-3 py-2 text-right font-mono ${highPastDue ? 'text-red-600 font-semibold' : ''}`}>{$(r.pastDue)}</td>
+                        <td className={`px-3 py-2 text-right font-mono ${highPastDue ? 'text-red-700 font-semibold' : ''}`}>{$(r.pastDue)}</td>
                         <td className="px-3 py-2 text-right font-mono">{$(r.ap)}</td>
-                        <td className={`px-3 py-2 text-right font-mono ${r.nwc < 0 ? 'text-red-600' : 'text-green-700'}`}>{$(r.nwc)}</td>
+                        <td className={`px-3 py-2 text-right font-mono ${r.nwc < 0 ? 'text-red-700' : 'text-green-800'}`}>{$(r.nwc)}</td>
                       </tr>
                     );
                   })}

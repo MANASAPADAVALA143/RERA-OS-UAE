@@ -89,7 +89,7 @@ export default function RentalLeases() {
         const d = r.days_until_expiry;
         if (d == null) return '—';
         return (
-          <span className={d <= 30 ? 'text-red-600 font-medium' : d <= 60 ? 'text-amber-600 font-medium' : ''}>
+          <span className={d <= 30 ? 'text-red-700 font-medium' : d <= 60 ? 'text-amber-600 font-medium' : ''}>
             {d}d
           </span>
         );
@@ -142,7 +142,7 @@ export default function RentalLeases() {
       {loading ? (
         <LoadingSkeleton rows={8} />
       ) : error ? (
-        <p className="text-red-600">{error}</p>
+        <p className="text-red-700">{error}</p>
       ) : (
         <Card title={`Leases (${leases.length})`}>
           {leases.length === 0 ? (
@@ -176,7 +176,7 @@ export default function RentalLeases() {
         <div className="grid grid-cols-3 gap-4 text-center">
           <div className="p-4 bg-red-50 rounded-xl">
             <p className="text-2xl font-bold text-red-700">{pipeline.days_30}</p>
-            <p className="text-sm text-red-600">Expiring in 30 days</p>
+            <p className="text-sm text-red-700">Expiring in 30 days</p>
           </div>
           <div className="p-4 bg-amber-50 rounded-xl">
             <p className="text-2xl font-bold text-amber-700">{pipeline.days_60}</p>

@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ComposedChart, BarChart, Bar, Line, Area, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, Cell, Legend,
@@ -226,7 +226,7 @@ function StatusHistoryTab() {
             </div>
           )}
           {ltm.occPct === 100 && availableMonths.length >= 3 && (
-            <div className="flex gap-3 p-3 rounded-lg border-l-4" style={{ borderColor: '#26A65B', background: 'rgba(38,166,91,0.08)' }}>
+            <div className="flex gap-3 p-3 rounded-lg border-l-4" style={{ borderColor: '#15803D', background: 'rgba(21,128,61,0.08)' }}>
               <span style={{ flexShrink: 0 }}>🟢</span>
               <div>
                 <p className="text-sm font-semibold" style={{ color: '#065F46' }}>
@@ -319,8 +319,8 @@ function StatusHistoryTab() {
 // ── LTM PERFORMANCE TAB (REDESIGNED) ─────────────────────────────────────────
 
 const LTM_C = {
-  teal:  '#18B7A0',
-  green: '#26A65B',
+  teal:  '#0F766E',
+  green: '#15803D',
   amber: '#B8860B',
   warn:  '#92400E',
   gold:  '#D4AF37',
@@ -693,12 +693,12 @@ function LTMPerformanceTab() {
                         : ltm.trend === 'down'
                           ? <span style={{ color: LTM_C.warn, fontWeight: 700 }}>↓</span>
                           : <span style={{ color: '#A8A29E' }}>→</span>;
-                      const scoreBg    = score >= 60 ? 'rgba(146,64,14,0.12)' : score >= 30 ? 'rgba(184,134,11,0.15)' : 'rgba(38,166,91,0.12)';
+                      const scoreBg    = score >= 60 ? 'rgba(146,64,14,0.12)' : score >= 30 ? 'rgba(184,134,11,0.15)' : 'rgba(21,128,61,0.12)';
                       const scoreColor = score >= 60 ? '#92400E' : score >= 30 ? '#B8860B' : '#065F46';
                       const actionStyle = {
                         'Offer discount': { bg: '#FEF3C7', color: '#92400E' },
                         'Review rent':    { bg: 'rgba(184,134,11,0.15)', color: '#92400E' },
-                        'Retain tenant':  { bg: 'rgba(38,166,91,0.12)', color: '#065F46' },
+                        'Retain tenant':  { bg: 'rgba(21,128,61,0.12)', color: '#065F46' },
                         'Monitor':        { bg: 'rgba(168,162,158,0.15)', color: '#57534E' },
                       }[ltm.action] ?? { bg: 'rgba(168,162,158,0.15)', color: '#57534E' };
                       return (
@@ -740,7 +740,7 @@ function LTMPerformanceTab() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {insights.map((ins, i) => {
                     const border = ins.type === 'red' ? LTM_C.warn : ins.type === 'amber' ? LTM_C.amber : LTM_C.green;
-                    const bg     = ins.type === 'red' ? '#FEF3C7' : ins.type === 'amber' ? 'rgba(184,134,11,0.12)' : 'rgba(38,166,91,0.08)';
+                    const bg     = ins.type === 'red' ? '#FEF3C7' : ins.type === 'amber' ? 'rgba(184,134,11,0.12)' : 'rgba(21,128,61,0.08)';
                     const tc     = ins.type === 'red' ? '#92400E' : ins.type === 'amber' ? '#92400E' : '#065F46';
                     return (
                       <div key={i} style={{ borderLeft: `3px solid ${border}`, background: bg, padding: '10px 12px', borderRadius: '0 8px 8px 0' }}>
@@ -826,7 +826,7 @@ export default function RentalUnits() {
     { key: 'monthly_rent', label: 'Monthly Rent', render: r => fmtUSD(r.monthly_rent), sortValue: r => r.monthly_rent },
     {
       key: 'arrears', label: 'Arrears',
-      render: r => r.arrears > 0 ? <span className="text-red-600 font-medium">{fmtUSD(r.arrears)}</span> : '—',
+      render: r => r.arrears > 0 ? <span className="text-red-700 font-medium">{fmtUSD(r.arrears)}</span> : '—',
       sortValue: r => r.arrears,
     },
   ];
@@ -878,7 +878,7 @@ export default function RentalUnits() {
             <KpiCard label="Total Arrears" value={fmtUSD(totalArrears)} />
           </div>
           {loading ? <LoadingSkeleton rows={8} /> : error ? (
-            <p className="text-red-600">{error}</p>
+            <p className="text-red-700">{error}</p>
           ) : (
             <Card title="Units">
               <Table columns={columns} data={units} emptyMessage="No units found" defaultSortKey="unit_number" />

@@ -101,7 +101,7 @@ const fmtK  = (v: number) => `$${(Math.abs(v) / 1000).toFixed(0)}K`;
 const pct   = (v: number) => `${Math.min(v, 999).toFixed(1)}%`;
 const short = (m: string) => m.replace(/-\d{4}$/, '');
 
-const STATUS_COLORS = ['#22A06B','#F2C94C','#F5A623','#D9534F','#2F80ED','#8B5CF6','#EC4899','#06B6D4','#D4AF37'];
+const STATUS_COLORS = ['#166534','#F2C94C','#F5A623','#B91C1C','#2F80ED','#8B5CF6','#EC4899','#06B6D4','#D4AF37'];
 
 function getStatus(rate: number, collected: number): { label: string; bg: string; color: string } {
   if (collected === 0) return { label: 'Zero-Pay', bg: '#FEE2E2', color: '#991B1B' };
@@ -126,7 +126,7 @@ function BvcTooltip({ active, payload }: { active?: boolean; payload?: any[] }) 
     <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, padding: '10px 14px', fontSize: 12, maxWidth: 260, fontVariantNumeric: 'tabular-nums lining-nums' }}>
       <p style={{ fontWeight: 700, color: '#1C1917', marginBottom: 8 }}>{row.full ?? row.month}</p>
       <p style={{ color: '#4E79A7' }}>Billed: {fmt$(billed)}</p>
-      <p style={{ color: '#22A06B' }}>Collected: {fmt$(collected)}</p>
+      <p style={{ color: '#166534' }}>Collected: {fmt$(collected)}</p>
       <p style={{ color: '#B91C1C' }}>Gap: {fmt$(gap)}</p>
       {realPct !== null && <p style={{ color: '#78716C', marginTop: 3 }}>Realization: {realPct}%</p>}
       {byCompany.length > 1 && (
@@ -433,9 +433,9 @@ export default function RentalArDashboard() {
     const fullPay      = companies.filter(c => c.billed_per_month > 0 && c.latest_collected >= c.billed_per_month).length;
     const noBilledCnt  = companies.filter(c => c.billed_per_month === 0).length;
     return [
-      { name: 'Zero-Pay',         count: zeroPay,      fill: '#D9534F' },
+      { name: 'Zero-Pay',         count: zeroPay,      fill: '#B91C1C' },
       { name: 'Partial-Pay',      count: partial,       fill: '#F5A623' },
-      { name: 'Fully Paid',       count: fullPay,       fill: '#22A06B' },
+      { name: 'Fully Paid',       count: fullPay,       fill: '#166534' },
       ...(noBilledCnt > 0 ? [{ name: 'No Billing Data', count: noBilledCnt, fill: '#D1D5DB' }] : []),
     ].filter(d => d.count > 0);
   }, [companies]);
@@ -470,25 +470,25 @@ export default function RentalArDashboard() {
       label: selMonth ? `Collected · ${selMonth}` : 'Collected (Latest Mo)',
       value: fmt$(port.totalCollected),
       sub: `${pct(port.rate)} collection rate`,
-      border: '#22A06B',
+      border: '#166534',
     },
     {
       label: 'Outstanding AR',
       value: fmt$(port.totalOutstanding),
       sub: `${companies.filter(c => c.latest_outstanding > 0).length} companies with gaps`,
-      border: '#D9534F',
+      border: '#B91C1C',
     },
     {
       label: 'Collection Rate',
       value: pct(port.rate),
       sub: port.rate >= 95 ? '✅ On Target' : '⚠️ Below 95% target',
-      border: port.rate >= 95 ? '#22A06B' : '#F5A623',
+      border: port.rate >= 95 ? '#166534' : '#F5A623',
     },
     {
       label: 'Vacancy Loss / Month',
       value: fmt$(port.vacLoss),
       sub: `${port.total - port.occupied} vacant / notice units`,
-      border: '#D9534F',
+      border: '#B91C1C',
     },
     {
       label: 'Total Units',
@@ -500,7 +500,7 @@ export default function RentalArDashboard() {
       label: 'Zero-Pay Companies',
       value: String(companies.filter(c => c.billed_per_month > 0 && c.latest_collected === 0).length),
       sub: companies.filter(c => c.billed_per_month > 0 && c.latest_collected === 0).map(c => c.company_name).join(', ') || 'None',
-      border: '#D9534F',
+      border: '#B91C1C',
     },
     {
       label: 'Best Performer',
@@ -509,7 +509,7 @@ export default function RentalArDashboard() {
         const b = [...companies].filter(c => c.latest_collected > 0).sort((a, b) => b.latest_rate - a.latest_rate)[0];
         return b ? `${pct(b.latest_rate)} · ${fmt$(b.latest_collected)}` : 'No data yet';
       })(),
-      border: '#22A06B',
+      border: '#166534',
     },
     {
       label: `Month-End Shortfall${currentMonthShortfall ? ' · ' + short(currentMonthShortfall.month) : ''}`,
@@ -517,7 +517,7 @@ export default function RentalArDashboard() {
       sub: currentMonthShortfall
         ? `${fmt$(currentMonthShortfall.collected)} collected of ${fmt$(currentMonthShortfall.billed)} billed`
         : 'No monthly data',
-      border: (currentMonthShortfall?.shortfall ?? 0) > 0 ? '#D9534F' : '#22A06B',
+      border: (currentMonthShortfall?.shortfall ?? 0) > 0 ? '#B91C1C' : '#166534',
     },
     {
       label: 'Partial-Pay Companies',
@@ -525,7 +525,7 @@ export default function RentalArDashboard() {
       sub: partialPayCount > 0
         ? companies.filter(c => c.latest_collected > 0 && c.latest_collected < c.billed_per_month).map(c => c.company_name).slice(0, 3).join(', ')
         : 'All paying in full or zero-pay',
-      border: partialPayCount > 0 ? '#F5A623' : '#22A06B',
+      border: partialPayCount > 0 ? '#F5A623' : '#166534',
     },
     {
       label: 'Top 5 by Outstanding AR',
@@ -533,7 +533,7 @@ export default function RentalArDashboard() {
       sub: top5Outstanding.length > 0
         ? top5Outstanding.map((c, i) => `${i + 1}. ${c.company_name.length > 12 ? c.company_name.slice(0, 11) + '…' : c.company_name}`).join(' · ')
         : 'No outstanding AR',
-      border: top5Outstanding.length > 0 ? '#D9534F' : '#22A06B',
+      border: top5Outstanding.length > 0 ? '#B91C1C' : '#166534',
     },
     {
       label: 'Occupied — Billing Gap',
@@ -541,7 +541,7 @@ export default function RentalArDashboard() {
       sub: occupiedBillingGap.unbilled > 0
         ? `⚠ ${occupiedBillingGap.unbilled} occupied units have no billing data`
         : '✓ All occupied units have billing data',
-      border: occupiedBillingGap.unbilled > 0 ? '#F5A623' : '#22A06B',
+      border: occupiedBillingGap.unbilled > 0 ? '#F5A623' : '#166534',
     },
   ] : [];
 
@@ -644,9 +644,9 @@ export default function RentalArDashboard() {
               </div>
               {realizationPct !== null && (
                 <div style={{ fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 20,
-                  background: realizationPct >= 95 ? 'rgba(34,160,107,0.12)' : realizationPct >= 80 ? 'rgba(242,193,78,0.18)' : 'rgba(217,83,79,0.12)',
+                  background: realizationPct >= 95 ? 'rgba(22,101,52,0.12)' : realizationPct >= 80 ? 'rgba(242,193,78,0.18)' : 'rgba(185,28,28,0.12)',
                   color:      realizationPct >= 95 ? '#065F46' : realizationPct >= 80 ? '#92400E' : '#991B1B',
-                  border: `1px solid ${realizationPct >= 95 ? 'rgba(34,160,107,0.3)' : realizationPct >= 80 ? 'rgba(242,193,78,0.4)' : 'rgba(217,83,79,0.3)'}`,
+                  border: `1px solid ${realizationPct >= 95 ? 'rgba(22,101,52,0.3)' : realizationPct >= 80 ? 'rgba(242,193,78,0.4)' : 'rgba(185,28,28,0.3)'}`,
                   fontVariantNumeric: 'tabular-nums lining-nums', flexShrink: 0 }}>
                   {realizationPct.toFixed(1)}% realization
                 </div>
@@ -699,11 +699,11 @@ export default function RentalArDashboard() {
                     <Area type="monotone" dataKey="collectedBase" stackId="gap" fill="transparent" stroke="none" legendType="none" />
                     <Area type="monotone" dataKey="gapFill"       stackId="gap" fill="rgba(235,87,87,0.12)" stroke="none" legendType="none" />
                     <Line type="monotone" dataKey="billed"    name="Billed"    stroke="#4E79A7" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 1.5, stroke: '#4E79A7', fill: '#fff' }} />
-                    <Line type="monotone" dataKey="collected" name="Collected" stroke="#22A06B" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 1.5, stroke: '#22A06B', fill: '#fff' }} />
+                    <Line type="monotone" dataKey="collected" name="Collected" stroke="#166534" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 1.5, stroke: '#166534', fill: '#fff' }} />
                   </ComposedChart>
                 </ResponsiveContainer>
                 <div style={{ display: 'flex', gap: 20, marginTop: 10, alignItems: 'center' }}>
-                  {[['#4E79A7','Billed'],['#22A06B','Collected']].map(([c,l]) => (
+                  {[['#4E79A7','Billed'],['#166534','Collected']].map(([c,l]) => (
                     <span key={l} style={{ fontSize: 12, color: '#4B5563', display: 'flex', alignItems: 'center', gap: 5, fontWeight: 500 }}>
                       <span style={{ width: 20, height: 3, borderRadius: 2, background: c, display: 'inline-block' }} />{l}
                     </span>
@@ -776,7 +776,7 @@ export default function RentalArDashboard() {
         <div style={CARD}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>Revenue vs Vacancy Loss</div>
           <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 14 }}>
-            Actual billed vs maximum potential · current vacancy loss: <strong style={{ color: '#D9534F' }}>{fmt$(port.vacLoss)}/mo</strong> · based on registry occupancy snapshot
+            Actual billed vs maximum potential · current vacancy loss: <strong style={{ color: '#B91C1C' }}>{fmt$(port.vacLoss)}/mo</strong> · based on registry occupancy snapshot
           </div>
           <ResponsiveContainer width="100%" height={180}>
             <ComposedChart
@@ -788,7 +788,7 @@ export default function RentalArDashboard() {
               <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} tickFormatter={(v: number) => v === 0 ? '$0' : v >= 1_000_000 ? `$${(v/1_000_000).toFixed(1)}M` : `$${(v/1000).toFixed(0)}k`} axisLine={false} tickLine={false} width={44} />
               <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #E8DEC8', background: '#FBF6EE' }} formatter={(v: number, name: string) => [fmt$(v), name]} />
               <Area type="monotone" dataKey="billed"        stackId="vac" fill="transparent"            stroke="none" legendType="none" />
-              <Area type="monotone" dataKey="vacancyLoss"   stackId="vac" fill="rgba(217,83,79,0.12)"  stroke="rgba(217,83,79,0.3)" strokeWidth={0.5} name="Vacancy Loss" />
+              <Area type="monotone" dataKey="vacancyLoss"   stackId="vac" fill="rgba(185,28,28,0.12)"  stroke="rgba(185,28,28,0.3)" strokeWidth={0.5} name="Vacancy Loss" />
               <Line type="monotone" dataKey="potential"     name="Potential Revenue" stroke="#9CA3AF" strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
               <Line type="monotone" dataKey="billed"        name="Actual Billed"    stroke="#4E79A7" strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 1.5, stroke: '#4E79A7', fill: '#fff' }} />
             </ComposedChart>
@@ -801,7 +801,7 @@ export default function RentalArDashboard() {
               <span style={{ width: 20, height: 2, background: '#9CA3AF', borderRadius: 2, display: 'inline-block', borderTop: '2px dashed #9CA3AF' }} />Potential Revenue
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ width: 12, height: 10, background: 'rgba(217,83,79,0.20)', borderRadius: 2, display: 'inline-block' }} />Vacancy Loss Gap
+              <span style={{ width: 12, height: 10, background: 'rgba(185,28,28,0.20)', borderRadius: 2, display: 'inline-block' }} />Vacancy Loss Gap
             </span>
           </div>
         </div>
@@ -821,7 +821,7 @@ export default function RentalArDashboard() {
               <YAxis dataKey="company" type="category" tick={{ fontSize: 11, fill: '#374151' }} axisLine={false} tickLine={false} />
               <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} formatter={(v: number, _, p) => [fmt$(v), `${p.payload?.full} · Outstanding`]} />
               <Bar dataKey="ar" radius={[0,4,4,0]} label={{ position: 'right', fontSize: 10, fill: '#6b7280', formatter: (v: number) => fmt$(v) }}>
-                {outstandingData.map((_, i) => <Cell key={i} fill={['#D9534F','#F5A623','#F2C94C'][Math.min(i, 2)]} />)}
+                {outstandingData.map((_, i) => <Cell key={i} fill={['#B91C1C','#F5A623','#F2C94C'][Math.min(i, 2)]} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -829,7 +829,7 @@ export default function RentalArDashboard() {
       )}
 
       {!!port && outstandingData.length === 0 && companies.some(c => c.latest_collected > 0) && (
-        <div style={{ ...CARD, textAlign: 'center', color: '#22A06B', fontSize: 13, fontWeight: 600 }}>
+        <div style={{ ...CARD, textAlign: 'center', color: '#166534', fontSize: 13, fontWeight: 600 }}>
           ✅ No outstanding AR — all companies current
         </div>
       )}
@@ -842,11 +842,11 @@ export default function RentalArDashboard() {
           {heatmapData.months.length > 0 && heatmapData.rows.length > 0 && (() => {
             const heatBg = (rate: number | null) => {
               if (rate === null) return '#F3F4F6';
-              if (rate >= 95)   return '#22A06B';
-              if (rate >= 80)   return '#86EFAC';
+              if (rate >= 95)   return '#166534';
+              if (rate >= 80)   return '#16A34A';
               if (rate >= 60)   return '#FCD34D';
               if (rate >= 30)   return '#F5A623';
-              return '#D9534F';
+              return '#B91C1C';
             };
             const heatFg = (rate: number | null) => {
               if (rate === null) return '#9CA3AF';
@@ -900,7 +900,7 @@ export default function RentalArDashboard() {
                   </tbody>
                 </table>
                 <div style={{ display: 'flex', gap: 10, marginTop: 12, alignItems: 'center', fontSize: 11, color: '#78716C', flexWrap: 'wrap' }}>
-                  {([['#22A06B','≥95%'],['#86EFAC','80–94%'],['#FCD34D','60–79%'],['#F5A623','30–59%'],['#D9534F','<30%'],['#F3F4F6','No data']] as [string,string][]).map(([c, l]) => (
+                  {([['#166534','≥95%'],['#16A34A','80–94%'],['#FCD34D','60–79%'],['#F5A623','30–59%'],['#B91C1C','<30%'],['#F3F4F6','No data']] as [string,string][]).map(([c, l]) => (
                     <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                       <span style={{ width: 10, height: 10, borderRadius: 2, background: c, display: 'inline-block', border: '1px solid rgba(0,0,0,0.1)' }} />
                       {l}
@@ -1033,7 +1033,7 @@ export default function RentalArDashboard() {
       {/* ══ NEW SECTION 2 — AR BY PROPERTY (ranked bar, color = collection rate) ═ */}
       {!!port && propertyBarData.length > 0 && (() => {
         const rateColor = (rate: number) =>
-          rate >= 95 ? '#22A06B' : rate >= 75 ? '#F5A623' : '#D9534F';
+          rate >= 95 ? '#166534' : rate >= 75 ? '#F5A623' : '#B91C1C';
         const maxOutstanding = Math.max(...propertyBarData.map(d => d.outstanding), 1);
         return (
           <div style={CARD}>
@@ -1041,9 +1041,9 @@ export default function RentalArDashboard() {
             <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 14 }}>
               Bar size = Outstanding AR · Color = Collection Rate · Click to filter dashboard
               <span style={{ marginLeft: 12 }}>
-                <span style={{ color: '#22A06B', fontWeight: 600 }}>■</span> ≥95%
+                <span style={{ color: '#166534', fontWeight: 600 }}>■</span> ≥95%
                 <span style={{ color: '#F5A623', fontWeight: 600, marginLeft: 8 }}>■</span> 75–94%
-                <span style={{ color: '#D9534F', fontWeight: 600, marginLeft: 8 }}>■</span> &lt;75%
+                <span style={{ color: '#B91C1C', fontWeight: 600, marginLeft: 8 }}>■</span> &lt;75%
               </span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1106,7 +1106,7 @@ export default function RentalArDashboard() {
                 />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Line type="monotone" dataKey="31–60" name="31–60 days" stroke="#F5A623" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-                <Line type="monotone" dataKey="61–90" name="61–90 days" stroke="#EB5757" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="61–90" name="61–90 days" stroke="#C0392B" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
                 <Line type="monotone" dataKey="91+"   name="91+ days"   stroke="#991B1B" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
               </ComposedChart>
             </ResponsiveContainer>
@@ -1130,7 +1130,7 @@ export default function RentalArDashboard() {
                 <div style={{ fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>{f.company} · {f.month}</div>
                 <div style={{ color: '#2F80ED' }}>Rent Receivable: {fmt$(f.rent_receivable)}</div>
                 <div style={{ color: '#92400E' }}>P&L: {fmt$(f.pl)}</div>
-                <div style={{ color: '#D9534F', fontWeight: 600, marginTop: 2 }}>Δ {f.diff_pct}% difference</div>
+                <div style={{ color: '#B91C1C', fontWeight: 600, marginTop: 2 }}>Δ {f.diff_pct}% difference</div>
               </div>
             ))}
           </div>
@@ -1390,7 +1390,7 @@ export default function RentalArDashboard() {
                 {/* Bucket totals */}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
                   {[
-                    { label: 'Current', v: qbPreview.portfolio_totals.current, c: '#22A06B' },
+                    { label: 'Current', v: qbPreview.portfolio_totals.current, c: '#166534' },
                     { label: '1–30 Days', v: qbPreview.portfolio_totals.days_1_30, c: '#F5A623' },
                     { label: '31–60 Days', v: qbPreview.portfolio_totals.days_31_60, c: '#E97316' },
                     { label: '61–90 Days', v: qbPreview.portfolio_totals.days_61_90, c: '#DC2626' },
@@ -1430,7 +1430,7 @@ export default function RentalArDashboard() {
                     disabled={qbConfirming}
                     style={{
                       padding: '8px 22px', borderRadius: 6, border: 'none',
-                      background: qbConfirming ? '#86EFAC' : 'linear-gradient(135deg,#22A06B,#16A34A)',
+                      background: qbConfirming ? '#86EFAC' : 'linear-gradient(135deg,#166534,#16A34A)',
                       color: '#fff', fontWeight: 700, fontSize: 13, cursor: qbConfirming ? 'not-allowed' : 'pointer',
                       letterSpacing: '0.02em',
                     }}
@@ -1457,7 +1457,7 @@ export default function RentalArDashboard() {
           <div style={{ padding: 16 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10, marginBottom: 14 }}>
               {[
-                { label: 'Overdue AR (30+)', value: fmt$(qbAging.portfolio_totals.overdue), border: '#D9534F', sub: 'Excludes current bucket' },
+                { label: 'Overdue AR (30+)', value: fmt$(qbAging.portfolio_totals.overdue), border: '#B91C1C', sub: 'Excludes current bucket' },
                 { label: '30+ Days Overdue', value: fmt$(qbAging.portfolio_totals.days_1_30 + qbAging.portfolio_totals.days_31_60 + qbAging.portfolio_totals.days_61_90 + qbAging.portfolio_totals.days_91_plus), border: '#F5A623', sub: '1-30 + 31-60 + 61-90 + 91+' },
                 { label: '60+ Days Overdue', value: fmt$(qbAging.portfolio_totals.days_61_90 + qbAging.portfolio_totals.days_91_plus), border: '#E97316', sub: '61-90 + 91+ days' },
                 { label: '90+ Days Overdue', value: fmt$(qbAging.portfolio_totals.days_91_plus), border: '#991B1B', sub: 'Critical — 91+ days' },
@@ -1493,7 +1493,7 @@ export default function RentalArDashboard() {
                     <YAxis type="category" dataKey="name" width={60} tick={{ fontSize: 11 }} />
                     <Tooltip formatter={(v: number) => fmt$(v)} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="Current"  stackId="a" fill="#22A06B" />
+                    <Bar dataKey="Current"  stackId="a" fill="#166534" />
                     <Bar dataKey="1-30"    stackId="a" fill="#F5A623" />
                     <Bar dataKey="31-60"   stackId="a" fill="#E97316" />
                     <Bar dataKey="61-90"   stackId="a" fill="#DC2626" />
@@ -1512,15 +1512,15 @@ export default function RentalArDashboard() {
                     .map((co, i) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, background: '#F5F0E8', borderRadius: 5, padding: '6px 10px' }}>
                         <span style={{ fontWeight: 600, color: '#1C1917', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{co.company_name}</span>
-                        <span style={{ color: '#22A06B', marginLeft: 8, minWidth: 60, textAlign: 'right' }}>{fmt$(co.current)}</span>
-                        <span style={{ color: co.overdue > 0 ? '#D9534F' : '#9CA3AF', marginLeft: 6, minWidth: 60, textAlign: 'right', fontWeight: co.overdue > 0 ? 700 : 400 }}>{co.overdue > 0 ? fmt$(co.overdue) : '—'}</span>
+                        <span style={{ color: '#166534', marginLeft: 8, minWidth: 60, textAlign: 'right' }}>{fmt$(co.current)}</span>
+                        <span style={{ color: co.overdue > 0 ? '#B91C1C' : '#9CA3AF', marginLeft: 6, minWidth: 60, textAlign: 'right', fontWeight: co.overdue > 0 ? 700 : 400 }}>{co.overdue > 0 ? fmt$(co.overdue) : '—'}</span>
                       </div>
                     ))
                   }
                 </div>
                 <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 10, color: '#9CA3AF' }}>
-                  <span style={{ color: '#22A06B' }}>■ Current</span>
-                  <span style={{ color: '#D9534F' }}>■ Overdue (30+)</span>
+                  <span style={{ color: '#166534' }}>■ Current</span>
+                  <span style={{ color: '#B91C1C' }}>■ Overdue (30+)</span>
                 </div>
               </div>
             </div>
@@ -1544,7 +1544,7 @@ export default function RentalArDashboard() {
                     <YAxis tickFormatter={v => `$${(v/1000).toFixed(0)}K`} tick={{ fontSize: 10 }} />
                     <Tooltip formatter={(v: number) => fmt$(v)} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="Current" stackId="a" fill="#22A06B" />
+                    <Bar dataKey="Current" stackId="a" fill="#166534" />
                     <Bar dataKey="1-30"   stackId="a" fill="#F5A623" />
                     <Bar dataKey="31-60"  stackId="a" fill="#E97316" />
                     <Bar dataKey="61-90"  stackId="a" fill="#DC2626" />

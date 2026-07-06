@@ -35,7 +35,7 @@ const COMPANY_STYLES: { Icon: IconComp; bg: string; text: string }[] = [
   { Icon: Home,      bg: 'bg-blue-100',    text: 'text-blue-700'    },
   { Icon: Hotel,     bg: 'bg-amber-100',   text: 'text-amber-700'   },
   { Icon: Building,  bg: 'bg-indigo-100',  text: 'text-indigo-700'  },
-  { Icon: House,     bg: 'bg-teal-100',    text: 'text-teal-700'    },
+  { Icon: House,     bg: 'bg-teal-100',    text: 'text-teal-900'    },
   { Icon: Warehouse, bg: 'bg-cyan-100',    text: 'text-cyan-700'    },
   { Icon: Landmark,  bg: 'bg-violet-100',  text: 'text-violet-700'  },
   { Icon: Store,     bg: 'bg-rose-100',    text: 'text-rose-700'    },
@@ -156,7 +156,7 @@ export default function RentalCompanies() {
 
   if (loading) return <LoadingSkeleton rows={6} />;
   if (error) return (
-    <div className="text-red-600 p-4">
+    <div className="text-red-700 p-4">
       {error}
       <button className="ml-4 underline" onClick={fetchCompanies}>Retry</button>
     </div>
@@ -230,7 +230,7 @@ export default function RentalCompanies() {
             >
               Cancel
             </button>
-            {addError && <span className="text-xs text-red-500">{addError}</span>}
+            {addError && <span className="text-xs text-red-700">{addError}</span>}
           </div>
         )}
 
@@ -303,7 +303,7 @@ export default function RentalCompanies() {
                       </button>
                       <button
                         onClick={e => { e.stopPropagation(); handleDelete(c.id, c.company_name); }}
-                        className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-500 transition-colors flex-shrink-0"
+                        className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-700 transition-colors flex-shrink-0"
                         title="Delete company"
                       >
                         <Trash2 size={14} />
@@ -332,13 +332,13 @@ export default function RentalCompanies() {
                       </div>
                       <div>
                         <p className="text-gray-400">NOI</p>
-                        <p className={`font-semibold ${c.noi_this_month < 0 ? 'text-red-600' : 'text-green-700'}`}>
+                        <p className={`font-semibold ${c.noi_this_month < 0 ? 'text-red-700' : 'text-green-800'}`}>
                           {fmtUSD(c.noi_this_month)}
                         </p>
                       </div>
                       <div>
                         <p className="text-gray-400">Arrears</p>
-                        <p className={`font-semibold ${c.arrears_total > 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                        <p className={`font-semibold ${c.arrears_total > 0 ? 'text-red-700' : 'text-gray-600'}`}>
                           {c.arrears_total > 0 ? fmtUSD(c.arrears_total) : '—'}
                         </p>
                       </div>

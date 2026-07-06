@@ -53,7 +53,7 @@ const SCORE_PILL: Record<string, string> = {
 };
 
 const COND_PILL: Record<string, string> = {
-  ok:             'bg-green-100 text-green-700',
+  ok:             'bg-green-100 text-green-800',
   damaged:        'bg-red-100 text-red-700',
   missing:        'bg-gray-100 text-gray-700',
   needs_cleaning: 'bg-amber-100 text-amber-700',
@@ -144,7 +144,7 @@ export default function RentalInspections() {
   };
 
   if (loading) return <LoadingSkeleton />;
-  if (error)   return <p className="text-red-500 p-4">{error}</p>;
+  if (error)   return <p className="text-red-700 p-4">{error}</p>;
 
   return (
     <div className="space-y-6">

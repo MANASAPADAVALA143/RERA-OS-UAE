@@ -45,7 +45,7 @@ function loadDiscounts(): Discount[] {
 function saveDiscounts(d: Discount[]) { localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); }
 
 const TYPE_BADGE: Record<DiscountType,string>    = { promotional:'bg-purple-100 text-purple-700', fixed:'bg-blue-100 text-blue-700', percentage:'bg-amber-100 text-amber-700' };
-const STATUS_BADGE: Record<DiscountStatus,string> = { active:'bg-green-100 text-green-700', expired:'bg-gray-100 text-gray-500', pending:'bg-blue-100 text-blue-700' };
+const STATUS_BADGE: Record<DiscountStatus,string> = { active:'bg-green-100 text-green-800', expired:'bg-gray-100 text-gray-500', pending:'bg-blue-100 text-blue-700' };
 
 function buildAiRec(u: typeof VACANT_RECS[0]): string {
   return (
@@ -362,7 +362,7 @@ export default function RentalDiscounts() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label:'Active Discounts',    value:String(kpis.count),    sub:'currently running',      color:'text-gray-900' },
-          { label:'Total Discount Value',value:fmt(kpis.value)+'/mo', sub:'monthly revenue impact', color:'text-red-600'  },
+          { label:'Total Discount Value',value:fmt(kpis.value)+'/mo', sub:'monthly revenue impact', color:'text-red-700'  },
           { label:'Units with Discount', value:String(kpis.units),    sub:'across portfolio',       color:'text-gray-900' },
           { label:'Avg Discount %',      value:`${kpis.avgPct}%`,     sub:'percentage-type only',   color:'text-amber-600'},
         ].map(k => (
@@ -434,9 +434,9 @@ export default function RentalDiscounts() {
                   <td className="px-3 py-2">
                     <span className={`px-2 py-0.5 rounded-full font-medium capitalize ${STATUS_BADGE[d.status]}`}>{d.status}</span>
                   </td>
-                  <td className="px-3 py-2 font-mono text-right text-red-600 font-medium">{fmt(d.monthlyImpact)}</td>
+                  <td className="px-3 py-2 font-mono text-right text-red-700 font-medium">{fmt(d.monthlyImpact)}</td>
                   <td className="px-3 py-2">
-                    <button onClick={()=>removeDiscount(d.id)} title="Remove" className="text-gray-300 hover:text-red-500 transition-colors">
+                    <button onClick={()=>removeDiscount(d.id)} title="Remove" className="text-gray-300 hover:text-red-700 transition-colors">
                       <X size={14}/>
                     </button>
                   </td>
@@ -459,7 +459,7 @@ export default function RentalDiscounts() {
             <div key={u.unit} className="border border-gray-200 rounded-xl p-4 space-y-3">
               <div>
                 <p className="font-semibold text-gray-900">Unit {u.unit} — Vacant {u.vacantMonths} months</p>
-                <p className="text-sm text-red-600 font-medium">Revenue lost: {fmt(u.lost)}</p>
+                <p className="text-sm text-red-700 font-medium">Revenue lost: {fmt(u.lost)}</p>
                 <p className="text-xs text-gray-500 mt-0.5">{u.building} · Market rent: {fmt(u.marketRent)}/mo</p>
               </div>
               <div className="space-y-1.5">
@@ -470,7 +470,7 @@ export default function RentalDiscounts() {
                   { label:`C) $200 off first 3 months`,          sub:`low-risk · total cost: $600` },
                 ].map((opt,i)=>(
                   <div key={i} className="flex items-start gap-2 p-2 bg-gray-50 rounded-lg">
-                    <span className="text-xs font-semibold text-green-700 whitespace-nowrap">{opt.label}</span>
+                    <span className="text-xs font-semibold text-green-800 whitespace-nowrap">{opt.label}</span>
                     <span className="text-xs text-gray-500">→ {opt.sub}</span>
                   </div>
                 ))}
@@ -547,7 +547,7 @@ export default function RentalDiscounts() {
               <p className="text-xs text-gray-400 mt-1">
                 Market rent: <span className="font-medium text-gray-700">{fmt(calcRent)}/mo</span>
                 {vacAnalysis?.currentlyVacant && (
-                  <span className="ml-2 text-red-500 font-medium">
+                  <span className="ml-2 text-red-700 font-medium">
                     · Vacant {vacAnalysis.currentVacancyRun} mo
                   </span>
                 )}
@@ -584,13 +584,13 @@ export default function RentalDiscounts() {
               </div>
               <div className="flex justify-between text-gray-600">
                 <span>Discount ({calcPct}% = {fmt(cDisMo)}/mo × {cMonths} months)</span>
-                <span className="font-mono text-red-600">−{fmt(cCost)} total</span>
+                <span className="font-mono text-red-700">−{fmt(cCost)} total</span>
               </div>
 
               <div className="border-t border-gray-200 pt-2 mt-2 space-y-1.5">
                 <div className="flex justify-between font-medium">
                   <span>Cost of discount ({cMonths} mo)</span>
-                  <span className="font-mono text-red-600">{fmt(cCost)}</span>
+                  <span className="font-mono text-red-700">{fmt(cCost)}</span>
                 </div>
 
                 {/* Real vacancy comparison */}
@@ -619,7 +619,7 @@ export default function RentalDiscounts() {
               </div>
 
               {/* Net benefit */}
-              <div className={`flex justify-between text-base font-bold pt-1 border-t border-gray-200 ${cBenefit > 0 ? 'text-green-700' : 'text-red-700'}`}>
+              <div className={`flex justify-between text-base font-bold pt-1 border-t border-gray-200 ${cBenefit > 0 ? 'text-green-800' : 'text-red-700'}`}>
                 <span>Net benefit of discounting</span>
                 <span>{fmt(cBenefit)} {cBenefit > 0 ? '✅' : '❌'}</span>
               </div>

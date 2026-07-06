@@ -123,7 +123,7 @@ export default function RentalReports() {
       <Card>
         <div className="flex items-start gap-4">
           <div className="p-3 bg-green-50 rounded-xl">
-            <FileSpreadsheet size={28} className="text-green-700" />
+            <FileSpreadsheet size={28} className="text-green-800" />
           </div>
           <div className="flex-1 space-y-2">
             <h3 className="font-bold text-lg text-gray-800">CFO Dashboard Export</h3>
@@ -134,7 +134,7 @@ export default function RentalReports() {
             <p className="text-xs text-gray-400">
               Sheets: DASHBOARD · AR &amp; AP · OpEx Composition · COMPLIANCE
             </p>
-            {exportError && <p className="text-xs text-red-600">{exportError}</p>}
+            {exportError && <p className="text-xs text-red-700">{exportError}</p>}
             <button
               onClick={downloadCfoDashboard}
               disabled={exporting}
@@ -153,7 +153,7 @@ export default function RentalReports() {
             <div className="space-y-3">
               <h3 className="font-bold text-primary">{report.title}</h3>
               <p className="text-sm text-gray-500">{report.description}</p>
-              {errors[report.id] && <p className="text-xs text-red-600">{errors[report.id]}</p>}
+              {errors[report.id] && <p className="text-xs text-red-700">{errors[report.id]}</p>}
               <button
                 onClick={() => generateCSV(report)}
                 disabled={generating === report.id}

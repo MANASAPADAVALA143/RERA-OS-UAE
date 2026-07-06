@@ -251,7 +251,7 @@ export default function RentalPortfolioUpload() {
             'AR Dashboard — tenant aging & bucket breakdown',
           ].map(item => (
             <div key={item} className="text-xs flex items-center gap-1.5" style={{ color: '#92400E' }}>
-              <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#18B7A0' }} />
+              <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#0F766E' }} />
               {item}
             </div>
           ))}
@@ -275,10 +275,10 @@ export default function RentalPortfolioUpload() {
             <div className="grid grid-cols-4 gap-3 mb-5">
               {([
                 { label: 'Total Units',     value: preview.portfolio.total_units,                            color: 'text-blue-600'  },
-                { label: 'Occupied',        value: preview.portfolio.occupied,                               color: 'text-green-600' },
-                { label: 'Vacant',          value: preview.portfolio.vacant,                                 color: 'text-red-500'   },
-                { label: 'Total Collected', value: fmtUSD(preview.portfolio.total_collected),               color: 'text-green-600' },
-                { label: 'Occupancy %',     value: `${preview.portfolio.occupancy_rate}%`,                  color: preview.portfolio.occupancy_rate >= 80 ? 'text-green-600' : 'text-amber-600' },
+                { label: 'Occupied',        value: preview.portfolio.occupied,                               color: 'text-green-800' },
+                { label: 'Vacant',          value: preview.portfolio.vacant,                                 color: 'text-red-700'   },
+                { label: 'Total Collected', value: fmtUSD(preview.portfolio.total_collected),               color: 'text-green-800' },
+                { label: 'Occupancy %',     value: `${preview.portfolio.occupancy_rate}%`,                  color: preview.portfolio.occupancy_rate >= 80 ? 'text-green-800' : 'text-amber-600' },
                 { label: 'Vacancy Loss',    value: fmtUSD(preview.portfolio.total_vacancy_loss),            color: 'text-amber-600' },
                 { label: 'Gross Potential', value: fmtUSD(preview.portfolio.gross_potential),               color: 'text-blue-600'  },
                 { label: 'Companies',       value: preview.portfolio.companies_parsed,                       color: 'text-gray-700'  },
@@ -310,10 +310,10 @@ export default function RentalPortfolioUpload() {
                       <td className="py-2 px-3 font-medium text-gray-800">{co}</td>
                       <td className="py-2 px-3 text-right font-mono">{data.total_units}</td>
                       <td className={`py-2 px-3 text-right font-mono font-medium ${
-                        data.occupancy_rate >= 85 ? 'text-green-600' :
-                        data.occupancy_rate >= 70 ? 'text-amber-600' : 'text-red-500'
+                        data.occupancy_rate >= 85 ? 'text-green-800' :
+                        data.occupancy_rate >= 70 ? 'text-amber-600' : 'text-red-700'
                       }`}>{data.occupancy_rate}%</td>
-                      <td className="py-2 px-3 text-right font-mono text-green-700">{fmtUSD(data.collected)}</td>
+                      <td className="py-2 px-3 text-right font-mono text-green-800">{fmtUSD(data.collected)}</td>
                       <td className="py-2 px-3 text-right font-mono text-amber-600">{fmtUSD(data.vacancy_loss)}</td>
                       <td className="py-2 px-3 text-gray-400 text-[10px]">
                         {data.vacant_units.slice(0, 4).join(', ')}

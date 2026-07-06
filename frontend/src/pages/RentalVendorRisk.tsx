@@ -43,7 +43,7 @@ function pct(n: number) {
 function concentrationBadge(flag: boolean) {
   return flag
     ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700 font-medium"><AlertTriangle size={11} />High</span>
-    : <span className="inline-flex px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">OK</span>;
+    : <span className="inline-flex px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-800">OK</span>;
 }
 
 function repeatBadge(flag: boolean) {
@@ -113,7 +113,7 @@ export default function RentalVendorRisk() {
   }
 
   if (loading) return <LoadingSkeleton rows={6} />;
-  if (error) return <p className="text-red-600 p-4">{error}</p>;
+  if (error) return <p className="text-red-700 p-4">{error}</p>;
   if (!data) return null;
 
   return (
@@ -283,7 +283,7 @@ export default function RentalVendorRisk() {
                     <td className="px-3 py-2 text-gray-500">{v.vendor_category ? CAT_LABELS[v.vendor_category] ?? v.vendor_category : '—'}</td>
                     <td className="px-3 py-2 text-right">
                       <button onClick={() => deleteVendor(v.id)}
-                        className="text-red-500 hover:text-red-700 text-xs">Remove</button>
+                        className="text-red-700 hover:text-red-700 text-xs">Remove</button>
                     </td>
                   </tr>
                 ))}

@@ -201,7 +201,7 @@ export default function RentalVacancy() {
                   <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#78716C' }} />
                   <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12, fill: '#78716C' }} />
                   <Tooltip formatter={(v: number) => fmtUSD(v)} {...TT} />
-                  <Bar dataKey="loss" name="Vacancy Loss" fill="#E76F6F" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="loss" name="Vacancy Loss" fill="#C0392B" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

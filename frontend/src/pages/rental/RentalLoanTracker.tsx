@@ -1,4 +1,4 @@
-﻿import { useMemo, useRef, useState, useEffect } from 'react';
+import { useMemo, useRef, useState, useEffect } from 'react';
 import { Download, Zap, CheckCircle2, TrendingDown, Plus, X, FileSpreadsheet, DollarSign, Briefcase, AlertCircle, TrendingUp, Calendar } from 'lucide-react';
 import { useRentalCfoData, dscrStatus } from '../../hooks/useRentalCfoData';
 import { LoadingSkeleton } from '../../components/ui/Table';
@@ -86,7 +86,7 @@ function AddLoanDrawer({ open, onClose, onSaved, companyNames }: {
   }) => (
     <div>
       <label className="block text-xs font-semibold text-gray-600 mb-1">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+        {label}{required && <span className="text-red-700 ml-0.5">*</span>}
       </label>
       <input
         type={type} value={form[id]} onChange={e => set(id, e.target.value)}
@@ -107,13 +107,13 @@ function AddLoanDrawer({ open, onClose, onSaved, companyNames }: {
         </div>
 
         <form onSubmit={submit} className="flex-1 overflow-y-auto p-6 space-y-5">
-          {err && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</p>}
+          {err && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</p>}
 
           <div className="space-y-1">
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Property</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Company<span className="text-red-500 ml-0.5">*</span></label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Company<span className="text-red-700 ml-0.5">*</span></label>
                 <input list="co-opts" value={form.company_name} onChange={e => { set('company_name', e.target.value); set('property_name', e.target.value); }}
                   placeholder="ABC LLC"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent" />
@@ -422,7 +422,7 @@ export default function RentalLoanTracker() {
     })), [dscrHealth]);
 
   if (loading) return <LoadingSkeleton rows={10} />;
-  if (error) return <div className="text-red-600 p-4">{error}<button className="ml-3 underline" onClick={reload}>Retry</button></div>;
+  if (error) return <div className="text-red-700 p-4">{error}<button className="ml-3 underline" onClick={reload}>Retry</button></div>;
 
   return (
     <div className="space-y-6 -m-6 p-6" style={{ background: PT.pageBg }}>
@@ -497,12 +497,12 @@ export default function RentalLoanTracker() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Portfolio DSCR */}
         <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 12, padding: '16px 18px',
-          borderLeft: extKpis.portfolioDscr == null ? `3px solid ${PT.border}` : extKpis.portfolioDscr > 1.25 ? '3px solid #22A06B' : extKpis.portfolioDscr >= 1.0 ? '3px solid #F2C94C' : '3px solid #EB5757' }}>
+          borderLeft: extKpis.portfolioDscr == null ? `3px solid ${PT.border}` : extKpis.portfolioDscr > 1.25 ? '3px solid #166534' : extKpis.portfolioDscr >= 1.0 ? '3px solid #F2C94C' : '3px solid #C0392B' }}>
           <p style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 4 }}>Portfolio DSCR</p>
           {extKpis.portfolioDscr != null ? (
             <>
               <p style={{ fontSize: 30, fontWeight: 700, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums lining-nums',
-                color: extKpis.portfolioDscr > 1.25 ? '#22A06B' : extKpis.portfolioDscr >= 1.0 ? '#F2C94C' : '#EB5757' }}>
+                color: extKpis.portfolioDscr > 1.25 ? '#166534' : extKpis.portfolioDscr >= 1.0 ? '#F2C94C' : '#C0392B' }}>
                 {extKpis.portfolioDscr.toFixed(2)}x
               </p>
               <p style={{ fontSize: 12, color: PT.muted, marginTop: 4 }}>NOI {fmtUSD(extKpis.totalNoi)}/yr ÷ DS {fmtUSD(extKpis.totalDebtService)}/yr</p>
@@ -520,7 +520,7 @@ export default function RentalLoanTracker() {
           <p style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 4 }}>Wtd Avg Remaining Term</p>
           {extKpis.weightedAvgTerm != null ? (
             <>
-              <p style={{ fontSize: 30, fontWeight: 700, color: extKpis.weightedAvgTerm < 12 ? '#EB5757' : extKpis.weightedAvgTerm < 36 ? '#F2C94C' : PT.text, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums lining-nums' }}>
+              <p style={{ fontSize: 30, fontWeight: 700, color: extKpis.weightedAvgTerm < 12 ? '#C0392B' : extKpis.weightedAvgTerm < 36 ? '#F2C94C' : PT.text, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums lining-nums' }}>
                 {Math.round(extKpis.weightedAvgTerm)}mo
               </p>
               <p style={{ fontSize: 12, color: PT.muted, marginTop: 4 }}>~{(extKpis.weightedAvgTerm / 12).toFixed(1)} yrs · weighted by balance</p>
@@ -532,9 +532,9 @@ export default function RentalLoanTracker() {
 
         {/* Maturing in 12 months */}
         <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 12, padding: '16px 18px',
-          borderLeft: extKpis.maturingCount > 0 ? '3px solid #EB5757' : `1px solid ${PT.border}` }}>
+          borderLeft: extKpis.maturingCount > 0 ? '3px solid #C0392B' : `1px solid ${PT.border}` }}>
           <p style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 4 }}>Maturing ≤12 Months</p>
-          <p style={{ fontSize: 30, fontWeight: 700, lineHeight: 1.1, color: extKpis.maturingCount > 0 ? '#EB5757' : '#22A06B' }}>
+          <p style={{ fontSize: 30, fontWeight: 700, lineHeight: 1.1, color: extKpis.maturingCount > 0 ? '#C0392B' : '#166534' }}>
             {extKpis.maturingCount} loan{extKpis.maturingCount !== 1 ? 's' : ''}
           </p>
           <p style={{ fontSize: 12, color: PT.muted, marginTop: 4 }}>
@@ -548,7 +548,7 @@ export default function RentalLoanTracker() {
           {extKpis.avgLtv != null ? (
             <>
               <p style={{ fontSize: 30, fontWeight: 700, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums lining-nums',
-                color: extKpis.avgLtv <= 75 ? '#22A06B' : extKpis.avgLtv <= 85 ? '#F2C94C' : '#EB5757' }}>
+                color: extKpis.avgLtv <= 75 ? '#166534' : extKpis.avgLtv <= 85 ? '#F2C94C' : '#C0392B' }}>
                 {extKpis.avgLtv.toFixed(1)}%
               </p>
               <p style={{ fontSize: 12, color: PT.muted, marginTop: 4 }}>{extKpis.ltvCount} of {filtered.length} loans have property value</p>
@@ -568,7 +568,7 @@ export default function RentalLoanTracker() {
           <p style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 4 }}>Building Concentration Risk</p>
           {extKpis.topBuildingPct != null ? (
             <>
-              <p style={{ fontSize: 30, fontWeight: 700, color: extKpis.topBuildingPct > 50 ? '#EB5757' : extKpis.topBuildingPct > 33 ? '#F2C94C' : '#22A06B', fontVariantNumeric: 'tabular-nums lining-nums', lineHeight: 1.1 }}>
+              <p style={{ fontSize: 30, fontWeight: 700, color: extKpis.topBuildingPct > 50 ? '#C0392B' : extKpis.topBuildingPct > 33 ? '#F2C94C' : '#166534', fontVariantNumeric: 'tabular-nums lining-nums', lineHeight: 1.1 }}>
                 {extKpis.topBuildingPct.toFixed(0)}%
               </p>
               <p style={{ fontSize: 12, color: PT.muted, marginTop: 4 }}>Largest: {extKpis.topBuilding}</p>
@@ -579,7 +579,7 @@ export default function RentalLoanTracker() {
           <p style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 4 }}>Lender Concentration Risk</p>
           {extKpis.topLenderPct != null ? (
             <>
-              <p style={{ fontSize: 30, fontWeight: 700, color: extKpis.topLenderPct > 60 ? '#EB5757' : extKpis.topLenderPct > 40 ? '#F2C94C' : '#22A06B', fontVariantNumeric: 'tabular-nums lining-nums', lineHeight: 1.1 }}>
+              <p style={{ fontSize: 30, fontWeight: 700, color: extKpis.topLenderPct > 60 ? '#C0392B' : extKpis.topLenderPct > 40 ? '#F2C94C' : '#166534', fontVariantNumeric: 'tabular-nums lining-nums', lineHeight: 1.1 }}>
                 {extKpis.topLenderPct.toFixed(0)}%
               </p>
               <p style={{ fontSize: 12, color: PT.muted, marginTop: 4 }}>Largest lender: {extKpis.topLender}</p>
@@ -615,15 +615,15 @@ export default function RentalLoanTracker() {
               {filtered.map((l, idx) => {
                 const st = dscrStatus(l.dscr);
                 const rate = l.loan_interest_rate != null ? l.loan_interest_rate * 100 : null;
-                const rateColor = rate == null ? PT.muted : rate <= 6.5 ? '#22A06B' : '#F5A623';
+                const rateColor = rate == null ? PT.muted : rate <= 6.5 ? '#166534' : '#F5A623';
                 const now = new Date();
                 const matColor = (() => {
                   if (!l.loan_maturity_date) return PT.text;
                   const mat = new Date(l.loan_maturity_date);
                   const months = (mat.getFullYear() - now.getFullYear()) * 12 + mat.getMonth() - now.getMonth();
-                  return months < 12 ? '#D9534F' : PT.text;
+                  return months < 12 ? '#B91C1C' : PT.text;
                 })();
-                const dscrColor = l.dscr == null ? PT.muted : l.dscr < 1.0 ? '#D9534F' : l.dscr <= 1.25 ? '#F5A623' : '#22A06B';
+                const dscrColor = l.dscr == null ? PT.muted : l.dscr < 1.0 ? '#B91C1C' : l.dscr <= 1.25 ? '#F5A623' : '#166534';
                 return (
                   <tr key={l.id} style={{ background: idx % 2 === 0 ? PT.rowOdd : PT.rowEven, borderBottom: `1px solid ${PT.border}` }}>
                     <td style={{ padding: '9px 12px', fontSize: 13, color: PT.text }}>{l.company_name}</td>
@@ -633,7 +633,7 @@ export default function RentalLoanTracker() {
                     <td style={{ padding: '9px 12px', fontSize: 13, color: rateColor, textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums', fontWeight: 600 }}>{rate != null ? `${rate.toFixed(2)}%` : '—'}</td>
                     <td style={{ padding: '9px 12px', fontSize: 13, color: PT.text, textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums' }}>{l.loan_emi != null ? fmtUSD(l.loan_emi) : '—'}</td>
                     <td style={{ padding: '9px 12px', fontSize: 13, color: PT.text, textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums' }}>{fmtUSD(l.loan_balance_as_of ?? l.loan_amount)}</td>
-                    <td style={{ padding: '9px 12px', fontSize: 13, color: matColor, textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums', fontWeight: matColor === '#D9534F' ? 600 : 400 }}>{l.loan_maturity_date ?? '—'}</td>
+                    <td style={{ padding: '9px 12px', fontSize: 13, color: matColor, textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums', fontWeight: matColor === '#B91C1C' ? 600 : 400 }}>{l.loan_maturity_date ?? '—'}</td>
                     <td style={{ padding: '9px 12px', fontSize: 13, color: PT.text, textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums' }}>{l.loan_emi_day ?? '—'}</td>
                     <td style={{ padding: '9px 12px', fontSize: 13, color: dscrColor, textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums', fontWeight: 600 }}>{l.dscr != null ? `${l.dscr.toFixed(2)}x` : '—'}</td>
                     <td style={{ padding: '9px 12px', textAlign: 'right' }}>
@@ -656,7 +656,7 @@ export default function RentalLoanTracker() {
             if (dueLoans.length === 0) return <div key={d} style={{ width: 28, height: 28, fontSize: 11, color: '#C5BDB0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{d}</div>;
             return (
               <div key={d} className="relative group">
-                <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#22A06B', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 3 }}>{d}</div>
+                <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#166534', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 3 }}>{d}</div>
                 <div className="hidden group-hover:block absolute z-10 top-7 left-0 bg-gray-900 text-white text-xs rounded p-2 whitespace-nowrap">
                   {dueLoans.map(l => <div key={l.id}>{l.loan_bank_name}: {fmtUSD(l.loan_emi ?? 0)}</div>)}
                 </div>
@@ -683,8 +683,8 @@ export default function RentalLoanTracker() {
 
         {/* Cash / EMI alert banner */}
         {kpis.emi > 0 && kpis.emi * 12 > kpis.portfolio * 0.12 && (
-          <div style={{ background: '#FFECEC', borderLeft: '4px solid #EB5757', borderRadius: '0 8px 8px 0', padding: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-            <TrendingDown size={18} style={{ color: '#EB5757', flexShrink: 0, marginTop: 1 }} />
+          <div style={{ background: '#FFECEC', borderLeft: '4px solid #C0392B', borderRadius: '0 8px 8px 0', padding: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <TrendingDown size={18} style={{ color: '#C0392B', flexShrink: 0, marginTop: 1 }} />
             <div>
               <h4 style={{ fontSize: 14, fontWeight: 600, color: '#7B0000', marginBottom: 2 }}>High Debt Service</h4>
               <p style={{ fontSize: 13, color: '#7B0000' }}>
@@ -760,7 +760,7 @@ export default function RentalLoanTracker() {
                   {maturityLadderData.map((d, i) => {
                     const yr = typeof d.year === 'string' ? parseInt(d.year) : d.year;
                     const now = new Date().getFullYear();
-                    return <Cell key={i} fill={yr - now <= 1 ? '#EB5757' : yr - now <= 2 ? '#F2C94C' : '#D4AF37'} />;
+                    return <Cell key={i} fill={yr - now <= 1 ? '#C0392B' : yr - now <= 2 ? '#F2C94C' : '#D4AF37'} />;
                   })}
                 </Bar>
               </BarChart>
@@ -782,7 +782,7 @@ export default function RentalLoanTracker() {
                 <Tooltip formatter={(v: number) => [`${v > 0 ? '+' : ''}${v} bps`, 'Rate vs Market']} />
                 <ReferenceLine y={0} stroke={PT.border} strokeWidth={2} />
                 <Bar dataKey="bps" name="Rate vs Market" radius={[4, 4, 0, 0]}>
-                  {rateVarianceData.map((d, i) => <Cell key={i} fill={d.bps <= 0 ? '#22A06B' : d.bps <= 50 ? '#F2C94C' : '#EB5757'} />)}
+                  {rateVarianceData.map((d, i) => <Cell key={i} fill={d.bps <= 0 ? '#166534' : d.bps <= 50 ? '#F2C94C' : '#C0392B'} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -814,7 +814,7 @@ export default function RentalLoanTracker() {
             </thead>
             <tbody>
               {dscrHealth.map((row, idx) => {
-                const dscrColor = row.dscr == null ? PT.muted : row.dscr < 1.0 ? '#D9534F' : row.dscr <= 1.25 ? '#F5A623' : '#22A06B';
+                const dscrColor = row.dscr == null ? PT.muted : row.dscr < 1.0 ? '#B91C1C' : row.dscr <= 1.25 ? '#F5A623' : '#166534';
                 return (
                   <tr key={row.building} style={{ background: idx % 2 === 0 ? PT.rowOdd : PT.rowEven, borderBottom: `1px solid ${PT.border}` }}>
                     <td style={{ padding: '9px 16px', fontSize: 13, fontWeight: 600, color: PT.text }}>{row.building}</td>

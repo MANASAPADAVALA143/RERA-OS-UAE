@@ -65,7 +65,7 @@ function fmt(n: number) {
 }
 
 function nwcColor(n: number) {
-  if (n > 0) return 'text-green-700';
+  if (n > 0) return 'text-green-800';
   if (n < 0) return 'text-red-700';
   return 'text-gray-700';
 }
@@ -151,7 +151,7 @@ export default function RentalArAp() {
   }
 
   if (loading) return <LoadingSkeleton rows={6} cols={12} />;
-  if (error) return <p className="text-red-600 p-4">{error}</p>;
+  if (error) return <p className="text-red-700 p-4">{error}</p>;
   if (!data) return null;
 
   const rows = data.rows;
@@ -327,7 +327,7 @@ export default function RentalArAp() {
                   <td className="px-3 py-2 text-right">{row.ar ? fmt(row.ar.days_1_30) : '—'}</td>
                   <td className="px-3 py-2 text-right">{row.ar ? fmt(row.ar.days_31_60) : '—'}</td>
                   <td className="px-3 py-2 text-right">{row.ar ? fmt(row.ar.days_61_90) : '—'}</td>
-                  <td className="px-3 py-2 text-right text-red-600">{row.ar ? fmt(row.ar.days_90_plus) : '—'}</td>
+                  <td className="px-3 py-2 text-right text-red-700">{row.ar ? fmt(row.ar.days_90_plus) : '—'}</td>
                   <td className="px-3 py-2 text-right font-semibold">{fmt(row.ar_total)}</td>
                   <td className="px-3 py-2 text-right">{row.ap ? fmt(row.ap.current_amount) : '—'}</td>
                   <td className="px-3 py-2 text-right">{row.ap ? fmt(row.ap.days_1_30) : '—'}</td>

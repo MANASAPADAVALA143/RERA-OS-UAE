@@ -1,4 +1,4 @@
-﻿import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
   ReferenceLine, Area, ComposedChart,
@@ -11,7 +11,7 @@ import { fmtUSD } from '../../components/ProtectedRoute';
 
 const fmtK = (n: number) => n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(2)}M` : n >= 1000 ? `$${(n / 1000).toFixed(0)}K` : fmtUSD(n);
 
-const CASH_COLOR = { green: 'text-green-700 bg-green-50', amber: 'text-amber-700 bg-amber-50', red: 'text-red-700 bg-red-50' };
+const CASH_COLOR = { green: 'text-green-800 bg-green-50', amber: 'text-amber-700 bg-amber-50', red: 'text-red-700 bg-red-50' };
 
 export default function Rental13WeekCashFlow() {
   const { companies, loans, portfolio, loading, error, reload } = useRentalCfoData();
@@ -77,7 +77,7 @@ export default function Rental13WeekCashFlow() {
   }
 
   if (loading) return <LoadingSkeleton rows={10} />;
-  if (error) return <div className="text-red-600 p-4">{error}<button className="ml-3 underline" onClick={reload}>Retry</button></div>;
+  if (error) return <div className="text-red-700 p-4">{error}<button className="ml-3 underline" onClick={reload}>Retry</button></div>;
 
   return (
     <div className="space-y-6 -m-6 p-6" style={{ background: 'transparent' }}>
@@ -169,12 +169,12 @@ export default function Rental13WeekCashFlow() {
                     </td>
                     <td className="px-2 py-2">{w.startDate}</td>
                     <td className="px-2 py-2 text-right font-mono">{fmtK(w.openingCash)}</td>
-                    <td className="px-2 py-2 text-right font-mono text-green-700">+{fmtK(w.rentCollections)}</td>
-                    <td className="px-2 py-2 text-right font-mono text-green-700">+{fmtK(w.otherIncome)}</td>
-                    <td className="px-2 py-2 text-right font-mono text-red-600">−{fmtK(w.emiPayments)}</td>
-                    <td className="px-2 py-2 text-right font-mono text-red-600">−{fmtK(w.operatingExpenses)}</td>
-                    <td className="px-2 py-2 text-right font-mono text-red-600">{w.capex > 0 ? `−${fmtK(w.capex)}` : '—'}</td>
-                    <td className={`px-2 py-2 text-right font-mono font-semibold ${w.netCashFlow >= 0 ? 'text-green-700' : 'text-red-600'}`}>{fmtK(w.netCashFlow)}</td>
+                    <td className="px-2 py-2 text-right font-mono text-green-800">+{fmtK(w.rentCollections)}</td>
+                    <td className="px-2 py-2 text-right font-mono text-green-800">+{fmtK(w.otherIncome)}</td>
+                    <td className="px-2 py-2 text-right font-mono text-red-700">−{fmtK(w.emiPayments)}</td>
+                    <td className="px-2 py-2 text-right font-mono text-red-700">−{fmtK(w.operatingExpenses)}</td>
+                    <td className="px-2 py-2 text-right font-mono text-red-700">{w.capex > 0 ? `−${fmtK(w.capex)}` : '—'}</td>
+                    <td className={`px-2 py-2 text-right font-mono font-semibold ${w.netCashFlow >= 0 ? 'text-green-800' : 'text-red-700'}`}>{fmtK(w.netCashFlow)}</td>
                     <td className="px-2 py-2 text-right font-mono font-bold">{fmtK(w.closingCash)}</td>
                     <td className="px-2 py-2">{w.status === 'green' ? '✅' : w.status === 'amber' ? '⚠️' : '🔴'}</td>
                   </tr>

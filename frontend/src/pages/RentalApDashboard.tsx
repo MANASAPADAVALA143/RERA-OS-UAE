@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
@@ -73,7 +73,7 @@ const STAGE_LABELS: Record<Stage, string> = {
 };
 function stageColor(s: Stage): string {
   if (s <= 3) return 'text-amber-700';
-  if (s <= 5) return 'text-green-700';
+  if (s <= 5) return 'text-green-800';
   return 'text-red-700';
 }
 
@@ -497,9 +497,9 @@ export default function RentalApDashboard() {
             <p className="text-2xl font-bold font-mono mt-1 text-gray-900">{$$(totalAP)}</p>
           </div>
           <div className="bg-green-50 rounded-xl border border-green-200 p-5">
-            <p className="text-xs font-sans text-green-700">Current (0–30)</p>
+            <p className="text-xs font-sans text-green-800">Current (0–30)</p>
             <p className="text-2xl font-bold font-mono mt-1 text-green-800">{$$(current + b130)}</p>
-            <p className="text-xs font-sans text-green-600 mt-1">{pctStr(current + b130, totalAP)}</p>
+            <p className="text-xs font-sans text-green-800 mt-1">{pctStr(current + b130, totalAP)}</p>
           </div>
           <div className="bg-amber-50 rounded-xl border border-amber-200 p-5">
             <p className="text-xs font-sans text-amber-700">Due Soon (31–60)</p>
@@ -509,7 +509,7 @@ export default function RentalApDashboard() {
           <div className="bg-red-50 rounded-xl border border-red-200 p-5">
             <p className="text-xs font-sans text-red-700">Overdue (60+)</p>
             <p className="text-2xl font-bold font-mono mt-1 text-red-800">{$$(b60plus)}</p>
-            <p className="text-xs font-sans text-red-600 mt-1">{pctStr(b60plus, totalAP)}</p>
+            <p className="text-xs font-sans text-red-700 mt-1">{pctStr(b60plus, totalAP)}</p>
           </div>
         </div>
       </div>
@@ -568,7 +568,7 @@ export default function RentalApDashboard() {
                     <td className={`px-4 py-2.5 text-right font-mono ${r.ap_31_60 > 0 ? 'text-amber-700 font-semibold' : ''}`}>{$$(r.ap_31_60)}</td>
                     <td className={`px-4 py-2.5 text-right font-mono ${r.ap_60_plus > 0 ? 'text-red-700 font-bold' : ''}`}>{$$(r.ap_60_plus)}</td>
                     <td className="px-4 py-2.5 text-right font-mono font-bold">{$$(total)}</td>
-                    <td className={`px-4 py-2.5 text-right font-mono ${overdue > 0 ? 'text-red-600' : 'text-gray-400'}`}>{pctStr(overdue, total)}</td>
+                    <td className={`px-4 py-2.5 text-right font-mono ${overdue > 0 ? 'text-red-700' : 'text-gray-400'}`}>{pctStr(overdue, total)}</td>
                     <td className="px-4 py-2.5 text-center">
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${RISK_STYLE[flag]}`}>{flag}</span>
                     </td>
@@ -603,7 +603,7 @@ export default function RentalApDashboard() {
         {payNow.length > 0 && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-5">
             <p className="text-sm font-bold text-red-800 mb-1 font-sans">🔴 PAY IMMEDIATELY</p>
-            <p className="text-xs text-red-600 font-sans mb-3">60+ days overdue — vendor may stop service or initiate legal action</p>
+            <p className="text-xs text-red-700 font-sans mb-3">60+ days overdue — vendor may stop service or initiate legal action</p>
             <div className="space-y-3">
               {payNow.map(r => {
                 const key = `now-${r.entity_name}`;
@@ -707,7 +707,7 @@ export default function RentalApDashboard() {
             <p className={`text-2xl font-bold font-mono mt-1 ${b60plus > 0 ? 'text-red-800' : 'text-gray-900'}`}>
               {pctStr(b60plus, totalAP)}
             </p>
-            {b60plus > 0 && <p className="text-xs font-sans mt-1 text-red-600">⚠ Clear immediately</p>}
+            {b60plus > 0 && <p className="text-xs font-sans mt-1 text-red-700">⚠ Clear immediately</p>}
           </div>
 
           {/* Working Capital Impact */}

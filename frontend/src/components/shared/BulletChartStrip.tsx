@@ -16,10 +16,10 @@ export interface BulletCard {
 }
 
 export const STATUS_BAR: Record<BulletStatus, string> = {
-  good:     '#22A06B',
+  good:     '#166534',
   watch:    '#F2C94C',
-  critical: '#EB5757',
-  monitor:  '#EB5757',
+  critical: '#C0392B',
+  monitor:  '#C0392B',
   info:     '#78716C',
 };
 

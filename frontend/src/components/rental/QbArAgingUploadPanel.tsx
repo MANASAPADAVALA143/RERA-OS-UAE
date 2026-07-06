@@ -256,7 +256,7 @@ export default function QbArAgingUploadPanel({ qbAging, qbLoading, onRefresh, de
 
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
                 {[
-                  { label: 'Current', v: qbPreview.portfolio_totals.current, c: '#22A06B' },
+                  { label: 'Current', v: qbPreview.portfolio_totals.current, c: '#166534' },
                   { label: '1–30d', v: qbPreview.portfolio_totals.days_1_30, c: '#F5A623' },
                   { label: '31–60d', v: qbPreview.portfolio_totals.days_31_60, c: '#E97316' },
                   { label: '61–90d', v: qbPreview.portfolio_totals.days_61_90, c: '#DC2626' },
@@ -282,7 +282,7 @@ export default function QbArAgingUploadPanel({ qbAging, qbLoading, onRefresh, de
                   disabled={qbConfirming}
                   style={{
                     padding: '8px 22px', borderRadius: 6, border: 'none',
-                    background: qbConfirming ? '#86EFAC' : 'linear-gradient(135deg,#22A06B,#16A34A)',
+                    background: qbConfirming ? '#86EFAC' : 'linear-gradient(135deg,#166534,#16A34A)',
                     color: '#fff', fontWeight: 700, fontSize: 13,
                     cursor: qbConfirming ? 'not-allowed' : 'pointer',
                   }}

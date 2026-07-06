@@ -127,8 +127,8 @@ export default function RentalCfoDashboard() {
 
     if (margin > 20) {
       insight = `Strong profitability: ${margin.toFixed(1)}% net margin. Revenue of ${fmt$(revenue)} with controlled expenses.`;
-      icon = <CheckCircle2 size={20} className="text-green-600" />;
-      color = 'text-green-700';
+      icon = <CheckCircle2 size={20} className="text-green-800" />;
+      color = 'text-green-800';
     } else if (margin > 10) {
       insight = `Healthy margins at ${margin.toFixed(1)}%. Watch expense growth relative to ${fmt$(revenue)} revenue.`;
       icon = <TrendingUp size={20} className="text-blue-600" />;
@@ -139,7 +139,7 @@ export default function RentalCfoDashboard() {
       color = 'text-amber-700';
     } else {
       insight = 'No revenue recorded for this year.';
-      icon = <AlertCircle size={20} className="text-red-600" />;
+      icon = <AlertCircle size={20} className="text-red-700" />;
       color = 'text-red-700';
     }
 
@@ -283,7 +283,7 @@ export default function RentalCfoDashboard() {
               <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: '12px', padding: '16px' }}>
                 <p className="text-xs text-gray-600 uppercase font-semibold">Latest Net Income ({latestYear})</p>
                 <p className="text-2xl font-bold text-gray-900 mt-2">{fmt$(latestNI)}</p>
-                <p className={`text-xs mt-2 ${niChange > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                <p className={`text-xs mt-2 ${niChange > 0 ? 'text-green-800' : 'text-red-700'}`}>
                   {niChange > 0 ? '↑' : '↓'} {Math.abs(niChange).toFixed(1)}% vs {prevYear}
                 </p>
               </div>

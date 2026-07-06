@@ -115,7 +115,7 @@ export default function RentalCollections() {
       </div>
 
       {loading ? <LoadingSkeleton rows={8} /> : error ? (
-        <p className="text-red-600">{error}</p>
+        <p className="text-red-700">{error}</p>
       ) : data ? (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -153,7 +153,7 @@ export default function RentalCollections() {
                         <td className="py-2 px-2">{r.billing_period}</td>
                         <td className="py-2 px-2">{fmtUSD(r.amount_billed)}</td>
                         <td className="py-2 px-2">{fmtUSD(r.amount_collected)}</td>
-                        <td className="py-2 px-2">{bal > 0 ? <span className="text-red-600 font-medium">{fmtUSD(bal)}</span> : '—'}</td>
+                        <td className="py-2 px-2">{bal > 0 ? <span className="text-red-700 font-medium">{fmtUSD(bal)}</span> : '—'}</td>
                         <td className="py-2 px-2">
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${stClass}`}>{st}</span>
                         </td>

@@ -13,7 +13,7 @@ import { useRentalCfoData } from '../hooks/useRentalCfoData';
 const P = {
   pageBg: '#F7F1E6', cardBg: '#FBF6EE', border: '#E8DEC8',
   gold: '#D4AF37', text: '#1C1917', muted: '#78716C',
-  green: '#26A65B', amber: '#F2C14E', red: '#E76F6F', teal: '#18B7A0',
+  green: '#15803D', amber: '#F2C14E', red: '#C0392B', teal: '#0F766E',
 } as const;
 
 const CARD: React.CSSProperties = {
