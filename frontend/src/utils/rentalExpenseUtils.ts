@@ -145,3 +145,47 @@ export function buildMonthlyRevenue(pl: FinItem[]): Record<string, number> {
   }
   return map;
 }
+
+/** P&L line is maintenance-related (repairs, maintenance, cleaning, etc.). */
+export function isMaintenanceLine(label: string): boolean {
+  const t = label.trim();
+  if (SKIP_RE.test(t)) return false;
+  const cat = classifyLabel(t);
+  if (cat === 'Repairs & Maintenance' || cat === 'Cleaning') return true;
+  return /repair|maintenance|cleaning|hvac|plumbing|landscap|pest|roofing|pool/i.test(t);
+}
+
+export interface MaintPlRow {
+  company: string;
+  account: string;
+  month: string;
+  amount: number;
+}
+
+/** Extract maintenance P&L account rows with monthly amounts. */
+export function buildMaintenancePlRows(companyName: string, pl: FinItem[]): MaintPlRow[] {
+  const rows: MaintPlRow[] = [];
+  for (const item of flattenItems(pl)) {
+    if (item.children?.length || item.isSectionHeader || item.isTotal) continue;
+    if (!isMaintenanceLine(item.label)) continue;
+    for (const [month, val] of Object.entries(item.monthlyValues ?? {})) {
+      const amount = Math.abs(val as number);
+      if (amount > 0) {
+        rows.push({
+          company: companyName,
+          account: item.label.trim(),
+          month: month.replace(/-/g, ' '),
+          amount,
+        });
+      }
+    }
+  }
+  return rows;
+}
+
+export function parseMonthKey(k: string): { month: number; year: number } {
+  const parts = k.split(/[\s-]/);
+  const month = MNAMES.indexOf(parts[0]) + 1;
+  const year = parseInt(parts[parts.length - 1], 10);
+  return { month: month > 0 ? month : 1, year: Number.isFinite(year) ? year : new Date().getFullYear() };
+}

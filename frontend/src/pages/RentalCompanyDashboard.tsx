@@ -54,12 +54,6 @@ interface MaintItem {
   sla_status: string; is_overdue: boolean; days_open: number;
 }
 
-interface InspItem {
-  id: string; unit_number: string; inspection_type: string;
-  inspection_date: string; performed_by: string; condition_score: string;
-  notes: string | null; checklist_count: number; photo_count: number;
-}
-
 // ── pill maps ─────────────────────────────────────────────────────────────────
 const STATUS_PILL: Record<string, string> = {
   occupied:         'bg-green-100 text-green-800',
@@ -83,22 +77,12 @@ const SLA_PILL: Record<string, string> = {
   closed:   'bg-gray-100 text-gray-600',
 };
 
-const COND_PILL: Record<string, string> = {
-  excellent:    'bg-green-100 text-green-800',
-  good:         'bg-blue-100 text-blue-800',
-  fair:         'bg-amber-100 text-amber-800',
-  poor:         'bg-orange-100 text-orange-800',
-  needs_repair: 'bg-red-100 text-red-800',
-};
-
-
-type DashTab = 'overview' | 'leases' | 'maintenance' | 'inspections';
+type DashTab = 'overview' | 'leases' | 'maintenance';
 
 const TABS: { id: DashTab; label: string }[] = [
   { id: 'overview',     label: 'Overview'     },
   { id: 'leases',       label: 'Rentals'      },
   { id: 'maintenance',  label: 'Maintenance'  },
-  { id: 'inspections',  label: 'Inspections'  },
 ];
 
 // ── Unit filter + table sub-component ────────────────────────────────────────
@@ -197,7 +181,6 @@ export default function RentalCompanyDashboard({ companyId }: Props) {
   const [error, setError] = useState('');
   const [dashTab, setDashTab] = useState<DashTab>('overview');
   const [maintenance, setMaintenance] = useState<MaintItem[] | null>(null);
-  const [inspections, setInspections] = useState<InspItem[] | null>(null);
   const [subLoading, setSubLoading] = useState(false);
   const [pl, setPl] = useState<FinItem[] | null>(null);
 
@@ -248,7 +231,7 @@ export default function RentalCompanyDashboard({ companyId }: Props) {
     });
   }, [data, plMonthBilled, plMonthExp]);
 
-  // Lazy-load maintenance / inspections on first visit to those tabs
+  // Lazy-load maintenance on first visit to that tab
   useEffect(() => {
     if (dashTab === 'maintenance' && maintenance === null) {
       setSubLoading(true);
@@ -257,14 +240,7 @@ export default function RentalCompanyDashboard({ companyId }: Props) {
         .catch(() => setMaintenance([]))
         .finally(() => setSubLoading(false));
     }
-    if (dashTab === 'inspections' && inspections === null) {
-      setSubLoading(true);
-      api.get<InspItem[]>(`/api/rentals/inspections?company_id=${companyId}`)
-        .then(r => setInspections(r.data))
-        .catch(() => setInspections([]))
-        .finally(() => setSubLoading(false));
-    }
-  }, [dashTab, companyId, maintenance, inspections]);
+  }, [dashTab, companyId, maintenance]);
 
   if (loading) return <LoadingSkeleton rows={8} />;
   if (error || !data) return <div className="text-red-600 p-4">{error || 'No data'}</div>;
@@ -342,20 +318,25 @@ export default function RentalCompanyDashboard({ companyId }: Props) {
               {localExpBreakdown.length === 0 ? (
                 <p className="text-gray-400 text-center py-10">No expense data — upload a P&amp;L to see breakdown</p>
               ) : (
-                <ResponsiveContainer width="100%" height={240}>
-                  <PieChart>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart margin={{ top: 20, right: 12, bottom: 72, left: 12 }}>
                     <Pie
                       data={localExpBreakdown}
                       dataKey="amount"
                       nameKey="category"
-                      cx="50%" cy="50%" innerRadius={44} outerRadius={80} paddingAngle={2}
+                      cx="50%" cy="52%" innerRadius={42} outerRadius={72} paddingAngle={2}
                     >
                       {localExpBreakdown.map((_, i) => (
                         <Cell key={i} fill={EXP_PALETTE[i % EXP_PALETTE.length]} />
                       ))}
                     </Pie>
                     <Tooltip formatter={(v: number) => fmtUSD(v)} />
-                    <Legend />
+                    <Legend
+                      verticalAlign="bottom"
+                      align="center"
+                      iconSize={8}
+                      wrapperStyle={{ fontSize: 11, lineHeight: '16px', paddingTop: 4 }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               )}
@@ -485,52 +466,6 @@ export default function RentalCompanyDashboard({ companyId }: Props) {
                       <td className="py-2 px-2">{m.days_open ?? '—'}</td>
                       <td className="py-2 px-2">{m.vendor_name || '—'}</td>
                       <td className="py-2 px-2">{m.cost != null ? fmtUSD(m.cost) : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-      )}
-
-      {/* ── INSPECTIONS ───────────────────────────────────────────────────── */}
-      {dashTab === 'inspections' && (
-        <Card title="Unit Inspections">
-          {subLoading ? (
-            <LoadingSkeleton rows={4} />
-          ) : !inspections || inspections.length === 0 ? (
-            <p className="text-gray-400 text-center py-8 text-sm">No inspections on record</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200 text-left text-gray-500">
-                    <th className="py-2 px-2 font-medium">Unit</th>
-                    <th className="py-2 px-2 font-medium">Type</th>
-                    <th className="py-2 px-2 font-medium">Date</th>
-                    <th className="py-2 px-2 font-medium">Performed By</th>
-                    <th className="py-2 px-2 font-medium">Condition</th>
-                    <th className="py-2 px-2 font-medium">Checklist</th>
-                    <th className="py-2 px-2 font-medium">Photos</th>
-                    <th className="py-2 px-2 font-medium">Notes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {inspections.map(insp => (
-                    <tr key={insp.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                      <td className="py-2 px-2 font-mono">{insp.unit_number}</td>
-                      <td className="py-2 px-2 capitalize">{insp.inspection_type.replace(/_/g, ' ')}</td>
-                      <td className="py-2 px-2">{insp.inspection_date}</td>
-                      <td className="py-2 px-2">{insp.performed_by}</td>
-                      <td className="py-2 px-2">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${COND_PILL[insp.condition_score] ?? 'bg-gray-100 text-gray-600'}`}>
-                          {insp.condition_score.replace(/_/g, ' ')}
-                        </span>
-                      </td>
-                      <td className="py-2 px-2">{insp.checklist_count} items</td>
-                      <td className="py-2 px-2">{insp.photo_count}</td>
-                      <td className="py-2 px-2 max-w-[200px] truncate text-gray-500">{insp.notes || '—'}</td>
                     </tr>
                   ))}
                 </tbody>

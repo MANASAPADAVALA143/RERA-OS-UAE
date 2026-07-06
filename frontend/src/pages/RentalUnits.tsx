@@ -766,7 +766,7 @@ function LTMPerformanceTab() {
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
 
 export default function RentalUnits() {
-  const [activeTab, setActiveTab] = useState<'list' | 'history' | 'ltm'>('list');
+  const [activeTab, setActiveTab] = useState<'list' | 'history' | 'ltm'>('ltm');
 
   // Units list state
   const [units,         setUnits]         = useState<UnitRow[]>([]);
@@ -827,9 +827,9 @@ export default function RentalUnits() {
   ];
 
   const TABS = [
+    { id: 'ltm'     as const, label: 'LTM Performance' },
     { id: 'list'    as const, label: 'Units List'      },
     { id: 'history' as const, label: 'Status History'  },
-    { id: 'ltm'     as const, label: 'LTM Performance' },
   ];
 
   return (

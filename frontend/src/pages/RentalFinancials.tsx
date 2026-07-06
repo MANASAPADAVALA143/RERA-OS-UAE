@@ -521,6 +521,127 @@ function calcKpis(fin: ParsedFinancials, year: number): KpiData {
   return { totalRevenue, totalExpenses, netIncome, noi, rentalIncome, otherIncome, interestExpense, propertyTax, managementFee, hoaFees, legalFees, utilities, repairs, totalAssets, totalLiabilities, equity, cash, buildings, accumDep, longTermLoans, securityDeposits };
 }
 
+function calcKpisFromMonthlyKey(fin: ParsedFinancials, key: string): KpiData {
+  const pl = fin.pl;
+  const bs = fin.bs;
+  const m = calcMonthlyKpis(pl, key);
+  const totalAssets =
+    getMV(bs, /^total\s+for\s+assets$/i, key) ||
+    getMV(bs, /^total\s+assets$/i, key);
+  const totalLiabilities =
+    getMV(bs, /^total\s+for\s+liabilities$/i, key) ||
+    getMV(bs, /^total\s+liabilities$/i, key) ||
+    getMV(bs, /^total\s+for\s+long.term\s+liabilities$/i, key) + Math.abs(getMV(bs, /^total\s+for\s+current\s+liabilities$/i, key));
+  const equity =
+    getMV(bs, /^total\s+for\s+equity$/i, key) ||
+    getMV(bs, /^total\s+equity$/i, key);
+  const cash =
+    getMV(bs, /^total\s+for\s+bank\s+accounts$/i, key) ||
+    sumMV(bs, /^bank\s+of\s+america|^great\s+plains|^prosperity|checking|savings/i, key);
+  const buildings = Math.abs(
+    getMV(bs, /^buildings$/i, key) ||
+    getMV(bs, /^property\s*(and|&)?\s*equipment/i, key) ||
+    getMV(bs, /^fixed\s*assets/i, key) ||
+    getMV(bs, /^land\s*(and|&)?\s*buildings/i, key) ||
+    getMV(bs, /^real\s+estate/i, key),
+  );
+  const accumDep = getMV(bs, /accumulated\s+dep/i, key);
+  const longTermLoans = Math.abs(
+    getMV(bs, /^total\s+for\s+long.term\s+liabilities$/i, key) ||
+    sumMV(bs, /^loan\s+from\s+gpb|^independent\s+bank|^loan\s+a\/c/i, key),
+  );
+  const securityDeposits = Math.abs(
+    getMV(bs, /^total\s+for\s+security\s+deposit$/i, key) ||
+    sumMV(bs, /security\s+deposit/i, key),
+  );
+  return {
+    totalRevenue: m.totalRevenue,
+    totalExpenses: m.totalExpenses,
+    netIncome: m.netIncome,
+    noi: m.noi,
+    rentalIncome: m.rentIncome,
+    otherIncome: m.otherIncome,
+    interestExpense: m.interest,
+    propertyTax: m.propertyTax,
+    managementFee: m.management,
+    hoaFees: m.hoa,
+    legalFees: m.legal,
+    utilities: m.utilities,
+    repairs: m.repairs,
+    totalAssets,
+    totalLiabilities,
+    equity,
+    cash,
+    buildings,
+    accumDep,
+    longTermLoans,
+    securityDeposits,
+  };
+}
+
+function periodAggregateToKpiData(fin: ParsedFinancials, agg: PeriodAggregate, bsKey: string): KpiData {
+  const bsK = calcKpisFromMonthlyKey(fin, bsKey);
+  return {
+    totalRevenue: agg.totalRevenue,
+    totalExpenses: agg.totalExpenses,
+    netIncome: agg.netIncome,
+    noi: agg.noi,
+    rentalIncome: agg.rentIncome,
+    otherIncome: agg.otherIncome,
+    interestExpense: agg.interest,
+    propertyTax: agg.propertyTax,
+    managementFee: agg.management,
+    hoaFees: agg.hoa,
+    legalFees: agg.legal,
+    utilities: agg.utilities,
+    repairs: agg.repairs,
+    totalAssets: bsK.totalAssets,
+    totalLiabilities: bsK.totalLiabilities,
+    equity: bsK.equity,
+    cash: bsK.cash,
+    buildings: bsK.buildings,
+    accumDep: bsK.accumDep,
+    longTermLoans: bsK.longTermLoans,
+    securityDeposits: bsK.securityDeposits,
+  };
+}
+
+function resolveKpiView(
+  fin: ParsedFinancials,
+  kpiYear: number,
+  kpiMonth: number | null,
+): { k: KpiData; kPrev: KpiData | null; label: string; compareLabel: string } {
+  const availableKeys = getAvailableKeys(fin);
+  const year = fin.years.includes(kpiYear) ? kpiYear : fin.years[fin.years.length - 1];
+
+  if (kpiMonth && availableKeys.length > 0) {
+    const key = `${_MNAMES[kpiMonth - 1]} ${kpiYear}`;
+    if (availableKeys.includes(key)) {
+      const k = calcKpisFromMonthlyKey(fin, key);
+      const prevMonthKey = kpiMonth === 1
+        ? `${_MNAMES[11]} ${kpiYear - 1}`
+        : `${_MNAMES[kpiMonth - 2]} ${kpiYear}`;
+      const prevYearKey = `${_MNAMES[kpiMonth - 1]} ${kpiYear - 1}`;
+      const kPrev = availableKeys.includes(prevYearKey)
+        ? calcKpisFromMonthlyKey(fin, prevYearKey)
+        : availableKeys.includes(prevMonthKey)
+          ? calcKpisFromMonthlyKey(fin, prevMonthKey)
+          : fin.years.includes(kpiYear - 1)
+            ? calcKpis(fin, kpiYear - 1)
+            : null;
+      const compareLabel = availableKeys.includes(prevYearKey)
+        ? `${_MNAMES[kpiMonth - 1]} ${kpiYear - 1}`
+        : kPrev ? 'Prior period' : '';
+      return { k, kPrev, label: key, compareLabel };
+    }
+  }
+
+  const k = calcKpis(fin, year);
+  const prevY = fin.years.filter(y => y < year).pop() ?? null;
+  const kPrev = prevY ? calcKpis(fin, prevY) : null;
+  return { k, kPrev, label: `FY ${year}`, compareLabel: prevY ? `FY ${prevY}` : '' };
+}
+
 // ── Empty State ───────────────────────────────────────────────────────────────
 
 function EmptyUpload({ onUpload, company, onAddMetrics }: { onUpload: () => void; onAddMetrics: () => void; company: string }) {
@@ -827,11 +948,9 @@ function KCard({ label, value, sub, status, trendData, category }: KCardProps) {
 
 // ── KPI Dashboard Tab ─────────────────────────────────────────────────────────
 
-function KPITab({ fin }: { fin: ParsedFinancials }) {
-  const lastY = fin.years[fin.years.length - 1];
-  const prevY = fin.years.length >= 2 ? fin.years[fin.years.length - 2] : null;
-  const k = calcKpis(fin, lastY);
-  const kP = prevY ? calcKpis(fin, prevY) : null;
+function KPITab({ fin, kpiYear, kpiMonth }: { fin: ParsedFinancials; kpiYear: number; kpiMonth: number | null }) {
+  const { k, kPrev: kP, label, compareLabel } = resolveKpiView(fin, kpiYear, kpiMonth);
+  const prevY = compareLabel || (fin.years.length >= 2 ? String(fin.years[fin.years.length - 2]) : null);
 
   const noiM  = k.totalRevenue > 0 ? k.noi / k.totalRevenue * 100 : 0;
   const netM  = k.totalRevenue > 0 ? k.netIncome / k.totalRevenue * 100 : 0;
@@ -911,23 +1030,23 @@ function KPITab({ fin }: { fin: ParsedFinancials }) {
     { name: 'NOI', value: Math.max(0, lastKpi.noi) },
     { name: 'Expenses', value: lastKpi.totalExpenses },
   ];
-  const yoyComparison = prevY ? [
-    { kpi: 'NOI Margin', current: noiM, previous: (calcKpis(fin, prevY).totalRevenue > 0 ? calcKpis(fin, prevY).noi / calcKpis(fin, prevY).totalRevenue * 100 : 0) },
-    { kpi: 'Net Margin', current: netM, previous: (calcKpis(fin, prevY).totalRevenue > 0 ? calcKpis(fin, prevY).netIncome / calcKpis(fin, prevY).totalRevenue * 100 : 0) },
-    { kpi: 'Expense Ratio', current: expR, previous: (calcKpis(fin, prevY).totalRevenue > 0 ? calcKpis(fin, prevY).totalExpenses / calcKpis(fin, prevY).totalRevenue * 100 : 0) },
-    { kpi: 'D/E Ratio', current: dte, previous: (calcKpis(fin, prevY).equity > 0 ? calcKpis(fin, prevY).totalLiabilities / calcKpis(fin, prevY).equity : 0) },
+  const yoyComparison = kP ? [
+    { kpi: 'NOI Margin', current: noiM, previous: kP.totalRevenue > 0 ? kP.noi / kP.totalRevenue * 100 : 0 },
+    { kpi: 'Net Margin', current: netM, previous: kP.totalRevenue > 0 ? kP.netIncome / kP.totalRevenue * 100 : 0 },
+    { kpi: 'Expense Ratio', current: expR, previous: kP.totalRevenue > 0 ? kP.totalExpenses / kP.totalRevenue * 100 : 0 },
+    { kpi: 'D/E Ratio', current: dte, previous: kP.equity > 0 ? kP.totalLiabilities / kP.equity : 0 },
   ] : [];
 
   return (
     <div className="space-y-6">
-      <p style={{ fontSize: 13, color: '#A8A29E' }}>KPIs for latest year: <strong style={{ color: '#1C1917' }}>{lastY}</strong></p>
+      <p style={{ fontSize: 13, color: '#A8A29E' }}>KPIs for selected period: <strong style={{ color: '#1C1917' }}>{label}</strong>{compareLabel ? <span> · compared to <strong style={{ color: '#1C1917' }}>{compareLabel}</strong></span> : null}</p>
 
       <div>
         <p style={{ fontSize: 13, fontWeight: 600, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Profitability</p>
         <div className="grid grid-cols-4 gap-4">
           <KCard label="NOI Margin" value={`${noiM.toFixed(1)}%`} sub={`NOI: ${fmt(k.noi)}`} status={noiM>=40?'good':noiM>=20?'warn':'bad'} trendData={noiMTrend} category={noiM<20?'review':'profitability'} />
           <KCard label="Net Income Margin" value={`${netM.toFixed(1)}%`} sub={`Net: ${fmt(k.netIncome)}`} status={netM>=10?'good':netM>=0?'warn':'bad'} trendData={netMTrend} category={netM<0?'review':'profitability'} />
-          <KCard label="Revenue Growth YoY" value={revG!==null?`${revG>=0?'+':''}${revG.toFixed(1)}%`:'N/A'} sub={prevY?`${lastY} vs ${prevY}`:'Only 1 year'} status={revG===null?'info':revG>=3?'good':revG>=0?'warn':'bad'} trendData={revGTrend} category="profitability" />
+          <KCard label="Revenue Growth YoY" value={revG!==null?`${revG>=0?'+':''}${revG.toFixed(1)}%`:'N/A'} sub={kP?`${label} vs ${compareLabel || prevY}`:'Only 1 period'} status={revG===null?'info':revG>=3?'good':revG>=0?'warn':'bad'} trendData={revGTrend} category="profitability" />
           <KCard label="Expense Ratio" value={`${expR.toFixed(1)}%`} sub={`Total exp: ${fmt(k.totalExpenses)}`} status={expR<=70?'good':expR<=85?'warn':'bad'} category={expR>85?'review':'profitability'} />
         </div>
       </div>
@@ -948,7 +1067,7 @@ function KPITab({ fin }: { fin: ParsedFinancials }) {
           <KCard label="LTV (Loans / Building)" value={ltv>0?`${ltv.toFixed(1)}%`:'Not available'} sub={ltv>0?`Loans: ${fmt(k.longTermLoans)}`:'Property value not found in balance sheet'} status={ltv>0&&ltv<=75?'good':ltv>0&&ltv<=85?'warn':ltv>0?'bad':'info'} category={ltv>85?'review':'balance'} />
           <KCard label="Asset / Liability Ratio" value={alR>0?`${alR.toFixed(2)}x`:'N/A'} sub={`Assets: ${fmt(k.totalAssets)}`} status={alR>=1.5?'good':alR>=1?'warn':'bad'} category={alR<1?'review':'balance'} />
           <KCard label="Debt-to-Equity" value={dte>0?`${dte.toFixed(2)}x`:'N/A'} sub={`Equity: ${fmt(k.equity)}`} status={dte>0&&dte<=2?'good':dte<=4?'warn':'bad'} category={dte>4?'review':'balance'} />
-          <KCard label="Cash Balance" value={fmt(k.cash)} sub={`As of Dec 31, ${lastY}`} status={k.cash>10000?'good':k.cash>0?'warn':'bad'} trendData={cashTrend} category={k.cash<=0?'review':'balance'} />
+          <KCard label="Cash Balance" value={fmt(k.cash)} sub={`As of ${label}`} status={k.cash>10000?'good':k.cash>0?'warn':'bad'} trendData={cashTrend} category={k.cash<=0?'review':'balance'} />
         </div>
       </div>
 
@@ -1008,7 +1127,7 @@ function KPITab({ fin }: { fin: ParsedFinancials }) {
       {/* Revenue Allocation + YoY */}
       <div className="grid grid-cols-2 gap-4">
         <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: 20 }}>
-          <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 14 }}>Revenue Allocation ({lastY})</p>
+          <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 14 }}>Revenue Allocation ({label})</p>
           <ResponsiveContainer width="100%" height={220}>
             <PieChart>
               <Pie data={revenueAllocation} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value">
@@ -1023,7 +1142,7 @@ function KPITab({ fin }: { fin: ParsedFinancials }) {
 
         {yoyComparison.length > 0 && (
           <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: 20 }}>
-            <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 14 }}>This Year vs Last Year</p>
+            <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 14 }}>{label} vs {compareLabel || 'Prior Period'}</p>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={yoyComparison}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" vertical={false} />
@@ -1031,8 +1150,8 @@ function KPITab({ fin }: { fin: ParsedFinancials }) {
                 <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip formatter={(v: number) => v.toFixed(2)} contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 }} />
                 <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="current"  name={`${lastY} (Current)`}  fill="#D4AF37" radius={[4,4,0,0]} />
-                <Bar dataKey="previous" name={`${prevY} (Previous)`} fill="#A8A29E" radius={[4,4,0,0]} />
+                <Bar dataKey="current"  name={label}  fill="#D4AF37" radius={[4,4,0,0]} />
+                <Bar dataKey="previous" name={compareLabel || 'Prior'} fill="#A8A29E" radius={[4,4,0,0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -1698,25 +1817,37 @@ export default function RentalFinancials() {
   const [period, setPeriod] = useState<Period | null>(null);
   const [pMonth, setPMonth] = useState(new Date().getMonth() + 1);
   const [pYear, setPYear] = useState(new Date().getFullYear());
+  const [kpiYear, setKpiYear] = useState(new Date().getFullYear());
+  const [kpiMonth, setKpiMonth] = useState<number | null>(null);
 
-  // Reset period and default to latest available key when company changes
+  const selectStyle: React.CSSProperties = {
+    fontSize: 13, border: '1px solid #E8DEC8', borderRadius: 6,
+    padding: '5px 10px', background: '#FBF6EE', color: '#1C1917', cursor: 'pointer',
+  };
+
+  const currentFin = selectedCompanyId ? allFinancials[selectedCompanyId] : null;
+
+  // Reset period and default to latest available key when company or financials load
   useEffect(() => {
+    if (!selectedCompanyId || !currentFin) return;
     setPeriod(null);
-    const fin = selectedCompanyId ? allFinancials[selectedCompanyId] : null;
-    if (fin) {
-      const keys = getAvailableKeys(fin);
-      const latestKey = keys[keys.length - 1] ?? '';
-      const _M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      if (latestKey) {
-        const parts = latestKey.split(' ');
-        const m = _M.indexOf(parts[0]) + 1;
-        const y = parseInt(parts[1]);
-        if (m > 0) setPMonth(m);
-        if (!isNaN(y)) setPYear(y);
-      }
+    const keys = getAvailableKeys(currentFin);
+    const latestKey = keys[keys.length - 1] ?? '';
+    const _M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    if (latestKey) {
+      const parts = latestKey.split(' ');
+      const m = _M.indexOf(parts[0]) + 1;
+      const y = parseInt(parts[1]);
+      if (m > 0) setPMonth(m);
+      if (!isNaN(y)) setPYear(y);
+      if (m > 0) setKpiMonth(m);
+      if (!isNaN(y)) setKpiYear(y);
+    } else {
+      const latestYear = currentFin.years[currentFin.years.length - 1] ?? new Date().getFullYear();
+      setKpiYear(latestYear);
+      setKpiMonth(null);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCompanyId]);
+  }, [selectedCompanyId, currentFin?.uploadedAt, currentFin?.fileName]);
 
   // Load company list from backend
   useEffect(() => {
@@ -1800,7 +1931,6 @@ export default function RentalFinancials() {
   }, [companies]);
 
   const isAll = !selectedCompanyId;
-  const currentFin = selectedCompanyId ? allFinancials[selectedCompanyId] : null;
   const selectedCompanyName = companies.find(c => c.id === selectedCompanyId)?.company_name ?? '';
 
   const triggerUpload = useCallback(() => {
@@ -1935,6 +2065,56 @@ export default function RentalFinancials() {
               </p>
             </div>
             <div className="flex items-center gap-1.5 flex-wrap">
+              {activeTab === 'KPI Dashboard' && currentFin ? (
+                <>
+                  <span style={{ fontSize: 11, color: '#92400E', fontWeight: 600, marginRight: 4 }}>PERIOD:</span>
+                  <select
+                    value={kpiYear}
+                    onChange={e => {
+                      const y = Number(e.target.value);
+                      setKpiYear(y);
+                      const monthsForY = getAvailableKeys(currentFin)
+                        .filter(k => k.endsWith(` ${y}`))
+                        .map(k => _MNAMES.indexOf(k.split(' ')[0]) + 1)
+                        .filter(m => m > 0)
+                        .sort((a, b) => a - b);
+                      if (kpiMonth && !monthsForY.includes(kpiMonth)) {
+                        setKpiMonth(monthsForY[monthsForY.length - 1] ?? null);
+                      }
+                    }}
+                    style={selectStyle}
+                  >
+                    {currentFin.years.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                  {getAvailableKeys(currentFin).length > 0 && (
+                    <select
+                      value={kpiMonth ?? 0}
+                      onChange={e => {
+                        const v = Number(e.target.value);
+                        setKpiMonth(v === 0 ? null : v);
+                      }}
+                      style={selectStyle}
+                    >
+                      <option value={0}>Full Year</option>
+                      {getAvailableKeys(currentFin)
+                        .filter(k => k.endsWith(` ${kpiYear}`))
+                        .map(k => _MNAMES.indexOf(k.split(' ')[0]) + 1)
+                        .filter(m => m > 0)
+                        .sort((a, b) => a - b)
+                        .map(m => (
+                          <option key={m} value={m}>{MONTH_DISPLAY[m - 1]}</option>
+                        ))}
+                    </select>
+                  )}
+                  <span style={{
+                    fontSize: 11, color: '#78716C', background: '#F7F1E6',
+                    border: '1px solid #E8DEC8', borderRadius: 20, padding: '3px 12px',
+                  }}>
+                    {kpiMonth ? `${MONTH_DISPLAY[kpiMonth - 1]} ${kpiYear}` : `FY ${kpiYear}`}
+                  </span>
+                </>
+              ) : (
+                <>
               {/* YEAR VIEW — clicking drills into Monthly Detail for that year */}
               {!selectedYear && (
                 <span style={{ fontSize: 11, color: '#92400E', fontWeight: 600, marginRight: 4 }}>YEAR VIEW:</span>
@@ -1969,14 +2149,17 @@ export default function RentalFinancials() {
                     onClick={() => { setSelectedYear(y); setPeriod(null); }}
                     style={{
                       fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 20,
-                      border: '1.5px solid #C8C0B0',
-                      background: 'transparent', color: '#78716C',
+                      border: selectedYear === y ? '1.5px solid #D4AF37' : '1.5px solid #C8C0B0',
+                      background: selectedYear === y ? '#FDF3D7' : 'transparent',
+                      color: selectedYear === y ? '#D4AF37' : '#78716C',
                       cursor: 'pointer', transition: 'all 0.15s',
                     }}
                   >
                     {y}
                   </button>
                 ))
+              )}
+                </>
               )}
 
               {/* MoM/YTD/TTM — shows on P&L always when monthly data exists;
@@ -2008,7 +2191,13 @@ export default function RentalFinancials() {
           {/* Tabs */}
           <div className="flex gap-1 p-1 rounded-lg w-fit flex-wrap" style={{ background: '#E8E4DC' }}>
             {TABS.map(t => (
-              <button key={t} onClick={() => { setActiveTab(t); setSelectedYear(null); setPeriod(null); }}
+              <button key={t} onClick={() => {
+                setActiveTab(t);
+                if (t === 'P&L Statement' || t === 'Balance Sheet' || t === 'Cash Flow') {
+                  setSelectedYear(null);
+                  setPeriod(null);
+                }
+              }}
                 className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors"
                 style={activeTab === t
                   ? { background: '#D4AF37', color: '#161310', boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }
@@ -2023,7 +2212,7 @@ export default function RentalFinancials() {
             {activeTab === 'P&L Statement' && <PLTable fin={currentFin} selectedYear={selectedYear} period={period} pMonth={pMonth} pYear={pYear} />}
             {activeTab === 'Balance Sheet'  && <BSTable fin={currentFin} selectedYear={selectedYear} period={period} pMonth={pMonth} pYear={pYear} />}
             {activeTab === 'Cash Flow'      && <CFTable fin={currentFin} selectedYear={selectedYear} period={period} pMonth={pMonth} pYear={pYear} />}
-            {activeTab === 'KPI Dashboard'  && <KPITab  fin={currentFin} />}
+            {activeTab === 'KPI Dashboard'  && <KPITab  fin={currentFin} kpiYear={kpiYear} kpiMonth={kpiMonth} />}
             {activeTab === 'CFO Dashboard'  && <CFOTab  fin={currentFin} />}
             {activeTab === 'Financial Metrics' && <FinancialMetricsTab companyName={currentFin.companyName} />}
           </div>
