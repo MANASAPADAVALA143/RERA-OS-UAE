@@ -156,6 +156,14 @@ export default function RentalExpenses() {
   const operatingRows         = useMemo(() => allRows.filter(r => r.category !== ONE_TIME_CAT), [allRows]);
   const filteredOperatingRows = useMemo(() => filteredRows.filter(r => r.category !== ONE_TIME_CAT), [filteredRows]);
 
+  // applies the active category chip on top of the period window —
+  // this is the source-of-truth for every KPI and chart that should
+  // respect both filters simultaneously
+  const catFilteredRows = useMemo(
+    () => filterCat ? filteredOperatingRows.filter(r => r.category === filterCat) : filteredOperatingRows,
+    [filteredOperatingRows, filterCat],
+  );
+
   // one-time
   const oneTimeAllRows = useMemo(() => allRows.filter(r => r.category === ONE_TIME_CAT), [allRows]);
   const oneTimeTotal   = useMemo(() => oneTimeAllRows.reduce((s, r) => s + r.amount, 0), [oneTimeAllRows]);
@@ -185,9 +193,9 @@ export default function RentalExpenses() {
   const periodLabel = period ?? (currentMonthKey === `${MNAMES[new Date().getMonth()]} ${new Date().getFullYear()}` ? 'This Month' : `Latest · ${currentMonthKey}`);
   const periodTotal = useMemo(() =>
     period
-      ? filteredOperatingRows.reduce((s, r) => s + r.amount, 0)
-      : operatingRows.filter(r => r.month === currentMonthKey).reduce((s, r) => s + r.amount, 0),
-  [period, filteredOperatingRows, operatingRows, currentMonthKey]);
+      ? catFilteredRows.reduce((s, r) => s + r.amount, 0)
+      : operatingRows.filter(r => r.month === currentMonthKey && (!filterCat || r.category === filterCat)).reduce((s, r) => s + r.amount, 0),
+  [period, catFilteredRows, operatingRows, currentMonthKey, filterCat]);
 
   // ── KPI 2: all time ──────────────────────────────────────────────────────────
   const totalAllTime = useMemo(() => operatingRows.reduce((s, r) => s + r.amount, 0), [operatingRows]);
@@ -195,48 +203,54 @@ export default function RentalExpenses() {
   // ── KPI 3: top category ──────────────────────────────────────────────────────
   const topCategory = useMemo(() => {
     const byCat: Record<string, number> = {};
-    filteredOperatingRows.forEach(r => { byCat[r.category] = (byCat[r.category] ?? 0) + r.amount; });
+    catFilteredRows.forEach(r => { byCat[r.category] = (byCat[r.category] ?? 0) + r.amount; });
     return Object.entries(byCat).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—';
-  }, [filteredOperatingRows]);
+  }, [catFilteredRows]);
 
   // ── KPI 4: avg monthly spend ─────────────────────────────────────────────────
   const avgMonthlySpend = useMemo(() => {
     const byMonth: Record<string, number> = {};
-    filteredOperatingRows.forEach(r => { byMonth[r.month] = (byMonth[r.month] ?? 0) + r.amount; });
+    catFilteredRows.forEach(r => { byMonth[r.month] = (byMonth[r.month] ?? 0) + r.amount; });
     const months = Object.keys(byMonth);
     return months.length > 0 ? Object.values(byMonth).reduce((s, v) => s + v, 0) / months.length : 0;
-  }, [filteredOperatingRows]);
+  }, [catFilteredRows]);
 
-  // ── KPI 5: MoM change (from most recent 2 months in full history) ────────────
+  // ── KPI 5: MoM change — scoped to active category when one is selected ───────
   const momChange = useMemo(() => {
+    // use all-time operating rows, filtered by active category if set
+    const rows = filterCat ? operatingRows.filter(r => r.category === filterCat) : operatingRows;
     const byMonth: Record<string, number> = {};
-    operatingRows.forEach(r => { byMonth[r.month] = (byMonth[r.month] ?? 0) + r.amount; });
+    rows.forEach(r => { byMonth[r.month] = (byMonth[r.month] ?? 0) + r.amount; });
     const months = Object.keys(byMonth).sort((a, b) => monthSortKey(a) - monthSortKey(b));
     if (months.length < 2) return null;
     const curr = byMonth[months[months.length - 1]];
     const prev = byMonth[months[months.length - 2]];
     return prev > 0 ? ((curr - prev) / prev) * 100 : null;
-  }, [operatingRows]);
+  }, [operatingRows, filterCat]);
 
-  // ── KPI 6: expense-to-revenue ratio ─────────────────────────────────────────
+  // ── KPI 6: expense-to-revenue ratio (category-scoped when filter active) ─────
+  // Decision: scoped to active category for consistency with other tiles.
+  // When a category is selected the ratio shows that category's spend vs
+  // total revenue — making it easy to see what fraction of revenue one
+  // cost centre consumes. Clearing the filter reverts to portfolio-wide.
   const expToRevRatio = useMemo(() => {
     const rev = filteredRevRows.reduce((s, r) => s + r.amount, 0);
     if (rev === 0) return null;
-    return (filteredOperatingRows.reduce((s, r) => s + r.amount, 0) / rev) * 100;
-  }, [filteredRevRows, filteredOperatingRows]);
+    return (catFilteredRows.reduce((s, r) => s + r.amount, 0) / rev) * 100;
+  }, [filteredRevRows, catFilteredRows]);
 
-  // ── KPI 7: largest single line item in period ────────────────────────────────
+  // ── KPI 7: largest single line item — within active category if filtered ──────
   const largestLineItem = useMemo(() => {
-    if (filteredOperatingRows.length === 0) return null;
+    if (catFilteredRows.length === 0) return null;
     // aggregate to company × category × month first, then pick max
     const agg: Record<string, ExpRow> = {};
-    filteredOperatingRows.forEach(r => {
+    catFilteredRows.forEach(r => {
       const key = `${r.company}|${r.category}|${r.month}`;
       if (agg[key]) agg[key] = { ...agg[key], amount: agg[key].amount + r.amount };
       else agg[key] = { ...r };
     });
     return Object.values(agg).reduce((max, r) => r.amount > max.amount ? r : max, Object.values(agg)[0]);
-  }, [filteredOperatingRows]);
+  }, [catFilteredRows]);
 
   // ── chart data ───────────────────────────────────────────────────────────────
   const allCats = useMemo(() => [...new Set(filteredOperatingRows.map(r => r.category))].sort(), [filteredOperatingRows]);
@@ -249,9 +263,9 @@ export default function RentalExpenses() {
 
   const byCompany = useMemo(() => {
     const byCo: Record<string, number> = {};
-    filteredOperatingRows.forEach(r => { byCo[r.company] = (byCo[r.company] ?? 0) + r.amount; });
+    catFilteredRows.forEach(r => { byCo[r.company] = (byCo[r.company] ?? 0) + r.amount; });
     return Object.entries(byCo).sort((a, b) => b[1] - a[1]).map(([name, amount]) => ({ name, amount }));
-  }, [filteredOperatingRows]);
+  }, [catFilteredRows]);
 
   // trend — all-time last 6 months, operating only
   const trendData = useMemo(() => {
@@ -431,20 +445,26 @@ export default function RentalExpenses() {
               value={momChange === null ? '—' : `${momChange > 0 ? '+' : ''}${momChange.toFixed(1)}%`}
               sub={momChange === null ? undefined : momChange > 0 ? '▲ expenses up vs prior month' : '▼ expenses down vs prior month'}
               warn={momChange !== null && momChange > 10}
-              tip="Percentage change in total monthly operating expenses between the two most recent months with data"
+              tip={filterCat
+                ? `MoM change for "${filterCat}" only — % change in that category's total between its two most recent months`
+                : 'Percentage change in total monthly operating expenses between the two most recent months with data'}
             />
             <KpiTile
               label="Expense / Revenue"
               value={expToRevRatio === null ? '—' : `${expToRevRatio.toFixed(1)}%`}
               sub={expToRevRatio !== null && expToRevRatio > 70 ? '⚠ Above 70% — review cost structure' : undefined}
               warn={expToRevRatio !== null && expToRevRatio > 70}
-              tip="Expense-to-Revenue Ratio = Total Operating Expenses ÷ Total Rental Revenue for the selected period"
+              tip={filterCat
+                ? `"${filterCat}" spend ÷ total rental revenue for the selected period. Category-scoped when a filter is active.`
+                : 'Expense-to-Revenue Ratio = Total Operating Expenses ÷ Total Rental Revenue for the selected period'}
             />
             <KpiTile
               label="Largest Line Item"
               value={largestLineItem ? fmtUSD(largestLineItem.amount) : '—'}
               sub={largestLineItem ? `${largestLineItem.company.split(' ')[0]} · ${largestLineItem.category} · ${largestLineItem.month}` : undefined}
-              tip="Single largest expense entry (company × category × month) in the selected period"
+              tip={filterCat
+                ? `Largest single entry within "${filterCat}" (company × month) in the selected period`
+                : 'Single largest expense entry (company × category × month) in the selected period'}
             />
           </div>
 
@@ -549,7 +569,18 @@ export default function RentalExpenses() {
             {/* By Company — click bar to drill down */}
             <div className="rounded-xl p-4" style={{ background: '#FBF6EE', border: '1px solid #E8DEC8' }}>
               <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Expense by Company</p>
-              <p style={{ fontSize: 12, color: '#A8A29E', marginBottom: 8 }}>Click a bar to filter to that company</p>
+              <p style={{ fontSize: 12, color: '#A8A29E', marginBottom: 2 }}>Click a bar to filter to that company</p>
+              <p style={{ fontSize: 11, color: '#B8A99A', marginBottom: 8 }}>
+                Formula: sum of leaf-level expense lines per company ·{' '}
+                <span style={{ fontWeight: 600, color: filterCat ? '#78716C' : '#B8A99A' }}>
+                  {filterCat ? `category: ${filterCat}` : 'all categories'}
+                </span>
+                {' · '}
+                <span style={{ fontWeight: 600, color: period ? '#78716C' : '#B8A99A' }}>
+                  {period ?? 'all periods'}
+                </span>
+                {' · excludes Sec 481(a)'}
+              </p>
               {byCompany.length > 0 ? (
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={byCompany} layout="vertical" margin={{ left: 4, right: 16, top: 4, bottom: 4 }}
