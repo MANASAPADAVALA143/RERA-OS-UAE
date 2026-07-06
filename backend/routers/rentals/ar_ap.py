@@ -6,7 +6,7 @@ import tempfile
 import uuid
 from collections import defaultdict
 from datetime import date, datetime
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -499,11 +499,76 @@ def _row_dict(r: QBArAgingRow) -> dict:
     }
 
 
+def _enrich_aging_preview_rows(
+    parse_result: dict,
+    *,
+    companies: list,
+    units_by_co: dict,
+    force_company_id: Optional[str] = None,
+) -> tuple[list, list, list, list]:
+    """Return (preview_rows, matched_names, unmatched_list, credit_rows)."""
+    co_list = companies
+    if force_company_id:
+        co_list = [c for c in companies if c["id"] == force_company_id]
+        if not co_list:
+            raise HTTPException(status_code=400, detail=f"Unknown company_id: {force_company_id}")
+
+    co_name = co_list[0]["company_name"] if force_company_id and co_list else ""
+
+    matched, unmatched = [], []
+    preview_rows = []
+    for row in parse_result["rows"]:
+        uid, cid = match_row_to_unit(row, units_by_co, co_list if force_company_id else companies)
+        if force_company_id and cid is None:
+            cid = force_company_id
+            if not row.get("building"):
+                row = {**row, "building": co_name}
+        enriched = {
+            **row,
+            "matched_unit_id": uid,
+            "matched_company_id": cid,
+            "is_unmatched": uid is None,
+        }
+        preview_rows.append(enriched)
+        if uid is None:
+            unmatched.append({
+                "customer": row["customer"],
+                "unit_ref": row.get("unit_ref"),
+                "building": row.get("building", ""),
+                "company_id": cid,
+            })
+        else:
+            matched.append(row["customer"])
+
+    credit_rows = [
+        {
+            "customer": r["customer"],
+            "has_credit": True,
+            "days_61_90": r["days_61_90"],
+            "days_91_plus": r["days_91_plus"],
+        }
+        for r in preview_rows if r["has_credit"]
+    ]
+    return preview_rows, matched, unmatched, credit_rows
+
+
+def _portfolio_totals_from_rows(preview_rows: list) -> dict:
+    return {
+        "current":      round(sum(r["current"]      for r in preview_rows), 2),
+        "days_1_30":    round(sum(r["days_1_30"]    for r in preview_rows), 2),
+        "days_31_60":   round(sum(r["days_31_60"]   for r in preview_rows), 2),
+        "days_61_90":   round(sum(r["days_61_90"]   for r in preview_rows), 2),
+        "days_91_plus": round(sum(r["days_91_plus"]  for r in preview_rows), 2),
+        "total":        round(sum(r["total"]         for r in preview_rows), 2),
+    }
+
+
 @router.post("/ar-ap/qb-aging/preview")
 async def qb_aging_preview(
     file: UploadFile = File(...),
     as_of_date: str  = Form(...),           # ISO date "2026-06-30"
     snapshot_month: str = Form(""),         # "Jun-2026" display label
+    company_id: str = Form(""),             # optional — company-wise aging file
     current_user: CurrentUser = Depends(require_write_access()),
     db: Session = Depends(get_db),
 ):
@@ -537,28 +602,12 @@ async def qb_aging_preview(
             "id": str(u.id), "unit_number": u.unit_number, "company_id": str(u.company_id)
         })
 
-    matched, unmatched = [], []
-    preview_rows = []
-    for row in result["rows"]:
-        uid, cid = match_row_to_unit(row, units_by_co, co_list)
-        enriched = {**row, "matched_unit_id": uid, "matched_company_id": cid, "is_unmatched": uid is None}
-        preview_rows.append(enriched)
-        if uid is None:
-            unmatched.append({"customer": row["customer"], "unit_ref": row.get("unit_ref"), "building": row["building"]})
-        else:
-            matched.append(row["customer"])
+    force_cid = company_id.strip() or None
+    preview_rows, matched, unmatched, credit_rows = _enrich_aging_preview_rows(
+        result, companies=co_list, units_by_co=units_by_co, force_company_id=force_cid,
+    )
 
-    credit_rows = [r for r in preview_rows if r["has_credit"]]
-
-    # Portfolio-level bucket totals
-    totals = {
-        "current":     sum(r["current"]     for r in preview_rows),
-        "days_1_30":   sum(r["days_1_30"]   for r in preview_rows),
-        "days_31_60":  sum(r["days_31_60"]  for r in preview_rows),
-        "days_61_90":  sum(r["days_61_90"]  for r in preview_rows),
-        "days_91_plus": sum(r["days_91_plus"] for r in preview_rows),
-        "total":       sum(r["total"]        for r in preview_rows),
-    }
+    totals = _portfolio_totals_from_rows(preview_rows)
 
     # Derive snapshot_month from as_of_date if not supplied
     if not snapshot_month:
@@ -576,11 +625,114 @@ async def qb_aging_preview(
         "matched_count":   len(matched),
         "unmatched_count": len(unmatched),
         "unmatched":       unmatched,
-        "credit_rows":     [{"customer": r["customer"], "has_credit": True,
-                              "days_61_90": r["days_61_90"], "days_91_plus": r["days_91_plus"]}
-                             for r in credit_rows],
+        "credit_rows":     credit_rows,
         "skipped_subtotals": result["skipped_subtotals"],
         "portfolio_totals":  totals,
+        "company_id":      force_cid,
+    }
+
+
+@router.post("/ar-ap/qb-aging/preview-batch")
+async def qb_aging_preview_batch(
+    files: List[UploadFile] = File(...),
+    company_ids: List[str] = Form(...),
+    as_of_date: str = Form(...),
+    snapshot_month: str = Form(""),
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    """
+    Parse multiple company-wise AR Aging Summary files in one preview.
+    Each file is paired with a company_id (same order). Use empty company_id for portfolio-wide QB export.
+    """
+    if not files:
+        raise HTTPException(status_code=400, detail="At least one file is required.")
+    if len(company_ids) != len(files):
+        raise HTTPException(
+            status_code=400,
+            detail=f"company_ids length ({len(company_ids)}) must match files ({len(files)}).",
+        )
+
+    tid = current_user.tenant_id
+    companies = db.query(RentalCompany).filter(RentalCompany.tenant_id == tid).all()
+    all_units = db.query(RentalUnit).filter(RentalUnit.tenant_id == tid).all()
+    co_list = [{"id": str(c.id), "company_name": c.company_name} for c in companies]
+    units_by_co: dict[str, list] = defaultdict(list)
+    for u in all_units:
+        units_by_co[str(u.company_id)].append({
+            "id": str(u.id), "unit_number": u.unit_number, "company_id": str(u.company_id)
+        })
+
+    all_preview_rows: list = []
+    all_matched: list = []
+    all_unmatched: list = []
+    all_credit: list = []
+    skipped_subtotals = 0
+    file_summaries = []
+    errors = []
+
+    for upload, cid_raw in zip(files, company_ids):
+        force_cid = cid_raw.strip() or None
+        if force_cid and force_cid not in {c["id"] for c in co_list}:
+            errors.append(f"{upload.filename}: unknown company")
+            continue
+
+        contents = await upload.read()
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".xlsx")
+        try:
+            with os.fdopen(tmp_fd, "wb") as fh:
+                fh.write(contents)
+            result = parse_qb_ar_aging(tmp_path)
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+        if result.get("error"):
+            errors.append(f"{upload.filename}: {result['error']}")
+            continue
+
+        skipped_subtotals += result.get("skipped_subtotals", 0)
+        rows, matched, unmatched, credit_rows = _enrich_aging_preview_rows(
+            result, companies=co_list, units_by_co=units_by_co, force_company_id=force_cid,
+        )
+        all_preview_rows.extend(rows)
+        all_matched.extend(matched)
+        all_unmatched.extend(unmatched)
+        all_credit.extend(credit_rows)
+
+        co_label = next((c["company_name"] for c in co_list if c["id"] == force_cid), "Portfolio")
+        file_summaries.append({
+            "filename": upload.filename,
+            "company_id": force_cid,
+            "company_name": co_label,
+            "row_count": len(rows),
+        })
+
+    if errors and not all_preview_rows:
+        raise HTTPException(status_code=400, detail="; ".join(errors))
+
+    if not snapshot_month:
+        try:
+            d = date.fromisoformat(as_of_date)
+            snapshot_month = d.strftime("%b-%Y")
+        except ValueError:
+            snapshot_month = as_of_date
+
+    totals = _portfolio_totals_from_rows(all_preview_rows)
+
+    return {
+        "as_of_date": as_of_date,
+        "snapshot_month": snapshot_month,
+        "rows": all_preview_rows,
+        "row_count": len(all_preview_rows),
+        "matched_count": len(all_matched),
+        "unmatched_count": len(all_unmatched),
+        "unmatched": all_unmatched,
+        "credit_rows": all_credit,
+        "skipped_subtotals": skipped_subtotals,
+        "portfolio_totals": totals,
+        "file_summaries": file_summaries,
+        "parse_errors": errors,
     }
 
 

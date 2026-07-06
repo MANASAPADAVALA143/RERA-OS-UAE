@@ -195,15 +195,17 @@ export default function RentalPortfolioUpload() {
             <span className="text-xl">📋</span>
           </div>
           <div>
-            <div className="text-sm font-semibold text-gray-800">QB AR Aging Sync</div>
+            <div className="text-sm font-semibold text-gray-800">AR Aging Sync</div>
             <div className="text-xs text-gray-400">
-              Upload QuickBooks AR Aging Detail by Customer.xlsx
+              Upload company-wise AR Aging Summary Excel (one file per entity)
             </div>
           </div>
         </div>
         <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-          Separate from Rent Receivable — required to populate <strong>Overview → Arrears Aging by Bucket</strong>,
-          <strong> Arrears Days Outstanding</strong>, and <strong>Top Risk Companies</strong> arrears days.
+          Separate from Rent Receivable — upload each company&apos;s aging analysis Excel with buckets
+          (Current / 1–30d / 31–60d / 61–90d / 90+d). Merges into one snapshot for
+          <strong> Overview → Arrears Aging by Bucket</strong>, <strong>Arrears Days Outstanding</strong>,
+          and <strong>Top Risk Companies</strong>.
         </p>
         <QbArAgingUploadPanel
           qbAging={qbAging}

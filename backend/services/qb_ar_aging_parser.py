@@ -21,7 +21,7 @@ import openpyxl
 
 # ── Column header variants seen in QB exports ─────────────────────────────────
 _CURRENT_RE = re.compile(r'current', re.I)
-_1_30_RE    = re.compile(r'1\s*[-–]\s*30', re.I)
+_1_30_RE    = re.compile(r'(?:1|0)\s*[-–]\s*30', re.I)
 _31_60_RE   = re.compile(r'31\s*[-–]\s*60', re.I)
 _61_90_RE   = re.compile(r'61\s*[-–]\s*90', re.I)
 _91P_RE     = re.compile(r'91\s*(and\s*over|plus|\+)', re.I)
