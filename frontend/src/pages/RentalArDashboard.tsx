@@ -351,10 +351,9 @@ export default function RentalArDashboard() {
     });
   }, [tenantAging, tenantSortCol, tenantSortAsc]);
 
-  // ── Property treemap data (ranked bar fallback) ────────────────────────────
+  // ── Property ranked bar — always show all companies ──────────────────────
   const propertyBarData = useMemo(() =>
     [...companies]
-      .filter(c => c.latest_outstanding > 0 || c.billed_per_month > 0)
       .sort((a, b) => b.latest_outstanding - a.latest_outstanding)
       .map(c => ({
         company:     c.company_name,
@@ -845,7 +844,7 @@ export default function RentalArDashboard() {
       })()}
 
       {/* ══ NEW SECTION 3 — OVERDUE TREND BY BUCKET (gated: 3+ snapshots) ════ */}
-      {!!port && qbAging?.has_data && (
+      {!!port && (
         bucketTrend.length >= 3 ? (
           <div style={CARD}>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>Overdue Trend by Aging Bucket</div>
@@ -876,8 +875,9 @@ export default function RentalArDashboard() {
           <div style={{ ...CARD, textAlign: 'center', padding: '28px 16px' }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1917', marginBottom: 6 }}>Overdue Trend by Bucket</div>
             <div style={{ fontSize: 12, color: '#9CA3AF' }}>
-              Collecting history — chart appears after 3 monthly snapshots.
-              Currently {qbAging.snapshot_count ?? 0} of 3 required.
+              Collecting history — chart appears after 3 monthly QB AR Aging snapshots.
+              Currently {qbAging?.snapshot_count ?? 0} of 3 required.
+              {!qbAging?.has_data && ' Upload QB AR Aging below to start.'}
             </div>
           </div>
         )
