@@ -189,3 +189,26 @@ export function parseMonthKey(k: string): { month: number; year: number } {
   const year = parseInt(parts[parts.length - 1], 10);
   return { month: month > 0 ? month : 1, year: Number.isFinite(year) ? year : new Date().getFullYear() };
 }
+
+/** Minimum dollar denominator before MoM% or ratio% is shown (avoids divide-by-near-zero). */
+export const KPI_MIN_DENOMINATOR = 100;
+
+export function prevMonthKey(k: string): string {
+  const [m, y] = k.split(' ');
+  const mi = MNAMES.indexOf(m);
+  return mi === 0 ? `Dec ${parseInt(y, 10) - 1}` : `${MNAMES[mi - 1]} ${y}`;
+}
+
+/** Safe month-over-month % — returns null when prior period is missing or below threshold. */
+export function safeMomPct(curr: number, prev: number, minDenom = KPI_MIN_DENOMINATOR): number | null {
+  if (!Number.isFinite(curr) || !Number.isFinite(prev)) return null;
+  if (prev < minDenom) return null;
+  return ((curr - prev) / prev) * 100;
+}
+
+/** Safe ratio % (numerator ÷ denominator × 100) — null when denominator is too small. */
+export function safeRatioPct(numerator: number, denominator: number, minDenom = KPI_MIN_DENOMINATOR): number | null {
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator)) return null;
+  if (denominator < minDenom) return null;
+  return (numerator / denominator) * 100;
+}

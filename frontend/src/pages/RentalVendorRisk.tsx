@@ -6,12 +6,13 @@ import { LoadingSkeleton } from '../components/ui/Table';
 import { fmtUSD } from '../components/ProtectedRoute';
 
 interface RiskItem {
+  vendor_id?: string;
   vendor_name: string;
   vendor_category: string | null;
-  ap_amount: number;
-  ap_pct: number;
+  total_ap_owed: number;
+  pct_of_total_payable: number;
   concentration_flag: boolean;
-  open_maintenance: number;
+  open_maintenance_requests: number;
   repeat_issues_flag: boolean;
   last_payment_date: string | null;
 }
@@ -117,6 +118,24 @@ export default function RentalVendorRisk() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1C1917' }}>Vendor Risk</h1>
+          <p style={{ fontSize: 13, color: '#78716C', marginTop: 2 }}>
+            Track vendor AP exposure, concentration, and maintenance signals
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowForm(v => !v)}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white shrink-0"
+          style={{ background: showForm ? '#1A5249' : '#0E3B36' }}
+        >
+          <Plus size={16} /> {showForm ? 'Close Form' : 'Add Vendor'}
+        </button>
+      </div>
+
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total AP Exposure" value={fmtUSD(data.total_ap)} />
@@ -125,14 +144,6 @@ export default function RentalVendorRisk() {
           accent={data.concentration_risk_count > 0} />
         <KpiCard label="Repeat Issues" value={String(data.repeat_issue_count)}
           accent={data.repeat_issue_count > 0} />
-      </div>
-
-      {/* Add vendor */}
-      <div>
-        <button onClick={() => setShowForm(v => !v)}
-          className="flex items-center gap-2 bg-[#0E3B36] text-white px-4 py-2 rounded-lg text-sm hover:bg-[#1A5249]">
-          <Plus size={16} /> Add Vendor
-        </button>
       </div>
 
       {showForm && (
@@ -213,21 +224,28 @@ export default function RentalVendorRisk() {
             </thead>
             <tbody>
               {data.items.map((item, i) => (
-                <tr key={item.vendor_name} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                <tr key={item.vendor_id ?? item.vendor_name} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                   <td className="px-3 py-2 font-medium">{item.vendor_name}</td>
                   <td className="px-3 py-2 text-gray-500">{item.vendor_category ? CAT_LABELS[item.vendor_category] ?? item.vendor_category : '—'}</td>
-                  <td className="px-3 py-2 text-right">{fmtUSD(item.ap_amount)}</td>
-                  <td className="px-3 py-2 text-right">{pct(item.ap_pct)}</td>
+                  <td className="px-3 py-2 text-right">{item.total_ap_owed > 0 ? fmtUSD(item.total_ap_owed) : '—'}</td>
+                  <td className="px-3 py-2 text-right">{pct(item.pct_of_total_payable)}</td>
                   <td className="px-3 py-2 text-center">{concentrationBadge(item.concentration_flag)}</td>
-                  <td className="px-3 py-2 text-right">{item.open_maintenance}</td>
+                  <td className="px-3 py-2 text-right">{item.open_maintenance_requests || '—'}</td>
                   <td className="px-3 py-2 text-center">{repeatBadge(item.repeat_issues_flag)}</td>
                   <td className="px-3 py-2 text-right">{item.last_payment_date ?? '—'}</td>
                 </tr>
               ))}
               {data.items.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-3 py-6 text-center text-gray-400">
-                    No vendors yet. Add the first one above.
+                  <td colSpan={8} className="px-3 py-8 text-center text-gray-400">
+                    <p className="mb-3">No vendors yet.</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowForm(true)}
+                      className="inline-flex items-center gap-2 bg-[#0E3B36] text-white px-4 py-2 rounded-lg text-sm font-medium"
+                    >
+                      <Plus size={14} /> Add your first vendor
+                    </button>
                   </td>
                 </tr>
               )}
@@ -237,9 +255,18 @@ export default function RentalVendorRisk() {
       </Card>
 
       {/* Registered vendors list */}
-      {vendors.length > 0 && (
-        <Card>
-          <h3 className="font-semibold text-gray-800 mb-3">Registered Vendors</h3>
+      <Card>
+        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+          <h3 className="font-semibold text-gray-800">Registered Vendors ({vendors.length})</h3>
+          <button
+            type="button"
+            onClick={() => setShowForm(true)}
+            className="text-sm font-medium text-[#0E3B36] hover:underline"
+          >
+            + Add another vendor
+          </button>
+        </div>
+        {vendors.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-gray-700">
               <thead>
@@ -263,8 +290,12 @@ export default function RentalVendorRisk() {
               </tbody>
             </table>
           </div>
-        </Card>
-      )}
+        ) : (
+          <p className="text-sm text-gray-400 py-4 text-center">
+            No vendors registered. Click <strong>Add Vendor</strong> above to add one.
+          </p>
+        )}
+      </Card>
     </div>
   );
 }

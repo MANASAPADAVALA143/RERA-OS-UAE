@@ -16,16 +16,13 @@ import {
   classifyLabel, flattenItems,
   MNAMES, monthSortKey, allMonthKeys,
   EXP_PALETTE, catColor,
+  prevMonthKey, safeMomPct, safeRatioPct,
 } from '../utils/rentalExpenseUtils';
 interface CompanyOption { id: string; company_name: string }
 interface ExpRow { company: string; category: string; month: string; amount: number }
 
 // ── dev debug ─────────────────────────────────────────────────────────────────
 const DEBUG_EXPENSES = false;
-function prevMonthKey(k: string): string {
-  const [m, y] = k.split(' '); const mi = MNAMES.indexOf(m);
-  return mi === 0 ? `Dec ${parseInt(y)-1}` : `${MNAMES[mi-1]} ${y}`;
-}
 
 // ── row builders ──────────────────────────────────────────────────────────────
 function buildExpRows(companyName: string, pl: FinItem[]): ExpRow[] {
@@ -215,29 +212,92 @@ export default function RentalExpenses() {
     return months.length > 0 ? Object.values(byMonth).reduce((s, v) => s + v, 0) / months.length : 0;
   }, [catFilteredRows]);
 
-  // ── KPI 5: MoM change — scoped to active category when one is selected ───────
+  // ── KPI 5: MoM change — same period window + company scope as other KPIs ─────
   const momChange = useMemo(() => {
-    // use all-time operating rows, filtered by active category if set
-    const rows = filterCat ? operatingRows.filter(r => r.category === filterCat) : operatingRows;
-    const byMonth: Record<string, number> = {};
-    rows.forEach(r => { byMonth[r.month] = (byMonth[r.month] ?? 0) + r.amount; });
-    const months = Object.keys(byMonth).sort((a, b) => monthSortKey(a) - monthSortKey(b));
-    if (months.length < 2) return null;
-    const curr = byMonth[months[months.length - 1]];
-    const prev = byMonth[months[months.length - 2]];
-    return prev > 0 ? ((curr - prev) / prev) * 100 : null;
-  }, [operatingRows, filterCat]);
+    const rows = filterCat
+      ? (period ? filteredOperatingRows : operatingRows).filter(r => r.category === filterCat)
+      : (period ? filteredOperatingRows : operatingRows);
 
-  // ── KPI 6: expense-to-revenue ratio (category-scoped when filter active) ─────
-  // Decision: scoped to active category for consistency with other tiles.
-  // When a category is selected the ratio shows that category's spend vs
-  // total revenue — making it easy to see what fraction of revenue one
-  // cost centre consumes. Clearing the filter reverts to portfolio-wide.
+    const sumForMonth = (key: string) =>
+      rows.filter(r => r.month === key).reduce((s, r) => s + r.amount, 0);
+
+    let currKey: string;
+    let prevKey: string;
+
+    if (period === 'MoM') {
+      const keys = getPeriodKeys('MoM', pMonth, pYear);
+      prevKey = keys[0];
+      currKey = keys[1];
+    } else if (period) {
+      const windowKeys = getPeriodKeys(period, pMonth, pYear);
+      if (windowKeys.length < 2) return null;
+      prevKey = windowKeys[windowKeys.length - 2];
+      currKey = windowKeys[windowKeys.length - 1];
+    } else {
+      currKey = currentMonthKey;
+      prevKey = prevMonthKey(currentMonthKey);
+    }
+
+    const curr = sumForMonth(currKey);
+    const prev = sumForMonth(prevKey);
+
+    if (DEBUG_EXPENSES) {
+      console.log('[ExpenseKPI] MoM', {
+        period: period ?? `Latest · ${currentMonthKey}`,
+        currKey, prevKey, curr, prev,
+        filterCompany: filterCompany || 'all',
+        filterCat: filterCat ?? 'all',
+      });
+    }
+
+    return safeMomPct(curr, prev);
+  }, [operatingRows, filteredOperatingRows, filterCat, period, pMonth, pYear, currentMonthKey, filterCompany]);
+
+  // ── KPI 6: expense-to-revenue ratio — matched period + company scope ─────────
   const expToRevRatio = useMemo(() => {
-    const rev = filteredRevRows.reduce((s, r) => s + r.amount, 0);
-    if (rev === 0) return null;
-    return (catFilteredRows.reduce((s, r) => s + r.amount, 0) / rev) * 100;
-  }, [filteredRevRows, catFilteredRows]);
+    const expenseRows = period
+      ? catFilteredRows
+      : operatingRows.filter(r => r.month === currentMonthKey && (!filterCat || r.category === filterCat));
+    const revRows = period
+      ? filteredRevRows
+      : allRevRows.filter(r => r.month === currentMonthKey);
+
+    const exp = expenseRows.reduce((s, r) => s + r.amount, 0);
+    const rev = revRows.reduce((s, r) => s + r.amount, 0);
+
+    if (DEBUG_EXPENSES) {
+      console.log('[ExpenseKPI] Exp/Rev', {
+        period: period ?? `Latest · ${currentMonthKey}`,
+        exp, rev,
+        filterCompany: filterCompany || 'all',
+        filterCat: filterCat ?? 'all',
+      });
+    }
+
+    return safeRatioPct(exp, rev);
+  }, [period, catFilteredRows, operatingRows, currentMonthKey, filterCat, filteredRevRows, allRevRows, filterCompany]);
+
+  // One-time diagnostic: log old (misaligned) vs new inputs when data loads
+  useEffect(() => {
+    if (!DEBUG_EXPENSES || loading || operatingRows.length === 0) return;
+    const oldExpAll = operatingRows.reduce((s, r) => s + r.amount, 0);
+    const oldRevAll = allRevRows.reduce((s, r) => s + r.amount, 0);
+    const newExp = operatingRows.filter(r => r.month === currentMonthKey).reduce((s, r) => s + r.amount, 0);
+    const newRev = allRevRows.filter(r => r.month === currentMonthKey).reduce((s, r) => s + r.amount, 0);
+    const byMonth: Record<string, number> = {};
+    operatingRows.forEach(r => { byMonth[r.month] = (byMonth[r.month] ?? 0) + r.amount; });
+    const months = Object.keys(byMonth).sort((a, b) => monthSortKey(a) - monthSortKey(b));
+    const oldPrev = months.length >= 2 ? byMonth[months[months.length - 2]] : 0;
+    const oldCurr = months.length >= 1 ? byMonth[months[months.length - 1]] : 0;
+    const newPrev = operatingRows.filter(r => r.month === prevMonthKey(currentMonthKey)).reduce((s, r) => s + r.amount, 0);
+    const newCurr = operatingRows.filter(r => r.month === currentMonthKey).reduce((s, r) => s + r.amount, 0);
+    console.group('[ExpenseKPI] Diagnosis — old vs fixed inputs');
+    console.log('Expense/Revenue (OLD: all months summed)', { exp: oldExpAll, rev: oldRevAll, ratioPct: oldRevAll > 0 ? (oldExpAll / oldRevAll) * 100 : null });
+    console.log('Expense/Revenue (FIXED: same month)', { month: currentMonthKey, exp: newExp, rev: newRev, ratioPct: safeRatioPct(newExp, newRev) });
+    console.log('MoM (OLD: last two months in data)', { prevMonth: months[months.length - 2], prev: oldPrev, currMonth: months[months.length - 1], curr: oldCurr, momPct: safeMomPct(oldCurr, oldPrev) });
+    console.log('MoM (FIXED: current vs prior calendar month)', { prevMonth: prevMonthKey(currentMonthKey), prev: newPrev, currMonth: currentMonthKey, curr: newCurr, momPct: safeMomPct(newCurr, newPrev) });
+    console.groupEnd();
+  }, [loading, operatingRows, allRevRows, currentMonthKey]);
 
   // ── KPI 7: largest single line item — within active category if filtered ──────
   const largestLineItem = useMemo(() => {
@@ -275,8 +335,8 @@ export default function RentalExpenses() {
     const prev6 = months.slice(-7); // include 7 so we can compute MoM in tooltip
     return prev6.slice(-6).map(month => {
       const prevKey = prevMonthKey(month);
-      const mom = byMonth[prevKey] > 0 ? ((byMonth[month] - byMonth[prevKey]) / byMonth[prevKey] * 100) : 0;
-      return { month, amount: parseFloat((byMonth[month] ?? 0).toFixed(2)), mom: parseFloat(mom.toFixed(1)) };
+      const momVal = safeMomPct(byMonth[month] ?? 0, byMonth[prevKey] ?? 0);
+      return { month, amount: parseFloat((byMonth[month] ?? 0).toFixed(2)), mom: momVal };
     });
   }, [operatingRows]);
 
@@ -442,21 +502,21 @@ export default function RentalExpenses() {
               tip="Average monthly operating expense across the months in the selected period window" />
             <KpiTile
               label="MoM Change"
-              value={momChange === null ? '—' : `${momChange > 0 ? '+' : ''}${momChange.toFixed(1)}%`}
-              sub={momChange === null ? undefined : momChange > 0 ? '▲ expenses up vs prior month' : '▼ expenses down vs prior month'}
+              value={momChange === null ? 'N/A' : `${momChange > 0 ? '+' : ''}${momChange.toFixed(1)}%`}
+              sub={momChange === null ? 'Insufficient prior data' : momChange > 0 ? '▲ expenses up vs prior month' : '▼ expenses down vs prior month'}
               warn={momChange !== null && momChange > 10}
               tip={filterCat
-                ? `MoM change for "${filterCat}" only — % change in that category's total between its two most recent months`
-                : 'Percentage change in total monthly operating expenses between the two most recent months with data'}
+                ? `MoM change for "${filterCat}" only — % change in that category's total between the prior and current month in the selected period`
+                : 'Percentage change in total monthly operating expenses between the prior and current month (same company scope as other KPIs)'}
             />
             <KpiTile
               label="Expense / Revenue"
-              value={expToRevRatio === null ? '—' : `${expToRevRatio.toFixed(1)}%`}
-              sub={expToRevRatio !== null && expToRevRatio > 70 ? '⚠ Above 70% — review cost structure' : undefined}
+              value={expToRevRatio === null ? 'N/A' : `${expToRevRatio.toFixed(1)}%`}
+              sub={expToRevRatio === null ? 'Insufficient revenue data' : expToRevRatio > 70 ? '⚠ Above 70% — review cost structure' : undefined}
               warn={expToRevRatio !== null && expToRevRatio > 70}
               tip={filterCat
-                ? `"${filterCat}" spend ÷ total rental revenue for the selected period. Category-scoped when a filter is active.`
-                : 'Expense-to-Revenue Ratio = Total Operating Expenses ÷ Total Rental Revenue for the selected period'}
+                ? `"${filterCat}" spend ÷ total rental revenue for the same period and company scope. Category-scoped when a filter is active.`
+                : 'Expense-to-Revenue Ratio = Operating Expenses ÷ Rental Revenue for the same period and company scope'}
             />
             <KpiTile
               label="Largest Line Item"
@@ -619,9 +679,9 @@ export default function RentalExpenses() {
                       tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                     <Tooltip
                       formatter={(v: number) => fmtUSD(v)}
-                      labelFormatter={(label: string, payload: { payload: { mom: number } }[]) => {
+                      labelFormatter={(label: string, payload: { payload: { mom: number | null } }[]) => {
                         const mom = payload?.[0]?.payload?.mom;
-                        return `${label}${mom !== undefined ? `  •  MoM: ${mom > 0 ? '+' : ''}${mom}%` : ''}`;
+                        return `${label}${mom !== null && mom !== undefined ? `  •  MoM: ${mom > 0 ? '+' : ''}${mom.toFixed(1)}%` : ''}`;
                       }}
                       {...TT} />
                     <Line type="monotone" dataKey="amount" stroke="#D4AF37" strokeWidth={2}

@@ -1105,15 +1105,40 @@ export default function RentalArDashboard() {
             </ResponsiveContainer>
           </div>
         ) : (
-          <div style={{ ...CARD, textAlign: 'center', padding: '28px 16px' }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1917', marginBottom: 6 }}>Overdue Trend by Bucket</div>
-            <div style={{ fontSize: 12, color: '#9CA3AF' }}>
-              Collecting history — chart appears after 3 monthly QB AR Aging snapshots.
-              Currently {qbAging?.snapshot_count ?? 0} of 3 required.
-              {!qbAging?.has_data && ' Upload QB AR Aging below to start.'}
-            </div>
+          <div style={CARD}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1917' }}>Overdue Trend by Bucket</div>
           </div>
         )
+      )}
+
+      {/* ── RECON FLAGS (below Overdue Trend) ─────────────────────────────── */}
+      {reconFlags.length > 0 && (
+        <div style={{ background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 10, padding: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#92400E', marginBottom: 10 }}>
+            ⚠️ {reconFlags.length} Reconciliation Flag{reconFlags.length > 1 ? 's' : ''} — Rent Receivable vs P&L differ &gt; 2%
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 8 }}>
+            {reconFlags.map((f, i) => (
+              <div key={i} style={{ background: '#fff', border: '1px solid #FCD34D', borderRadius: 6, padding: '10px 12px', fontSize: 11 }}>
+                <div style={{ fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>{f.company} · {f.month}</div>
+                <div style={{ color: '#2F80ED' }}>Rent Receivable: {fmt$(f.rent_receivable)}</div>
+                <div style={{ color: '#92400E' }}>P&L: {fmt$(f.pl)}</div>
+                <div style={{ color: '#D9534F', fontWeight: 600, marginTop: 2 }}>Δ {f.diff_pct}% difference</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── QB snapshot collecting history (below Overdue Trend) ──────────── */}
+      {!!port && bucketTrend.length < 3 && (
+        <div style={{ ...CARD, textAlign: 'center', padding: '20px 16px' }}>
+          <div style={{ fontSize: 12, color: '#9CA3AF' }}>
+            Collecting history — chart appears after 3 monthly QB AR Aging snapshots.
+            Currently {qbAging?.snapshot_count ?? 0} of 3 required.
+            {!qbAging?.has_data && ' Upload QB AR Aging below to start.'}
+          </div>
+        </div>
       )}
 
       {/* ── COMPANY × MONTH DETAIL TABLE ─────────────────────────────────── */}
@@ -1224,25 +1249,6 @@ export default function RentalArDashboard() {
                 </tfoot>
               )}
             </table>
-          </div>
-        </div>
-      )}
-
-      {/* ── RECON FLAGS ──────────────────────────────────────────────────── */}
-      {reconFlags.length > 0 && (
-        <div style={{ background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 10, padding: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#92400E', marginBottom: 10 }}>
-            ⚠️ {reconFlags.length} Reconciliation Flag{reconFlags.length > 1 ? 's' : ''} — Rent Receivable vs P&L differ &gt; 2%
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 8 }}>
-            {reconFlags.map((f, i) => (
-              <div key={i} style={{ background: '#fff', border: '1px solid #FCD34D', borderRadius: 6, padding: '10px 12px', fontSize: 11 }}>
-                <div style={{ fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>{f.company} · {f.month}</div>
-                <div style={{ color: '#2F80ED' }}>Rent Receivable: {fmt$(f.rent_receivable)}</div>
-                <div style={{ color: '#92400E' }}>P&L: {fmt$(f.pl)}</div>
-                <div style={{ color: '#D9534F', fontWeight: 600, marginTop: 2 }}>Δ {f.diff_pct}% difference</div>
-              </div>
-            ))}
           </div>
         </div>
       )}
