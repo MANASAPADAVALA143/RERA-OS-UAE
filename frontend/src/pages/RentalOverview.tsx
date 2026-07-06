@@ -8,6 +8,7 @@ import { X } from 'lucide-react';
 import api from '../services/api';
 import { fmtUSD, fmtPct } from '../components/ProtectedRoute';
 import { useRentalNav } from '../contexts/RentalNavContext';
+import QbArAgingUploadPanel, { type QBAgingLatest, estimateDsoFromBuckets } from '../components/rental/QbArAgingUploadPanel';
 
 // ── palette & style constants ─────────────────────────────────────────────────
 
@@ -19,6 +20,14 @@ const C_GOLD  = '#D4AF37';
 const C_CARD  = '#FBF6EE';
 const C_BORD  = '#E8DEC8';
 const OCCUPANCY_TARGET = 92; // percent
+
+/** Distinct bar colors per company — estate palette with varied hues */
+const COMPANY_BAR_COLORS = [
+  '#E76F6F', '#D4AF37', '#18B7A0', '#7B68AD', '#E9A358',
+  '#5B9BD5', '#C75B7A', '#6B8E6B', '#D97B4A', '#4A90A4',
+];
+
+const AGING_BUCKET_COLORS = ['#22A06B', '#F5A623', '#E97316', '#DC2626', '#991B1B'];
 
 const CARD: React.CSSProperties = {
   background: C_CARD,
@@ -250,15 +259,31 @@ export default function RentalOverview() {
   const [error, setError]                 = useState('');
   const isFirstLoad = useRef(true);
 
-  // QB aging DSO — fetched once, independent of month filter
-  const [qbDso, setQbDso] = useState<number | null>(null);
-  useEffect(() => {
-    api.get<{ has_data: boolean; dso_estimate?: number | null; portfolio_totals?: Record<string, number> }>(
-      '/api/rentals/ar-ap/qb-aging/latest'
-    ).then(r => {
-      if (r.data.has_data && r.data.dso_estimate != null) setQbDso(r.data.dso_estimate);
-    }).catch(() => {});
+  // QB AR Aging — drives aging chart, DSO KPIs, and risk table arrears days
+  const [qbAging, setQbAging] = useState<QBAgingLatest | null>(null);
+  const [qbLoading, setQbLoading] = useState(true);
+
+  const fetchQbAging = useCallback(() => {
+    setQbLoading(true);
+    api.get<QBAgingLatest>('/api/rentals/ar-ap/qb-aging/latest')
+      .then(r => setQbAging(r.data))
+      .catch(() => setQbAging(null))
+      .finally(() => setQbLoading(false));
   }, []);
+
+  useEffect(() => { fetchQbAging(); }, [fetchQbAging]);
+
+  const qbDso = qbAging?.has_data ? (qbAging.dso_estimate ?? null) : null;
+
+  const qbDsoByCompany = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!qbAging?.has_data) return map;
+    for (const co of qbAging.by_company) {
+      const dso = estimateDsoFromBuckets(co);
+      if (dso != null) map.set(co.company_id, dso);
+    }
+    return map;
+  }, [qbAging]);
 
   // ── data fetching ──────────────────────────────────────────────────────────
 
@@ -423,6 +448,30 @@ export default function RentalOverview() {
   const sparkCollected = useMemo(() => trendData.map(d => d.collected).filter(v => v > 0), [trendData]);
   const sparkNoi       = useMemo(() => trendData.map(d => d.noi).filter((_, i, arr) => arr.length > 0), [trendData]);
 
+  // Arrears aging — prefer QB upload buckets; fall back to portfolio-summary
+  const agingData = useMemo(() => {
+    if (qbAging?.has_data && qbAging.portfolio_totals) {
+      const t = qbAging.portfolio_totals;
+      return [
+        { bucket: 'Current', amount: t.current },
+        { bucket: '1–30d', amount: t.days_1_30 },
+        { bucket: '31–60d', amount: t.days_31_60 },
+        { bucket: '61–90d', amount: t.days_61_90 },
+        { bucket: '90+d', amount: t.days_91_plus },
+      ];
+    }
+    if (!data) return [];
+    return [
+      { bucket: 'Current', amount: data.arrears_aging['current'] ?? data.arrears_aging['0_30'] ?? 0 },
+      { bucket: '1–30d', amount: data.arrears_aging['1_30'] ?? data.arrears_aging['0_30'] ?? 0 },
+      { bucket: '31–60d', amount: data.arrears_aging['31_60'] ?? 0 },
+      { bucket: '61–90d', amount: data.arrears_aging['61_90'] ?? 0 },
+      { bucket: '90+d', amount: data.arrears_aging['90_plus'] ?? 0 },
+    ];
+  }, [qbAging, data]);
+  const hasAgingData = agingData.some(d => d.amount > 0);
+  const agingFromQb = qbAging?.has_data ?? false;
+
   // Sync banner
   const lastSyncMonth = useMemo(() => {
     if (selectedCoId) return syncCompanies.find(c => c.id === selectedCoId)?.last_sync_month ?? '';
@@ -471,16 +520,6 @@ export default function RentalOverview() {
   // Occupancy gauge values
   const occPct      = kpis.occupancy_pct * 100;
   const gaugeColor  = occPct >= OCCUPANCY_TARGET ? C_GREEN : occPct >= OCCUPANCY_TARGET - 10 ? C_AMBER : C_RED;
-
-  // Arrears aging — check if any real data exists
-  const agingData = [
-    { bucket: 'Current', amount: data.arrears_aging['current'] ?? data.arrears_aging['0_30'] ?? 0 },
-    { bucket: '1–30d',   amount: data.arrears_aging['1_30']   ?? data.arrears_aging['0_30']  ?? 0 },
-    { bucket: '31–60d',  amount: data.arrears_aging['31_60']  ?? 0 },
-    { bucket: '61–90d',  amount: data.arrears_aging['61_90']  ?? 0 },
-    { bucket: '90+d',    amount: data.arrears_aging['90_plus']?? 0 },
-  ];
-  const hasAgingData = agingData.some(d => d.amount > 0);
 
   return (
     <div className="space-y-5">
@@ -632,13 +671,13 @@ export default function RentalOverview() {
           />
           <SecTile
             label="Arrears Days Outstanding"
-            value={qbDso != null ? `${Math.round(qbDso)} days` : 'Not available'}
-            sub={qbDso != null ? 'Weighted estimate · QB aging buckets' : 'Upload QB AR Aging in AR Dashboard'}
+            value={qbDso != null ? `${Math.round(qbDso)} days` : 'NA'}
+            sub={qbDso != null ? 'Weighted estimate · QB aging buckets' : 'Upload AR Aging below'}
             na={qbDso == null}
           />
           <SecTile
             label="Vacant > 30 Days"
-            value="Not available"
+            value="NA"
             sub="Vacancy date not tracked"
             na
           />
@@ -820,7 +859,9 @@ export default function RentalOverview() {
                   <YAxis type="category" dataKey="name" width={84} tick={{ ...TICK, fontSize: 10 }} />
                   <Tooltip formatter={(v: number) => fmtUSD(v)} {...TT} />
                   <Bar dataKey="loss" name="Vacancy Loss" radius={[0, 4, 4, 0]}>
-                    {vacancyByCompany.map((_, idx) => <Cell key={idx} fill={C_RED} />)}
+                    {vacancyByCompany.map((_, idx) => (
+                      <Cell key={idx} fill={COMPANY_BAR_COLORS[idx % COMPANY_BAR_COLORS.length]} />
+                    ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -877,29 +918,48 @@ export default function RentalOverview() {
         </div>
       )}
 
-      {/* ── Arrears Aging (Chart 6) ───────────────────────────────────────────── */}
+      {/* ── QB AR Aging upload + Arrears Aging chart ─────────────────────────── */}
       {!fetching && (
-        <ChartCard title="Arrears Aging by Bucket">
-          {hasAgingData ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={agingData}>
-                <XAxis dataKey="bucket" tick={TICK} />
-                <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} tick={TICK} />
-                <Tooltip formatter={(v: number) => fmtUSD(v)} {...TT} />
-                <Bar dataKey="amount" name="Arrears" fill={C_RED} radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-12 gap-3">
-              <span style={{ fontSize: 32, opacity: 0.4 }}>📊</span>
-              <span style={{ fontSize: 14, fontWeight: 600, color: '#9B9B9B' }}>Awaiting QB Aging upload</span>
-              <span style={{ fontSize: 12, color: '#B5B5B5', maxWidth: 320, textAlign: 'center' }}>
-                Upload QB "AR Aging Detail by Customer" in the AR Dashboard tab to populate
-                Current / 1–30d / 31–60d / 61–90d / 90+d buckets here.
-              </span>
-            </div>
-          )}
-        </ChartCard>
+        <div className="space-y-3">
+          <QbArAgingUploadPanel
+            qbAging={qbAging}
+            qbLoading={qbLoading}
+            onRefresh={fetchQbAging}
+            defaultExpanded={!qbAging?.has_data}
+          />
+          <ChartCard title="Arrears Aging by Bucket">
+            {hasAgingData ? (
+              <>
+                {agingFromQb && qbAging?.latest_snapshot?.snapshot_month && (
+                  <p style={{ fontSize: 11, color: '#78716C', marginBottom: 8 }}>
+                    From QB AR Aging upload · as of {qbAging.latest_snapshot.snapshot_month}
+                  </p>
+                )}
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={agingData}>
+                    <XAxis dataKey="bucket" tick={TICK} />
+                    <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} tick={TICK} />
+                    <Tooltip formatter={(v: number) => fmtUSD(v)} {...TT} />
+                    <Bar dataKey="amount" name="Arrears" radius={[4, 4, 0, 0]}>
+                      {agingData.map((_, idx) => (
+                        <Cell key={idx} fill={AGING_BUCKET_COLORS[idx % AGING_BUCKET_COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-10 gap-2">
+                <span style={{ fontSize: 28, opacity: 0.4 }}>📊</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#9B9B9B' }}>Awaiting AR Aging upload</span>
+                <span style={{ fontSize: 12, color: '#B5B5B5', maxWidth: 340, textAlign: 'center' }}>
+                  Use the upload panel above to add your QB AR Aging Summary report.
+                  Buckets (Current / 1–30d / 31–60d / 61–90d / 90+d) will appear here.
+                </span>
+              </div>
+            )}
+          </ChartCard>
+        </div>
       )}
 
       {/* ── Top Risk Companies table (Chart 7 / Exception table) ─────────────── */}
@@ -907,7 +967,8 @@ export default function RentalOverview() {
         <div style={CARD}>
           <h3 className="ov-section-title">Top Risk Companies</h3>
           <p style={{ fontSize: 12, color: '#7A7A7A', marginBottom: 12 }}>
-            Ranked by combined arrears + vacancy exposure · Arrears days require aging data upload
+            Ranked by combined arrears + vacancy exposure
+            {qbAging?.has_data ? ' · Arrears days from QB aging upload' : ' · Upload AR Aging above for arrears days'}
           </p>
           <div className="overflow-x-auto">
             <table className="w-full" style={{ fontSize: 14, borderCollapse: 'collapse' }}>
@@ -939,8 +1000,10 @@ export default function RentalOverview() {
                           {(c.occupancy_pct * 100).toFixed(1)}%
                         </span>
                       </td>
-                      <td className="py-2.5 px-3" style={{ color: '#B0B0B0', fontSize: 13 }}>
-                        {qbDso != null ? `~${Math.round(qbDso)}d (portfolio avg)` : 'Upload QB aging'}
+                      <td className="py-2.5 px-3" style={{ color: '#6B6B6B', fontSize: 13, ...TAB_NUM }}>
+                        {qbDsoByCompany.has(c.company_id)
+                          ? `~${qbDsoByCompany.get(c.company_id)}d`
+                          : 'NA'}
                       </td>
                       <td className="py-2.5 px-3">
                         <span style={{

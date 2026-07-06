@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import api from '../services/api';
 import { Card } from '../components/ui/Card';
+import { ParchmentKpiTile } from '../components/ui/ParchmentKpiTile';
 import { LoadingSkeleton } from '../components/ui/Table';
 import { fmtUSD } from '../components/ProtectedRoute';
 import PeriodToggle from '../components/shared/PeriodToggle';
@@ -64,29 +65,6 @@ function buildRevRows(pl: FinItem[]): { month: string; amount: number }[] {
 }
 
 const TT = { contentStyle: { background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: '0.5rem', fontSize: 13 } };
-
-// ── mini KPI card ─────────────────────────────────────────────────────────────
-function KpiTile({ label, value, sub, accent, warn, tip }: {
-  label: string; value: string; sub?: string; accent?: boolean; warn?: boolean; tip?: string;
-}) {
-  return (
-    <div className="exp-kpi-card" title={tip}
-      style={{
-        background: accent ? 'linear-gradient(135deg,#D4AF37,#B8860B)' : warn ? '#FEF3C7' : '#FBF6EE',
-        border: `1px solid ${warn ? '#FDE68A' : '#E8DEC8'}`,
-        borderRadius: 12, padding: '16px 18px', cursor: 'default',
-      }}>
-      <p style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em',
-        color: accent ? 'rgba(255,255,255,0.8)' : warn ? '#92400E' : '#78716C', marginBottom: 4 }}>
-        {label}
-      </p>
-      <p style={{ fontSize: 28, fontWeight: 700, color: accent ? '#fff' : warn ? '#92400E' : '#1C1917', lineHeight: 1.1 }}>
-        {value}
-      </p>
-      {sub && <p style={{ fontSize: 12, color: accent ? 'rgba(255,255,255,0.7)' : '#A8A29E', marginTop: 4 }}>{sub}</p>}
-    </div>
-  );
-}
 
 // ── component ─────────────────────────────────────────────────────────────────
 export default function RentalExpenses() {
@@ -436,9 +414,9 @@ export default function RentalExpenses() {
     <div className="space-y-6">
       {/* scoped CSS */}
       <style>{`
-        .exp-kpi-card { transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
-        .exp-kpi-card:hover { transform: scale(1.03); box-shadow: 0 6px 12px rgba(0,0,0,0.08); }
-        .exp-kpi-card:active { transform: scale(0.98); }
+        .exp-kpi-card, .parchment-kpi-tile { transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
+        .exp-kpi-card:hover, .parchment-kpi-tile:hover { transform: scale(1.03); box-shadow: 0 6px 12px rgba(0,0,0,0.08); }
+        .exp-kpi-card:active, .parchment-kpi-tile:active { transform: scale(0.98); }
         .exp-row:hover td { background: #F7F1E6 !important; }
         .exp-interactive:focus-visible { outline: 2px solid #D4AF37; outline-offset: 2px; }
         .exp-bar-clickable:hover { cursor: pointer; filter: brightness(1.08); }
@@ -488,19 +466,19 @@ export default function RentalExpenses() {
         <>
           {/* ── KPI row 1 ─────────────────────────────────────────────────────── */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <KpiTile label={typeof periodLabel === 'string' ? periodLabel : 'Period'} value={fmtUSD(periodTotal)} accent
+            <ParchmentKpiTile label={typeof periodLabel === 'string' ? periodLabel : 'Period'} value={fmtUSD(periodTotal)} accent
               tip={`Total operating expenses for the selected ${period ?? 'current month'} window`} />
-            <KpiTile label="All Time (all years)" value={fmtUSD(totalAllTime)}
+            <ParchmentKpiTile label="All Time (all years)" value={fmtUSD(totalAllTime)}
               tip="Sum of all recurring operating expenses across every uploaded period. Excludes Sec 481(a) one-time adjustments." />
-            <KpiTile label="Top Category" value={topCategory}
+            <ParchmentKpiTile label="Top Category" value={topCategory}
               tip={`Category with highest spend in the selected period. Matches the largest slice in the Expense by Category donut below.`} />
           </div>
 
           {/* ── KPI row 2 ─────────────────────────────────────────────────────── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <KpiTile label="Avg Monthly Spend" value={fmtUSD(avgMonthlySpend)}
+            <ParchmentKpiTile label="Avg Monthly Spend" value={fmtUSD(avgMonthlySpend)}
               tip="Average monthly operating expense across the months in the selected period window" />
-            <KpiTile
+            <ParchmentKpiTile
               label="MoM Change"
               value={momChange === null ? 'N/A' : `${momChange > 0 ? '+' : ''}${momChange.toFixed(1)}%`}
               sub={momChange === null ? 'Insufficient prior data' : momChange > 0 ? '▲ expenses up vs prior month' : '▼ expenses down vs prior month'}
@@ -509,7 +487,7 @@ export default function RentalExpenses() {
                 ? `MoM change for "${filterCat}" only — % change in that category's total between the prior and current month in the selected period`
                 : 'Percentage change in total monthly operating expenses between the prior and current month (same company scope as other KPIs)'}
             />
-            <KpiTile
+            <ParchmentKpiTile
               label="Expense / Revenue"
               value={expToRevRatio === null ? 'N/A' : `${expToRevRatio.toFixed(1)}%`}
               sub={expToRevRatio === null ? 'Insufficient revenue data' : expToRevRatio > 70 ? '⚠ Above 70% — review cost structure' : undefined}
@@ -518,7 +496,7 @@ export default function RentalExpenses() {
                 ? `"${filterCat}" spend ÷ total rental revenue for the same period and company scope. Category-scoped when a filter is active.`
                 : 'Expense-to-Revenue Ratio = Operating Expenses ÷ Rental Revenue for the same period and company scope'}
             />
-            <KpiTile
+            <ParchmentKpiTile
               label="Largest Line Item"
               value={largestLineItem ? fmtUSD(largestLineItem.amount) : '—'}
               sub={largestLineItem ? `${largestLineItem.company.split(' ')[0]} · ${largestLineItem.category} · ${largestLineItem.month}` : undefined}

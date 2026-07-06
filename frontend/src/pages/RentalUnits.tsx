@@ -9,6 +9,7 @@ import { Card, KpiCard } from '../components/ui/Card';
 import { Table, LoadingSkeleton, type Column } from '../components/ui/Table';
 import { fmtUSD } from '../components/ProtectedRoute';
 import { occupancyStats } from '../utils/occupancyStats';
+import { EXP_PALETTE } from '../utils/rentalExpenseUtils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -320,20 +321,20 @@ function StatusHistoryTab() {
 const LTM_C = {
   teal:  '#18B7A0',
   green: '#26A65B',
-  amber: '#F2C14E',
-  red:   '#E76F6F',
+  amber: '#B8860B',
+  warn:  '#92400E',
   gold:  '#D4AF37',
 };
 const LTM_CARD: React.CSSProperties = {
   background: '#FBF6EE',
   border: '1px solid #E8DEC8',
   borderRadius: 12,
-  padding: '14px 16px',
+  padding: '16px 18px',
 };
-const LTM_TICK = { fill: '#7A7A7A', fontSize: 11 };
+const LTM_TICK = { fill: '#78716C', fontSize: 12 };
 const LTM_TT = {
-  contentStyle: { background: '#FBF6EE', border: '1px solid #E8DEC8', color: '#262626', borderRadius: 8, fontSize: 12 },
-  labelStyle:   { color: '#5A4B35', fontWeight: 600 },
+  contentStyle: { background: '#FBF6EE', border: '1px solid #E8DEC8', color: '#1C1917', borderRadius: 8, fontSize: 13 },
+  labelStyle:   { color: '#78716C', fontWeight: 600 },
 };
 
 function priorityScore(ltm: ReturnType<typeof computeUnitLtm>): number {
@@ -354,9 +355,9 @@ function LtmKpi({ label, value, sub, accent, warn, na }: {
 }) {
   return (
     <div style={LTM_CARD}>
-      <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#7A7A7A', marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums lining-nums', color: na ? '#C0C0C0' : warn ? LTM_C.red : (accent ?? '#1F1F1F') }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: na ? '#D0D0D0' : '#9B9B9B', marginTop: 4 }}>{sub}</div>}
+      <div style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#78716C', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums lining-nums', color: na ? '#A8A29E' : warn ? LTM_C.warn : (accent ?? '#1C1917') }}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: na ? '#A8A29E' : '#A8A29E', marginTop: 4 }}>{sub}</div>}
     </div>
   );
 }
@@ -365,8 +366,8 @@ function LtmChart({ title, sub, children }: { title: string; sub?: string; child
   return (
     <div style={LTM_CARD}>
       <div style={{ marginBottom: 12 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 600, color: '#3A2F1F', margin: 0 }}>{title}</h3>
-        {sub && <p style={{ fontSize: 11, color: '#9B9B9B', margin: '3px 0 0' }}>{sub}</p>}
+        <h3 style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', margin: 0 }}>{title}</h3>
+        {sub && <p style={{ fontSize: 12, color: '#A8A29E', margin: '4px 0 0' }}>{sub}</p>}
       </div>
       {children}
     </div>
@@ -468,7 +469,7 @@ function LTMPerformanceTab() {
       if (ltm.totalMonths > 0) map[ltm.action] = (map[ltm.action] ?? 0) + 1;
     }
     const ACTION_FILL: Record<string, string> = {
-      'Offer discount': LTM_C.red,
+      'Offer discount': LTM_C.amber,
       'Review rent':    LTM_C.amber,
       'Retain tenant':  LTM_C.green,
       'Monitor':        '#A8A29E',
@@ -528,7 +529,7 @@ function LTMPerformanceTab() {
           <option value="" style={{ background: '#F7F5F0' }}>All Buildings</option>
           {buildings.map(b => <option key={b} value={b} style={{ background: '#F7F5F0' }}>{b}</option>)}
         </select>
-        <span className="text-xs ml-2" style={{ color: '#A8A29E' }}>{periodLabel}</span>
+        <span className="text-sm ml-2" style={{ color: '#A8A29E' }}>{periodLabel}</span>
       </div>
 
       {availableMonths.length === 0 && (
@@ -546,7 +547,7 @@ function LTMPerformanceTab() {
             <LtmKpi label="Occupied Units"  value={String(kpis.occupied)}  sub={`${kpis.totalUnits - kpis.occupied} vacant`} accent={LTM_C.green} />
             <LtmKpi
               label="Occupancy Rate" value={`${Math.round(kpis.occRate * 100)}%`}
-              accent={kpis.occRate >= 0.92 ? LTM_C.green : kpis.occRate >= 0.82 ? LTM_C.amber : LTM_C.red}
+              accent={kpis.occRate >= 0.92 ? LTM_C.green : kpis.occRate >= 0.82 ? LTM_C.amber : LTM_C.warn}
             />
             <LtmKpi label="Rent Collected"  value={fmtN(kpis.collected)}  sub="LTM period"        accent={LTM_C.teal} />
             <LtmKpi label="Expected Rent"   value={fmtN(kpis.expected)}   sub="If fully occupied" />
@@ -570,19 +571,23 @@ function LTMPerformanceTab() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <LtmChart title="Lost Rent vs Occupancy by Unit" sub="Bars = vacancy loss · Line = occupancy % · sorted highest loss first">
               {crossSection.length > 0 ? (
-                <ResponsiveContainer width="100%" height={240}>
-                  <ComposedChart data={crossSection} margin={{ left: 0, right: 32, top: 4, bottom: 28 }}>
+                <ResponsiveContainer width="100%" height={260}>
+                  <ComposedChart data={crossSection} margin={{ left: 0, right: 32, top: 4, bottom: 36 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(232,222,200,0.5)" />
-                    <XAxis dataKey="name" tick={{ ...LTM_TICK, fontSize: 10 }} angle={-25} textAnchor="end" height={52} />
+                    <XAxis dataKey="name" tick={{ ...LTM_TICK }} angle={-25} textAnchor="end" height={60} interval={0} />
                     <YAxis yAxisId="left"  tick={LTM_TICK} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                     <YAxis yAxisId="right" orientation="right" tick={LTM_TICK} tickFormatter={(v: number) => `${v}%`} domain={[0, 110]} />
                     <Tooltip
                       contentStyle={LTM_TT.contentStyle}
                       labelStyle={LTM_TT.labelStyle}
-                      formatter={(v: number, name: string) => name === 'occPct' ? [`${v}%`, 'Occupancy'] : [fmtN(v), 'Lost Rent']}
+                      formatter={(v: number, name: string) =>
+                        name === 'Occupancy %' ? [`${v}%`, 'Occupancy'] : [fmtN(v), 'Lost Rent']
+                      }
                     />
                     <Bar yAxisId="left" dataKey="lost" name="Lost Rent" radius={[3, 3, 0, 0]}>
-                      {crossSection.map((_, i) => <Cell key={i} fill={LTM_C.red} opacity={Math.max(0.55, 0.9 - i * 0.025)} />)}
+                      {crossSection.map((_, i) => (
+                        <Cell key={i} fill={EXP_PALETTE[i % EXP_PALETTE.length]} opacity={Math.max(0.7, 0.95 - i * 0.02)} />
+                      ))}
                     </Bar>
                     <Line yAxisId="right" type="monotone" dataKey="occPct" name="Occupancy %" stroke={LTM_C.gold} strokeWidth={2} dot={{ r: 3, fill: LTM_C.gold }} />
                   </ComposedChart>
@@ -604,8 +609,8 @@ function LTMPerformanceTab() {
                       labelStyle={LTM_TT.labelStyle}
                       formatter={(v: number, name: string) => [fmtN(v), name]}
                     />
-                    <Legend wrapperStyle={{ fontSize: 11, color: '#7A7A7A' }} />
-                    <Area type="monotone" dataKey="lost" name="Lost" fill={`${LTM_C.red}25`} stroke="none" legendType="none" />
+                    <Legend wrapperStyle={{ fontSize: 12, color: '#78716C' }} />
+                    <Area type="monotone" dataKey="lost" name="Lost" fill="rgba(212,175,55,0.18)" stroke="none" legendType="none" />
                     <Line type="monotone" dataKey="expected"  name="Expected"  stroke={LTM_C.gold}  strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
                     <Line type="monotone" dataKey="collected" name="Collected" stroke={LTM_C.teal}  strokeWidth={2.5} dot={{ r: 3, fill: LTM_C.teal }} />
                   </ComposedChart>
@@ -622,10 +627,10 @@ function LTMPerformanceTab() {
               {buildingChart.length > 0 ? (
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart layout="vertical" data={buildingChart} margin={{ left: 4, right: 16, top: 4, bottom: 4 }}>
-                    <XAxis type="number" tick={{ ...LTM_TICK, fontSize: 10 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
-                    <YAxis type="category" dataKey="name" width={88} tick={{ ...LTM_TICK, fontSize: 10 }} />
+                    <XAxis type="number" tick={LTM_TICK} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+                    <YAxis type="category" dataKey="name" width={100} tick={LTM_TICK} />
                     <Tooltip contentStyle={LTM_TT.contentStyle} labelStyle={LTM_TT.labelStyle} formatter={(v: number, name: string) => [fmtN(v), name]} />
-                    <Legend wrapperStyle={{ fontSize: 10, color: '#7A7A7A' }} />
+                    <Legend wrapperStyle={{ fontSize: 12, color: '#78716C' }} />
                     <Bar dataKey="expected"  name="Expected"  fill={`${LTM_C.gold}70`} radius={[0, 3, 3, 0]} />
                     <Bar dataKey="collected" name="Collected" fill={LTM_C.teal}         radius={[0, 3, 3, 0]} />
                   </BarChart>
@@ -649,7 +654,7 @@ function LTMPerformanceTab() {
               {actionDist.length > 0 ? (
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={actionDist} margin={{ left: 0, right: 8, top: 4, bottom: 36 }}>
-                    <XAxis dataKey="action" tick={{ ...LTM_TICK, fontSize: 9 }} angle={-20} textAnchor="end" height={58} interval={0} />
+                    <XAxis dataKey="action" tick={{ ...LTM_TICK, fontSize: 11 }} angle={-20} textAnchor="end" height={62} interval={0} />
                     <YAxis tick={LTM_TICK} allowDecimals={false} />
                     <Tooltip contentStyle={LTM_TT.contentStyle} labelStyle={LTM_TT.labelStyle} />
                     <Bar dataKey="count" name="Units" radius={[4, 4, 0, 0]}>
@@ -668,53 +673,53 @@ function LTMPerformanceTab() {
             {/* Top Risk table */}
             <div style={{ ...LTM_CARD, padding: 0, overflow: 'hidden' }} className="lg:col-span-2">
               <div style={{ padding: '12px 16px', borderBottom: '1px solid #E8DEC8' }}>
-                <h3 style={{ fontSize: 15, fontWeight: 600, color: '#3A2F1F', margin: 0 }}>Top Risk Units</h3>
-                <p style={{ fontSize: 11, color: '#9B9B9B', margin: '3px 0 0' }}>Ranked by occupancy risk + vacancy loss · {topRisk.length} shown</p>
+                <h3 style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', margin: 0 }}>Top Risk Units</h3>
+                <p style={{ fontSize: 12, color: '#A8A29E', margin: '4px 0 0' }}>Ranked by occupancy risk + vacancy loss · {topRisk.length} shown</p>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full" style={{ borderCollapse: 'collapse', fontSize: 12 }}>
+                <table className="w-full" style={{ borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: '#F0EDE5' }}>
                       {['Unit', 'Building', 'Occ Mo', 'Vac Mo', 'Collected', 'Expected', 'Lost', 'Occ %', 'Avg Rent', 'Trend', 'Action', 'Score'].map(h => (
-                        <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#7A7A7A', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', borderBottom: '1px solid #E8DEC8' }}>{h}</th>
+                        <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', borderBottom: '1px solid #E8DEC8' }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {topRisk.map(({ unit, ltm, score }, i) => {
-                      const occColor = ltm.occPct >= 92 ? LTM_C.green : ltm.occPct >= 82 ? '#C57B1A' : LTM_C.red;
+                      const occColor = ltm.occPct >= 92 ? LTM_C.green : ltm.occPct >= 82 ? LTM_C.amber : LTM_C.warn;
                       const trendEl = ltm.trend === 'up'
                         ? <span style={{ color: LTM_C.green, fontWeight: 700 }}>↑</span>
                         : ltm.trend === 'down'
-                          ? <span style={{ color: LTM_C.red, fontWeight: 700 }}>↓</span>
+                          ? <span style={{ color: LTM_C.warn, fontWeight: 700 }}>↓</span>
                           : <span style={{ color: '#A8A29E' }}>→</span>;
-                      const scoreBg    = score >= 60 ? 'rgba(231,111,111,0.18)' : score >= 30 ? 'rgba(242,193,78,0.18)' : 'rgba(38,166,91,0.12)';
-                      const scoreColor = score >= 60 ? '#B91C1C' : score >= 30 ? '#92400E' : '#065F46';
+                      const scoreBg    = score >= 60 ? 'rgba(146,64,14,0.12)' : score >= 30 ? 'rgba(184,134,11,0.15)' : 'rgba(38,166,91,0.12)';
+                      const scoreColor = score >= 60 ? '#92400E' : score >= 30 ? '#B8860B' : '#065F46';
                       const actionStyle = {
-                        'Offer discount': { bg: '#FCEAEA', color: '#C0392B' },
-                        'Review rent':    { bg: 'rgba(242,193,78,0.2)', color: '#92400E' },
+                        'Offer discount': { bg: '#FEF3C7', color: '#92400E' },
+                        'Review rent':    { bg: 'rgba(184,134,11,0.15)', color: '#92400E' },
                         'Retain tenant':  { bg: 'rgba(38,166,91,0.12)', color: '#065F46' },
-                        'Monitor':        { bg: 'rgba(168,162,158,0.15)', color: '#44403C' },
-                      }[ltm.action] ?? { bg: 'rgba(168,162,158,0.15)', color: '#44403C' };
+                        'Monitor':        { bg: 'rgba(168,162,158,0.15)', color: '#57534E' },
+                      }[ltm.action] ?? { bg: 'rgba(168,162,158,0.15)', color: '#57534E' };
                       return (
                         <tr key={unit.id} style={{ background: i % 2 === 0 ? '#F7F1E6' : '#FBF6EE', borderBottom: '1px solid rgba(232,222,200,0.5)' }}>
-                          <td style={{ padding: '7px 10px', fontWeight: 500, color: '#262626', whiteSpace: 'nowrap' }}>{unit.unit_number}</td>
-                          <td style={{ padding: '7px 10px', color: '#5A4B35', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{unit.property_name || '—'}</td>
-                          <td style={{ padding: '7px 10px', textAlign: 'center', color: LTM_C.green, fontWeight: 600 }}>{ltm.occMonths}</td>
-                          <td style={{ padding: '7px 10px', textAlign: 'center', color: ltm.vacMonths > 0 ? LTM_C.red : '#A8A29E', fontWeight: 600 }}>{ltm.vacMonths}</td>
-                          <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums' }}>{fmtN(ltm.collected)}</td>
-                          <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums', color: '#7A7A7A' }}>{fmtN(ltm.expected)}</td>
-                          <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums', color: ltm.lost > 0 ? LTM_C.red : '#A8A29E', fontWeight: ltm.lost > 0 ? 600 : 400 }}>{ltm.lost > 0 ? fmtN(ltm.lost) : '—'}</td>
-                          <td style={{ padding: '7px 10px', textAlign: 'center' }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: occColor }}>{ltm.occPct}%</span>
+                          <td style={{ padding: '8px 10px', fontWeight: 500, color: '#1C1917', whiteSpace: 'nowrap' }}>{unit.unit_number}</td>
+                          <td style={{ padding: '8px 10px', color: '#57534E', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{unit.property_name || '—'}</td>
+                          <td style={{ padding: '8px 10px', textAlign: 'center', color: LTM_C.green, fontWeight: 600 }}>{ltm.occMonths}</td>
+                          <td style={{ padding: '8px 10px', textAlign: 'center', color: ltm.vacMonths > 0 ? LTM_C.warn : '#A8A29E', fontWeight: 600 }}>{ltm.vacMonths}</td>
+                          <td style={{ padding: '8px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums' }}>{fmtN(ltm.collected)}</td>
+                          <td style={{ padding: '8px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums', color: '#78716C' }}>{fmtN(ltm.expected)}</td>
+                          <td style={{ padding: '8px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums', color: ltm.lost > 0 ? LTM_C.warn : '#A8A29E', fontWeight: ltm.lost > 0 ? 600 : 400 }}>{ltm.lost > 0 ? fmtN(ltm.lost) : '—'}</td>
+                          <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: occColor }}>{ltm.occPct}%</span>
                           </td>
-                          <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums' }}>{ltm.avgRent > 0 ? fmtN(ltm.avgRent) : '—'}</td>
-                          <td style={{ padding: '7px 10px', textAlign: 'center', fontSize: 15 }}>{trendEl}</td>
-                          <td style={{ padding: '7px 10px' }}>
-                            <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 10, whiteSpace: 'nowrap', background: actionStyle.bg, color: actionStyle.color }}>{ltm.action}</span>
+                          <td style={{ padding: '8px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums' }}>{ltm.avgRent > 0 ? fmtN(ltm.avgRent) : '—'}</td>
+                          <td style={{ padding: '8px 10px', textAlign: 'center', fontSize: 15 }}>{trendEl}</td>
+                          <td style={{ padding: '8px 10px' }}>
+                            <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap', background: actionStyle.bg, color: actionStyle.color }}>{ltm.action}</span>
                           </td>
-                          <td style={{ padding: '7px 10px', textAlign: 'center' }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 10, background: scoreBg, color: scoreColor }}>{score}</span>
+                          <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: scoreBg, color: scoreColor }}>{score}</span>
                           </td>
                         </tr>
                       );
@@ -729,18 +734,18 @@ function LTMPerformanceTab() {
 
             {/* Strategic Insights */}
             <div style={LTM_CARD}>
-              <h3 style={{ fontSize: 15, fontWeight: 600, color: '#3A2F1F', margin: '0 0 3px' }}>Strategic Insights</h3>
-              <p style={{ fontSize: 11, color: '#9B9B9B', margin: '0 0 14px' }}>Rule-based flags from per-unit LTM data</p>
+              <h3 style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', margin: '0 0 4px' }}>Strategic Insights</h3>
+              <p style={{ fontSize: 12, color: '#A8A29E', margin: '0 0 14px' }}>Rule-based flags from per-unit LTM data</p>
               {insights.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {insights.map((ins, i) => {
-                    const border = ins.type === 'red' ? LTM_C.red : ins.type === 'amber' ? LTM_C.amber : LTM_C.green;
-                    const bg     = ins.type === 'red' ? 'rgba(231,111,111,0.08)' : ins.type === 'amber' ? 'rgba(242,193,78,0.10)' : 'rgba(38,166,91,0.08)';
-                    const tc     = ins.type === 'red' ? '#B91C1C' : ins.type === 'amber' ? '#92400E' : '#065F46';
+                    const border = ins.type === 'red' ? LTM_C.warn : ins.type === 'amber' ? LTM_C.amber : LTM_C.green;
+                    const bg     = ins.type === 'red' ? '#FEF3C7' : ins.type === 'amber' ? 'rgba(184,134,11,0.12)' : 'rgba(38,166,91,0.08)';
+                    const tc     = ins.type === 'red' ? '#92400E' : ins.type === 'amber' ? '#92400E' : '#065F46';
                     return (
-                      <div key={i} style={{ borderLeft: `3px solid ${border}`, background: bg, padding: '8px 10px', borderRadius: '0 6px 6px 0' }}>
-                        <p style={{ fontSize: 12, fontWeight: 600, color: tc, margin: 0 }}>{ins.icon} {ins.title}</p>
-                        <p style={{ fontSize: 11, color: tc, opacity: 0.8, margin: '3px 0 0' }}>{ins.detail}</p>
+                      <div key={i} style={{ borderLeft: `3px solid ${border}`, background: bg, padding: '10px 12px', borderRadius: '0 8px 8px 0' }}>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: tc, margin: 0 }}>{ins.icon} {ins.title}</p>
+                        <p style={{ fontSize: 12, color: tc, opacity: 0.85, margin: '4px 0 0' }}>{ins.detail}</p>
                       </div>
                     );
                   })}
@@ -750,8 +755,8 @@ function LTMPerformanceTab() {
                   🟢 No urgent issues — portfolio within normal range.
                 </div>
               )}
-              <div style={{ marginTop: 14, padding: '8px 10px', background: 'rgba(38,38,38,0.04)', borderRadius: 8 }}>
-                <p style={{ fontSize: 10, color: '#A0A0A0', margin: 0, lineHeight: 1.6 }}>
+              <div style={{ marginTop: 14, padding: '10px 12px', background: '#F7F1E6', borderRadius: 8, border: '1px solid #E8DEC8' }}>
+                <p style={{ fontSize: 12, color: '#78716C', margin: 0, lineHeight: 1.6 }}>
                   Rules: Occ &lt;50% + loss &gt;$3K → discount review · High rent + low occ → pricing review · Collection rate &lt;70% → collections flag
                 </p>
               </div>
@@ -834,7 +839,7 @@ export default function RentalUnits() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-charcoal">Units</h1>
+      <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1C1917' }}>Units</h1>
 
       {/* Tab switcher */}
       <div className="flex gap-1 p-1 rounded-lg w-fit" style={{ background: '#F0EDE5' }}>

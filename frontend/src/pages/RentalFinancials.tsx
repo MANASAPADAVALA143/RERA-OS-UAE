@@ -10,6 +10,7 @@ import PeriodToggle from '../components/shared/PeriodToggle';
 import { type Period, getPeriodKeys } from '../utils/periodWindow';
 import { BulletChartStrip } from '../components/shared/BulletChartStrip';
 import type { BulletDef, BulletCard } from '../components/shared/BulletChartStrip';
+import { ParchmentKpiTile } from '../components/ui/ParchmentKpiTile';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -882,67 +883,30 @@ function CFTable({ fin, selectedYear, period, pMonth, pYear }: {
   );
 }
 
-// ── KPI Card ──────────────────────────────────────────────────────────────────
+// ── KPI Card (parchment style — matches Expenses page) ─────────────────────────
 
 interface KCardProps {
   label: string; value: string; sub: string;
   status: 'good'|'warn'|'bad'|'info';
-  icon?: React.ReactNode;
   trendData?: number[];
-  category?: 'profitability'|'rental'|'balance'|'review';
+  accent?: boolean;
 }
 
-// Section → card background and left-border accent colors
-const KCARD_SECTION_STYLE: Record<string, { bg: string; border: string; borderBox: string }> = {
-  profitability: { bg: '#FFF7E8', border: '#2F80ED', borderBox: '#E8DEC8' },
-  rental:        { bg: '#F4FFF3', border: '#27AE60', borderBox: '#C8E8C8' },
-  balance:       { bg: '#FFF7E8', border: '#F2994A', borderBox: '#E8DEC8' },
-  review:        { bg: '#FFECEC', border: '#EB5757', borderBox: '#F0D0D0' },
-};
-
-// Status → pill color
-const KCARD_PILL: Record<string, { bg: string; color: string; label: string }> = {
-  good: { bg: '#22A06B', color: '#fff', label: '✓ Healthy' },
-  warn: { bg: '#F5A623', color: '#fff', label: '⚠ Monitor' },
-  bad:  { bg: '#D9534F', color: '#fff', label: '✗ Review'  },
-  info: { bg: '#6B6B6B', color: '#fff', label: 'ℹ Info'    },
-};
-
-function KCard({ label, value, sub, status, trendData, category }: KCardProps) {
-  const sec = KCARD_SECTION_STYLE[category || 'profitability'];
-  const pill = KCARD_PILL[status];
-  const isNeg = value.startsWith('(') || (status === 'bad' && value !== 'N/A');
-  const valueColor = (status === 'bad' || isNeg) ? '#D9534F' : value === 'N/A' ? '#6B6B6B' : '#262626';
+function KCard({ label, value, sub, status, trendData, accent }: KCardProps) {
+  const warn = status === 'warn' || status === 'bad';
 
   return (
-    <div style={{
-      background: sec.bg,
-      borderLeft: `3px solid ${sec.border}`,
-      border: `1px solid ${sec.borderBox}`,
-      borderLeftWidth: 3,
-      borderLeftColor: sec.border,
-      borderRadius: 8,
-      padding: '14px 14px 10px',
-      fontFamily: FIN_FONT,
-    }}>
-      <p style={{ fontSize: 13, fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{label}</p>
-      <p style={{ fontSize: 28, fontWeight: 700, color: valueColor, marginBottom: 2, lineHeight: 1.15 }}>{value}</p>
-      <p style={{ fontSize: 13, fontWeight: 400, color: '#A8A29E', marginBottom: 8 }}>{sub}</p>
-
+    <ParchmentKpiTile label={label} value={value} sub={sub} accent={accent} warn={warn}>
       {trendData && trendData.length > 0 && (
-        <div style={{ height: 28, marginBottom: 8 }}>
+        <div style={{ height: 28, marginTop: 8 }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={trendData.map((v, i) => ({ x: i, y: v }))}>
-              <Line type="monotone" dataKey="y" stroke={sec.border} dot={false} strokeWidth={1.5} isAnimationActive={false} />
+              <Line type="monotone" dataKey="y" stroke={accent ? 'rgba(255,255,255,0.7)' : '#D4AF37'} dot={false} strokeWidth={1.5} isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
       )}
-
-      <span style={{ display: 'inline-block', background: pill.bg, color: pill.color, fontSize: 11, fontWeight: 500, padding: '3px 10px', borderRadius: 20 }}>
-        {pill.label}
-      </span>
-    </div>
+    </ParchmentKpiTile>
   );
 }
 
@@ -1044,30 +1008,30 @@ function KPITab({ fin, kpiYear, kpiMonth }: { fin: ParsedFinancials; kpiYear: nu
       <div>
         <p style={{ fontSize: 13, fontWeight: 600, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Profitability</p>
         <div className="grid grid-cols-4 gap-4">
-          <KCard label="NOI Margin" value={`${noiM.toFixed(1)}%`} sub={`NOI: ${fmt(k.noi)}`} status={noiM>=40?'good':noiM>=20?'warn':'bad'} trendData={noiMTrend} category={noiM<20?'review':'profitability'} />
-          <KCard label="Net Income Margin" value={`${netM.toFixed(1)}%`} sub={`Net: ${fmt(k.netIncome)}`} status={netM>=10?'good':netM>=0?'warn':'bad'} trendData={netMTrend} category={netM<0?'review':'profitability'} />
-          <KCard label="Revenue Growth YoY" value={revG!==null?`${revG>=0?'+':''}${revG.toFixed(1)}%`:'N/A'} sub={kP?`${label} vs ${compareLabel || prevY}`:'Only 1 period'} status={revG===null?'info':revG>=3?'good':revG>=0?'warn':'bad'} trendData={revGTrend} category="profitability" />
-          <KCard label="Expense Ratio" value={`${expR.toFixed(1)}%`} sub={`Total exp: ${fmt(k.totalExpenses)}`} status={expR<=70?'good':expR<=85?'warn':'bad'} category={expR>85?'review':'profitability'} />
+          <KCard label="NOI Margin" value={`${noiM.toFixed(1)}%`} sub={`NOI: ${fmt(k.noi)}`} status={noiM>=40?'good':noiM>=20?'warn':'bad'} trendData={noiMTrend} accent />
+          <KCard label="Net Income Margin" value={`${netM.toFixed(1)}%`} sub={`Net: ${fmt(k.netIncome)}`} status={netM>=10?'good':netM>=0?'warn':'bad'} trendData={netMTrend} />
+          <KCard label="Revenue Growth YoY" value={revG!==null?`${revG>=0?'+':''}${revG.toFixed(1)}%`:'N/A'} sub={kP?`${label} vs ${compareLabel || prevY}`:'Only 1 period'} status={revG===null?'info':revG>=3?'good':revG>=0?'warn':'bad'} trendData={revGTrend} />
+          <KCard label="Expense Ratio" value={`${expR.toFixed(1)}%`} sub={`Total exp: ${fmt(k.totalExpenses)}`} status={expR<=70?'good':expR<=85?'warn':'bad'} />
         </div>
       </div>
 
       <div>
         <p style={{ fontSize: 13, fontWeight: 600, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Rental Performance</p>
         <div className="grid grid-cols-4 gap-4">
-          <KCard label="Rental Income %" value={`${rentP.toFixed(1)}%`} sub={`${fmt(k.rentalIncome)} of ${fmt(k.totalRevenue)}`} status={rentP>=80?'good':'info'} category="rental" />
-          <KCard label="Interest Coverage" value={iCov>0?`${iCov.toFixed(2)}x`:'N/A'} sub={`NOI ÷ Interest (${fmt(k.interestExpense)})`} status={iCov>=2?'good':iCov>=1.2?'warn':'bad'} category={iCov<1.2?'review':'rental'} />
-          <KCard label="Mgmt Fee %" value={`${mgmtP.toFixed(1)}%`} sub={`${fmt(k.managementFee)} of revenue`} status={mgmtP<=10?'good':mgmtP<=15?'warn':'bad'} category="rental" />
-          <KCard label="Repair % of Revenue" value={`${repP.toFixed(1)}%`} sub={`${fmt(k.repairs)} repairs/maint`} status={repP<=5?'good':repP<=10?'warn':'bad'} category={repP>10?'review':'rental'} />
+          <KCard label="Rental Income %" value={`${rentP.toFixed(1)}%`} sub={`${fmt(k.rentalIncome)} of ${fmt(k.totalRevenue)}`} status={rentP>=80?'good':'info'} />
+          <KCard label="Interest Coverage" value={iCov>0?`${iCov.toFixed(2)}x`:'N/A'} sub={`NOI ÷ Interest (${fmt(k.interestExpense)})`} status={iCov>=2?'good':iCov>=1.2?'warn':'bad'} />
+          <KCard label="Mgmt Fee %" value={`${mgmtP.toFixed(1)}%`} sub={`${fmt(k.managementFee)} of revenue`} status={mgmtP<=10?'good':mgmtP<=15?'warn':'bad'} />
+          <KCard label="Repair % of Revenue" value={`${repP.toFixed(1)}%`} sub={`${fmt(k.repairs)} repairs/maint`} status={repP<=5?'good':repP<=10?'warn':'bad'} />
         </div>
       </div>
 
       <div>
         <p style={{ fontSize: 13, fontWeight: 600, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Balance Sheet</p>
         <div className="grid grid-cols-4 gap-4">
-          <KCard label="LTV (Loans / Building)" value={ltv>0?`${ltv.toFixed(1)}%`:'Not available'} sub={ltv>0?`Loans: ${fmt(k.longTermLoans)}`:'Property value not found in balance sheet'} status={ltv>0&&ltv<=75?'good':ltv>0&&ltv<=85?'warn':ltv>0?'bad':'info'} category={ltv>85?'review':'balance'} />
-          <KCard label="Asset / Liability Ratio" value={alR>0?`${alR.toFixed(2)}x`:'N/A'} sub={`Assets: ${fmt(k.totalAssets)}`} status={alR>=1.5?'good':alR>=1?'warn':'bad'} category={alR<1?'review':'balance'} />
-          <KCard label="Debt-to-Equity" value={dte>0?`${dte.toFixed(2)}x`:'N/A'} sub={`Equity: ${fmt(k.equity)}`} status={dte>0&&dte<=2?'good':dte<=4?'warn':'bad'} category={dte>4?'review':'balance'} />
-          <KCard label="Cash Balance" value={fmt(k.cash)} sub={`As of ${label}`} status={k.cash>10000?'good':k.cash>0?'warn':'bad'} trendData={cashTrend} category={k.cash<=0?'review':'balance'} />
+          <KCard label="LTV (Loans / Building)" value={ltv>0?`${ltv.toFixed(1)}%`:'Not available'} sub={ltv>0?`Loans: ${fmt(k.longTermLoans)}`:'Property value not found in balance sheet'} status={ltv>0&&ltv<=75?'good':ltv>0&&ltv<=85?'warn':ltv>0?'bad':'info'} />
+          <KCard label="Asset / Liability Ratio" value={alR>0?`${alR.toFixed(2)}x`:'N/A'} sub={`Assets: ${fmt(k.totalAssets)}`} status={alR>=1.5?'good':alR>=1?'warn':'bad'} />
+          <KCard label="Debt-to-Equity" value={dte>0?`${dte.toFixed(2)}x`:'N/A'} sub={`Equity: ${fmt(k.equity)}`} status={dte>0&&dte<=2?'good':dte<=4?'warn':'bad'} />
+          <KCard label="Cash Balance" value={fmt(k.cash)} sub={`As of ${label}`} status={k.cash>10000?'good':k.cash>0?'warn':'bad'} trendData={cashTrend} />
         </div>
       </div>
 

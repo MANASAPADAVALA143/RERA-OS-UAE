@@ -7,6 +7,7 @@ import {
 import { api } from '../../services/api';
 import { BulletChartStrip } from '../../components/shared/BulletChartStrip';
 import type { BulletDef, BulletStatus } from '../../components/shared/BulletChartStrip';
+import { ParchmentKpiTile } from '../../components/ui/ParchmentKpiTile';
 
 type RatioTab = 'Profitability' | 'Liquidity' | 'Solvency' | 'Rental KPIs' | 'Cost of Capital';
 type StatusType = BulletStatus;
@@ -85,55 +86,73 @@ function LiveDataPanel({ fin, activeYear }: { fin: LiveFin; activeYear?: number 
   const revGrowth = prevRevenue && prevRevenue > 0 ? ((totalRevenue - prevRevenue)/prevRevenue*100) : null;
 
   const metrics = [
-    { label: 'NOI Margin', value: noiM > 0 ? `${noiM.toFixed(1)}%` : '—', status: noiM>=35?'good':noiM>=20?'watch':'critical' as const },
-    { label: 'Net Margin', value: `${netM.toFixed(1)}%`, status: netM>=10?'good':netM>=0?'watch':'monitor' as const },
-    { label: 'Revenue', value: fmtV(totalRevenue), status: 'info' as const },
-    { label: 'NOI', value: fmtV(noi), status: noi>=0?'good':'critical' as const },
-    { label: 'LTV', value: ltv > 0 ? `${ltv.toFixed(1)}%` : buildings === 0 ? 'No bldg value' : '—', status: ltv<=75?'good':ltv<=85?'watch':'monitor' as const },
-    { label: 'Int. Coverage', value: iCov > 0 ? `${iCov.toFixed(2)}x` : '—', status: iCov>=2?'good':iCov>=1.2?'watch':'critical' as const },
-    { label: 'D/E Ratio', value: dte > 0 ? `${dte.toFixed(1)}x` : '—', status: dte<=3?'good':dte<=6?'watch':'monitor' as const },
-    { label: 'Expense Ratio', value: expR > 0 ? `${expR.toFixed(1)}%` : '—', status: expR<=70?'good':expR<=85?'watch':'critical' as const },
-    { label: 'Cash', value: fmtV(cash), status: cash>10000?'good':cash>0?'watch':'critical' as const },
-    { label: 'Total Assets', value: fmtV(totalAssets), status: 'info' as const },
-    { label: 'Equity', value: fmtV(equity), status: equity>0?'good':'critical' as const },
-    { label: 'Revenue Growth', value: revGrowth !== null ? `${revGrowth>=0?'+':''}${revGrowth.toFixed(1)}%` : 'N/A', status: revGrowth===null?'info':revGrowth>=3?'good':revGrowth>=0?'watch':'critical' as const },
+    { label: 'NOI Margin', value: noiM > 0 ? `${noiM.toFixed(1)}%` : '—', accent: true, warn: false },
+    { label: 'Net Margin', value: `${netM.toFixed(1)}%`, warn: netM < 0 },
+    { label: 'Revenue', value: fmtV(totalRevenue) },
+    { label: 'NOI', value: fmtV(noi), warn: noi < 0 },
+    { label: 'LTV', value: ltv > 0 ? `${ltv.toFixed(1)}%` : buildings === 0 ? 'No bldg value' : '—', warn: ltv > 85 },
+    { label: 'Int. Coverage', value: iCov > 0 ? `${iCov.toFixed(2)}x` : '—', warn: iCov > 0 && iCov < 1.2 },
+    { label: 'D/E Ratio', value: dte > 0 ? `${dte.toFixed(1)}x` : '—', warn: dte > 6 },
+    { label: 'Expense Ratio', value: expR > 0 ? `${expR.toFixed(1)}%` : '—', warn: expR > 70 },
+    { label: 'Cash', value: fmtV(cash), warn: cash <= 0 },
+    { label: 'Total Assets', value: fmtV(totalAssets) },
+    { label: 'Equity', value: fmtV(equity), warn: equity <= 0 },
+    { label: 'Revenue Growth', value: revGrowth !== null ? `${revGrowth >= 0 ? '+' : ''}${revGrowth.toFixed(1)}%` : 'N/A', warn: revGrowth !== null && revGrowth < 0 },
   ];
-  const colors: Record<string,string> = { good:'border-green-500 bg-green-50 text-green-800', watch:'border-amber-500 bg-amber-50 text-amber-800', critical:'border-red-500 bg-red-50 text-red-800', monitor:'border-orange-500 bg-orange-50 text-orange-800', info:'border-blue-500 bg-blue-50 text-blue-800' };
 
   return (
-    <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 space-y-4">
+    <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: 20 }} className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <span className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Live Data — {fin.company_name}</span>
-          <p className="text-xs text-gray-400 mt-0.5">{fin.filename} · Latest year: <strong>{lastY}</strong> · {fin.years.length} years of data</p>
+          <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#92400E' }}>
+            Live Data — {fin.company_name}
+          </span>
+          <p style={{ fontSize: 12, color: '#A8A29E', marginTop: 4 }}>
+            {fin.filename} · Latest year: <strong style={{ color: '#1C1917' }}>{lastY}</strong> · {fin.years.length} years of data
+          </p>
         </div>
         <div className="flex gap-1 flex-wrap">
-          {fin.years.map(y => <span key={y} className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">{y}</span>)}
+          {fin.years.map(y => (
+            <span key={y} style={{
+              fontSize: 11, background: '#F7F1E6', color: '#78716C',
+              border: '1px solid #E8DEC8', borderRadius: 20, padding: '3px 10px', fontWeight: 600,
+            }}>
+              {y}
+            </span>
+          ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
         {metrics.map(m => (
-          <div key={m.label} className={`border-l-4 rounded-lg px-3 py-2 ${colors[m.status]}`}>
-            <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">{m.label}</p>
-            <p className="text-sm font-bold font-mono mt-0.5">{m.value}</p>
-          </div>
+          <ParchmentKpiTile
+            key={m.label}
+            label={m.label}
+            value={m.value}
+            accent={'accent' in m && m.accent}
+            warn={'warn' in m && m.warn}
+            compact
+          />
         ))}
       </div>
 
       {trendRows.length >= 2 && (
-        <div>
-          <p className="text-xs font-semibold text-gray-500 mb-2">Multi-Year P&amp;L Trend</p>
-          <ResponsiveContainer width="100%" height={160}>
-            <LineChart data={trendRows} margin={{ left: 20, right: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="year" tick={{ fontSize: 10 }} />
-              <YAxis tickFormatter={v => fmtV(v as number)} tick={{ fontSize: 9 }} />
-              <Tooltip formatter={(v: number) => fmtV(v)} />
-              <Legend wrapperStyle={{ fontSize: 10 }} />
-              <Line type="monotone" dataKey="Revenue" stroke="#2E75B6" strokeWidth={2} dot />
-              <Line type="monotone" dataKey="NOI" stroke="#70AD47" strokeWidth={2} dot />
-              <Line type="monotone" dataKey="Net Income" stroke="#ED7D31" strokeWidth={1.5} strokeDasharray="5 3" dot />
+        <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: 16 }}>
+          <p style={{ fontSize: 13, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Multi-Year P&amp;L Trend</p>
+          <p style={{ fontSize: 12, color: '#A8A29E', marginBottom: 12 }}>Revenue, NOI, and Net Income across all available years</p>
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={trendRows} margin={{ left: 20, right: 10, top: 4, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+              <XAxis dataKey="year" tick={{ fontSize: 11, fill: '#78716C' }} />
+              <YAxis tickFormatter={v => fmtV(v as number)} tick={{ fontSize: 10, fill: '#78716C' }} />
+              <Tooltip
+                formatter={(v: number) => fmtV(v)}
+                contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 }}
+              />
+              <Legend wrapperStyle={{ fontSize: 12, color: '#78716C' }} />
+              <Line type="monotone" dataKey="Revenue" stroke="#D4AF37" strokeWidth={2} dot={{ r: 3, fill: '#D4AF37' }} />
+              <Line type="monotone" dataKey="NOI" stroke="#B8860B" strokeWidth={2} dot={{ r: 3, fill: '#B8860B' }} />
+              <Line type="monotone" dataKey="Net Income" stroke="#8B6914" strokeWidth={1.5} strokeDasharray="5 3" dot={{ r: 3, fill: '#8B6914' }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -1052,9 +1071,13 @@ export default function RentalFinancialRatios() {
 
       {/* Live data badge */}
       {liveData && (
-        <div style={{ background: '#F4FFF3', border: '1px solid #22A06B', borderRadius: 8, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 11, color: '#22A06B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>● Live Data Active</span>
-          <span style={{ fontSize: 12, color: '#262626' }}>Ratio cards below are calculated from <strong>{liveData.company_name}</strong> · year <strong>{liveData.years.includes(selectedYear) ? selectedYear : liveData.years[liveData.years.length - 1]}</strong> · {MONTHS[selectedMonth - 1]} {selectedYear}</span>
+        <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, color: '#92400E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>● Live Data Active</span>
+          <span style={{ fontSize: 12, color: '#78716C' }}>
+            Ratio cards below are calculated from <strong style={{ color: '#1C1917' }}>{liveData.company_name}</strong>
+            {' · '}year <strong style={{ color: '#1C1917' }}>{liveData.years.includes(selectedYear) ? selectedYear : liveData.years[liveData.years.length - 1]}</strong>
+            {' · '}{MONTHS[selectedMonth - 1]} {selectedYear}
+          </span>
         </div>
       )}
       {!selectedId && (

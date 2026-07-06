@@ -3,8 +3,9 @@ import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
 } from 'recharts';
-import { AlertTriangle, CheckCircle, TrendingUp, Printer } from 'lucide-react';
+import { AlertTriangle, CheckCircle, TrendingUp, Download } from 'lucide-react';
 import PeriodToggle from '../components/shared/PeriodToggle';
+import ExecSummaryExportModal from '../components/rental/ExecSummaryExportModal';
 import { type Period, getPeriodKeys } from '../utils/periodWindow';
 import { useRentalCfoData } from '../hooks/useRentalCfoData';
 
@@ -878,6 +879,7 @@ export default function RentalExecutiveSummary() {
   const [period, setPeriod] = useState<Period | null>(null);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
+  const [showExportModal, setShowExportModal] = useState(false);
 
   // Main data hook
   const { companies, loans, portfolio, units } = useRentalCfoData();
@@ -949,6 +951,20 @@ export default function RentalExecutiveSummary() {
         }
       `}</style>
 
+      {showExportModal && (
+        <ExecSummaryExportModal
+          companies={companies}
+          portfolio={portfolio}
+          loans={loans}
+          arData={filteredAr}
+          finRows={filteredFin}
+          period={period}
+          month={month}
+          year={year}
+          onClose={() => setShowExportModal(false)}
+        />
+      )}
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
@@ -962,12 +978,20 @@ export default function RentalExecutiveSummary() {
             availableKeys={availableKeys}
           />
           <button
+            onClick={() => setShowExportModal(true)}
+            title="Download multi-section Executive Summary PowerPoint"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px',
+              background: `linear-gradient(135deg, ${P.gold}, #B8860B)`, border: 'none', borderRadius: 8,
+              fontSize: 13, fontWeight: 700, color: '#fff', cursor: 'pointer' }}>
+            <Download size={14} />
+            Download PPT
+          </button>
+          <button
             onClick={handlePrint}
             title="Export to PDF via browser print"
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px',
               background: P.cardBg, border: `1px solid ${P.border}`, borderRadius: 8,
               fontSize: 13, fontWeight: 600, color: P.text, cursor: 'pointer' }}>
-            <Printer size={14} />
             Export PDF
           </button>
         </div>

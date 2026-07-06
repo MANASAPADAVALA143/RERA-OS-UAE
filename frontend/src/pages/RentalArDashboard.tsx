@@ -857,42 +857,49 @@ export default function RentalArDashboard() {
             const startIdx = heatmapData.months.length - displayMonths.length;
             return (
               <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, padding: 16, overflowX: 'auto' }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>Collection Rate Heatmap</div>
-                <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 12 }}>
+                <div style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 2 }}>Collection Rate Heatmap</div>
+                <div style={{ fontSize: 12, color: '#A8A29E', marginBottom: 12 }}>
                   Company × Month · green = high collection rate · red = low · last {displayMonths.length} months
                 </div>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ borderCollapse: 'separate', borderSpacing: 2, fontSize: 10 }}>
-                    <thead>
-                      <tr>
-                        <th style={{ textAlign: 'left', padding: '3px 8px 3px 4px', fontSize: 10, color: '#6B6B6B', fontWeight: 600, whiteSpace: 'nowrap', minWidth: 100 }}>Company</th>
-                        {displayMonths.map(m => (
-                          <th key={m} style={{ padding: '3px 2px', fontSize: 9, color: '#6B6B6B', fontWeight: 600, textAlign: 'center', minWidth: 36 }}>{short(m)}</th>
+                <table style={{ borderCollapse: 'separate', borderSpacing: 3, fontSize: 12, width: '100%', tableLayout: 'fixed' }}>
+                  <colgroup>
+                    <col style={{ width: '22%' }} />
+                    {displayMonths.map(m => (
+                      <col key={m} style={{ width: `${78 / displayMonths.length}%` }} />
+                    ))}
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left', padding: '4px 8px', fontSize: 12, color: '#78716C', fontWeight: 600, whiteSpace: 'nowrap' }}>Company</th>
+                      {displayMonths.map(m => (
+                        <th key={m} style={{ padding: '4px 2px', fontSize: 11, color: '#78716C', fontWeight: 600, textAlign: 'center' }}>{short(m)}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {heatmapData.rows.map((row, ri) => (
+                      <tr key={ri}>
+                        <td style={{
+                          padding: '4px 8px', fontSize: 12, color: '#1C1917', fontWeight: 500,
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        }}>
+                          {row.company}
+                        </td>
+                        {row.cells.slice(startIdx).map((cell, ci) => (
+                          <td key={ci} style={{
+                            padding: '6px 4px', textAlign: 'center', borderRadius: 4,
+                            background: heatBg(cell.has_data ? cell.rate : null),
+                            color: heatFg(cell.has_data ? cell.rate : null),
+                            fontSize: 11, fontWeight: 700,
+                          }}>
+                            {cell.has_data ? `${Math.round(cell.rate ?? 0)}%` : '—'}
+                          </td>
                         ))}
                       </tr>
-                    </thead>
-                    <tbody>
-                      {heatmapData.rows.map((row, ri) => (
-                        <tr key={ri}>
-                          <td style={{ padding: '2px 8px 2px 4px', fontSize: 10, color: '#374151', fontWeight: 500, whiteSpace: 'nowrap' }}>
-                            {row.company.length > 15 ? row.company.slice(0, 13) + '…' : row.company}
-                          </td>
-                          {row.cells.slice(startIdx).map((cell, ci) => (
-                            <td key={ci} style={{
-                              padding: '4px 3px', textAlign: 'center', borderRadius: 4,
-                              background: heatBg(cell.has_data ? cell.rate : null),
-                              color: heatFg(cell.has_data ? cell.rate : null),
-                              fontSize: 9, fontWeight: 700, minWidth: 36,
-                            }}>
-                              {cell.has_data ? `${Math.round(cell.rate ?? 0)}%` : '—'}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', fontSize: 10, color: '#6B6B6B', flexWrap: 'wrap' }}>
+                    ))}
+                  </tbody>
+                </table>
+                <div style={{ display: 'flex', gap: 10, marginTop: 12, alignItems: 'center', fontSize: 11, color: '#78716C', flexWrap: 'wrap' }}>
                   {([['#22A06B','≥95%'],['#86EFAC','80–94%'],['#FCD34D','60–79%'],['#F5A623','30–59%'],['#D9534F','<30%'],['#F3F4F6','No data']] as [string,string][]).map(([c, l]) => (
                     <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                       <span style={{ width: 10, height: 10, borderRadius: 2, background: c, display: 'inline-block', border: '1px solid rgba(0,0,0,0.1)' }} />
