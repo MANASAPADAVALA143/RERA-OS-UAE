@@ -118,7 +118,7 @@ export function dscrStatus(dscr: number | null): 'green' | 'amber' | 'red' | 'gr
   return 'red';
 }
 
-export function useRentalCfoData() {
+export function useRentalCfoData(monthYm?: string) {
   const [companies, setCompanies] = useState<CompanyRow[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
   const [units, setUnits] = useState<UnitRow[]>([]);
@@ -131,13 +131,14 @@ export function useRentalCfoData() {
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
+    const monthQ = monthYm ? `?month=${monthYm}` : '';
     try {
       const [coRes, expRes, unitRes, loanRes, portRes, maintRes] = await Promise.all([
-        api.get<CompanyRow[]>('/api/rentals/companies'),
+        api.get<CompanyRow[]>(`/api/rentals/companies${monthQ}`),
         api.get<ExpenseRow[]>('/api/rentals/expenses'),
         api.get<UnitRow[]>('/api/rentals/units'),
         api.get<{ items: LoanRow[] }>('/api/real-estate/loans', { params: { context_type: 'rental' } }),
-        api.get<PortfolioSummary>('/api/rentals/portfolio-summary'),
+        api.get<PortfolioSummary>(`/api/rentals/portfolio-summary${monthQ}`),
         api.get<{ items: MaintRow[] }>('/api/rentals/maintenance').catch(() => ({ data: { items: [] } })),
       ]);
       setCompanies(coRes.data);
@@ -151,7 +152,7 @@ export function useRentalCfoData() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [monthYm]);
 
   useEffect(() => { load(); }, [load]);
 

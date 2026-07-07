@@ -11,6 +11,7 @@ import {
   type ExportKpiItem,
 } from './rentalKpiEngine';
 import type { ExecExportPayload, ExecOverviewKpi, LoanExportRow } from './executiveSummaryPpt';
+import { buildLoanScheduleKpis } from './executiveSummaryLoans';
 
 interface ArMonth { month: string; billed: number; collected: number; }
 
@@ -66,65 +67,7 @@ function finStatementLines(fin: ParsedFinancials | null, sheet: 'pl' | 'bs' | 'c
 }
 
 function buildLoanRows(loans: LoanRow[]): { rows: LoanExportRow[]; summary: ExportKpiItem[] } {
-  if (!loans.length) {
-    return {
-      rows: [],
-      summary: [
-        { label: 'Avg Mortgage Rate', value: 'Data not available', benchmark: 'Market', status: 'info', statusLabel: 'Info' },
-        { label: 'Avg Remaining Term', value: 'Data not available', benchmark: 'Monitor', status: 'info', statusLabel: 'Info' },
-        { label: 'Balloon Risk', value: 'Data not available', benchmark: '<12 mo', status: 'info', statusLabel: 'Info' },
-        { label: 'Total Debt', value: 'Data not available', benchmark: '—', status: 'info', statusLabel: 'Info' },
-      ],
-    };
-  }
-
-  const avgRate = loans.reduce((s, l) => s + (l.loan_interest_rate ?? 0), 0) / loans.length * 100;
-  const totalBal = loans.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0);
-  const now = new Date();
-  const in12mo = new Date(now); in12mo.setMonth(in12mo.getMonth() + 12);
-  const balloonCount = loans.filter(l => {
-    if (!l.loan_maturity_date) return false;
-    const d = new Date(l.loan_maturity_date);
-    return d <= in12mo;
-  }).length;
-
-  const avgTermMonths = loans.reduce((s, l) => {
-    if (!l.loan_maturity_date) return s;
-    const months = (new Date(l.loan_maturity_date).getTime() - now.getTime()) / (30 * 24 * 3600 * 1000);
-    return s + Math.max(0, months);
-  }, 0) / loans.filter(l => l.loan_maturity_date).length || 0;
-
-  const rows: LoanExportRow[] = loans.map(l => ({
-    company: l.company_name,
-    bank: l.loan_bank_name,
-    balance: fmtUsd(l.loan_balance_as_of ?? 0),
-    rate: l.loan_interest_rate != null ? pct(l.loan_interest_rate * 100) : 'Data not available',
-    maturity: l.loan_maturity_date ?? 'Data not available',
-    emi: l.loan_emi ? fmtUsd(l.loan_emi) : 'Data not available',
-  }));
-
-  const summary: ExportKpiItem[] = [
-    {
-      label: 'Avg Mortgage Rate', value: pct(avgRate), benchmark: '<6.5%',
-      status: avgRate <= 5 ? 'good' : avgRate <= 6.5 ? 'warn' : 'bad', statusLabel: avgRate <= 5 ? 'Healthy' : avgRate <= 6.5 ? 'Monitor' : 'Review',
-    },
-    {
-      label: 'Avg Remaining Term', value: avgTermMonths > 0 ? `${Math.round(avgTermMonths)} mo` : 'Data not available',
-      benchmark: '>24 mo', status: avgTermMonths >= 24 ? 'good' : avgTermMonths >= 12 ? 'warn' : 'bad',
-      statusLabel: avgTermMonths >= 24 ? 'Healthy' : avgTermMonths >= 12 ? 'Monitor' : 'Review',
-    },
-    {
-      label: 'Balloon Risk', value: `${balloonCount} loan${balloonCount !== 1 ? 's' : ''} ≤12mo`,
-      benchmark: '0', status: balloonCount === 0 ? 'good' : balloonCount <= 2 ? 'warn' : 'bad',
-      statusLabel: balloonCount === 0 ? 'Healthy' : balloonCount <= 2 ? 'Monitor' : 'Review',
-    },
-    {
-      label: 'Total Debt', value: fmtUsd(totalBal), benchmark: 'Monitor',
-      status: 'info', statusLabel: 'Info',
-    },
-  ];
-
-  return { rows, summary };
+  return buildLoanScheduleKpis(loans);
 }
 
 function buildActionItems(
@@ -134,8 +77,8 @@ function buildActionItems(
 ): { severity: string; title: string; detail: string }[] {
   const items: { severity: string; title: string; detail: string }[] = [];
   if (portfolio) {
-    if (portfolio.occupancy_pct < 85) {
-      items.push({ severity: 'critical', title: 'Low Occupancy', detail: `Occupancy at ${pct(portfolio.occupancy_pct)} — target ≥95%` });
+    if (portfolio.occupancy_pct * 100 < 85) {
+      items.push({ severity: 'critical', title: 'Low Occupancy', detail: `Occupancy at ${pct(portfolio.occupancy_pct * 100)} — target ≥95%` });
     }
     if (collectionRate > 0 && collectionRate < 80) {
       items.push({ severity: 'critical', title: 'Collection Rate Below Target', detail: `Collection rate ${pct(collectionRate)} — target ≥95%` });
@@ -225,9 +168,9 @@ export async function gatherExecutiveExportPayload(opts: GatherExportOptions): P
     : { k: null as KpiData | null, kPrev: null as KpiData | null };
 
   const ops = {
-    occupancyPct: scopedPortfolio?.occupancy_pct,
+    occupancyPct: scopedPortfolio?.occupancy_pct != null ? scopedPortfolio.occupancy_pct * 100 : undefined,
     collectionRate: collectionRate > 0 ? collectionRate : undefined,
-    vacancyRate: scopedPortfolio ? 100 - scopedPortfolio.occupancy_pct : undefined,
+    vacancyRate: scopedPortfolio ? (1 - scopedPortfolio.occupancy_pct) * 100 : undefined,
     totalUnits: scopedPortfolio?.total_units,
     avgDaysVacant: undefined,
   };
@@ -239,12 +182,12 @@ export async function gatherExecutiveExportPayload(opts: GatherExportOptions): P
       };
 
   const overviewKpis: ExecOverviewKpi[] = [
-    { label: 'Gross Potential Rent', value: fmtUsd(scopedPortfolio?.gross_potential_rent ?? 0) },
-    { label: 'Total Collected', value: fmtUsd(scopedPortfolio?.collected_this_month ?? 0) },
-    { label: 'Net Operating Income', value: fmtUsd(scopedPortfolio?.noi_this_month ?? 0) },
-    { label: 'Occupancy Rate', value: scopedPortfolio ? pct(scopedPortfolio.occupancy_pct) : 'Data not available' },
+    { label: 'Gross Potential Rent', value: fmtUsd(scopedPortfolio?.gross_potential_rent ?? k?.totalRevenue ?? 0) },
+    { label: 'Total Collected', value: fmtUsd(scopedPortfolio?.collected_this_month ?? k?.totalRevenue ?? 0) },
+    { label: 'Net Operating Income', value: fmtUsd(k?.noi ?? scopedPortfolio?.noi_this_month ?? 0) },
+    { label: 'Occupancy Rate', value: scopedPortfolio ? pct(scopedPortfolio.occupancy_pct * 100) : 'Data not available' },
     { label: 'Vacancy Loss', value: fmtUsd(scopedPortfolio?.vacancy_loss ?? 0) },
-    { label: 'Total Expenses', value: fmtUsd(scopedPortfolio?.total_expense_this_month ?? 0) },
+    { label: 'Total Expenses', value: fmtUsd(k?.totalExpenses ?? scopedPortfolio?.total_expense_this_month ?? 0) },
     { label: 'Collection Rate', value: collectionRate > 0 ? pct(collectionRate) : 'Data not available' },
     { label: 'Total Debt', value: fmtUsd(scopedLoans.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0)) },
   ];

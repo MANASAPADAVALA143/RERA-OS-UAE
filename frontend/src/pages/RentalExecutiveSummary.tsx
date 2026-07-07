@@ -6,8 +6,11 @@ import {
 import { AlertTriangle, CheckCircle, TrendingUp, Download } from 'lucide-react';
 import PeriodToggle from '../components/shared/PeriodToggle';
 import ExecSummaryExportModal from '../components/rental/ExecSummaryExportModal';
-import { type Period, getPeriodKeys } from '../utils/periodWindow';
+import { type Period, getPeriodKeys, periodChipText } from '../utils/periodWindow';
 import { useRentalCfoData } from '../hooks/useRentalCfoData';
+import { useExecutiveSummaryKpis, type ExecutiveOverviewMetrics } from '../hooks/useExecutiveSummaryKpis';
+import { mergeFinRows, type FinRow } from '../utils/executiveSummaryFinRows';
+import type { ExportKpiItem } from '../utils/rentalKpiEngine';
 
 // ─── palette ─────────────────────────────────────────────────────────────────
 const P = {
@@ -44,12 +47,6 @@ function fmtK(v: number): string {
 function pct(v: number, d = 1): string { return `${v.toFixed(d)}%`; }
 
 // ─── interfaces ──────────────────────────────────────────────────────────────
-interface FinRow {
-  month: string; account: string; amount: number;
-  category?: string; isSectionHeader?: boolean;
-  isTotal?: boolean; children?: unknown[];
-}
-
 interface ArMonth { month: string; billed: number; collected: number; }
 interface OwnerRow {
   partner_name: string; total_noi_share: number;
@@ -60,17 +57,68 @@ interface OwnerRow {
 function KpiTile({ label, value, sub, color }: {
   label: string; value: string; sub?: string; color?: string;
 }) {
+  const display = value === '—' ? 'Not available' : value;
   return (
     <div style={{ ...CARD, minWidth: 0 }}>
       <div style={{ fontSize: 11, fontWeight: 600, color: P.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
         {label}
       </div>
-      <div style={{ fontSize: 28, fontWeight: 700, color: color ?? P.text, fontVariantNumeric: 'tabular-nums lining-nums' }}>
-        {value}
+      <div style={{ fontSize: 28, fontWeight: 700, color: display === 'Not available' ? P.muted : (color ?? P.text), fontVariantNumeric: 'tabular-nums lining-nums' }}>
+        {display}
       </div>
       {sub && <div style={{ fontSize: 12, color: P.muted, marginTop: 4 }}>{sub}</div>}
     </div>
   );
+}
+
+const PILL_STYLE: Record<ExportKpiItem['status'], { bg: string; color: string }> = {
+  good: { bg: '#DCFCE7', color: '#166534' },
+  warn: { bg: '#FEF3C7', color: '#92400E' },
+  bad: { bg: '#FEE2E2', color: '#B91C1C' },
+  info: { bg: '#F5F5F4', color: '#78716C' },
+};
+
+function KpiTileWithPill({ item }: { item: ExportKpiItem }) {
+  const pill = PILL_STYLE[item.status];
+  const value = item.value === 'Data not available' || item.value === 'N/A' ? 'Not available' : item.value;
+  return (
+    <div style={{ ...CARD, minWidth: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: P.muted, textTransform: 'uppercase', letterSpacing: '0.06em', lineHeight: 1.3 }}>
+          {item.label}
+        </div>
+        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: pill.bg, color: pill.color, whiteSpace: 'nowrap' }}>
+          {item.statusLabel}
+        </span>
+      </div>
+      <div style={{ fontSize: 24, fontWeight: 700, color: value === 'Not available' ? P.muted : P.text, fontVariantNumeric: 'tabular-nums lining-nums' }}>
+        {value}
+      </div>
+      <div style={{ fontSize: 11, color: P.muted, marginTop: 6 }}>Target {item.benchmark}</div>
+    </div>
+  );
+}
+
+function KpiGroup({ title, items }: { title: string; items: ExportKpiItem[] }) {
+  if (!items.length) return null;
+  return (
+    <div>
+      <SectionTitle>{title}</SectionTitle>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 12 }}>
+        {items.map(item => <KpiTileWithPill key={item.label} item={item} />)}
+      </div>
+    </div>
+  );
+}
+
+function fmtMetricMoney(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n) || n === 0) return 'Not available';
+  return fmt(n);
+}
+
+function fmtMetricPct(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n) || n === 0) return 'Not available';
+  return pct(n);
 }
 
 // ─── section heading ─────────────────────────────────────────────────────────
@@ -101,62 +149,40 @@ function yFmt(v: number) {
 // TAB 1 – EXECUTIVE OVERVIEW
 // ═══════════════════════════════════════════════════════════════════════════════
 function Tab1({
-  portfolio, loans, arData, ownership, companies,
-  period, month, year,
+  overview, kpiSets, loanSchedule, loans, arData, ownership, periodLabel, finLoading,
 }: {
-  portfolio: ReturnType<typeof useRentalCfoData>['portfolio'];
+  overview: ExecutiveOverviewMetrics;
+  kpiSets: ReturnType<typeof import('../utils/rentalKpiEngine').buildExportKpiSets>;
+  loanSchedule: ReturnType<typeof import('../utils/executiveSummaryLoans').buildLoanScheduleKpis>;
   loans: ReturnType<typeof useRentalCfoData>['loans'];
   arData: ArMonth[];
   ownership: OwnerRow[];
-  companies: ReturnType<typeof useRentalCfoData>['companies'];
-  period: Period | null; month: number; year: number;
+  periodLabel: string;
+  finLoading: boolean;
 }) {
-  // Revenue KPIs
-  const grossRevenue = portfolio?.gross_potential_rent ?? 0;
-  const totalCollected = portfolio?.collected_this_month ?? 0;
-  const noi = portfolio?.noi_this_month ?? 0;
-  const occupancy = portfolio?.occupancy_pct ?? 0;
-  const vacancyLoss = portfolio?.vacancy_loss ?? 0;
-  const totalExpenses = portfolio?.total_expense_this_month ?? 0;
-
-  // AR outstanding = latest month billed - collected
   const latestAr = useMemo(() => {
-    if (!arData.length) return 0;
+    if (overview.arOutstanding != null && overview.arOutstanding > 0) return overview.arOutstanding;
+    if (!arData.length) return null;
     const sorted = [...arData].sort((a, b) => monthSortKey(b.month) - monthSortKey(a.month));
     const m = sorted[0];
     return Math.max(0, m.billed - m.collected);
-  }, [arData]);
+  }, [arData, overview.arOutstanding]);
 
-  // Collection rate = avg collected/billed over trend
-  const collectionRate = useMemo(() => {
-    if (!arData.length) return 0;
-    const totalB = arData.reduce((s, r) => s + r.billed, 0);
-    const totalC = arData.reduce((s, r) => s + r.collected, 0);
-    return totalB > 0 ? (totalC / totalB) * 100 : 0;
-  }, [arData]);
-
-  // Debt summary
-  const totalDebt = useMemo(() => loans.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0), [loans]);
-  const avgRate = useMemo(() => {
-    if (!loans.length) return 0;
-    return loans.reduce((s, l) => s + (l.loan_interest_rate ?? 0), 0) / loans.length;
-  }, [loans]);
+  const totalDebt = overview.totalDebt ?? 0;
+  const avgRate = loans.length
+    ? loans.reduce((s, l) => s + (l.loan_interest_rate ?? 0), 0) / loans.length
+    : 0;
   const nextMaturity = useMemo(() => {
-    const dates = loans
-      .filter(l => l.loan_maturity_date)
-      .map(l => l.loan_maturity_date as string)
-      .sort();
+    const dates = loans.filter(l => l.loan_maturity_date).map(l => l.loan_maturity_date as string).sort();
     return dates[0] ?? null;
   }, [loans]);
 
-  // Partner distributions
   const totalPartnerNoi = useMemo(() => ownership.reduce((s, o) => s + o.total_noi_share, 0), [ownership]);
   const partnerSub = useMemo(() => {
-    if (!ownership.length) return '';
+    if (!ownership.length) return 'No partner data for this period';
     return ownership.slice(0, 2).map(o => `${o.partner_name}: ${fmt(o.total_noi_share)}`).join(' · ');
   }, [ownership]);
 
-  // Trend chart: Revenue vs Expenses
   const trendData = useMemo(() => {
     const sorted = [...arData].sort((a, b) => monthSortKey(a.month) - monthSortKey(b.month));
     return sorted.map(d => ({
@@ -166,50 +192,63 @@ function Tab1({
     }));
   }, [arData]);
 
-  const collRateColor = collectionRate >= 95 ? P.green : collectionRate >= 80 ? P.amber : P.red;
-  const occColor = occupancy >= 95 ? P.green : occupancy >= 75 ? P.amber : P.red;
+  const collRate = overview.collectionRate ?? 0;
+  const occ = overview.occupancyPct ?? 0;
+  const collRateColor = collRate >= 95 ? P.green : collRate >= 80 ? P.amber : P.red;
+  const occColor = occ >= 95 ? P.green : occ >= 75 ? P.amber : P.red;
+  const noiVal = overview.noi ?? 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* Row 1 – Revenue KPIs */}
+      {periodLabel && (
+        <p style={{ fontSize: 13, color: P.muted, margin: 0 }}>
+          Financial KPIs for <strong style={{ color: P.text }}>{periodLabel}</strong>
+          {finLoading ? ' · loading saved financials…' : overview.hasFinancials ? ' · from uploaded P&L / balance sheet' : ' · upload financials on Financials page for full KPI groups'}
+        </p>
+      )}
+
       <div>
         <SectionTitle>Revenue &amp; Performance</SectionTitle>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
-          <KpiTile label="Gross Potential Rent" value={grossRevenue > 0 ? fmt(grossRevenue) : '—'} />
-          <KpiTile label="Total Collected" value={totalCollected > 0 ? fmt(totalCollected) : '—'} color={P.green} />
-          <KpiTile label="Net Operating Income" value={noi !== 0 ? fmt(noi) : '—'} color={noi > 0 ? P.green : P.red} />
-          <KpiTile label="Occupancy Rate" value={occupancy > 0 ? pct(occupancy) : '—'} color={occColor} sub={occupancy > 0 ? `Target ≥ 95%` : undefined} />
-          <KpiTile label="Vacancy Loss" value={vacancyLoss > 0 ? fmt(vacancyLoss) : '—'} color={vacancyLoss > 0 ? P.red : P.muted} />
+          <KpiTile label="Gross Potential Rent" value={fmtMetricMoney(overview.grossPotentialRent)} />
+          <KpiTile label="Total Collected" value={fmtMetricMoney(overview.totalCollected)} color={P.green} />
+          <KpiTile label="Net Operating Income" value={fmtMetricMoney(overview.noi)} color={noiVal > 0 ? P.green : noiVal < 0 ? P.red : undefined} />
+          <KpiTile label="Occupancy Rate" value={fmtMetricPct(overview.occupancyPct)} color={occColor} sub={occ > 0 ? 'Target ≥ 95%' : undefined} />
+          <KpiTile label="Vacancy Loss" value={fmtMetricMoney(overview.vacancyLoss)} color={overview.vacancyLoss ? P.red : P.muted} />
         </div>
       </div>
 
-      {/* Row 2 – Risk KPIs */}
       <div>
         <SectionTitle>Risk &amp; Obligations</SectionTitle>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
-          <KpiTile label="Total Expenses" value={totalExpenses > 0 ? fmt(totalExpenses) : '—'} />
-          <KpiTile label="AR Outstanding" value={latestAr > 0 ? fmt(latestAr) : '—'} color={P.amber} sub="Latest month gap" />
-          <KpiTile label="Collection Rate" value={collectionRate > 0 ? pct(collectionRate) : '—'} color={collRateColor} sub="Avg over trend" />
+          <KpiTile label="Total Expenses" value={fmtMetricMoney(overview.totalExpenses)} />
+          <KpiTile label="AR Outstanding" value={fmtMetricMoney(latestAr)} color={P.amber} sub="Arrears / latest gap" />
+          <KpiTile label="Collection Rate" value={fmtMetricPct(overview.collectionRate)} color={collRateColor} sub="Selected period" />
           <KpiTile
             label="Total Debt"
-            value={totalDebt > 0 ? fmtK(totalDebt) : '—'}
-            sub={loans.length > 0 ? `Avg ${pct(avgRate * 100)} · Next maturity ${nextMaturity ?? 'N/A'}` : undefined}
+            value={totalDebt > 0 ? fmtK(totalDebt) : 'Not available'}
+            sub={loans.length > 0 ? `Avg ${pct(avgRate * 100)} · Next maturity ${nextMaturity ?? 'N/A'}` : 'No loan data'}
           />
           <KpiTile
             label="Partner NOI Share"
-            value={ownership.length > 0 ? fmt(totalPartnerNoi) : '—'}
-            sub={ownership.length > 0 ? partnerSub : 'Not available'}
+            value={ownership.length > 0 ? fmt(totalPartnerNoi) : 'Not available'}
+            sub={partnerSub}
           />
         </div>
       </div>
 
-      {/* Row 3 – Charts */}
+      <KpiGroup title="Profitability & Margins" items={kpiSets.profitability} />
+      <KpiGroup title="Balance Sheet & Leverage" items={kpiSets.balanceSheet} />
+      <KpiGroup title="Occupancy & Rental Ops" items={kpiSets.occupancy} />
+      <KpiGroup title="Pricing & Market Position" items={kpiSets.pricing} />
+      <KpiGroup title="Returns & Cost of Capital" items={kpiSets.returns} />
+      <KpiGroup title="Loan Schedule" items={loanSchedule.summary} />
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-        {/* Billed vs Collected trend */}
         <div style={CARD}>
           <div style={{ fontSize: 14, fontWeight: 700, color: P.text, marginBottom: 16 }}>Billed vs Collected Trend</div>
           {trendData.length === 0 ? (
-            <div style={{ color: P.muted, fontSize: 13, textAlign: 'center', paddingTop: 40 }}>No AR data available</div>
+            <div style={{ color: P.muted, fontSize: 13, textAlign: 'center', paddingTop: 40 }}>No AR data for this period</div>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
               <ComposedChart data={trendData}>
@@ -228,11 +267,10 @@ function Tab1({
           )}
         </div>
 
-        {/* Loan portfolio breakdown */}
         <div style={CARD}>
           <div style={{ fontSize: 14, fontWeight: 700, color: P.text, marginBottom: 16 }}>Loan Portfolio</div>
           {loans.length === 0 ? (
-            <NA msg="No loan data available" />
+            <NA msg="No loan data — add loans in Loan Tracker" />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 220, overflowY: 'auto' }}>
               {loans.map((l, i) => {
@@ -243,17 +281,13 @@ function Tab1({
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     padding: '10px 14px', background: P.pageBg, borderRadius: 8, border: `1px solid ${P.border}` }}>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: P.text }}>
-                        {(l as any).company_name ?? `Loan ${i + 1}`}
-                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: P.text }}>{l.company_name ?? `Loan ${i + 1}`}</div>
                       <div style={{ fontSize: 11, color: P.muted }}>
                         Due {l.loan_maturity_date ?? 'N/A'} · EMI {l.loan_emi ? fmtK(l.loan_emi) : 'N/A'}/mo
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: P.text, fontVariantNumeric: 'tabular-nums' }}>
-                        {fmtK(bal)}
-                      </div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: P.text, fontVariantNumeric: 'tabular-nums' }}>{fmtK(bal)}</div>
                       <div style={{ fontSize: 11, fontWeight: 600, color: rateColor }}>{pct(rate)}</div>
                     </div>
                   </div>
@@ -264,7 +298,6 @@ function Tab1({
         </div>
       </div>
 
-      {/* Partner distributions */}
       {ownership.length > 0 && (
         <div style={CARD}>
           <div style={{ fontSize: 14, fontWeight: 700, color: P.text, marginBottom: 16 }}>Partner Distributions — NOI Share</div>
@@ -272,12 +305,8 @@ function Tab1({
             {ownership.map((o, i) => (
               <div key={i} style={{ padding: '14px 16px', background: P.pageBg, borderRadius: 8, border: `1px solid ${P.border}` }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: P.text }}>{o.partner_name}</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: P.gold, marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>
-                  {fmt(o.total_noi_share)}
-                </div>
-                <div style={{ fontSize: 11, color: P.muted, marginTop: 4 }}>
-                  {o.holdings.length} holding{o.holdings.length !== 1 ? 's' : ''}
-                </div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: P.gold, marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{fmt(o.total_noi_share)}</div>
+                <div style={{ fontSize: 11, color: P.muted, marginTop: 4 }}>{o.holdings.length} holding{o.holdings.length !== 1 ? 's' : ''}</div>
               </div>
             ))}
           </div>
@@ -301,7 +330,7 @@ function isRevenueLine(row: FinRow): boolean {
 }
 
 function Tab2({ finRows, arData }: { finRows: FinRow[]; arData: ArMonth[] }) {
-  const dataRows = finRows.filter(r => !r.isSectionHeader && !r.isTotal && !r.children);
+  const dataRows = finRows.filter(r => !r.isSectionHeader && !r.isTotal);
 
   const monthlyAgg = useMemo(() => {
     const map = new Map<string, { revenue: number; expenses: number }>();
@@ -569,7 +598,7 @@ function Tab4({
 
   // Net income from P&L (latest month)
   const latestNoi = useMemo(() => {
-    const dataRows = finRows.filter(r => !r.isSectionHeader && !r.isTotal && !r.children);
+    const dataRows = finRows.filter(r => !r.isSectionHeader && !r.isTotal);
     const months = [...new Set(dataRows.map(r => r.month))].sort((a, b) => monthSortKey(b) - monthSortKey(a));
     if (!months.length) return null;
     const m = months[0];
@@ -723,7 +752,7 @@ function Tab5({
   arData: ArMonth[];
   units: ReturnType<typeof useRentalCfoData>['units'];
 }) {
-  const occupancy = portfolio?.occupancy_pct ?? 0;
+  const occupancy = (portfolio?.occupancy_pct ?? 0) * 100;
   const totalBilled = arData.reduce((s, r) => s + r.billed, 0);
   const totalCollected = arData.reduce((s, r) => s + r.collected, 0);
   const collectionRate = totalBilled > 0 ? (totalCollected / totalBilled) * 100 : 0;
@@ -876,13 +905,14 @@ type TabId = typeof TABS[number]['id'];
 
 export default function RentalExecutiveSummary() {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
-  const [period, setPeriod] = useState<Period | null>(null);
+  const [period, setPeriod] = useState<Period | null>('MoM');
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
+  const [entityId, setEntityId] = useState<string>('portfolio');
   const [showExportModal, setShowExportModal] = useState(false);
 
-  // Main data hook
-  const { companies, loans, portfolio, units } = useRentalCfoData();
+  const monthYm = period ? `${year}-${String(month).padStart(2, '0')}` : undefined;
+  const { companies, loans, portfolio, units, loading: cfoLoading } = useRentalCfoData(monthYm);
 
   // AR summary
   const [arData, setArData] = useState<ArMonth[]>([]);
@@ -907,21 +937,29 @@ export default function RentalExecutiveSummary() {
       .catch(() => {});
   }, []);
 
-  // P&L financials for all companies
+  // P&L financials — parsed from same API as Financials page
   const [finRows, setFinRows] = useState<FinRow[]>([]);
-  useEffect(() => {
-    if (!companies.length) return;
-    Promise.all(
-      companies.map((c: any) =>
-        fetch(`/api/rentals/financials/${c.id}`)
-          .then(r => r.ok ? r.json() : [])
-          .catch(() => [])
-      )
-    ).then(results => setFinRows((results as FinRow[][]).flat()));
-  }, [companies]);
 
-  // Available period keys from AR data
-  const availableKeys = useMemo(() => arData.map(d => d.month), [arData]);
+  const arCollectionRate = useMemo(() => {
+    const keys = period ? new Set(getPeriodKeys(period, month, year)) : null;
+    const rows = keys ? arData.filter(d => keys.has(d.month)) : arData;
+    const totalB = rows.reduce((s, r) => s + r.billed, 0);
+    const totalC = rows.reduce((s, r) => s + r.collected, 0);
+    return totalB > 0 ? (totalC / totalB) * 100 : 0;
+  }, [arData, period, month, year]);
+
+  const {
+    kpiSets, loanSchedule, scopedLoans, overview, activeFins, availableKeys: finAvailableKeys, loading: finLoading,
+  } = useExecutiveSummaryKpis(companies, portfolio, loans, entityId, period, month, year, arCollectionRate);
+
+  useEffect(() => {
+    setFinRows(mergeFinRows(activeFins));
+  }, [activeFins]);
+
+  const availableKeys = useMemo(() => {
+    const keys = new Set<string>([...finAvailableKeys, ...arData.map(d => d.month)]);
+    return [...keys];
+  }, [finAvailableKeys, arData]);
 
   // Period-filtered AR data
   const filteredAr = useMemo(() => {
@@ -936,6 +974,14 @@ export default function RentalExecutiveSummary() {
     const keys = new Set(getPeriodKeys(period, month, year));
     return finRows.filter(r => keys.has(r.month));
   }, [finRows, period, month, year]);
+
+  const entityLabel = entityId === 'portfolio'
+    ? 'All companies (portfolio)'
+    : (companies.find(c => c.id === entityId)?.company_name ?? 'Entity');
+
+  const periodLabel = period
+    ? periodChipText(period, month, year)
+    : (overview.periodLabel || `FY ${year}`);
 
   const handlePrint = useCallback(() => {
     window.print();
@@ -969,9 +1015,19 @@ export default function RentalExecutiveSummary() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
           <h1 style={{ fontSize: 26, fontWeight: 700, color: P.text, margin: 0 }}>Executive Summary</h1>
-          <div style={{ fontSize: 13, color: P.muted, marginTop: 4 }}>Portfolio-wide financial overview across all companies</div>
+          <div style={{ fontSize: 13, color: P.muted, marginTop: 4 }}>{entityLabel} · {periodLabel}</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <select
+            value={entityId}
+            onChange={e => setEntityId(e.target.value)}
+            style={{ fontSize: 13, padding: '8px 12px', borderRadius: 8, border: `1px solid ${P.border}`, background: P.cardBg, minWidth: 200 }}
+          >
+            <option value="portfolio">All Companies (Portfolio)</option>
+            {companies.map(c => (
+              <option key={c.id} value={c.id}>{c.company_name}</option>
+            ))}
+          </select>
           <PeriodToggle
             period={period} month={month} year={year}
             onChange={(p, m, y) => { setPeriod(p); setMonth(m); setYear(y); }}
@@ -1014,11 +1070,20 @@ export default function RentalExecutiveSummary() {
       </div>
 
       {/* Tab content */}
+      {(cfoLoading || finLoading) && activeTab === 'overview' && (
+        <p style={{ fontSize: 13, color: P.muted, marginBottom: 16 }}>Loading saved financial data…</p>
+      )}
+
       {activeTab === 'overview' && (
         <Tab1
-          portfolio={portfolio} loans={loans} arData={filteredAr}
-          ownership={ownership} companies={companies}
-          period={period} month={month} year={year}
+          overview={overview}
+          kpiSets={kpiSets}
+          loanSchedule={loanSchedule}
+          loans={scopedLoans}
+          arData={filteredAr}
+          ownership={ownership}
+          periodLabel={periodLabel}
+          finLoading={finLoading}
         />
       )}
       {activeTab === 'income' && (
