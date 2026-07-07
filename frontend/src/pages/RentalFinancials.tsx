@@ -649,6 +649,68 @@ function resolveKpiView(
   return { k, kPrev, label: `FY ${year}`, compareLabel: prevY ? `FY ${prevY}` : '' };
 }
 
+function resolveKpiViewForPeriod(
+  fin: ParsedFinancials,
+  period: Period,
+  pMonth: number,
+  pYear: number,
+): { k: KpiData; kPrev: KpiData | null; label: string; compareLabel: string } {
+  const keys = getPeriodKeys(period, pMonth, pYear);
+  const available = getAvailableKeys(fin);
+  const filtered = keys.filter(k => available.includes(k));
+  if (!filtered.length) return resolveKpiView(fin, pYear, pMonth);
+
+  if (period === 'MoM') {
+    const currentKey = `${_MNAMES[pMonth - 1]} ${pYear}`;
+    const key = available.includes(currentKey) ? currentKey : filtered[filtered.length - 1];
+    const k = calcKpisFromMonthlyKey(fin, key);
+    const priorKey = filtered.length >= 2 ? filtered[0] : null;
+    const kPrev = priorKey && available.includes(priorKey)
+      ? calcKpisFromMonthlyKey(fin, priorKey)
+      : null;
+    const compareLabel = priorKey && available.includes(priorKey) ? priorKey : '';
+    return { k, kPrev, label: key, compareLabel };
+  }
+
+  const agg = sumKpisOverKeys(fin.pl, filtered);
+  const bsKey = filtered[filtered.length - 1];
+  const k = periodAggregateToKpiData(fin, agg, bsKey);
+
+  let kPrev: KpiData | null = null;
+  let compareLabel = '';
+  if (period === 'YTD') {
+    const prevYearKeys = filtered.map(k => {
+      const [mon, yr] = k.split(' ');
+      return `${mon} ${parseInt(yr, 10) - 1}`;
+    });
+    if (prevYearKeys.every(pk => available.includes(pk))) {
+      const prevAgg = sumKpisOverKeys(fin.pl, prevYearKeys);
+      kPrev = periodAggregateToKpiData(fin, prevAgg, prevYearKeys[prevYearKeys.length - 1]);
+      compareLabel = `YTD ${pYear - 1}`;
+    }
+  } else {
+    const prevTtmKeys = filtered.map(k => {
+      const [mon, yr] = k.split(' ');
+      const mi = _MNAMES.indexOf(mon);
+      const y = parseInt(yr, 10);
+      const prevMi = mi === 0 ? 11 : mi - 1;
+      const prevY = mi === 0 ? y - 1 : y;
+      return `${_MNAMES[prevMi]} ${prevY}`;
+    });
+    if (prevTtmKeys.every(pk => available.includes(pk))) {
+      const prevAgg = sumKpisOverKeys(fin.pl, prevTtmKeys);
+      kPrev = periodAggregateToKpiData(fin, prevAgg, prevTtmKeys[prevTtmKeys.length - 1]);
+      compareLabel = 'Prior TTM';
+    }
+  }
+
+  const periodLabel = period === 'YTD'
+    ? `YTD Jan–${_MNAMES[pMonth - 1]} ${pYear}`
+    : `TTM ending ${_MNAMES[pMonth - 1]} ${pYear}`;
+
+  return { k, kPrev, label: periodLabel, compareLabel };
+}
+
 // ── Empty State ───────────────────────────────────────────────────────────────
 
 function EmptyUpload({ onUpload, company, onAddMetrics }: { onUpload: () => void; onAddMetrics: () => void; company: string }) {
@@ -963,6 +1025,9 @@ function KPITab({
   fin,
   kpiYear,
   kpiMonth,
+  period,
+  pMonth,
+  pYear,
   showBreakdown,
   rowsByKpi,
   expandedKpi,
@@ -971,12 +1036,17 @@ function KPITab({
   fin: ParsedFinancials;
   kpiYear: number;
   kpiMonth: number | null;
+  period?: Period | null;
+  pMonth?: number;
+  pYear?: number;
   showBreakdown?: boolean;
   rowsByKpi?: Map<string, KpiAuditRow>;
   expandedKpi?: string | null;
   onToggleKpi?: (name: string) => void;
 }) {
-  const { k, kPrev: kP, label, compareLabel } = resolveKpiView(fin, kpiYear, kpiMonth);
+  const { k, kPrev: kP, label, compareLabel } = period && pMonth && pYear
+    ? resolveKpiViewForPeriod(fin, period, pMonth, pYear)
+    : resolveKpiView(fin, kpiYear, kpiMonth);
   const prevY = compareLabel || (fin.years.length >= 2 ? String(fin.years[fin.years.length - 2]) : null);
 
   const kpiCardProps = (name: string) => {
@@ -1317,10 +1387,14 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
     [period, pMonth, pYear],
   );
 
-  const periodAgg = useMemo(
-    () => periodKeys.length ? sumKpisOverKeys(fin.pl, periodKeys) : null,
-    [fin.pl, periodKeys],
-  );
+  const periodAgg = useMemo(() => {
+    if (!periodKeys.length) return null;
+    // MoM panels show the selected month only; prior month is for charts/comparison.
+    if (period === 'MoM') {
+      return calcMonthlyKpis(fin.pl, periodKeys[periodKeys.length - 1]);
+    }
+    return sumKpisOverKeys(fin.pl, periodKeys);
+  }, [fin.pl, periodKeys, period]);
 
   const periodTrend = useMemo(() => {
     if (!periodKeys.length) return [];
@@ -1889,7 +1963,9 @@ export default function RentalFinancials() {
 
   const auditMonth = activeTab === ADMIN_TAB ? pMonth : (kpiMonth ?? pMonth);
   const auditYear = activeTab === ADMIN_TAB ? pYear : kpiYear;
-  const auditPeriod = activeTab === ADMIN_TAB ? (adminPeriod ?? period) : null;
+  const auditPeriod = (activeTab === ADMIN_TAB || activeTab === 'KPI Dashboard')
+    ? (adminPeriod ?? period)
+    : null;
   const auditEnabled = isKpiAdmin && !!selectedCompanyId
     && (activeTab === 'KPI Dashboard' || activeTab === ADMIN_TAB);
 
@@ -2249,10 +2325,11 @@ export default function RentalFinancials() {
                   shows on BS/CF only when drilled into a year */}
               {(() => {
                 const showForPL  = activeTab === 'P&L Statement' && getAvailableKeys(currentFin).length > 0;
+                const showForKPI = activeTab === 'KPI Dashboard' && getAvailableKeys(currentFin).length > 0;
                 const showForBS  = activeTab === 'Balance Sheet'  && !!selectedYear && getItemKeys(currentFin.bs).length > 0;
                 const showForCF  = activeTab === 'Cash Flow'      && !!selectedYear && getItemKeys(currentFin.cf).length > 0;
-                if (!showForPL && !showForBS && !showForCF) return null;
-                const keys = showForPL ? getAvailableKeys(currentFin)
+                if (!showForPL && !showForKPI && !showForBS && !showForCF) return null;
+                const keys = showForPL || showForKPI ? getAvailableKeys(currentFin)
                            : showForBS ? getItemKeys(currentFin.bs)
                            : getItemKeys(currentFin.cf);
                 return (
@@ -2301,6 +2378,9 @@ export default function RentalFinancials() {
                 fin={currentFin}
                 kpiYear={kpiYear}
                 kpiMonth={kpiMonth}
+                period={period}
+                pMonth={pMonth}
+                pYear={pYear}
                 showBreakdown={isKpiAdmin}
                 rowsByKpi={rowsByKpi}
                 expandedKpi={expandedKpi}

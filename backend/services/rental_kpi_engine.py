@@ -405,14 +405,25 @@ def resolve_kpi_view_for_period(
     if not keys:
         return resolve_kpi_view(fin, p_year, p_month)
 
+    # MoM: current month only — prior month is for comparison (k_prev), not summed in.
+    if period == "MoM":
+        current_key = f"{_MNAMES[p_month - 1]} {p_year}"
+        if current_key not in available:
+            current_key = keys[-1]
+        k = calc_kpis_from_monthly_key(fin, current_key)
+        prior_key = keys[0] if len(keys) >= 2 else None
+        k_prev = (
+            calc_kpis_from_monthly_key(fin, prior_key)
+            if prior_key and prior_key in available
+            else None
+        )
+        return k, k_prev, current_key
+
     agg = sum_kpis_over_keys(_pl(fin), keys)
     bs_key = keys[-1]
     k = _period_aggregate_to_kpi(fin, agg, bs_key)
 
-    if period == "MoM" and len(keys) >= 2 and keys[0] in available:
-        k_prev = calc_kpis_from_monthly_key(fin, keys[0])
-        label = f"{keys[-1]} vs {keys[0]}"
-    elif period == "YTD":
+    if period == "YTD":
         k_prev = None
         label = f"YTD Jan–{_MNAMES[p_month - 1]} {p_year}"
     else:

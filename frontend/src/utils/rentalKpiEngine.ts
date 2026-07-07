@@ -361,32 +361,41 @@ export function resolveKpiViewForPeriod(
   if (!period) return resolveKpiView(fin, pYear, pMonth);
 
   const keys = getPeriodKeys(period, pMonth, pYear);
-  if (!keys.length) return resolveKpiView(fin, pYear, pMonth);
+  const available = getAvailableKeys(fin);
+  const filtered = keys.filter(k => available.includes(k));
+  if (!filtered.length) return resolveKpiView(fin, pYear, pMonth);
 
-  const agg = sumKpisOverKeys(fin.pl, keys);
-  const bsKey = keys[keys.length - 1];
+  // MoM: current month only — prior month is kPrev for comparison, not summed into k.
+  if (period === 'MoM') {
+    const currentKey = `${_MNAMES[pMonth - 1]} ${pYear}`;
+    const key = available.includes(currentKey) ? currentKey : filtered[filtered.length - 1];
+    const k = calcKpisFromMonthlyKey(fin, key);
+    const priorKey = filtered.length >= 2 ? filtered[0] : null;
+    const kPrev = priorKey && available.includes(priorKey)
+      ? calcKpisFromMonthlyKey(fin, priorKey)
+      : null;
+    const compareLabel = priorKey && available.includes(priorKey) ? priorKey : '';
+    return { k, kPrev, label: key, compareLabel };
+  }
+
+  const agg = sumKpisOverKeys(fin.pl, filtered);
+  const bsKey = filtered[filtered.length - 1];
   const k = periodAggregateToKpiData(fin, agg, bsKey);
 
   let kPrev: KpiData | null = null;
   let compareLabel = '';
-  if (period === 'MoM') {
-    const prevKey = keys[0];
-    if (getAvailableKeys(fin).includes(prevKey)) {
-      kPrev = calcKpisFromMonthlyKey(fin, prevKey);
-      compareLabel = prevKey;
-    }
-  } else if (period === 'YTD') {
-    const prevYearKeys = keys.map(k => {
+  if (period === 'YTD') {
+    const prevYearKeys = filtered.map(k => {
       const [mon, yr] = k.split(' ');
       return `${mon} ${parseInt(yr, 10) - 1}`;
     });
-    if (prevYearKeys.every(pk => getAvailableKeys(fin).includes(pk))) {
+    if (prevYearKeys.every(pk => available.includes(pk))) {
       const prevAgg = sumKpisOverKeys(fin.pl, prevYearKeys);
       kPrev = periodAggregateToKpiData(fin, prevAgg, prevYearKeys[prevYearKeys.length - 1]);
       compareLabel = `YTD ${pYear - 1}`;
     }
   } else {
-    const prevTtmKeys = keys.map(k => {
+    const prevTtmKeys = filtered.map(k => {
       const [mon, yr] = k.split(' ');
       const mi = _MNAMES.indexOf(mon);
       const y = parseInt(yr, 10);
@@ -394,18 +403,16 @@ export function resolveKpiViewForPeriod(
       const prevY = mi === 0 ? y - 1 : y;
       return `${_MNAMES[prevMi]} ${prevY}`;
     });
-    if (prevTtmKeys.every(pk => getAvailableKeys(fin).includes(pk))) {
+    if (prevTtmKeys.every(pk => available.includes(pk))) {
       const prevAgg = sumKpisOverKeys(fin.pl, prevTtmKeys);
       kPrev = periodAggregateToKpiData(fin, prevAgg, prevTtmKeys[prevTtmKeys.length - 1]);
       compareLabel = 'Prior TTM';
     }
   }
 
-  const periodLabel = period === 'MoM'
-    ? `${_MNAMES[pMonth - 1]} ${pYear}`
-    : period === 'YTD'
-      ? `YTD Jan–${_MNAMES[pMonth - 1]} ${pYear}`
-      : `TTM ending ${_MNAMES[pMonth - 1]} ${pYear}`;
+  const periodLabel = period === 'YTD'
+    ? `YTD Jan–${_MNAMES[pMonth - 1]} ${pYear}`
+    : `TTM ending ${_MNAMES[pMonth - 1]} ${pYear}`;
 
   return { k, kPrev, label: periodLabel, compareLabel };
 }

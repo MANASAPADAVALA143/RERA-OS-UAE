@@ -1,6 +1,44 @@
 """Tests for rental KPI engine and sanity check logic."""
 from services.kpi_sanity_check import audit_company_financials
-from services.rental_kpi_engine import calc_kpis, resolve_kpi_view
+from services.rental_kpi_engine import calc_kpis, resolve_kpi_view, resolve_kpi_view_for_period
+
+
+def _mom_sample_fin() -> dict:
+    """Feb + Mar 2026 monthly P&L — regression case for MoM summing bug."""
+    def pl_row(label: str, feb: float, mar: float, **kw) -> dict:
+        return {
+            "label": label,
+            "values": {2026: feb + mar},
+            "monthlyValues": {"Feb 2026": feb, "Mar 2026": mar},
+            "indent": 0,
+            "isTotal": True,
+            "isSectionHeader": False,
+            "isNetIncome": False,
+            **kw,
+        }
+
+    return {
+        "years": [2026],
+        "periods": ["Feb 2026", "Mar 2026"],
+        "pl": [
+            pl_row("Total for Income", 7475.0, 7875.0),
+            pl_row("Total for Expenses", 5656.82, 6121.70),
+            pl_row("Total for Interest Paid", 3577.71, 4116.06),
+            {"label": "Net Income", "values": {2026: 0}, "monthlyValues": {"Feb 2026": 0, "Mar 2026": 0},
+             "indent": 0, "isTotal": False, "isSectionHeader": False, "isNetIncome": True},
+        ],
+        "bs": [
+            {"label": "Total for Assets", "values": {2026: 100_000}, "monthlyValues": {"Feb 2026": 100_000, "Mar 2026": 100_000},
+             "indent": 0, "isTotal": True, "isSectionHeader": False, "isNetIncome": False},
+            {"label": "Total for Liabilities", "values": {2026: 50_000}, "monthlyValues": {"Feb 2026": 50_000, "Mar 2026": 50_000},
+             "indent": 0, "isTotal": True, "isSectionHeader": False, "isNetIncome": False},
+            {"label": "Total for Equity", "values": {2026: 50_000}, "monthlyValues": {"Feb 2026": 50_000, "Mar 2026": 50_000},
+             "indent": 0, "isTotal": True, "isSectionHeader": False, "isNetIncome": False},
+            {"label": "Buildings", "values": {2026: 80_000}, "monthlyValues": {"Feb 2026": 80_000, "Mar 2026": 80_000},
+             "indent": 1, "isTotal": False, "isSectionHeader": False, "isNetIncome": False},
+        ],
+        "cf": [],
+    }
 
 
 def _sample_fin() -> dict:
@@ -39,6 +77,48 @@ def _sample_fin() -> dict:
         ],
         "cf": [],
     }
+
+
+def test_mom_uses_current_month_only_not_sum():
+    fin = _mom_sample_fin()
+    k, k_prev, label = resolve_kpi_view_for_period(fin, "MoM", 3, 2026)
+    assert label == "Mar 2026"
+    assert k.total_revenue == 7875.0
+    assert k.total_expenses == 6121.70
+    assert k.interest_expense == 4116.06
+    assert abs(k.noi - 5869.36) < 0.02
+    assert k_prev is not None
+    assert k_prev.total_revenue == 7475.0
+    assert k_prev.total_expenses == 5656.82
+
+
+def test_mom_audit_noi_margin_march_only():
+    result = audit_company_financials(
+        _mom_sample_fin(),
+        company_id="co",
+        company_name="Co",
+        period="MoM",
+        month=3,
+        year=2026,
+    )
+    noi_row = next(r for r in result.rows if r.kpi == "NOI Margin")
+    assert noi_row.inputs_detail.get("Total Revenue") == "$7.9K"
+    assert noi_row.inputs_detail.get("Total Expenses") == "$6.1K"
+    assert abs(noi_row.canonical_value - 74.53) < 0.1
+
+
+def test_ytd_still_sums_months():
+    fin = _mom_sample_fin()
+    fin["pl"].append({
+        "label": "Jan income",
+        "values": {2026: 1000},
+        "monthlyValues": {"Jan 2026": 1000.0, "Feb 2026": 0, "Mar 2026": 0},
+        "indent": 1, "isTotal": False, "isSectionHeader": False, "isNetIncome": False,
+    })
+    fin["periods"] = ["Jan 2026", "Feb 2026", "Mar 2026"]
+    k, _, label = resolve_kpi_view_for_period(fin, "YTD", 3, 2026)
+    assert "YTD" in label
+    assert k.total_revenue > 7875.0  # includes Jan + Feb + Mar
 
 
 def test_noi_excludes_interest_add_back():
