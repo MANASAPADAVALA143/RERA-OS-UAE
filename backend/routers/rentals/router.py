@@ -302,17 +302,35 @@ def _load_company_data(company_id: uuid.UUID, tid: uuid.UUID, db: Session) -> tu
     return units, inv_dicts, exp_dicts
 
 
-def _registry_unit_counts(units: list) -> tuple[int, int]:
-    """Occupied / total from registry rows (one row = one unit)."""
+def _registry_unit_counts(units: list, month: str | None = None) -> tuple[int, int]:
+    """Occupied / total — when month given, use that month's rent_history."""
     total = len(units)
-    occupied = sum(1 for u in units if u.status == "occupied")
+    if month:
+        occupied = sum(
+            1 for u in units
+            if float((u.rent_history or {}).get(month, 0) or 0) > 0
+        )
+    else:
+        occupied = sum(1 for u in units if u.status == "occupied")
     return occupied, total
 
 
-def _apply_registry_unit_counts(company, units: list) -> None:
+def _reconcile_unit_status_for_month(units: list, month: str) -> None:
+    """Align stored status/monthly_rent with the sync target month in rent_history."""
+    for u in units:
+        h = u.rent_history or {}
+        if month not in h:
+            continue
+        amt = float(h.get(month, 0) or 0)
+        u.status = "vacant" if amt == 0 else "occupied"
+        if amt > 0:
+            u.monthly_rent = amt
+
+
+def _apply_registry_unit_counts(company, units: list, month: str | None = None) -> None:
     """Prefer registry unit rows over Excel physical-unit inflation for occupancy."""
     if units:
-        occupied, total = _registry_unit_counts(units)
+        occupied, total = _registry_unit_counts(units, month)
         company.occupied_units = occupied
         company.total_units = total
 
@@ -587,7 +605,10 @@ def list_companies(
     for co in companies:
         units, inv_dicts, exp_dicts = _load_company_data(co.id, tid, db)
         if units:
-            occ, total = _registry_unit_counts(units)
+            month = co.last_sync_month
+            if month and any(u.rent_history for u in units):
+                _reconcile_unit_status_for_month(units, month)
+            occ, total = _registry_unit_counts(units, month)
             if co.total_units != total or co.occupied_units != occ:
                 co.total_units = total
                 co.occupied_units = occ
@@ -1789,7 +1810,8 @@ async def confirm_rent_receivable(
                 RentalUnit.company_id == company.id,
             ).all()
             if registry_units:
-                _apply_registry_unit_counts(company, registry_units)
+                _reconcile_unit_status_for_month(registry_units, target_month)
+                _apply_registry_unit_counts(company, registry_units, target_month)
                 _apply_registry_financials(company, registry_units, target_month)
             else:
                 company.collected_this_month = data['collected']

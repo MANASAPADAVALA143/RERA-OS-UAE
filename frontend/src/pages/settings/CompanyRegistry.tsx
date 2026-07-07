@@ -346,6 +346,15 @@ function unitRentForMonth(u: UnitRow, month: string): { rent: number; vacancyLos
   return { rent, vacancyLoss };
 }
 
+/** Status + rent for a specific month — does not bleed across months. */
+function unitDisplayForMonth(u: UnitRow, month: string): { status: string; rent: number; vacancyLoss: number } {
+  const { rent, vacancyLoss } = unitRentForMonth(u, month);
+  const h = u.rent_history;
+  if (h && month && month in h) {
+    return { status: rent > 0 ? 'occupied' : 'vacant', rent, vacancyLoss };
+  }
+  return { status: u.status, rent, vacancyLoss };
+}
 function InlineSuites({
   companyId, companyName, canWrite, push, totalCols,
   onAdd, onEdit, onDelete, reloadKey, viewMonth,
@@ -593,9 +602,14 @@ function InlineSuites({
                                   <span className="text-xs font-semibold text-gray-600">
                                     Units — {s.property_name}
                                   </span>
+                                  {viewMonth && (
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500">
+                                      {viewMonth}
+                                    </span>
+                                  )}
                                   {unitsMap[s.id] && (() => {
-                                    const occ = unitsMap[s.id].filter(u => u.status === 'occupied').length;
-                                    const vac = unitsMap[s.id].filter(u => u.status === 'vacant').length;
+                                    const occ = unitsMap[s.id].filter(u => unitDisplayForMonth(u, viewMonth).status === 'occupied').length;
+                                    const vac = unitsMap[s.id].filter(u => unitDisplayForMonth(u, viewMonth).status === 'vacant').length;
                                     const tot = unitsMap[s.id].length;
                                     return (
                                       <div className="flex items-center gap-1.5">
@@ -647,9 +661,7 @@ function InlineSuites({
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
                                       {unitsMap[s.id].map((u, j) => {
-                                        const { rent: dispRent, vacancyLoss } = unitRentForMonth(u, viewMonth);
-                                        const dispStatus = u.status;
-                                        const showRent = dispRent > 0 ? dispRent : (dispStatus === 'occupied' ? (u.monthly_rent ?? 0) : 0);
+                                        const { status: dispStatus, rent: dispRent, vacancyLoss } = unitDisplayForMonth(u, viewMonth);
                                         return (
                                         <tr key={u.id}
                                           className="hover:bg-indigo-50/20"
@@ -709,8 +721,8 @@ function InlineSuites({
                                                 className="text-xs border border-indigo-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-24 text-right"
                                               />
                                             ) : (
-                                              showRent > 0
-                                                ? `$${showRent.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+                                              dispRent > 0
+                                                ? `$${dispRent.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
                                                 : '—'
                                             )}
                                           </td>
@@ -747,11 +759,12 @@ function InlineSuites({
                                                 <div className="flex items-center justify-center gap-1">
                                                   <button
                                                     onClick={() => {
+                                                      const d = unitDisplayForMonth(u, viewMonth);
                                                       setUnitEditId(u.id);
                                                       setUnitEditVal(u.unit_number);
-                                                      setUnitEditStatus(u.status);
-                                                      setUnitEditRent(String(u.monthly_rent));
-                                                      setUnitEditVacLoss(String(vacancyLoss || 0));
+                                                      setUnitEditStatus(d.status);
+                                                      setUnitEditRent(String(d.rent > 0 ? d.rent : ''));
+                                                      setUnitEditVacLoss(String(d.vacancyLoss || 0));
                                                     }}
                                                     className="p-1 rounded text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
                                                     title="Edit unit"
