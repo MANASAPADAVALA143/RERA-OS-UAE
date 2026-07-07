@@ -17,6 +17,7 @@ import {
 
 interface Props {
   companyId: string;
+  initialMonth?: string;
 }
 
 // ── flat interface matches actual API response shape ──────────────────────────
@@ -174,8 +175,8 @@ function buildMonthOptions(count = 24) {
 const MONTH_OPTS = buildMonthOptions(24);
 const THIS_MONTH = MONTH_OPTS[0].value;
 
-export default function RentalCompanyDashboard({ companyId }: Props) {
-  const [selectedMonth, setSelectedMonth] = useState(THIS_MONTH);
+export default function RentalCompanyDashboard({ companyId, initialMonth }: Props) {
+  const [selectedMonth, setSelectedMonth] = useState(initialMonth ?? THIS_MONTH);
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

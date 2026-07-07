@@ -685,6 +685,7 @@ def count_companies(
 @router.get("/companies")
 def list_companies(
     fmt: str = Query(None, alias="format"),
+    month: str = Query(None, description="YYYY-MM; defaults to current month"),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -694,6 +695,17 @@ def list_companies(
 
     tid = current_user.tenant_id
     today = date.today()
+
+    selected_month = today.strftime("%Y-%m")
+    if month:
+        m = month.strip()
+        if len(m) == 7 and m[4] == "-" and m[:4].isdigit():
+            selected_month = m
+        else:
+            try:
+                selected_month = datetime.strptime(m, "%b-%Y").strftime("%Y-%m")
+            except ValueError:
+                pass
 
     # Self-healing: if the query fails (missing columns), apply schema patches
     # and retry once before giving up.
@@ -712,8 +724,8 @@ def list_companies(
                 status_code=500,
                 detail="Could not load companies from database. Check server logs.",
             ) from exc2
-    month_abbrev = today.strftime("%b-%Y")  # e.g. "Jul-2026"
-    cur_month    = today.strftime("%Y-%m")  # e.g. "2026-07"
+    month_abbrev = datetime.strptime(selected_month, "%Y-%m").strftime("%b-%Y")
+    cur_month    = selected_month
     result = []
     counts_healed = False
     for co in companies:

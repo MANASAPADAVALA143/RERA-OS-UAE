@@ -26,6 +26,36 @@ interface CompanyListItem {
   arrears_total: number;
   noi_this_month: number;
   total_expense_this_month: number;
+  sync_collected?: number | null;
+  sync_occupied_units?: number | null;
+  sync_total_units?: number | null;
+  monthly_rent_data?: Record<string, number> | null;
+}
+
+function yyyymmToAbbrev(yyyymm: string): string {
+  const [y, m] = yyyymm.split('-');
+  const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const mi = parseInt(m, 10) - 1;
+  return mi >= 0 && mi < 12 ? `${names[mi]}-${y}` : yyyymm;
+}
+
+/** Rent Receivable rollup for the selected month (matches Company Registry). */
+function companyKpisForMonth(c: CompanyListItem, yyyymm: string) {
+  const abbrev = yyyymmToAbbrev(yyyymm);
+  const mrd = c.monthly_rent_data ?? {};
+  const fromExcel = abbrev in mrd ? mrd[abbrev] : null;
+  const collected = fromExcel ?? c.sync_collected ?? c.collected_this_month ?? 0;
+  const expenses = c.total_expense_this_month ?? 0;
+  const occ = (c.sync_total_units ?? 0) > 0
+    ? { occupied: c.sync_occupied_units ?? c.occupied_units, total: c.sync_total_units ?? c.total_units }
+    : { occupied: c.occupied_units, total: c.total_units };
+  return {
+    collected,
+    noi: collected - expenses,
+    occupied: occ.occupied,
+    total: occ.total,
+    fromRentReceivable: fromExcel != null || c.sync_collected != null,
+  };
 }
 
 type IconComp = React.FC<{ size?: number | string; className?: string }>;
@@ -76,6 +106,7 @@ export default function RentalCompanies() {
   const [editName, setEditName] = useState('');
   const [renaming, setRenaming] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(currentMonthValue);
+  const [dashboardMonth, setDashboardMonth] = useState<string | null>(null);
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -89,14 +120,16 @@ export default function RentalCompanies() {
     setLoading(true);
     setError('');
     try {
-      const res = await api.get<CompanyListItem[]>('/api/rentals/companies');
+      const res = await api.get<CompanyListItem[]>('/api/rentals/companies', {
+        params: { month: selectedMonth },
+      });
       setCompanies(res.data);
     } catch {
       setError('Failed to load companies.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedMonth]);
 
   useEffect(() => { fetchCompanies(); }, [fetchCompanies]);
 
@@ -144,12 +177,15 @@ export default function RentalCompanies() {
     return (
       <div className="space-y-4">
         <button
-          onClick={() => setSelectedCompanyId(null)}
+          onClick={() => { setSelectedCompanyId(null); setDashboardMonth(null); }}
           className="flex items-center gap-2 text-sm text-primary hover:underline"
         >
           <ArrowLeft size={16} /> Back to Companies
         </button>
-        <RentalCompanyDashboard companyId={selectedCompanyId} />
+        <RentalCompanyDashboard
+          companyId={selectedCompanyId}
+          initialMonth={dashboardMonth ?? selectedMonth}
+        />
       </div>
     );
   }
@@ -238,7 +274,8 @@ export default function RentalCompanies() {
           {companies.map((c, index) => {
             const style = COMPANY_STYLES[index % COMPANY_STYLES.length];
             const { Icon } = style;
-            const occ = c.total_units > 0 ? c.occupied_units / c.total_units : 0;
+            const kpis = companyKpisForMonth(c, selectedMonth);
+            const occ = kpis.total > 0 ? kpis.occupied / kpis.total : 0;
             return (
               <div
                 key={c.id}
@@ -292,7 +329,7 @@ export default function RentalCompanies() {
                         : occ >= 0.75 ? 'bg-amber-100 text-amber-800'
                         : 'bg-red-100 text-red-800'
                       }`}>
-                        {c.occupied_units}/{c.total_units}
+                        {kpis.occupied}/{kpis.total}
                       </span>
                       <button
                         onClick={e => { e.stopPropagation(); setEditingId(c.id); setEditName(c.company_name); }}
@@ -328,12 +365,15 @@ export default function RentalCompanies() {
                     <div className="grid grid-cols-3 gap-1 text-xs">
                       <div>
                         <p className="text-gray-400">Collected</p>
-                        <p className="font-semibold">{fmtUSD(c.collected_this_month)}</p>
+                        <p className="font-semibold">{fmtUSD(kpis.collected)}</p>
+                        {kpis.fromRentReceivable && (
+                          <p className="text-[10px] text-gray-400">Rent Receivable</p>
+                        )}
                       </div>
                       <div>
                         <p className="text-gray-400">NOI</p>
-                        <p className={`font-semibold ${c.noi_this_month < 0 ? 'text-red-700' : 'text-green-800'}`}>
-                          {fmtUSD(c.noi_this_month)}
+                        <p className={`font-semibold ${kpis.noi < 0 ? 'text-red-700' : 'text-green-800'}`}>
+                          {fmtUSD(kpis.noi)}
                         </p>
                       </div>
                       <div>
@@ -345,7 +385,7 @@ export default function RentalCompanies() {
                     </div>
 
                     <button
-                      onClick={() => setSelectedCompanyId(c.id)}
+                      onClick={() => { setDashboardMonth(selectedMonth); setSelectedCompanyId(c.id); }}
                       className="w-full py-1.5 bg-primary text-white text-sm rounded-lg hover:bg-primary/90 transition-colors"
                     >
                       View Dashboard →
