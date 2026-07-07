@@ -327,6 +327,32 @@ def _reconcile_unit_status_for_month(units: list, month: str) -> None:
             u.monthly_rent = amt
 
 
+def _sync_unit_from_preview(ex, unit: dict, target_month: str | None = None) -> bool:
+    """Apply Excel preview onto an existing registry unit (always overwrite stale history)."""
+    changed = False
+    hist = unit.get("history") or {}
+    if hist:
+        ex.rent_history = hist
+        changed = True
+    status = unit.get("status")
+    if status:
+        ex.status = status
+        changed = True
+    monthly = float(unit.get("monthly_rent", 0))
+    if monthly > 0:
+        ex.monthly_rent = monthly
+        changed = True
+    if target_month and hist and target_month in hist:
+        amt = float(hist.get(target_month, 0) or 0)
+        ex.status = "vacant" if amt == 0 else "occupied"
+        if amt > 0:
+            ex.monthly_rent = amt
+        elif amt == 0:
+            ex.vacancy_loss = 0.0
+        changed = True
+    return changed
+
+
 def _apply_registry_unit_counts(company, units: list, month: str | None = None) -> None:
     """Prefer registry unit rows over Excel physical-unit inflation for occupancy."""
     if units:
@@ -2343,7 +2369,7 @@ async def confirm_portfolio_import(
                             rent_history=unit.get("history", {}),
                         ))
                         created_units += 1
-                    elif unit_action == "update_rent" and unit.get("match_unit_id"):
+                    elif unit_action in ("update_rent", "skip") and unit.get("match_unit_id"):
                         ex = (
                             db.query(RentalUnit)
                             .filter(
@@ -2352,32 +2378,9 @@ async def confirm_portfolio_import(
                             )
                             .first()
                         )
-                        if ex:
-                            hist = unit.get("history") or {}
-                            if hist and not (ex.rent_history or {}):
-                                ex.rent_history = hist
-                            if float(unit.get("monthly_rent", 0)) > 0:
-                                if ex.monthly_rent == 0:
-                                    ex.monthly_rent = float(unit.get("monthly_rent", 0))
-                                    updated_units += 1
-                                ex.status = unit.get("status", ex.status)
-                    elif unit_action == "skip" and unit.get("match_unit_id"):
-                        ex = (
-                            db.query(RentalUnit)
-                            .filter(
-                                RentalUnit.id == uuid.UUID(unit["match_unit_id"]),
-                                RentalUnit.tenant_id == tid,
-                            )
-                            .first()
-                        )
-                        if ex:
-                            hist = unit.get("history") or {}
-                            if hist and not (ex.rent_history or {}):
-                                ex.rent_history = hist
-                                if float(unit.get("monthly_rent", 0)) > 0 and ex.monthly_rent == 0:
-                                    ex.monthly_rent = float(unit.get("monthly_rent", 0))
-                                ex.status = unit.get("status", ex.status)
-                                updated_units += 1
+                        co_month = co.get("target_month") or target_month
+                        if ex and _sync_unit_from_preview(ex, unit, co_month):
+                            updated_units += 1
 
                 co_month = co.get("target_month") or target_month
                 company_row = db.query(RentalCompany).filter(

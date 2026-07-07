@@ -85,7 +85,7 @@ interface ModuleDef {
   endpoint: string;
   fields: FieldDef[];
   tableCols: string[];
-  rowCells: (c: Company) => (ReactNode | null)[];
+  rowCells: (c: Company, viewMonth?: string) => (ReactNode | null)[];
   normalise: (raw: unknown) => Company[];
   toPayload: (form: Record<string, string>) => Record<string, unknown>;
 }
@@ -143,15 +143,19 @@ const MODULES: ModuleDef[] = [
         options: ['Apartment Complex', 'Multifamily Townhome', 'Garden Apartment', 'Single Family Rental', 'Loft Apartment', 'Commercial'] },
       { name: 'total_units',   label: 'Total Units',   type: 'number' },
     ],
-    tableCols: ['Company Name', 'Property Type', 'Occupancy', 'Last Sync', 'Collected', 'Status'],
-    rowCells: (c) => {
-      const syncGross   = c.sync_gross_potential as number | null;
-      const syncColl    = c.sync_collected as number | null;
+    tableCols: ['Company Name', 'Property Type', 'Occupancy', 'Month', 'Collected', 'Status'],
+    rowCells: (c, viewMonth = 'Jun-2026') => {
+      const mrd = (c.monthly_rent_data ?? {}) as Record<string, number>;
+      const syncGross   = (c.sync_gross_potential as number | null)
+        ?? (Object.keys(mrd).length ? Math.max(...Object.values(mrd)) : null);
+      const monthColl   = viewMonth && mrd[viewMonth] != null ? mrd[viewMonth] : null;
+      const syncColl    = monthColl ?? (c.sync_collected as number | null);
       const syncVac     = c.sync_vacancy_loss as number | null;
-      const lastSync    = (c.last_sync_month as string) || null;
       const { occ, total: occTotal } = occupancyCounts(c);
       const occPct      = occTotal ? Math.round(occ / occTotal * 100) : null;
-      const collPct     = syncGross && syncGross > 0 ? Math.round((syncColl ?? 0) / syncGross * 100) : null;
+      const hasMonthData = Boolean(viewMonth && Object.keys(mrd).length > 0 && viewMonth in mrd);
+      const displayColl = hasMonthData ? mrd[viewMonth!] : syncColl;
+      const collPct     = syncGross && syncGross > 0 ? Math.round((displayColl ?? 0) / syncGross * 100) : null;
 
       const occCell: ReactNode = occTotal > 0 ? (
         <div className="min-w-[110px]">
@@ -176,19 +180,22 @@ const MODULES: ModuleDef[] = [
         <span className="text-gray-400 text-sm">— / {c.total_units}</span>
       ) : '—';
 
-      const syncCell: ReactNode = lastSync ? (
+      const syncCell: ReactNode = (
         <div>
           <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
             style={{ background: 'rgba(212,175,55,0.15)', color: '#92400E' }}>
-            {lastSync}
+            {viewMonth}
           </span>
+          {c.last_sync_month && c.last_sync_month !== viewMonth && (
+            <span className="text-[10px] text-gray-400 block mt-0.5">synced {c.last_sync_month as string}</span>
+          )}
         </div>
-      ) : <span className="text-gray-400 text-sm">Not synced</span>;
+      );
 
-      const collCell: ReactNode = syncColl != null ? (
+      const collCell: ReactNode = displayColl != null || hasMonthData ? (
         <div>
           <div className="text-sm font-mono font-medium" style={{ color: '#1C1917' }}>
-            ${Math.round(syncColl).toLocaleString()}
+            ${Math.round(displayColl ?? 0).toLocaleString()}
           </div>
           <div className="text-xs mt-0.5" style={{ color: '#A8A29E' }}>
             {collPct != null ? `${collPct}% collected` : ''}
@@ -211,6 +218,7 @@ const MODULES: ModuleDef[] = [
         sync_gross_potential: r.sync_gross_potential ?? null,
         sync_vacancy_loss: r.sync_vacancy_loss ?? null,
         last_sync_month: r.last_sync_month ?? null,
+        monthly_rent_data: r.monthly_rent_data ?? null,
         status: (r.status as string) ?? 'active',
       }));
     },
@@ -321,10 +329,13 @@ const ALL_MONTHS = [
   'Jul-2026','Aug-2026','Sep-2026','Oct-2026','Nov-2026','Dec-2026',
 ];
 
-function unitRentForMonth(u: UnitRow, month: string): { rent: number; vacancyLoss: number } {
+function unitRentForMonth(u: UnitRow, month: string): { rent: number; vacancyLoss: number; hasMonth: boolean } {
   const h = u.rent_history;
-  if (!h || !month || !(month in h)) {
-    return { rent: u.monthly_rent ?? 0, vacancyLoss: u.vacancy_loss ?? 0 };
+  if (!h || !month) {
+    return { rent: u.monthly_rent ?? 0, vacancyLoss: u.vacancy_loss ?? 0, hasMonth: false };
+  }
+  if (!(month in h)) {
+    return { rent: 0, vacancyLoss: 0, hasMonth: false };
   }
   const rent = h[month] ?? 0;
 
@@ -343,17 +354,16 @@ function unitRentForMonth(u: UnitRow, month: string): { rent: number; vacancyLos
     }
   }
 
-  return { rent, vacancyLoss };
+  return { rent, vacancyLoss, hasMonth: true };
 }
 
 /** Status + rent for a specific month — does not bleed across months. */
 function unitDisplayForMonth(u: UnitRow, month: string): { status: string; rent: number; vacancyLoss: number } {
-  const { rent, vacancyLoss } = unitRentForMonth(u, month);
-  const h = u.rent_history;
-  if (h && month && month in h) {
+  const { rent, vacancyLoss, hasMonth } = unitRentForMonth(u, month);
+  if (hasMonth) {
     return { status: rent > 0 ? 'occupied' : 'vacant', rent, vacancyLoss };
   }
-  return { status: u.status, rent, vacancyLoss };
+  return { status: u.status, rent: u.monthly_rent ?? 0, vacancyLoss: u.vacancy_loss ?? 0 };
 }
 function InlineSuites({
   companyId, companyName, canWrite, push, totalCols,
@@ -1196,6 +1206,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                 value={importMonth}
                 onChange={e => setImportMonth(e.target.value)}
                 disabled={importState !== 'idle'}
+                title="View month for unit rent/status and Excel import target"
                 className="text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 disabled:opacity-60">
                 {IMPORT_MONTHS.map(m => (
                   <option key={m} value={m}>{m}</option>
@@ -1272,7 +1283,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
               </thead>
               <tbody>
                 {filtered.map((c, idx) => {
-                  const cells = mod.rowCells(c);
+                  const cells = mod.rowCells(c, activeId === 'rental' ? importMonth : undefined);
                   const isExpanded = expandedSuiteId === c.id;
                   return (
                     <Fragment key={c.id}>
@@ -1314,6 +1325,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                       </tr>
                       {activeId === 'rental' && isExpanded && (
                         <InlineSuites
+                          key={`${c.id}-${importMonth}`}
                           companyId={c.id}
                           companyName={c.company_name}
                           canWrite={canWrite}
@@ -1323,7 +1335,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                           onEdit={openSuiteEdit}
                           onDelete={openSuiteDelete}
                           reloadKey={suiteReloadKey}
-                          viewMonth={(c.last_sync_month as string) || importMonth}
+                          viewMonth={importMonth}
                         />
                       )}
                     </Fragment>
