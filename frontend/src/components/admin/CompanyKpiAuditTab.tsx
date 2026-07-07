@@ -89,15 +89,15 @@ export function CompanyKpiAuditTab({
           </div>
 
           <div className="overflow-x-auto border rounded-xl bg-white">
-            <table className="w-full text-xs">
-              <thead className="bg-gray-50 text-gray-500 uppercase">
+            <table className="w-full text-base leading-relaxed">
+              <thead className="bg-gray-50 text-sm text-gray-600 uppercase tracking-wide">
                 <tr>
-                  <th className="px-3 py-2 text-left">KPI</th>
-                  <th className="px-3 py-2 text-left">Formula</th>
-                  <th className="px-3 py-2 text-left">Raw Inputs</th>
-                  <th className="px-3 py-2 text-right">Calculated</th>
-                  <th className="px-3 py-2 text-right">Live Display</th>
-                  <th className="px-3 py-2 text-center">Status</th>
+                  <th className="px-4 py-3 text-left">KPI</th>
+                  <th className="px-4 py-3 text-left">Formula</th>
+                  <th className="px-4 py-3 text-left">Raw Inputs</th>
+                  <th className="px-4 py-3 text-right">Calculated</th>
+                  <th className="px-4 py-3 text-right">Live Display</th>
+                  <th className="px-4 py-3 text-center">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -109,26 +109,26 @@ export function CompanyKpiAuditTab({
                         : row.status === 'CHECK_LOGIC' ? 'bg-amber-50/60' : ''
                     }
                   >
-                    <td className="px-3 py-2 font-medium whitespace-nowrap">
-                      <div>{row.kpi}</div>
-                      <div className="text-gray-400">{row.section}</div>
+                    <td className="px-4 py-3 font-medium whitespace-nowrap">
+                      <div className="text-base">{row.kpi}</div>
+                      <div className="text-sm text-gray-500 mt-0.5">{row.section}</div>
                     </td>
-                    <td className="px-3 py-2 text-gray-600 max-w-[180px]">{row.formula}</td>
-                    <td className="px-3 py-2 text-gray-500 max-w-[200px]">
+                    <td className="px-4 py-3 text-gray-700 max-w-[220px] text-[15px]">{row.formula}</td>
+                    <td className="px-4 py-3 text-gray-600 max-w-[220px] text-[15px]">
                       {Object.entries(row.inputs_detail).map(([k, v]) => (
                         <div key={k}>{k}: {v}</div>
                       ))}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono font-semibold text-green-800">
+                    <td className="px-4 py-3 text-right font-mono font-semibold text-green-800 text-base">
                       {row.canonical_display}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono font-semibold">
+                    <td className="px-4 py-3 text-right font-mono font-semibold text-base">
                       {row.displayed_display}
                     </td>
-                    <td className="px-3 py-2 text-center">
+                    <td className="px-4 py-3 text-center">
                       <KpiStatusBadge status={row.status} />
                       {row.notes && (
-                        <p className="text-[10px] text-amber-800 mt-1 max-w-[140px] mx-auto">{row.notes}</p>
+                        <p className="text-sm text-amber-800 mt-2 max-w-[180px] mx-auto">{row.notes}</p>
                       )}
                     </td>
                   </tr>

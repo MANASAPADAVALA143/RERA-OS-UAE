@@ -199,15 +199,15 @@ export function KpiCalculationsReviewPanel({ embedded }: Props) {
 
       {companyId === 'all' && payload?.companies && (
         <div className="bg-white border rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b font-semibold text-sm">Portfolio Summary</div>
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+          <div className="px-4 py-3 border-b font-semibold text-base">Portfolio Summary</div>
+          <table className="w-full text-base">
+            <thead className="bg-gray-50 text-sm text-gray-600 uppercase tracking-wide">
               <tr>
-                <th className="px-3 py-2 text-left">Company</th>
-                <th className="px-3 py-2 text-left">Period</th>
-                <th className="px-3 py-2 text-center">Status</th>
-                <th className="px-3 py-2 text-right">Mismatches</th>
-                <th className="px-3 py-2 text-right">Logic Flags</th>
+                <th className="px-4 py-3 text-left">Company</th>
+                <th className="px-4 py-3 text-left">Period</th>
+                <th className="px-4 py-3 text-center">Status</th>
+                <th className="px-4 py-3 text-right">Mismatches</th>
+                <th className="px-4 py-3 text-right">Logic Flags</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -217,11 +217,11 @@ export function KpiCalculationsReviewPanel({ embedded }: Props) {
                   className="hover:bg-gray-50 cursor-pointer"
                   onClick={() => setCompanyId(co.company_id)}
                 >
-                  <td className="px-3 py-2 font-medium">{co.company_name}</td>
-                  <td className="px-3 py-2 text-gray-500">{co.period_label}</td>
-                  <td className="px-3 py-2 text-center"><KpiStatusBadge status={co.summary_status} /></td>
-                  <td className="px-3 py-2 text-right font-mono">{co.mismatch_count}</td>
-                  <td className="px-3 py-2 text-right font-mono">{co.check_logic_count}</td>
+                  <td className="px-4 py-3 font-medium">{co.company_name}</td>
+                  <td className="px-4 py-3 text-gray-600">{co.period_label}</td>
+                  <td className="px-4 py-3 text-center"><KpiStatusBadge status={co.summary_status} /></td>
+                  <td className="px-4 py-3 text-right font-mono">{co.mismatch_count}</td>
+                  <td className="px-4 py-3 text-right font-mono">{co.check_logic_count}</td>
                 </tr>
               ))}
             </tbody>
@@ -238,8 +238,8 @@ export function KpiCalculationsReviewPanel({ embedded }: Props) {
             }`}
           >
             <div>
-              <h2 className="font-semibold">{co.company_name}</h2>
-              <p className="text-xs text-gray-500">{co.period_label}</p>
+              <h2 className="font-semibold text-lg">{co.company_name}</h2>
+              <p className="text-sm text-gray-500">{co.period_label}</p>
             </div>
             <KpiStatusBadge status={co.summary_status} />
           </div>
@@ -250,16 +250,16 @@ export function KpiCalculationsReviewPanel({ embedded }: Props) {
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead className="bg-gray-50 text-gray-500 uppercase">
+              <table className="w-full text-base leading-relaxed">
+                <thead className="bg-gray-50 text-sm text-gray-600 uppercase tracking-wide">
                   <tr>
-                    <th className="px-3 py-2 text-left">KPI</th>
-                    <th className="px-3 py-2 text-left">Formula</th>
-                    <th className="px-3 py-2 text-left">Raw Inputs</th>
-                    <th className="px-3 py-2 text-left">Substitution</th>
-                    <th className="px-3 py-2 text-right">Calculated</th>
-                    <th className="px-3 py-2 text-right">Live Display</th>
-                    <th className="px-3 py-2 text-center">Status</th>
+                    <th className="px-4 py-3 text-left">KPI</th>
+                    <th className="px-4 py-3 text-left">Formula</th>
+                    <th className="px-4 py-3 text-left">Raw Inputs</th>
+                    <th className="px-4 py-3 text-left">Substitution</th>
+                    <th className="px-4 py-3 text-right">Calculated</th>
+                    <th className="px-4 py-3 text-right">Live Display</th>
+                    <th className="px-4 py-3 text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -271,29 +271,29 @@ export function KpiCalculationsReviewPanel({ embedded }: Props) {
                           : row.status === 'CHECK_LOGIC' ? 'bg-amber-50/60' : ''
                       }
                     >
-                      <td className="px-3 py-2 font-medium whitespace-nowrap align-top">
-                        <div>{row.kpi}</div>
-                        <div className="text-gray-400">{row.section}</div>
+                      <td className="px-4 py-3 font-medium whitespace-nowrap align-top">
+                        <div className="text-base">{row.kpi}</div>
+                        <div className="text-sm text-gray-500 mt-0.5">{row.section}</div>
                       </td>
-                      <td className="px-3 py-2 text-gray-600 max-w-[180px] align-top">{row.formula}</td>
-                      <td className="px-3 py-2 text-gray-500 max-w-[160px] align-top">
+                      <td className="px-4 py-3 text-gray-700 max-w-[220px] align-top text-[15px]">{row.formula}</td>
+                      <td className="px-4 py-3 text-gray-600 max-w-[200px] align-top text-[15px]">
                         {Object.entries(row.inputs_detail || {}).map(([k, v]) => (
                           <div key={k}>{k}: {v}</div>
                         ))}
                       </td>
-                      <td className="px-3 py-2 text-gray-600 max-w-[200px] whitespace-pre-wrap align-top font-mono text-[10px]">
+                      <td className="px-4 py-3 text-gray-700 max-w-[240px] whitespace-pre-wrap align-top font-mono text-sm">
                         {row.substitution || '—'}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono font-semibold text-green-800 align-top">
+                      <td className="px-4 py-3 text-right font-mono font-semibold text-green-800 align-top text-base">
                         {row.canonical_display}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono font-semibold align-top">
+                      <td className="px-4 py-3 text-right font-mono font-semibold align-top text-base">
                         {row.displayed_display}
                       </td>
-                      <td className="px-3 py-2 text-center align-top">
+                      <td className="px-4 py-3 text-center align-top">
                         <KpiStatusBadge status={row.status} />
                         {row.notes && (
-                          <p className="text-[10px] text-amber-800 mt-1 max-w-[140px]">{row.notes}</p>
+                          <p className="text-sm text-amber-800 mt-2 max-w-[180px] mx-auto">{row.notes}</p>
                         )}
                       </td>
                     </tr>

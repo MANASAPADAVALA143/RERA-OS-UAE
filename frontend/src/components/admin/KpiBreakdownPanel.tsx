@@ -9,7 +9,7 @@ interface Props {
 export function KpiBreakdownPanel({ row, compact }: Props) {
   return (
     <div
-      className="rounded-lg border text-sm"
+      className="rounded-lg border text-base leading-relaxed"
       style={{
         background: '#FFFBF5',
         borderColor: '#E8DEC8',
@@ -18,27 +18,27 @@ export function KpiBreakdownPanel({ row, compact }: Props) {
       }}
     >
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-        <p className="font-semibold text-gray-900">{row.kpi} — calculation breakdown</p>
+        <p className="font-semibold text-gray-900 text-base">{row.kpi} — calculation breakdown</p>
         <KpiStatusBadge status={row.status} />
       </div>
 
-      <p className="text-xs text-gray-600 mb-2">
-        <span className="font-semibold text-gray-700">Formula: </span>
+      <p className="text-sm text-gray-700 mb-3">
+        <span className="font-semibold text-gray-800">Formula: </span>
         {row.formula}
       </p>
 
       <div className="grid md:grid-cols-2 gap-3 mb-3">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Raw inputs (this period)</p>
-          <ul className="text-xs text-gray-700 space-y-0.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Raw inputs (this period)</p>
+          <ul className="text-sm text-gray-700 space-y-1">
             {Object.entries(row.inputs_detail).map(([k, v]) => (
               <li key={k}><span className="text-gray-500">{k}:</span> {v}</li>
             ))}
           </ul>
         </div>
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Source references</p>
-          <ul className="text-xs text-gray-600 space-y-0.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Source references</p>
+          <ul className="text-sm text-gray-600 space-y-1">
             {row.sources.map(s => (
               <li key={s.field}>
                 <span className="font-medium text-gray-700">{s.field}</span> → {s.source}
@@ -50,14 +50,14 @@ export function KpiBreakdownPanel({ row, compact }: Props) {
 
       {row.substitution && (
         <pre
-          className="text-xs whitespace-pre-wrap rounded-md p-3 mb-3 font-mono"
+          className="text-sm whitespace-pre-wrap rounded-md p-3 mb-3 font-mono"
           style={{ background: '#F7F5F0', border: '1px solid #E8DEC8', color: '#44403C' }}
         >
           {row.substitution}
         </pre>
       )}
 
-      <div className="flex flex-wrap gap-4 text-xs">
+      <div className="flex flex-wrap gap-4 text-sm">
         <div>
           <span className="text-gray-500">Canonical value: </span>
           <span className="font-mono font-semibold text-green-800">{row.canonical_display}</span>
@@ -69,7 +69,7 @@ export function KpiBreakdownPanel({ row, compact }: Props) {
       </div>
 
       {row.notes && (
-        <p className="text-xs text-amber-800 mt-2 bg-amber-50 border border-amber-100 rounded px-2 py-1">
+        <p className="text-sm text-amber-800 mt-2 bg-amber-50 border border-amber-100 rounded px-2 py-1.5">
           {row.notes}
         </p>
       )}
