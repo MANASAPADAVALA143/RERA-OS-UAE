@@ -29,6 +29,9 @@ class KpiCheckRow:
     section: str
     formula: str
     raw_inputs: dict[str, Any]
+    inputs_detail: dict[str, Any]
+    substitution: str
+    sources: list[dict[str, str]]
     canonical_value: float | None
     canonical_display: str
     displayed_value: float | None
@@ -122,7 +125,7 @@ def _raw_inputs(k: KpiData, k_prev: KpiData | None) -> dict[str, Any]:
         "Rental Income": _fmt_currency(k.rental_income),
         "Management Fee": _fmt_currency(k.management_fee),
         "Repairs": _fmt_currency(k.repairs),
-        "Buildings / Property Value": _fmt_currency(k.buildings),
+        "Buildings / Property Value": _fmt_currency(k.buildings) if k.buildings > 0 else "missing",
         "Long-term Loans": _fmt_currency(k.long_term_loans),
         "Total Assets": _fmt_currency(k.total_assets),
         "Total Liabilities": _fmt_currency(k.total_liabilities),
@@ -130,6 +133,153 @@ def _raw_inputs(k: KpiData, k_prev: KpiData | None) -> dict[str, Any]:
         "Cash": _fmt_currency(k.cash),
         "Prior Period Revenue": _fmt_currency(k_prev.total_revenue) if k_prev else "N/A",
     }
+
+
+FIELD_SOURCES: dict[str, str] = {
+    "Total Revenue": "r_financial_uploads.pl_data → 'Total for Income' row",
+    "Total Expenses": "r_financial_uploads.pl_data → 'Total for Expenses' row",
+    "Net Income": "r_financial_uploads.pl_data → 'Net Income' row",
+    "Interest Paid": "r_financial_uploads.pl_data → 'Total for Interest Paid' / interest lines",
+    "Depreciation": "r_financial_uploads.pl_data → depreciation expense lines",
+    "Rental Income": "r_financial_uploads.pl_data → rental / services income lines",
+    "Management Fee": "r_financial_uploads.pl_data → management fee lines",
+    "Repairs": "r_financial_uploads.pl_data → repairs / maintenance lines",
+    "Buildings / Property Value": "r_financial_uploads.bs_data → Buildings / Property & Equipment row",
+    "Long-term Loans": "r_financial_uploads.bs_data → 'Total for Long-term Liabilities' row",
+    "Total Assets": "r_financial_uploads.bs_data → 'Total for Assets' row",
+    "Total Liabilities": "r_financial_uploads.bs_data → 'Total for Liabilities' row",
+    "Equity": "r_financial_uploads.bs_data → 'Total for Equity' row",
+    "Cash": "r_financial_uploads.bs_data → 'Total for Bank Accounts' / cash lines",
+    "Prior Period Revenue": "r_financial_uploads.pl_data → prior period 'Total for Income'",
+    "NOI": "derived: Total Revenue − Total Expenses + Interest Paid",
+}
+
+
+def _kpi_field_keys(name: str) -> list[str]:
+    mapping: dict[str, list[str]] = {
+        "NOI Margin": ["Total Revenue", "Total Expenses", "Interest Paid", "NOI"],
+        "Net Income Margin": ["Total Revenue", "Net Income"],
+        "Revenue Growth YoY": ["Total Revenue", "Prior Period Revenue"],
+        "Expense Ratio": ["Total Expenses", "Total Revenue"],
+        "Rental Income %": ["Rental Income", "Total Revenue"],
+        "Interest Coverage": ["NOI", "Interest Paid"],
+        "Mgmt Fee %": ["Management Fee", "Total Revenue"],
+        "Repair % of Revenue": ["Repairs", "Total Revenue"],
+        "LTV": ["Long-term Loans", "Buildings / Property Value"],
+        "Asset/Liability Ratio": ["Total Assets", "Total Liabilities"],
+        "Debt-to-Equity": ["Total Liabilities", "Equity"],
+        "Cash Balance": ["Cash"],
+        "Debt-to-Asset": ["Total Liabilities", "Total Assets"],
+        "Equity Ratio": ["Equity", "Total Assets"],
+        "DSCR (Est.)": ["NOI", "Interest Paid"],
+        "EBITDA Margin": ["NOI", "Depreciation", "Total Revenue"],
+        "ROA": ["Net Income", "Total Assets"],
+        "ROE": ["Net Income", "Equity"],
+        "Cap Rate": ["NOI", "Buildings / Property Value"],
+    }
+    return mapping.get(name, [])
+
+
+def _kpi_inputs_detail(name: str, raw: dict[str, Any]) -> dict[str, Any]:
+    return {key: raw[key] for key in _kpi_field_keys(name) if key in raw}
+
+
+def _kpi_sources(name: str) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for key in _kpi_field_keys(name):
+        src = FIELD_SOURCES.get(key, "derived from uploaded financials")
+        rows.append({"field": key, "source": src})
+    return rows
+
+
+def _substitution_steps(name: str, k: KpiData, k_prev: KpiData | None, c_val: float | None) -> str:
+    rev = _fmt_currency(k.total_revenue)
+    exp = _fmt_currency(k.total_expenses)
+    intr = _fmt_currency(k.interest_expense)
+    noi = _fmt_currency(k.noi)
+    ni = _fmt_currency(k.net_income)
+    ebitda = _fmt_currency(k.noi + k.depreciation)
+
+    if name == "NOI Margin":
+        return (
+            f"Step 1 — NOI = Total Revenue − Total Expenses + Interest Paid\n"
+            f"         = {rev} − {exp} + {intr} = {noi}\n"
+            f"Step 2 — NOI Margin = NOI / Total Revenue × 100\n"
+            f"         = {noi} / {rev} × 100 = {_fmt_pct(c_val)}"
+        )
+    if name == "Net Income Margin":
+        return f"Net Income Margin = Net Income / Total Revenue × 100\n= {ni} / {rev} × 100 = {_fmt_pct(c_val)}"
+    if name == "Revenue Growth YoY":
+        if not k_prev or k_prev.total_revenue <= 0:
+            return "Revenue Growth YoY = N/A (no prior period revenue)"
+        prev = _fmt_currency(k_prev.total_revenue)
+        curr = _fmt_currency(k.total_revenue)
+        return (
+            f"Revenue Growth YoY = (Current − Prior) / Prior × 100\n"
+            f"= ({curr} − {prev}) / {prev} × 100 = {_fmt_pct(c_val)}"
+        )
+    if name == "Expense Ratio":
+        return f"Expense Ratio = Total Expenses / Total Revenue × 100\n= {exp} / {rev} × 100 = {_fmt_pct(c_val)}"
+    if name == "Rental Income %":
+        rent = _fmt_currency(k.rental_income)
+        return f"Rental Income % = Rental Income / Total Revenue × 100\n= {rent} / {rev} × 100 = {_fmt_pct(c_val)}"
+    if name == "Interest Coverage":
+        if k.interest_expense <= 0:
+            return f"Interest Coverage = N/A because Interest Paid = {intr} (denominator is zero)"
+        return f"Interest Coverage = NOI / Interest Paid\n= {noi} / {intr} = {_fmt_x(c_val)}"
+    if name == "Mgmt Fee %":
+        mgmt = _fmt_currency(k.management_fee)
+        return f"Mgmt Fee % = Management Fee / Total Revenue × 100\n= {mgmt} / {rev} × 100 = {_fmt_pct(c_val)}"
+    if name == "Repair % of Revenue":
+        rep = _fmt_currency(k.repairs)
+        return f"Repair % of Revenue = Repairs / Total Revenue × 100\n= {rep} / {rev} × 100 = {_fmt_pct(c_val)}"
+    if name == "LTV":
+        bldg = _fmt_currency(k.buildings) if k.buildings > 0 else "missing"
+        loans = _fmt_currency(k.long_term_loans)
+        if k.buildings <= 0:
+            return f"LTV = N/A because Buildings / Property Value is missing (loans = {loans})"
+        return f"LTV = Long-term Loans / Buildings × 100\n= {loans} / {bldg} × 100 = {_fmt_pct(c_val)}"
+    if name == "Asset/Liability Ratio":
+        assets = _fmt_currency(k.total_assets)
+        liab = _fmt_currency(k.total_liabilities)
+        return f"Asset/Liability Ratio = Total Assets / Total Liabilities\n= {assets} / {liab} = {_fmt_x(c_val)}"
+    if name == "Debt-to-Equity":
+        liab = _fmt_currency(k.total_liabilities)
+        eq = _fmt_currency(k.equity)
+        return f"Debt-to-Equity = Total Liabilities / Equity\n= {liab} / {eq} = {_fmt_x(c_val, 1)}"
+    if name == "Cash Balance":
+        return f"Cash Balance = sum of bank / cash accounts on balance sheet\n= {_fmt_currency(k.cash)}"
+    if name == "Debt-to-Asset":
+        liab = _fmt_currency(k.total_liabilities)
+        assets = _fmt_currency(k.total_assets)
+        return f"Debt-to-Asset = Total Liabilities / Total Assets × 100\n= {liab} / {assets} × 100 = {_fmt_pct(c_val)}"
+    if name == "Equity Ratio":
+        eq = _fmt_currency(k.equity)
+        assets = _fmt_currency(k.total_assets)
+        return f"Equity Ratio = Equity / Total Assets × 100\n= {eq} / {assets} × 100 = {_fmt_pct(c_val)}"
+    if name == "DSCR (Est.)":
+        if k.interest_expense <= 0:
+            return f"DSCR (Est.) = N/A because Interest Paid = {intr}"
+        debt_svc = _fmt_currency(k.interest_expense * 1.2)
+        return f"DSCR (Est.) = NOI / (Interest Paid × 1.2)\n= {noi} / {debt_svc} = {_fmt_x(c_val)}"
+    if name == "EBITDA Margin":
+        dep = _fmt_currency(k.depreciation)
+        return (
+            f"EBITDA = NOI + Depreciation = {noi} + {dep} = {ebitda}\n"
+            f"EBITDA Margin = EBITDA / Total Revenue × 100 = {ebitda} / {rev} × 100 = {_fmt_pct(c_val)}"
+        )
+    if name == "ROA":
+        assets = _fmt_currency(k.total_assets)
+        return f"ROA = Net Income / Total Assets × 100\n= {ni} / {assets} × 100 = {_fmt_pct(c_val)}"
+    if name == "ROE":
+        eq = _fmt_currency(k.equity)
+        return f"ROE = Net Income / Equity × 100\n= {ni} / {eq} × 100 = {_fmt_pct(c_val)}"
+    if name == "Cap Rate":
+        bldg = _fmt_currency(k.buildings) if k.buildings > 0 else "missing"
+        if k.buildings <= 0:
+            return f"Cap Rate = N/A because Buildings / Property Value is missing (NOI = {noi})"
+        return f"Cap Rate = NOI / Buildings × 100\n= {noi} / {bldg} × 100 = {_fmt_pct(c_val)}"
+    return ""
 
 
 def _canonical_metrics(k: KpiData, k_prev: KpiData | None) -> dict[str, float | None]:
@@ -293,6 +443,9 @@ def audit_company_financials(
             section=meta["section"],
             formula=meta["formula"],
             raw_inputs=raw,
+            inputs_detail=_kpi_inputs_detail(name, raw),
+            substitution=_substitution_steps(name, k, k_prev, c_val),
+            sources=_kpi_sources(name),
             canonical_value=c_val,
             canonical_display=_format_kpi_value(name, c_val),
             displayed_value=d_val,
@@ -414,6 +567,53 @@ def _save_audit_run(db: Session, tenant_id, run_id: str, payload: dict, triggere
     )
     db.add(row)
     db.commit()
+
+
+def get_company_audit_from_db(
+    db: Session,
+    tenant_id,
+    company_id: str,
+    *,
+    period: str | None = None,
+    month: int = 6,
+    year: int = 2026,
+) -> dict:
+    """Run audit for a single company — used by in-app Admin tab and KPI expand."""
+    co = (
+        db.query(RentalCompany)
+        .filter(RentalCompany.tenant_id == tenant_id, RentalCompany.id == company_id)
+        .first()
+    )
+    if not co:
+        raise ValueError("Company not found")
+
+    upload = (
+        db.query(RentalFinancialUpload)
+        .filter(
+            RentalFinancialUpload.tenant_id == tenant_id,
+            RentalFinancialUpload.company_id == company_id,
+        )
+        .first()
+    )
+    if not upload or not upload.pl_data:
+        result = CompanyAuditResult(
+            company_id=str(co.id),
+            company_name=co.company_name,
+            period_label="—",
+            has_data=False,
+            summary_status="INSUFFICIENT_DATA",
+        )
+    else:
+        fin = fin_upload_to_dict(upload)
+        result = audit_company_financials(
+            fin,
+            company_id=str(co.id),
+            company_name=co.company_name,
+            period=period,
+            month=month,
+            year=year,
+        )
+    return _company_to_dict(result)
 
 
 def get_latest_audit_run(db: Session, tenant_id) -> dict | None:

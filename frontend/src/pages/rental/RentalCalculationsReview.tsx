@@ -2,12 +2,11 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { KpiCalculationsReviewPanel } from '../../components/admin/KpiCalculationsReviewPanel';
 
-/** Legacy route — redirects CA firm reviewers to the in-app Calculations Review page. */
-export default function KpiSanityCheck() {
+export default function RentalCalculationsReview() {
   const { isKpiReviewer, loading } = useAuth();
 
   if (loading) return null;
-  if (!isKpiReviewer) return <Navigate to="/executive-summary" replace />;
+  if (!isKpiReviewer) return <Navigate to="/rental" replace />;
 
-  return <Navigate to="/rental/calculations-review" replace />;
+  return <KpiCalculationsReviewPanel embedded />;
 }

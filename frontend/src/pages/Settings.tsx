@@ -39,17 +39,27 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'registry', label: 'Company Registry' },
 ];
 
-const ROLES = ['owner', 'admin', 'cfo', 'controller', 'analyst', 'viewer'];
+const ROLE_OPTIONS: { value: string; label: string; group: string }[] = [
+  { value: 'internal_reviewer', label: 'Internal Reviewer — CA firm KPI cross-check', group: 'CA Firm' },
+  { value: 'owner', label: 'Owner', group: 'Operations' },
+  { value: 'admin', label: 'Admin', group: 'Operations' },
+  { value: 'cfo', label: 'CFO', group: 'Operations' },
+  { value: 'controller', label: 'Controller', group: 'Operations' },
+  { value: 'analyst', label: 'Analyst', group: 'Operations' },
+  { value: 'viewer', label: 'Viewer', group: 'Operations' },
+  { value: 'client', label: 'Client — portal only (no KPI tools)', group: 'Client' },
+];
 
 export default function Settings() {
-  const { canWrite, refreshProfile } = useAuth();
+  const { canWrite, refreshProfile, authConfig } = useAuth();
   const [tab, setTab] = useState<Tab>('team');
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [settings, setSettings] = useState<TenantSettings | null>(null);
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState('viewer');
+  const [inviteRole, setInviteRole] = useState('internal_reviewer');
+  const [invitePassword, setInvitePassword] = useState('');
   const [inviting, setInviting] = useState(false);
   const [inviteMsg, setInviteMsg] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -74,21 +84,30 @@ export default function Settings() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchTeam(), fetchSettings(), fetchAudit()])
-      .finally(() => setLoading(false));
-  }, [fetchTeam, fetchSettings, fetchAudit]);
+    const fetches = singleUserMode
+      ? [fetchSettings(), fetchAudit()]
+      : [fetchTeam(), fetchSettings(), fetchAudit()];
+    Promise.all(fetches).finally(() => setLoading(false));
+  }, [fetchTeam, fetchSettings, fetchAudit, singleUserMode]);
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     setInviting(true);
     setInviteMsg('');
     try {
-      const { data } = await api.post<{ message: string }>('/api/auth/invite-user', {
-        email: inviteEmail,
-        role: inviteRole,
-      });
+      const payload: Record<string, string> = { email: inviteEmail, role: inviteRole };
+      if (authConfig?.auth_mode === 'local') {
+        if (!invitePassword || invitePassword.length < 8) {
+          setInviteMsg('Password (min 8 characters) required for local mode.');
+          setInviting(false);
+          return;
+        }
+        payload.password = invitePassword;
+      }
+      const { data } = await api.post<{ message: string }>('/api/auth/invite-user', payload);
       setInviteMsg(data.message);
       setInviteEmail('');
+      setInvitePassword('');
       fetchTeam();
     } catch (err: unknown) {
       setInviteMsg(err instanceof Error ? err.message : 'Invite failed');
@@ -124,7 +143,11 @@ export default function Settings() {
 
   const teamColumns: Column<TeamMember>[] = [
     { key: 'email', label: 'Email', sortValue: (r) => r.email },
-    { key: 'role', label: 'Role', render: (r) => <Badge variant="accent">{r.role}</Badge> },
+    { key: 'role', label: 'Role', render: (r) => (
+      <Badge variant={r.role === 'internal_reviewer' ? 'accent' : 'default'}>
+        {ROLE_OPTIONS.find(o => o.value === r.role)?.label ?? r.role}
+      </Badge>
+    ) },
     { key: 'status', label: 'Status', render: (r) => <Badge>{r.status}</Badge> },
     { key: 'joined_at', label: 'Joined', render: (r) => (r.joined_at ? new Date(r.joined_at).toLocaleDateString() : r.invited_at ? `Invited ${new Date(r.invited_at).toLocaleDateString()}` : '—') },
   ];
@@ -152,7 +175,7 @@ export default function Settings() {
       <h1 className="text-2xl font-bold text-charcoal">Settings</h1>
 
       <div className="flex gap-1 border-b border-gray-200">
-        {TABS.map(({ id, label }) => (
+        {visibleTabs.map(({ id, label }) => (
           <button
             key={id}
             onClick={() => setTab(id)}
@@ -171,31 +194,50 @@ export default function Settings() {
             <Table columns={teamColumns} data={team} emptyMessage="No team members" />
             {canWrite && (
               <form onSubmit={handleInvite} className="mt-6 pt-6 border-t border-gray-100 space-y-3">
-                <p className="text-sm font-medium text-charcoal">Invite User</p>
-                <div className="flex flex-col sm:flex-row gap-3">
+                <p className="text-sm font-medium text-charcoal">Add Team Member</p>
+                <p className="text-xs text-gray-500">
+                  Use <strong>Internal Reviewer</strong> for CA firm staff who cross-check KPI calculations before client delivery.
+                  Client portal logins use the <strong>Client</strong> role — they never see Calculations Review or KPI expand tools.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
                   <input
                     type="email"
                     required
                     placeholder="email@company.com"
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-accent"
+                    className="flex-1 min-w-[200px] px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-accent"
                   />
                   <select
                     value={inviteRole}
                     onChange={(e) => setInviteRole(e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm min-w-[220px]"
                   >
-                    {ROLES.map((r) => (
-                      <option key={r} value={r}>{r}</option>
+                    {['CA Firm', 'Operations', 'Client'].map(group => (
+                      <optgroup key={group} label={group}>
+                        {ROLE_OPTIONS.filter(o => o.group === group).map((r) => (
+                          <option key={r.value} value={r.value}>{r.label}</option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
+                  {authConfig?.auth_mode === 'local' && (
+                    <input
+                      type="password"
+                      required
+                      minLength={8}
+                      placeholder="Temp password (local)"
+                      value={invitePassword}
+                      onChange={(e) => setInvitePassword(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm min-w-[160px]"
+                    />
+                  )}
                   <button
                     type="submit"
                     disabled={inviting}
                     className="px-4 py-2 bg-primary text-white rounded-lg text-sm hover:bg-primary-light disabled:opacity-50"
                   >
-                    {inviting ? 'Sending…' : 'Send Invite'}
+                    {inviting ? 'Adding…' : inviteRole === 'internal_reviewer' ? 'Add CA Reviewer' : 'Send Invite'}
                   </button>
                 </div>
                 {inviteMsg && <p className="text-sm text-gray-600">{inviteMsg}</p>}

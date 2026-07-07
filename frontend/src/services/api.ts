@@ -30,6 +30,8 @@ export default api;
 
 export interface AuthConfig {
   auth_mode: 'local' | 'supabase';
+  single_user_mode?: boolean;
+  primary_user_email?: string;
   demo_email?: string | null;
   demo_password?: string | null;
 }

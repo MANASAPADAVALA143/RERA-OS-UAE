@@ -37,7 +37,7 @@ def ensure_local_demo(db: Session) -> None:
             supabase_user_id=user_id,
             email=DEMO_EMAIL,
             password_hash=hash_password(DEMO_PASSWORD),
-            full_name="Demo Owner",
+            full_name="Primary Operator",
             role=UserRole.owner,
             status=UserStatus.active,
         )

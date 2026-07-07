@@ -29,6 +29,7 @@ import RentalBuildingExpenses from './rental/RentalBuildingExpenses';
 import RentalLoanTracker from './rental/RentalLoanTracker';
 import RentalCfoPortfolio from './rental/RentalCfoPortfolio';
 import Rental13WeekCashFlow from './rental/Rental13WeekCashFlow';
+import RentalCalculationsReview from './rental/RentalCalculationsReview';
 import RentalExecutiveSummary from './RentalExecutiveSummary';
 
 export default function Rental() {
@@ -68,6 +69,7 @@ export default function Rental() {
       {tab === 'loan-tracker'      && <ErrorBoundary><RentalLoanTracker /></ErrorBoundary>}
       {tab === 'cfo-portfolio'     && <ErrorBoundary><RentalCfoPortfolio /></ErrorBoundary>}
       {tab === '13-week-cf'        && <ErrorBoundary><Rental13WeekCashFlow /></ErrorBoundary>}
+      {tab === 'calculations-review' && <ErrorBoundary><RentalCalculationsReview /></ErrorBoundary>}
     </div>
   );
 }

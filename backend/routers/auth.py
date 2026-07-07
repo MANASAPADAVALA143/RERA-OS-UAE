@@ -11,11 +11,11 @@ from sqlalchemy.orm import Session
 
 from config import settings
 from database import get_db, set_rls_tenant
-from middleware.auth import CurrentUser, get_current_user, require_role
+from middleware.auth import CurrentUser, get_current_user, is_kpi_reviewer, require_role
 from models.audit_log import AuditLog
 from models.tenancy import Tenant, TenantUser, UserRole, UserStatus
+from services.app_access import assert_primary_app_user
 from services.local_auth import (
-    DEMO_EMAIL,
     DEMO_PASSWORD,
     create_access_token,
     hash_password,
@@ -38,7 +38,10 @@ def _check_login_rate(request: Request) -> None:
             raise HTTPException(status_code=429, detail="Too many login attempts. Wait 1 minute.")
         _login_attempts[ip].append(now)
 
-INVITE_ROLES = {"owner", "admin", "cfo", "controller", "analyst", "viewer"}
+INVITE_ROLES = {
+    "owner", "admin", "cfo", "controller", "analyst", "viewer",
+    "internal_reviewer", "client",
+}
 
 
 class RegisterTenantRequest(BaseModel):
@@ -68,12 +71,17 @@ class AuthMeResponse(BaseModel):
     status: str
     subscription_tier: str
     ai_narrative_enabled: bool
+    is_kpi_reviewer: bool = False
+    single_user_mode: bool = True
+    primary_user_email: str = ""
 
 
 @router.get("/config")
 def auth_config():
     return {
         "auth_mode": settings.effective_auth_mode,
+        "single_user_mode": True,
+        "primary_user_email": settings.primary_user_email,
     }
 
 
@@ -90,6 +98,8 @@ def login(request: Request, body: LoginRequest, db: Session = Depends(get_db)):
     if user.status == UserStatus.disabled:
         raise HTTPException(status_code=403, detail="Account disabled")
 
+    assert_primary_app_user(user.email)
+
     token = create_access_token(user.supabase_user_id, user.email)
     return {
         "access_token": token,
@@ -100,6 +110,7 @@ def login(request: Request, body: LoginRequest, db: Session = Depends(get_db)):
 
 
 def _register_local(body: RegisterTenantRequest, db: Session):
+    assert_primary_app_user(str(body.email))
     existing = db.query(TenantUser).filter(TenantUser.email == body.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -115,7 +126,7 @@ def _register_local(body: RegisterTenantRequest, db: Session):
         email=body.email,
         password_hash=hash_password(body.password),
         full_name=body.full_name,
-        role=UserRole.owner,
+        role=UserRole.internal_reviewer,
         status=UserStatus.active,
         joined_at=datetime.now(timezone.utc),
     )
@@ -128,7 +139,7 @@ def _register_local(body: RegisterTenantRequest, db: Session):
         "tenant_id": str(tenant.id),
         "user_id": user_id,
         "email": body.email,
-        "role": "owner",
+        "role": "internal_reviewer",
         "access_token": token,
         "message": "Tenant registered.",
     }
@@ -143,6 +154,7 @@ def _supabase_admin_headers():
 
 
 def _register_supabase(body: RegisterTenantRequest, db: Session):
+    assert_primary_app_user(str(body.email))
     existing = db.query(TenantUser).filter(TenantUser.email == body.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -175,7 +187,7 @@ def _register_supabase(body: RegisterTenantRequest, db: Session):
             supabase_user_id=user_id,
             email=body.email,
             full_name=body.full_name,
-            role=UserRole.owner,
+            role=UserRole.internal_reviewer,
             status=UserStatus.active,
             joined_at=datetime.now(timezone.utc),
         )
@@ -185,7 +197,7 @@ def _register_supabase(body: RegisterTenantRequest, db: Session):
         "tenant_id": str(tenant.id),
         "user_id": user_id,
         "email": body.email,
-        "role": "owner",
+        "role": "internal_reviewer",
         "message": "Tenant registered. Sign in with your credentials.",
     }
 
@@ -202,60 +214,13 @@ def register_tenant(body: RegisterTenantRequest, db: Session = Depends(get_db)):
 @router.post("/invite-user")
 def invite_user(
     body: InviteUserRequest,
-    current_user: CurrentUser = Depends(require_role("owner", "admin")),
+    current_user: CurrentUser = Depends(require_role("owner", "admin", "internal_reviewer")),
     db: Session = Depends(get_db),
 ):
-    if body.role not in INVITE_ROLES:
-        raise HTTPException(status_code=400, detail=f"Invalid role: {body.role}")
-
-    existing = db.query(TenantUser).filter(TenantUser.email == body.email).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="User already exists")
-
-    if settings.effective_auth_mode == "local":
-        if not body.password:
-            raise HTTPException(status_code=400, detail="password required for local mode invites")
-        user_id = new_local_user_id()
-        db.add(
-            TenantUser(
-                tenant_id=current_user.tenant_id,
-                supabase_user_id=user_id,
-                email=body.email,
-                password_hash=hash_password(body.password),
-                role=UserRole(body.role),
-                status=UserStatus.active,
-                joined_at=datetime.now(timezone.utc),
-            )
-        )
-        db.commit()
-        return {"message": f"User {body.email} added", "role": body.role}
-
-    with httpx.Client(timeout=30) as client:
-        resp = client.post(
-            f"{settings.supabase_url}/auth/v1/invite",
-            headers=_supabase_admin_headers(),
-            json={"email": body.email},
-        )
-        if resp.status_code >= 400:
-            raise HTTPException(status_code=400, detail=resp.text)
-        invite_data = resp.json()
-        user_id = invite_data.get("id") or invite_data.get("user", {}).get("id")
-
-    if not user_id:
-        raise HTTPException(status_code=500, detail="Failed to create invite user")
-
-    db.add(
-        TenantUser(
-            tenant_id=current_user.tenant_id,
-            supabase_user_id=user_id,
-            email=body.email,
-            role=UserRole(body.role),
-            status=UserStatus.invited,
-            invited_at=datetime.now(timezone.utc),
-        )
+    raise HTTPException(
+        status_code=403,
+        detail=f"Single-user mode — only {settings.primary_user_email} can use this application.",
     )
-    db.commit()
-    return {"message": f"Invitation sent to {body.email}", "role": body.role}
 
 
 @router.get("/me", response_model=AuthMeResponse)
@@ -279,6 +244,9 @@ def get_me(
         status=tenant_user.status.value if tenant_user else "active",
         subscription_tier=tenant.subscription_tier.value if tenant else "trial",
         ai_narrative_enabled=tenant.ai_narrative_enabled if tenant else True,
+        is_kpi_reviewer=is_kpi_reviewer(current_user.role, current_user.email),
+        single_user_mode=True,
+        primary_user_email=settings.primary_user_email,
     )
 
 

@@ -4,10 +4,31 @@ import {
   LineChart, Line, CartesianGrid, Legend, ReferenceLine, Cell,
   ComposedChart,
 } from 'recharts';
+import { Info } from 'lucide-react';
 import { api } from '../../services/api';
 import { BulletChartStrip } from '../../components/shared/BulletChartStrip';
 import type { BulletDef, BulletStatus } from '../../components/shared/BulletChartStrip';
 import { ParchmentKpiTile } from '../../components/ui/ParchmentKpiTile';
+import { useKpiAdminAccess } from '../../hooks/useKpiAdminAccess';
+import { useCompanyKpiAudit } from '../../hooks/useCompanyKpiAudit';
+import { KpiBreakdownPanel } from '../../components/admin/KpiBreakdownPanel';
+import type { KpiAuditRow } from '../../types/kpiAudit';
+
+/** Maps Financial Ratios page card names → kpi_sanity_check KPI names */
+const CARD_TO_AUDIT_KPI: Record<string, string> = {
+  'NOI Margin': 'NOI Margin',
+  'Net Profit Margin': 'Net Income Margin',
+  'Operating Expense Ratio': 'Expense Ratio',
+  'Return on Assets': 'ROA',
+  'Return on Equity': 'ROE',
+  'EBITDA Margin': 'EBITDA Margin',
+  'Interest Coverage': 'Interest Coverage',
+  'Debt-to-Equity': 'Debt-to-Equity',
+  'Debt-to-Asset Ratio': 'Debt-to-Asset',
+  'Equity Ratio': 'Equity Ratio',
+  'DSCR': 'DSCR (Est.)',
+  'Loan-to-Value (LTV)': 'LTV',
+};
 
 type RatioTab = 'Profitability' | 'Liquidity' | 'Solvency' | 'Rental KPIs' | 'Cost of Capital';
 type StatusType = BulletStatus;
@@ -307,30 +328,80 @@ function Spark({ data, color = '#B8860B' }: { data: number[]; color?: string }) 
   );
 }
 
-function RatioCardComp({ card }: { card: RatioCard }) {
+function RatioCardComp({
+  card,
+  auditRow,
+  showBreakdown,
+  expanded,
+  onToggleExpand,
+}: {
+  card: RatioCard;
+  auditRow?: KpiAuditRow | null;
+  showBreakdown?: boolean;
+  expanded?: boolean;
+  onToggleExpand?: () => void;
+}) {
   const st = S[card.status];
   return (
-    <div style={{
-      background: st.bg,
-      borderLeft: `4px solid ${st.borderColor}`,
-      borderRadius: 6,
-      padding: '10px 12px',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.07)',
-    }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: '#262626', textTransform: 'uppercase', letterSpacing: '0.04em', lineHeight: 1.2 }}>{card.name}</div>
-      <div style={{ fontSize: 20, fontWeight: 700, color: '#262626', fontFamily: 'monospace', margin: '4px 0 4px' }}>{card.value}</div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-        <span style={{ fontSize: 10, color: '#6B6B6B' }}>Benchmark: {card.benchmark}</span>
-        <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: st.pillBg, color: st.pillColor }}>{card.statusLabel}</span>
+    <div>
+      <div style={{
+        position: 'relative',
+        background: st.bg,
+        borderLeft: `4px solid ${st.borderColor}`,
+        borderRadius: 6,
+        padding: '10px 12px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.07)',
+      }}>
+        {showBreakdown && auditRow && (
+          <button
+            type="button"
+            onClick={onToggleExpand}
+            title="Show calculation breakdown (admin)"
+            style={{
+              position: 'absolute', top: 6, right: 6, width: 22, height: 22,
+              borderRadius: '50%', border: '1px solid #E8DEC8', background: '#fff',
+              color: '#78716C', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <Info size={12} />
+          </button>
+        )}
+        <div style={{ fontSize: 11, fontWeight: 600, color: '#262626', textTransform: 'uppercase', letterSpacing: '0.04em', lineHeight: 1.2 }}>{card.name}</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: '#262626', fontFamily: 'monospace', margin: '4px 0 4px' }}>{card.value}</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+          <span style={{ fontSize: 10, color: '#6B6B6B' }}>Benchmark: {card.benchmark}</span>
+          <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: st.pillBg, color: st.pillColor }}>{card.statusLabel}</span>
+        </div>
       </div>
+      {showBreakdown && expanded && auditRow && <KpiBreakdownPanel row={auditRow} compact />}
     </div>
   );
 }
 
-function CardGrid({ cards }: { cards: RatioCard[] }) {
+interface CardGridAuditProps {
+  rowsByKpi?: Map<string, KpiAuditRow>;
+  showBreakdown?: boolean;
+  expandedKpi?: string | null;
+  onToggleKpi?: (name: string) => void;
+}
+
+function CardGrid({ cards, rowsByKpi, showBreakdown, expandedKpi, onToggleKpi }: { cards: RatioCard[] } & CardGridAuditProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-      {cards.map(c => <RatioCardComp key={c.name} card={c} />)}
+      {cards.map(c => {
+        const auditName = CARD_TO_AUDIT_KPI[c.name];
+        const auditRow = auditName ? rowsByKpi?.get(auditName) : undefined;
+        return (
+          <RatioCardComp
+            key={c.name}
+            card={c}
+            auditRow={auditRow}
+            showBreakdown={showBreakdown && !!auditRow}
+            expanded={auditName ? expandedKpi === auditName : false}
+            onToggleExpand={auditName ? () => onToggleKpi?.(auditName) : undefined}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -515,16 +586,15 @@ function calcAllRatios(fin: LiveFin, activeYear?: number): { profitability: Rati
 
 // ── Tab components ─────────────────────────────────────────────────────────────
 
-function ProfitabilityTab({ coData, trendData, liveCards, liveFin }: {
+function ProfitabilityTab({ coData, trendData, liveCards, liveFin, auditProps }: {
   coData: any[]; trendData: any[]; liveCards?: RatioCard[]; liveFin?: LiveFin;
-}) {
+} & { auditProps?: CardGridAuditProps }) {
   const cards = liveCards ?? PROFITABILITY;
   const { profTrend, retTrend } = liveFin ? buildTrendFromLive(liveFin) : buildTrendFromSparks(cards);
 
   return (
     <div className="space-y-6">
-      {/* ── Existing KPI cards — unchanged ─────────────────────────────── */}
-      <CardGrid cards={cards} />
+      <CardGrid cards={cards} {...auditProps} />
 
       {/* ── NEW: Benchmark bullet-chart strip ──────────────────────────── */}
       <BulletStripForRatios cards={cards} />
@@ -739,14 +809,16 @@ function WcCompositionChart({ data }: { data: WcRow[] }) {
   );
 }
 
-function LiquidityTab({ coData: _coData, liveCards, liveFin }: { coData: any[]; liveCards?: RatioCard[]; liveFin?: LiveFin }) {
+function LiquidityTab({ coData: _coData, liveCards, liveFin, auditProps }: {
+  coData: any[]; liveCards?: RatioCard[]; liveFin?: LiveFin;
+} & { auditProps?: CardGridAuditProps }) {
   const cards = liveCards ?? LIQUIDITY;
   const { liqTrend, cashTrend, wcData } = liveFin
     ? buildLiqTrendFromLive(liveFin)
     : buildLiqTrendFromSparks(cards);
   return (
     <div className="space-y-6">
-      <CardGrid cards={cards} />
+      <CardGrid cards={cards} {...auditProps} />
       <BulletStripForRatios cards={cards} defs={LIQUIDITY_BULLET_DEFS} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <LiqRatiosTrendChart data={liqTrend} />
@@ -757,11 +829,13 @@ function LiquidityTab({ coData: _coData, liveCards, liveFin }: { coData: any[]; 
   );
 }
 
-function SolvencyTab({ coData, liveCards }: { coData: any[]; liveCards?: RatioCard[] }) {
+function SolvencyTab({ coData, liveCards, auditProps }: {
+  coData: any[]; liveCards?: RatioCard[];
+} & { auditProps?: CardGridAuditProps }) {
   const cards = liveCards ?? SOLVENCY;
   return (
     <div className="space-y-6">
-      <CardGrid cards={cards} />
+      <CardGrid cards={cards} {...auditProps} />
 
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
         <div className="flex gap-2 items-start">
@@ -923,9 +997,11 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 const NOW = new Date();
 
 export default function RentalFinancialRatios() {
+  const { isKpiAdmin } = useKpiAdminAccess();
   const [activeTab, setActiveTab] = useState<RatioTab>('Profitability');
   const [companies, setCompanies] = useState<CoOption[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
+  const [expandedKpi, setExpandedKpi] = useState<string | null>(null);
   const [liveData, setLiveData] = useState<LiveFin | null>(null);
   const [loadingLive, setLoadingLive] = useState(false);
   const [coData, setCoData] = useState<any[]>([]);
@@ -934,6 +1010,20 @@ export default function RentalFinancialRatios() {
   const [loadingData, setLoadingData] = useState(true);
   const [selectedYear, setSelectedYear] = useState<number>(NOW.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<number>(NOW.getMonth() + 1);
+
+  const { rowsByKpi } = useCompanyKpiAudit({
+    companyId: selectedId || null,
+    month: selectedMonth,
+    year: selectedYear,
+    enabled: isKpiAdmin && !!selectedId,
+  });
+
+  const auditProps: CardGridAuditProps = {
+    rowsByKpi,
+    showBreakdown: isKpiAdmin && !!selectedId,
+    expandedKpi,
+    onToggleKpi: (name) => setExpandedKpi(prev => prev === name ? null : name),
+  };
 
   // Available years: from liveData if present, else current year ± 4
   const availableYears = liveData?.years.length
@@ -1110,9 +1200,9 @@ export default function RentalFinancialRatios() {
         const liveRatios = liveData ? calcAllRatios(liveData, selectedYear) : null;
         return (
           <div>
-            {activeTab === 'Profitability'   && <ProfitabilityTab coData={coData} trendData={trendData} liveCards={liveRatios?.profitability} liveFin={liveData ?? undefined} />}
-            {activeTab === 'Liquidity'       && <LiquidityTab coData={coData} liveCards={liveRatios?.liquidity} liveFin={liveData ?? undefined} />}
-            {activeTab === 'Solvency'        && <SolvencyTab coData={coData} liveCards={liveRatios?.solvency} />}
+            {activeTab === 'Profitability'   && <ProfitabilityTab coData={coData} trendData={trendData} liveCards={liveRatios?.profitability} liveFin={liveData ?? undefined} auditProps={auditProps} />}
+            {activeTab === 'Liquidity'       && <LiquidityTab coData={coData} liveCards={liveRatios?.liquidity} liveFin={liveData ?? undefined} auditProps={auditProps} />}
+            {activeTab === 'Solvency'        && <SolvencyTab coData={coData} liveCards={liveRatios?.solvency} auditProps={auditProps} />}
             {activeTab === 'Rental KPIs'     && <RentalKPIsTab coData={coData} />}
             {activeTab === 'Cost of Capital' && <CostOfCapitalTab loanData={loanData} />}
           </div>

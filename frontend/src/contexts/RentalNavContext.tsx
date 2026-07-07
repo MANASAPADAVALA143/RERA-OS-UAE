@@ -6,7 +6,7 @@ import {
   Wrench, AlertTriangle, Receipt,
   TrendingUp, ArrowDownUp, Table2, CalendarCheck, Activity,
   Landmark, Store, BookOpen,
-  CircleDollarSign, CalendarRange, Tag, Percent, ClipboardList,
+  CircleDollarSign, CalendarRange, Tag, Percent, ClipboardList, Calculator,
 } from "lucide-react";
 
 export type RentalTab =
@@ -18,7 +18,8 @@ export type RentalTab =
   | "ownership" | "reports" | "financials"
   | "portfolio-upload" | "cfo-dashboard" | "income-bridge" | "entity-rollup" | "compliance"
   | "building-expenses" | "loan-tracker" | "cfo-portfolio" | "13-week-cf"
-  | "discounts" | "financial-ratios";
+  | "discounts" | "financial-ratios"
+  | "calculations-review";
 
 type LucideIcon = React.FC<{ size?: number; className?: string }>;
 export interface RentalNavItem {
@@ -27,6 +28,8 @@ export interface RentalNavItem {
   Icon: LucideIcon;
   groupLabel?: string;
   hidden?: boolean;
+  /** Visible only to CA firm internal_reviewer / platform_admin */
+  reviewerOnly?: boolean;
 }
 
 export const RENTAL_TABS: RentalNavItem[] = [
@@ -47,6 +50,7 @@ export const RENTAL_TABS: RentalNavItem[] = [
   { id: "vacancy",           label: "Vacancy & Loss",    Icon: TrendingDown    },
   { id: "financials",        label: "Financials",        Icon: BookOpen        },
   { id: "financial-ratios",  label: "Financial Ratios",  Icon: Percent         },
+  { id: "calculations-review", label: "Calculations Review", Icon: Calculator, reviewerOnly: true, groupLabel: "CA FIRM QA" },
   // ── OPERATIONS ────────────────────────────────────────────────────────────
   { id: "building-expenses", label: "Building Expenses", Icon: Receipt,         groupLabel: "OPERATIONS" },
   { id: "loan-tracker",      label: "Loan Tracker",      Icon: CircleDollarSign },
@@ -67,6 +71,7 @@ const TAB_PATHS: Partial<Record<RentalTab, string>> = {
   "cfo-portfolio":     "/rental/cfo-portfolio",
   "13-week-cf":        "/rental/13-week-cf",
   "financial-ratios":  "/rental/financial-ratios",
+  "calculations-review": "/rental/calculations-review",
 };
 
 const PATH_TO_TAB: Record<string, RentalTab> = {
@@ -75,6 +80,7 @@ const PATH_TO_TAB: Record<string, RentalTab> = {
   "/rental/cfo-portfolio":     "cfo-portfolio",
   "/rental/13-week-cf":        "13-week-cf",
   "/rental/financial-ratios":  "financial-ratios",
+  "/rental/calculations-review": "calculations-review",
 };
 
 export function rentalPathForTab(tab: RentalTab): string {

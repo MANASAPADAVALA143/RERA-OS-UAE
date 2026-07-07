@@ -4,13 +4,18 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid,
 } from 'recharts';
-import { Upload, Building2, FileSpreadsheet, TrendingUp, TrendingDown, DollarSign, Home, Vault, BarChart3, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Upload, Building2, FileSpreadsheet, TrendingUp, TrendingDown, DollarSign, Home, Vault, BarChart3, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import { api } from '../services/api';
 import PeriodToggle from '../components/shared/PeriodToggle';
 import { type Period, getPeriodKeys } from '../utils/periodWindow';
 import { BulletChartStrip } from '../components/shared/BulletChartStrip';
 import type { BulletDef, BulletCard } from '../components/shared/BulletChartStrip';
 import { ParchmentKpiTile } from '../components/ui/ParchmentKpiTile';
+import { useKpiAdminAccess } from '../hooks/useKpiAdminAccess';
+import { useCompanyKpiAudit } from '../hooks/useCompanyKpiAudit';
+import { KpiBreakdownPanel } from '../components/admin/KpiBreakdownPanel';
+import { CompanyKpiAuditTab } from '../components/admin/CompanyKpiAuditTab';
+import type { KpiAuditRow } from '../types/kpiAudit';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -53,7 +58,8 @@ interface KpiData {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const TABS = ['P&L Statement', 'Balance Sheet', 'Cash Flow', 'KPI Dashboard', 'CFO Dashboard', 'Financial Metrics'] as const;
-type FinTab = typeof TABS[number];
+const ADMIN_TAB = 'Calculations' as const;
+type FinTab = typeof TABS[number] | typeof ADMIN_TAB;
 
 
 // ── Parser ────────────────────────────────────────────────────────────────────
@@ -890,31 +896,107 @@ interface KCardProps {
   status: 'good'|'warn'|'bad'|'info';
   trendData?: number[];
   accent?: boolean;
+  kpiName?: string;
+  auditRow?: KpiAuditRow | null;
+  showBreakdown?: boolean;
+  expanded?: boolean;
+  onToggleExpand?: () => void;
 }
 
-function KCard({ label, value, sub, status, trendData, accent }: KCardProps) {
+function KCard({
+  label, value, sub, status, trendData, accent,
+  auditRow, showBreakdown, expanded, onToggleExpand,
+}: KCardProps) {
   const warn = status === 'warn' || status === 'bad';
 
   return (
-    <ParchmentKpiTile label={label} value={value} sub={sub} accent={accent} warn={warn}>
-      {trendData && trendData.length > 0 && (
-        <div style={{ height: 28, marginTop: 8 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={trendData.map((v, i) => ({ x: i, y: v }))}>
-              <Line type="monotone" dataKey="y" stroke={accent ? 'rgba(255,255,255,0.7)' : '#D4AF37'} dot={false} strokeWidth={1.5} isAnimationActive={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+    <div>
+      <div style={{ position: 'relative' }}>
+        {showBreakdown && auditRow && (
+          <button
+            type="button"
+            onClick={onToggleExpand}
+            title="Show calculation breakdown (admin)"
+            aria-label={`Show calculation for ${label}`}
+            style={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              zIndex: 2,
+              width: 26,
+              height: 26,
+              borderRadius: '50%',
+              border: `1px solid ${accent ? 'rgba(255,255,255,0.5)' : '#E8DEC8'}`,
+              background: accent ? 'rgba(0,0,0,0.15)' : '#fff',
+              color: accent ? '#fff' : '#78716C',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Info size={14} />
+          </button>
+        )}
+        <ParchmentKpiTile label={label} value={value} sub={sub} accent={accent} warn={warn}>
+          {trendData && trendData.length > 0 && (
+            <div style={{ height: 28, marginTop: 8 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={trendData.map((v, i) => ({ x: i, y: v }))}>
+                  <Line type="monotone" dataKey="y" stroke={accent ? 'rgba(255,255,255,0.7)' : '#D4AF37'} dot={false} strokeWidth={1.5} isAnimationActive={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </ParchmentKpiTile>
+      </div>
+      {showBreakdown && expanded && auditRow && (
+        <KpiBreakdownPanel row={auditRow} compact />
       )}
-    </ParchmentKpiTile>
+    </div>
   );
 }
 
 // ── KPI Dashboard Tab ─────────────────────────────────────────────────────────
 
-function KPITab({ fin, kpiYear, kpiMonth }: { fin: ParsedFinancials; kpiYear: number; kpiMonth: number | null }) {
+function KPITab({
+  fin,
+  kpiYear,
+  kpiMonth,
+  showBreakdown,
+  rowsByKpi,
+  expandedKpi,
+  onToggleKpi,
+}: {
+  fin: ParsedFinancials;
+  kpiYear: number;
+  kpiMonth: number | null;
+  showBreakdown?: boolean;
+  rowsByKpi?: Map<string, KpiAuditRow>;
+  expandedKpi?: string | null;
+  onToggleKpi?: (name: string) => void;
+}) {
   const { k, kPrev: kP, label, compareLabel } = resolveKpiView(fin, kpiYear, kpiMonth);
   const prevY = compareLabel || (fin.years.length >= 2 ? String(fin.years[fin.years.length - 2]) : null);
+
+  const kpiCardProps = (name: string) => {
+    const row = rowsByKpi?.get(name);
+    return {
+      kpiName: name,
+      auditRow: row ?? null,
+      showBreakdown: !!showBreakdown && !!row,
+      expanded: expandedKpi === name,
+      onToggleExpand: () => onToggleKpi?.(name),
+    };
+  };
+
+  const depreciation = (() => {
+    if (kpiMonth) {
+      const key = `${_MNAMES[kpiMonth - 1]} ${kpiYear}`;
+      return Math.abs(calcMonthlyKpis(fin.pl, key).depreciation);
+    }
+    return Math.abs(sumI(fin.pl, /depreciation|amortization/i, kpiYear));
+  })();
 
   const noiM  = k.totalRevenue > 0 ? k.noi / k.totalRevenue * 100 : 0;
   const netM  = k.totalRevenue > 0 ? k.netIncome / k.totalRevenue * 100 : 0;
@@ -927,6 +1009,11 @@ function KPITab({ fin, kpiYear, kpiMonth }: { fin: ParsedFinancials; kpiYear: nu
   const ltv   = k.buildings > 0 ? k.longTermLoans / k.buildings * 100 : 0;
   const alR   = k.totalLiabilities > 0 ? k.totalAssets / k.totalLiabilities : 0;
   const dte   = k.equity > 0 ? k.totalLiabilities / k.equity : 0;
+  const ebitdaM = k.totalRevenue > 0 ? (k.noi + depreciation) / k.totalRevenue * 100 : 0;
+  const dscr  = k.interestExpense > 0 ? k.noi / (k.interestExpense * 1.2) : 0;
+  const roa   = k.totalAssets > 0 ? k.netIncome / k.totalAssets * 100 : 0;
+  const roe   = k.equity > 0 ? k.netIncome / k.equity * 100 : 0;
+  const capRate = k.buildings > 0 ? k.noi / k.buildings * 100 : 0;
 
   // Calculate trend data for sparklines
   const noiMTrend = fin.years.map(y => { const kk = calcKpis(fin, y); return kk.totalRevenue > 0 ? kk.noi / kk.totalRevenue * 100 : 0; });
@@ -1008,30 +1095,43 @@ function KPITab({ fin, kpiYear, kpiMonth }: { fin: ParsedFinancials; kpiYear: nu
       <div>
         <p style={{ fontSize: 13, fontWeight: 600, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Profitability</p>
         <div className="grid grid-cols-4 gap-4">
-          <KCard label="NOI Margin" value={`${noiM.toFixed(1)}%`} sub={`NOI: ${fmt(k.noi)}`} status={noiM>=40?'good':noiM>=20?'warn':'bad'} trendData={noiMTrend} accent />
-          <KCard label="Net Income Margin" value={`${netM.toFixed(1)}%`} sub={`Net: ${fmt(k.netIncome)}`} status={netM>=10?'good':netM>=0?'warn':'bad'} trendData={netMTrend} />
-          <KCard label="Revenue Growth YoY" value={revG!==null?`${revG>=0?'+':''}${revG.toFixed(1)}%`:'N/A'} sub={kP?`${label} vs ${compareLabel || prevY}`:'Only 1 period'} status={revG===null?'info':revG>=3?'good':revG>=0?'warn':'bad'} trendData={revGTrend} />
-          <KCard label="Expense Ratio" value={`${expR.toFixed(1)}%`} sub={`Total exp: ${fmt(k.totalExpenses)}`} status={expR<=70?'good':expR<=85?'warn':'bad'} />
+          <KCard label="NOI Margin" value={`${noiM.toFixed(1)}%`} sub={`NOI: ${fmt(k.noi)}`} status={noiM>=40?'good':noiM>=20?'warn':'bad'} trendData={noiMTrend} accent {...kpiCardProps('NOI Margin')} />
+          <KCard label="Net Income Margin" value={`${netM.toFixed(1)}%`} sub={`Net: ${fmt(k.netIncome)}`} status={netM>=10?'good':netM>=0?'warn':'bad'} trendData={netMTrend} {...kpiCardProps('Net Income Margin')} />
+          <KCard label="Revenue Growth YoY" value={revG!==null?`${revG>=0?'+':''}${revG.toFixed(1)}%`:'N/A'} sub={kP?`${label} vs ${compareLabel || prevY}`:'Only 1 period'} status={revG===null?'info':revG>=3?'good':revG>=0?'warn':'bad'} trendData={revGTrend} {...kpiCardProps('Revenue Growth YoY')} />
+          <KCard label="Expense Ratio" value={`${expR.toFixed(1)}%`} sub={`Total exp: ${fmt(k.totalExpenses)}`} status={expR<=70?'good':expR<=85?'warn':'bad'} {...kpiCardProps('Expense Ratio')} />
         </div>
       </div>
 
       <div>
         <p style={{ fontSize: 13, fontWeight: 600, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Rental Performance</p>
         <div className="grid grid-cols-4 gap-4">
-          <KCard label="Rental Income %" value={`${rentP.toFixed(1)}%`} sub={`${fmt(k.rentalIncome)} of ${fmt(k.totalRevenue)}`} status={rentP>=80?'good':'info'} />
-          <KCard label="Interest Coverage" value={iCov>0?`${iCov.toFixed(2)}x`:'N/A'} sub={`NOI ÷ Interest (${fmt(k.interestExpense)})`} status={iCov>=2?'good':iCov>=1.2?'warn':'bad'} />
-          <KCard label="Mgmt Fee %" value={`${mgmtP.toFixed(1)}%`} sub={`${fmt(k.managementFee)} of revenue`} status={mgmtP<=10?'good':mgmtP<=15?'warn':'bad'} />
-          <KCard label="Repair % of Revenue" value={`${repP.toFixed(1)}%`} sub={`${fmt(k.repairs)} repairs/maint`} status={repP<=5?'good':repP<=10?'warn':'bad'} />
+          <KCard label="Rental Income %" value={`${rentP.toFixed(1)}%`} sub={`${fmt(k.rentalIncome)} of ${fmt(k.totalRevenue)}`} status={rentP>=80?'good':'info'} {...kpiCardProps('Rental Income %')} />
+          <KCard label="Interest Coverage" value={iCov>0?`${iCov.toFixed(2)}x`:'N/A'} sub={`NOI ÷ Interest (${fmt(k.interestExpense)})`} status={iCov>=2?'good':iCov>=1.2?'warn':'bad'} {...kpiCardProps('Interest Coverage')} />
+          <KCard label="Mgmt Fee %" value={`${mgmtP.toFixed(1)}%`} sub={`${fmt(k.managementFee)} of revenue`} status={mgmtP<=10?'good':mgmtP<=15?'warn':'bad'} {...kpiCardProps('Mgmt Fee %')} />
+          <KCard label="Repair % of Revenue" value={`${repP.toFixed(1)}%`} sub={`${fmt(k.repairs)} repairs/maint`} status={repP<=5?'good':repP<=10?'warn':'bad'} {...kpiCardProps('Repair % of Revenue')} />
         </div>
       </div>
 
       <div>
         <p style={{ fontSize: 13, fontWeight: 600, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Balance Sheet</p>
         <div className="grid grid-cols-4 gap-4">
-          <KCard label="LTV (Loans / Building)" value={ltv>0?`${ltv.toFixed(1)}%`:'Not available'} sub={ltv>0?`Loans: ${fmt(k.longTermLoans)}`:'Property value not found in balance sheet'} status={ltv>0&&ltv<=75?'good':ltv>0&&ltv<=85?'warn':ltv>0?'bad':'info'} />
-          <KCard label="Asset / Liability Ratio" value={alR>0?`${alR.toFixed(2)}x`:'N/A'} sub={`Assets: ${fmt(k.totalAssets)}`} status={alR>=1.5?'good':alR>=1?'warn':'bad'} />
-          <KCard label="Debt-to-Equity" value={dte>0?`${dte.toFixed(2)}x`:'N/A'} sub={`Equity: ${fmt(k.equity)}`} status={dte>0&&dte<=2?'good':dte<=4?'warn':'bad'} />
-          <KCard label="Cash Balance" value={fmt(k.cash)} sub={`As of ${label}`} status={k.cash>10000?'good':k.cash>0?'warn':'bad'} trendData={cashTrend} />
+          <KCard label="LTV (Loans / Building)" value={ltv>0?`${ltv.toFixed(1)}%`:'Not available'} sub={ltv>0?`Loans: ${fmt(k.longTermLoans)}`:'Property value not found in balance sheet'} status={ltv>0&&ltv<=75?'good':ltv>0&&ltv<=85?'warn':ltv>0?'bad':'info'} {...kpiCardProps('LTV')} />
+          <KCard label="Asset / Liability Ratio" value={alR>0?`${alR.toFixed(2)}x`:'N/A'} sub={`Assets: ${fmt(k.totalAssets)}`} status={alR>=1.5?'good':alR>=1?'warn':'bad'} {...kpiCardProps('Asset/Liability Ratio')} />
+          <KCard label="Debt-to-Equity" value={dte>0?`${dte.toFixed(2)}x`:'N/A'} sub={`Equity: ${fmt(k.equity)}`} status={dte>0&&dte<=2?'good':dte<=4?'warn':'bad'} {...kpiCardProps('Debt-to-Equity')} />
+          <KCard label="Cash Balance" value={fmt(k.cash)} sub={`As of ${label}`} status={k.cash>10000?'good':k.cash>0?'warn':'bad'} trendData={cashTrend} {...kpiCardProps('Cash Balance')} />
+        </div>
+      </div>
+
+      <div>
+        <p style={{ fontSize: 13, fontWeight: 600, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Financial Ratios</p>
+        <div className="grid grid-cols-4 gap-4">
+          <KCard label="DSCR (Est.)" value={dscr>0?`${dscr.toFixed(2)}x`:'N/A'} sub={`NOI ÷ (Interest × 1.2)`} status={dscr>=1.25?'good':dscr>=1?'warn':'bad'} {...kpiCardProps('DSCR (Est.)')} />
+          <KCard label="EBITDA Margin" value={`${ebitdaM.toFixed(1)}%`} sub={`Depreciation: ${fmt(depreciation)}`} status={ebitdaM>=30?'good':ebitdaM>=15?'warn':'bad'} {...kpiCardProps('EBITDA Margin')} />
+          <KCard label="ROA" value={roa!==0?`${roa.toFixed(1)}%`:'N/A'} sub={`Net Income / Assets`} status={roa>=5?'good':roa>=0?'warn':'bad'} {...kpiCardProps('ROA')} />
+          <KCard label="ROE" value={roe!==0?`${roe.toFixed(1)}%`:'N/A'} sub={`Net Income / Equity`} status={roe>=10?'good':roe>=0?'warn':'bad'} {...kpiCardProps('ROE')} />
+        </div>
+        <div className="grid grid-cols-4 gap-4 mt-4">
+          <KCard label="Cap Rate" value={capRate>0?`${capRate.toFixed(2)}%`:'N/A'} sub={k.buildings>0?`NOI / ${fmt(k.buildings)}`:'Building value missing'} status={capRate>=5?'good':capRate>0?'warn':'info'} {...kpiCardProps('Cap Rate')} />
         </div>
       </div>
 
@@ -1768,6 +1868,7 @@ function FinancialMetricsTab({ companyName }: { companyName: string }) {
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function RentalFinancials() {
+  const { isKpiAdmin } = useKpiAdminAccess();
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<FinTab>('P&L Statement');
@@ -1776,6 +1877,8 @@ export default function RentalFinancials() {
   const [uploading, setUploading] = useState(false);
   const [loadingFin, setLoadingFin] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [expandedKpi, setExpandedKpi] = useState<string | null>(null);
+  const [adminPeriod, setAdminPeriod] = useState<Period | null>(null);
 
   // Period toggle state (shared across P&L and CFO Dashboard)
   const [period, setPeriod] = useState<Period | null>(null);
@@ -1783,6 +1886,22 @@ export default function RentalFinancials() {
   const [pYear, setPYear] = useState(new Date().getFullYear());
   const [kpiYear, setKpiYear] = useState(new Date().getFullYear());
   const [kpiMonth, setKpiMonth] = useState<number | null>(null);
+
+  const auditMonth = activeTab === ADMIN_TAB ? pMonth : (kpiMonth ?? pMonth);
+  const auditYear = activeTab === ADMIN_TAB ? pYear : kpiYear;
+  const auditPeriod = activeTab === ADMIN_TAB ? (adminPeriod ?? period) : null;
+  const auditEnabled = isKpiAdmin && !!selectedCompanyId
+    && (activeTab === 'KPI Dashboard' || activeTab === ADMIN_TAB);
+
+  const { audit, loading: auditLoading, error: auditError, refresh: refreshAudit, rowsByKpi } = useCompanyKpiAudit({
+    companyId: selectedCompanyId,
+    month: auditMonth,
+    year: auditYear,
+    period: auditPeriod,
+    enabled: auditEnabled,
+  });
+
+  const visibleTabs: FinTab[] = isKpiAdmin ? [...TABS, ADMIN_TAB] : [...TABS];
 
   const selectStyle: React.CSSProperties = {
     fontSize: 13, border: '1px solid #E8DEC8', borderRadius: 6,
@@ -2154,13 +2273,14 @@ export default function RentalFinancials() {
 
           {/* Tabs */}
           <div className="flex gap-1 p-1 rounded-lg w-fit flex-wrap" style={{ background: '#E8E4DC' }}>
-            {TABS.map(t => (
+            {visibleTabs.map(t => (
               <button key={t} onClick={() => {
                 setActiveTab(t);
                 if (t === 'P&L Statement' || t === 'Balance Sheet' || t === 'Cash Flow') {
                   setSelectedYear(null);
                   setPeriod(null);
                 }
+                if (t !== 'KPI Dashboard') setExpandedKpi(null);
               }}
                 className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors"
                 style={activeTab === t
@@ -2176,9 +2296,33 @@ export default function RentalFinancials() {
             {activeTab === 'P&L Statement' && <PLTable fin={currentFin} selectedYear={selectedYear} period={period} pMonth={pMonth} pYear={pYear} />}
             {activeTab === 'Balance Sheet'  && <BSTable fin={currentFin} selectedYear={selectedYear} period={period} pMonth={pMonth} pYear={pYear} />}
             {activeTab === 'Cash Flow'      && <CFTable fin={currentFin} selectedYear={selectedYear} period={period} pMonth={pMonth} pYear={pYear} />}
-            {activeTab === 'KPI Dashboard'  && <KPITab  fin={currentFin} kpiYear={kpiYear} kpiMonth={kpiMonth} />}
+            {activeTab === 'KPI Dashboard'  && (
+              <KPITab
+                fin={currentFin}
+                kpiYear={kpiYear}
+                kpiMonth={kpiMonth}
+                showBreakdown={isKpiAdmin}
+                rowsByKpi={rowsByKpi}
+                expandedKpi={expandedKpi}
+                onToggleKpi={(name) => setExpandedKpi(prev => prev === name ? null : name)}
+              />
+            )}
             {activeTab === 'CFO Dashboard'  && <CFOTab  fin={currentFin} />}
             {activeTab === 'Financial Metrics' && <FinancialMetricsTab companyName={currentFin.companyName} />}
+            {activeTab === ADMIN_TAB && isKpiAdmin && (
+              <CompanyKpiAuditTab
+                companyName={currentFin.companyName}
+                audit={audit}
+                loading={auditLoading}
+                error={auditError}
+                onRefresh={refreshAudit}
+                period={adminPeriod ?? period}
+                month={pMonth}
+                year={pYear}
+                onPeriodChange={(p, m, y) => { setAdminPeriod(p); setPMonth(m); setPYear(y); }}
+                availableKeys={getAvailableKeys(currentFin)}
+              />
+            )}
           </div>
         </div>
       ) : (

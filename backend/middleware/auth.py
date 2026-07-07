@@ -12,9 +12,25 @@ from sqlalchemy.orm import Session
 from config import settings
 from database import get_db, set_rls_tenant
 from models.tenancy import Tenant, TenantUser, UserRole, UserStatus
+from services.app_access import assert_primary_app_user, is_primary_app_user
 from services.local_auth import decode_local_token
 
-WRITE_ROLES = {UserRole.owner, UserRole.admin, UserRole.cfo, UserRole.controller}
+# CA firm KPI cross-check — primary operator email (+ platform ops).
+KPI_REVIEWER_ROLES = {UserRole.platform_admin, UserRole.internal_reviewer}
+
+WRITE_ROLES = {
+    UserRole.owner,
+    UserRole.admin,
+    UserRole.cfo,
+    UserRole.controller,
+    UserRole.internal_reviewer,
+}
+
+
+def is_kpi_reviewer(role: UserRole, email: str | None = None) -> bool:
+    if role == UserRole.platform_admin:
+        return True
+    return is_primary_app_user(email)
 
 # In-process JWKS cache — populated on first RS256 token decode.
 _supabase_jwks: list[dict] | None = None
@@ -151,14 +167,12 @@ async def get_current_user(
     )
 
     if not tenant_user:
-        # Auto-provision: new Supabase user logging in for the first time.
-        # Create a private tenant so they can start adding companies immediately.
-        # Only do this in Supabase mode — local mode requires explicit registration.
         if settings.effective_auth_mode != "supabase":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="User has no tenant membership",
             )
+        assert_primary_app_user(email)
         company_label = email.split("@")[0].replace(".", " ").replace("_", " ").title()
         tenant = Tenant(id=_uuid.UUID(user_id), company_name=f"{company_label} Co.")
         db.add(tenant)
@@ -167,7 +181,7 @@ async def get_current_user(
             tenant_id=tenant.id,
             supabase_user_id=user_id,
             email=email,
-            role=UserRole.owner,
+            role=UserRole.internal_reviewer,
             status=UserStatus.active,
             joined_at=datetime.now(timezone.utc),
         )
@@ -181,6 +195,9 @@ async def get_current_user(
             detail="User account is disabled",
         )
 
+    effective_email = tenant_user.email or email
+    assert_primary_app_user(effective_email)
+
     # Set Postgres RLS tenant context for this session.
     # FastAPI caches Depends(get_db) per request, so `db` here is the same
     # Session object that will be injected into the route handler. Any queries
@@ -193,6 +210,21 @@ async def get_current_user(
         role=tenant_user.role,
         email=tenant_user.email or email,
     )
+
+
+async def require_kpi_reviewer(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> CurrentUser:
+    """Calculations review — primary CA firm email only."""
+    if not is_kpi_reviewer(current_user.role, current_user.email):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Calculations review is restricted to the primary CA firm account.",
+        )
+    return current_user
+
+
+require_kpi_admin = require_kpi_reviewer
 
 
 def require_role(*allowed_roles: str):
@@ -210,4 +242,4 @@ def require_role(*allowed_roles: str):
 
 
 def require_write_access():
-    return require_role("owner", "admin", "cfo", "controller")
+    return require_role(*(r.value for r in WRITE_ROLES))

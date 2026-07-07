@@ -43,7 +43,7 @@ const subBase     = 'w-full flex items-center gap-2 pl-7 pr-3 py-1.5 rounded-lg 
 
 function SidebarInner() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, isKpiReviewer } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const onConstruction = location.pathname.startsWith('/construction');
@@ -121,7 +121,7 @@ function SidebarInner() {
               {/* Rental sub-nav */}
               {to === '/rental' && onRental && (
                 <div className="mt-1 mb-1">
-                  {RENTAL_TABS.filter((item) => !item.hidden).map(({ id, label: itemLabel, Icon: ItemIcon, groupLabel }) => (
+                  {RENTAL_TABS.filter((item) => !item.hidden && (!item.reviewerOnly || isKpiReviewer)).map(({ id, label: itemLabel, Icon: ItemIcon, groupLabel }) => (
                     <div key={id}>
                       {groupLabel && (
                         <p className="pl-7 pr-3 pt-3 pb-1 text-sm uppercase tracking-wider font-medium"

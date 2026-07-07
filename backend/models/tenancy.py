@@ -21,6 +21,10 @@ class UserRole(str, enum.Enum):
     controller = "controller"
     analyst = "analyst"
     viewer = "viewer"
+    # CA firm staff — cross-verify KPIs before client delivery; firm-wide tenant access.
+    internal_reviewer = "internal_reviewer"
+    # Client company portal login — read-oriented; never sees KPI breakdown tools.
+    client = "client"
     # Cross-tenant platform administrator — can delete tenants.
     # Must be set manually in the DB; cannot be assigned via invite-user endpoint.
     platform_admin = "platform_admin"

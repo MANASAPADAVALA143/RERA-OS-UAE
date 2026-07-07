@@ -6,7 +6,7 @@ import jwt
 
 from config import settings
 
-DEMO_EMAIL = "demo@estatecfo.com"
+DEMO_EMAIL = settings.primary_user_email
 DEMO_PASSWORD = "AiM1S@2026#Secure"
 DEMO_COMPANY = "Summit Holdings LLC"
 

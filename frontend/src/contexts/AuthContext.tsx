@@ -19,6 +19,9 @@ export interface AuthProfile {
   status: string;
   subscription_tier: string;
   ai_narrative_enabled: boolean;
+  is_kpi_reviewer?: boolean;
+  single_user_mode?: boolean;
+  primary_user_email?: string;
 }
 
 interface AuthContextType {
@@ -30,11 +33,12 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   canWrite: boolean;
+  isKpiReviewer: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const WRITE_ROLES = new Set(['owner', 'admin', 'cfo', 'controller']);
+const WRITE_ROLES = new Set(['owner', 'admin', 'cfo', 'controller', 'internal_reviewer']);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<AuthProfile | null>(null);
@@ -121,10 +125,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const canWrite = profile ? WRITE_ROLES.has(profile.role) : false;
+  const isKpiReviewer = profile?.is_kpi_reviewer === true;
 
   return (
     <AuthContext.Provider
-      value={{ profile, loading, authConfig, isAuthenticated, signIn, signOut, refreshProfile, canWrite }}
+      value={{
+        profile, loading, authConfig, isAuthenticated, signIn, signOut, refreshProfile, canWrite, isKpiReviewer,
+      }}
     >
       {children}
     </AuthContext.Provider>

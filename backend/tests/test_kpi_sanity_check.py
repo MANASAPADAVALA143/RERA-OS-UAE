@@ -61,7 +61,16 @@ def test_interest_coverage_zero_flags_check_logic():
     assert ic_row.status == "CHECK_LOGIC"
 
 
-def test_noi_margin_calculation():
-    k = calc_kpis(_sample_fin(), 2026)
-    margin = k.noi / k.total_revenue * 100
-    assert abs(margin - 25.0) < 0.1
+def test_breakdown_fields_populated():
+    result = audit_company_financials(
+        _sample_fin(),
+        company_id="test-co",
+        company_name="Test Co",
+        month=6,
+        year=2026,
+    )
+    noi_row = next(r for r in result.rows if r.kpi == "NOI Margin")
+    assert noi_row.substitution
+    assert "NOI =" in noi_row.substitution
+    assert noi_row.inputs_detail.get("Total Revenue")
+    assert len(noi_row.sources) >= 2
