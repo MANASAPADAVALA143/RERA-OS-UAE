@@ -94,12 +94,12 @@ def _apply_collected_fallback(
     tid,
 ) -> None:
     """
-    Apply Excel-sync → P&L fallback for collected/NOI in-place.
+    Apply Excel-sync → P&L fallback for collected rent metrics in-place.
 
-    Called by list_companies, company_dashboard, and get_portfolio_summary
-    so the same two-source priority is enforced everywhere:
+    Called by list_companies, company_dashboard, and get_portfolio_summary.
+    NOI is applied separately via _apply_pl_noi (P&L upload only).
       Source B: Excel-synced monthly_rent_data / collected_this_month column
-      Source C: Latest P&L upload for the company
+      Source C: Latest P&L upload for the company (collected/rent income only)
     """
     # ── Source B: Excel sync ──────────────────────────────────────────────────
     if summ["collected_this_month"] == 0.0:
@@ -116,10 +116,9 @@ def _apply_collected_fallback(
                 pass
         if synced > 0.0:
             summ["collected_this_month"] = synced
-            summ["noi_this_month"] = round(synced - summ["total_expense_this_month"], 2)
             summ["collected_source"] = "excel_sync"
 
-    # ── Source C: P&L upload ──────────────────────────────────────────────────
+    # ── Source C: P&L upload (collected rent only — not NOI) ─────────────────
     if summ["collected_this_month"] == 0.0:
         upload = (
             db.query(_RFU)
@@ -149,9 +148,6 @@ def _apply_collected_fallback(
                 summ["collected_source"]     = "pl_fallback"
                 if pl_expense > 0.0 and summ["total_expense_this_month"] == 0.0:
                     summ["total_expense_this_month"] = pl_expense
-                summ["noi_this_month"] = round(
-                    summ["collected_this_month"] - summ["total_expense_this_month"], 2
-                )
                 if summ["billed_this_month"] == 0.0 and summ["gross_potential_rent"] > 0.0:
                     summ["billed_this_month"] = summ["gross_potential_rent"]
                 summ["arrears_total"] = round(
@@ -163,6 +159,81 @@ def _apply_collected_fallback(
         summ["gross_potential_rent"] = float(co.gross_potential_rent)
     if summ["vacancy_loss"] == 0.0 and co.vacancy_loss:
         summ["vacancy_loss"] = float(co.vacancy_loss)
+
+
+def _pl_month_key_candidates(month_abbrev: str) -> list[str]:
+    """Return likely monthlyValues keys for a Mon-YYYY period."""
+    try:
+        dt = datetime.strptime(month_abbrev, "%b-%Y")
+        spaced = dt.strftime("%b %Y")
+        return list(dict.fromkeys([spaced, month_abbrev, month_abbrev.replace("-", " ")]))
+    except ValueError:
+        return [month_abbrev, month_abbrev.replace("-", " ")]
+
+
+def _find_pl_month_key(pl_data: list, month_abbrev: str) -> str | None:
+    keys: set[str] = set()
+    for item in _flatten_pl_items(pl_data):
+        mv = item.get("monthlyValues") or item.get("monthly_values") or {}
+        keys.update(mv.keys())
+    for candidate in _pl_month_key_candidates(month_abbrev):
+        if candidate in keys:
+            return candidate
+    return None
+
+
+def _apply_pl_noi(summ: dict, co, month_abbrev: str, db, tid) -> None:
+    """
+    NOI from P&L upload only — matches Financials / rental_kpi_engine:
+      NOI = Total Income − Total Expenses + Interest Paid
+    """
+    from services.rental_kpi_engine import calc_monthly_kpis
+
+    summ["has_pl_noi"] = False
+    summ["pl_total_revenue"] = 0.0
+    summ["pl_total_expenses"] = 0.0
+    summ["pl_interest_paid"] = 0.0
+    summ["noi_this_month"] = 0.0
+
+    upload = (
+        db.query(_RFU)
+        .filter(_RFU.tenant_id == tid, _RFU.company_id == co.id)
+        .order_by(_RFU.uploaded_at.desc())
+        .first()
+    )
+    if not (upload and upload.pl_data):
+        return
+
+    month_key = _find_pl_month_key(upload.pl_data, month_abbrev)
+    if not month_key:
+        return
+
+    kpis = calc_monthly_kpis(_flatten_pl_items(upload.pl_data), month_key)
+    if kpis["total_revenue"] == 0.0 and kpis["total_expenses"] == 0.0:
+        return
+
+    summ["has_pl_noi"] = True
+    summ["pl_total_revenue"] = round(kpis["total_revenue"], 2)
+    summ["pl_total_expenses"] = round(kpis["total_expenses"], 2)
+    summ["pl_interest_paid"] = round(kpis["interest"], 2)
+    summ["noi_this_month"] = round(kpis["noi"], 2)
+
+
+def _rollup_pl_noi(portfolio: dict, by_company: list[dict]) -> None:
+    """Aggregate P&L-based NOI fields into portfolio totals."""
+    pl_cos = [c for c in by_company if c.get("has_pl_noi")]
+    if not pl_cos:
+        portfolio["has_pl_noi"] = False
+        portfolio["pl_total_revenue"] = 0.0
+        portfolio["pl_total_expenses"] = 0.0
+        portfolio["pl_interest_paid"] = 0.0
+        portfolio["noi_this_month"] = 0.0
+        return
+    portfolio["has_pl_noi"] = True
+    portfolio["pl_total_revenue"] = round(sum(c.get("pl_total_revenue", 0.0) for c in pl_cos), 2)
+    portfolio["pl_total_expenses"] = round(sum(c.get("pl_total_expenses", 0.0) for c in pl_cos), 2)
+    portfolio["pl_interest_paid"] = round(sum(c.get("pl_interest_paid", 0.0) for c in pl_cos), 2)
+    portfolio["noi_this_month"] = round(sum(c.get("noi_this_month", 0.0) for c in pl_cos), 2)
 
 
 def _pl_expense_breakdown(co, month_abbrev: str, db, tid) -> list[dict]:
@@ -543,9 +614,9 @@ def get_portfolio_summary(
         unit_dicts = [_unit_dict(u, inv_by_unit.get(str(u.id), []), today) for u in units]
         summ = company_summary(unit_dicts, inv_dicts, exp_dicts, today, cur_month=selected_month)
 
-        # Apply Excel-sync → P&L fallback (shared helper — same logic as company_dashboard)
+        # Apply Excel-sync → P&L fallback for collected; P&L engine for NOI
         _apply_collected_fallback(summ, co, month_abbrev, db, tid)
-        # ─────────────────────────────────────────────────────────────────────
+        _apply_pl_noi(summ, co, month_abbrev, db, tid)
 
         all_units_dicts.extend(unit_dicts)
         all_inv_dicts.extend(inv_dicts)
@@ -574,11 +645,8 @@ def get_portfolio_summary(
         total_exp = sum(c["total_expense_this_month"] for c in by_company)
         if total_exp > 0:
             portfolio["total_expense_this_month"] = total_exp
-    # Recompute NOI from rolled-up collected and expenses
-    if portfolio["noi_this_month"] == 0.0 and portfolio["collected_this_month"] > 0.0:
-        portfolio["noi_this_month"] = round(
-            portfolio["collected_this_month"] - portfolio["total_expense_this_month"], 2
-        )
+    # NOI — P&L upload only (never derived from Rent Receivable Excel)
+    _rollup_pl_noi(portfolio, by_company)
     if portfolio["gross_potential_rent"] == 0.0:
         portfolio["gross_potential_rent"] = round(sum(c["gross_potential_rent"] for c in by_company), 2)
     if portfolio["vacancy_loss"] == 0.0:
@@ -740,6 +808,7 @@ def list_companies(
             unit_dicts = [_unit_dict(u, inv_by_unit.get(str(u.id), []), today) for u in units]
             summ = company_summary(unit_dicts, inv_dicts, exp_dicts, today, cur_month=cur_month)
             _apply_collected_fallback(summ, co, month_abbrev, db, tid)
+            _apply_pl_noi(summ, co, month_abbrev, db, tid)
             props = db.query(RentalProp).filter(RentalProp.company_id == co.id).all()
             result.append({
                 "id": str(co.id),
@@ -913,27 +982,40 @@ def company_dashboard(
     unit_dicts = [_unit_dict(u, inv_by_unit.get(str(u.id), []), today) for u in units]
     summ = company_summary(unit_dicts, inv_dicts, exp_dicts, today, cur_month=cur_month)
 
-    # Apply Excel-sync → P&L fallback so KPIs match Portfolio Overview
+    # Apply Excel-sync → P&L fallback for collected; P&L engine for NOI
     _apply_collected_fallback(summ, co, month_abbrev, db, tid)
+    _apply_pl_noi(summ, co, month_abbrev, db, tid)
 
-    # Income trend — from invoice/collection records; fallback to synced monthly data
-    trend = income_trend(inv_dicts, exp_dicts, months=6)
-    if not trend and co.monthly_rent_data:
-        # Build a synthetic 6-month trend from synced collected amounts.
-        # Sort chronologically using MONTH_OPTIONS order (not alphabetically).
-        def _month_key(m: str) -> int:
-            try:
-                return MONTH_OPTIONS.index(m)
-            except ValueError:
-                return 999
-        sorted_entries = sorted(
-            ((m, float(v)) for m, v in co.monthly_rent_data.items() if float(v) > 0),
-            key=lambda x: _month_key(x[0]),
-        )[-6:]
+    # Income trend — 6 months ending at the selected viewing month
+    trend = income_trend(inv_dicts, exp_dicts, months=6, end_month=cur_month)
+    mrd = co.monthly_rent_data or {}
+    if not any(pt["collected"] or pt["billed"] or pt["expense"] for pt in trend) and mrd:
+        try:
+            end_idx = MONTH_OPTIONS.index(month_abbrev)
+        except ValueError:
+            end_idx = len(MONTH_OPTIONS) - 1
+        start_idx = max(0, end_idx - 5)
+        window = MONTH_OPTIONS[start_idx:end_idx + 1]
         trend = [
-            {"month": m, "billed": 0.0, "collected": v, "expense": 0.0, "noi": v}
-            for m, v in sorted_entries
+            {
+                "month": m,
+                "billed": 0.0,
+                "collected": float(mrd.get(m, 0.0)),
+                "expense": 0.0,
+                "noi": float(mrd.get(m, 0.0)),
+            }
+            for m in window
         ]
+    else:
+        for pt in trend:
+            try:
+                abbrev = datetime.strptime(pt["month"], "%Y-%m").strftime("%b-%Y")
+            except ValueError:
+                continue
+            synced = float(mrd.get(abbrev, 0.0))
+            if synced > 0.0:
+                pt["collected"] = synced
+                pt["noi"] = round(synced - pt["expense"], 2)
 
     # Expense breakdown — from RentalExpense records; fallback to P&L upload
     exp_by_cat: dict[str, float] = defaultdict(float)

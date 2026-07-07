@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import api from '../services/api';
 import QbArAgingUploadPanel, { type QBAgingLatest } from '../components/rental/QbArAgingUploadPanel';
+import { useRentalNav } from '../contexts/RentalNavContext';
 
 const MONTH_OPTIONS = [
   { value: 'Jan-2026', label: 'January 2026' },
@@ -56,6 +58,7 @@ const fmtUSD = (n: number) =>
   `$${n.toLocaleString('en-US', { minimumFractionDigits: 0 })}`;
 
 export default function RentalPortfolioUpload() {
+  const { setTab } = useRentalNav();
   const fileRef = useRef<HTMLInputElement>(null);
   const [selectedMonth, setSelectedMonth] = useState('Jun-2026');
   const [uploading, setUploading] = useState(false);
@@ -126,6 +129,14 @@ export default function RentalPortfolioUpload() {
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="mb-6">
+        <button
+          type="button"
+          onClick={() => setTab('ar-dashboard')}
+          className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 mb-3"
+        >
+          <ArrowLeft size={16} />
+          Back to AR Dashboard Overview
+        </button>
         <h1 className="text-xl font-semibold text-gray-900">Upload Portfolio Data</h1>
         <p className="text-sm text-gray-500 mt-0.5">
           Upload monthly Excel to sync all rental financials across every section

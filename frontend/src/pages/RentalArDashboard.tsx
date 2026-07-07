@@ -992,88 +992,6 @@ export default function RentalArDashboard() {
         </div>
       )}
 
-      {/* ══ NEW SECTION 1 — TENANT AGING TABLE ═══════════════════════════════ */}
-      {!!port && tenantAging?.has_data && sortedTenants.length > 0 && (() => {
-        const thStyle = (col: keyof TenantAgingRow): React.CSSProperties => ({
-          padding: '8px 10px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
-          letterSpacing: '0.04em', color: '#6B6B6B', whiteSpace: 'nowrap',
-          cursor: 'pointer', userSelect: 'none',
-          background: tenantSortCol === col ? '#F0EDE5' : '#FBF6EE',
-          borderBottom: '1px solid #E8DEC8', textAlign: 'right' as const,
-        });
-        const thL = (col: keyof TenantAgingRow): React.CSSProperties => ({ ...thStyle(col), textAlign: 'left' as const });
-        const arrow = (col: keyof TenantAgingRow) => tenantSortCol === col ? (tenantSortAsc ? ' ▲' : ' ▼') : '';
-        const sort = (col: keyof TenantAgingRow) => {
-          if (tenantSortCol === col) setTenantSortAsc(a => !a);
-          else { setTenantSortCol(col); setTenantSortAsc(false); }
-        };
-        const ACTION_STYLE: Record<string, React.CSSProperties> = {
-          Review:  { background: '#FEE2E2', color: '#991B1B', border: '1px solid rgba(220,38,38,0.25)' },
-          Monitor: { background: '#FEF3C7', color: '#92400E', border: '1px solid rgba(245,158,11,0.3)' },
-          Current: { background: '#DCFCE7', color: '#166534', border: '1px solid rgba(34,197,94,0.3)'  },
-        };
-        return (
-          <div style={{ background: '#fff', border: '1px solid #E8DEC8', borderRadius: 10, overflow: 'hidden' }}>
-            <div style={{ padding: '14px 16px', borderBottom: '1px solid #E8DEC8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1917' }}>Tenant AR Aging — {tenantAging.snapshot_month}</div>
-                <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>
-                  {sortedTenants.length} tenants · from QB AR Aging Detail upload · click column header to sort
-                </div>
-              </div>
-              <div style={{ fontSize: 11, color: '#78716C' }}>Last Payment Date: not captured in QB AR Aging export</div>
-            </div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead>
-                  <tr>
-                    {([
-                      ['customer',    'Tenant Name',      thL],
-                      ['unit_ref',    'Unit',             thL],
-                      ['lease_end',   'Lease End',        thL],
-                      ['current',     'Current',          thStyle],
-                      ['days_1_30',   '1–30',             thStyle],
-                      ['days_31_60',  '31–60',            thStyle],
-                      ['days_61_90',  '61–90',            thStyle],
-                      ['days_91_plus','91+',              thStyle],
-                      ['total',       'Total Due',        thStyle],
-                      ['action_status','Action Status',   thL],
-                    ] as [keyof TenantAgingRow, string, (c: keyof TenantAgingRow) => React.CSSProperties][]).map(([col, label, styleFn]) => (
-                      <th key={col} style={styleFn(col)} onClick={() => sort(col)}>
-                        {label}{arrow(col)}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedTenants.map((row, i) => (
-                    <tr key={i} style={{ borderBottom: '1px solid #F5F0E8', background: i % 2 === 0 ? '#fff' : '#FDFAF5' }}>
-                      <td style={{ padding: '8px 10px', color: '#1C1917', fontWeight: 500, whiteSpace: 'nowrap' }}>{row.customer}</td>
-                      <td style={{ padding: '8px 10px', color: '#78716C', whiteSpace: 'nowrap' }}>{row.unit_ref}</td>
-                      <td style={{ padding: '8px 10px', color: '#78716C', whiteSpace: 'nowrap' }}>
-                        {row.lease_end ?? <span style={{ color: '#D4AF37', fontStyle: 'italic' }}>Not tracked</span>}
-                      </td>
-                      {[row.current, row.days_1_30, row.days_31_60, row.days_61_90, row.days_91_plus, row.total].map((v, vi) => (
-                        <td key={vi} style={{ padding: '8px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums',
-                          color: vi >= 2 && v > 0 ? (vi >= 3 ? '#B91C1C' : '#92400E') : '#374151',
-                          fontWeight: vi === 5 ? 700 : 400 }}>
-                          {v > 0 ? fmt$(v) : '—'}
-                        </td>
-                      ))}
-                      <td style={{ padding: '8px 10px' }}>
-                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, fontWeight: 600, ...ACTION_STYLE[row.action_status] }}>
-                          {row.action_status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      })()}
-
       {/* ══ NEW SECTION 2 — AR BY PROPERTY (ranked bar, color = collection rate) ═ */}
       {!!port && propertyBarData.length > 0 && (() => {
         const rateColor = (rate: number) =>
@@ -1673,6 +1591,88 @@ export default function RentalArDashboard() {
           )}
         </div>
       )}
+
+      {/* ══ TENANT AR AGING TABLE (last on Overview) ═════════════════════════ */}
+      {arView === 'overview' && !!port && tenantAging?.has_data && sortedTenants.length > 0 && (() => {
+        const thStyle = (col: keyof TenantAgingRow): React.CSSProperties => ({
+          padding: '8px 10px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
+          letterSpacing: '0.04em', color: '#6B6B6B', whiteSpace: 'nowrap',
+          cursor: 'pointer', userSelect: 'none',
+          background: tenantSortCol === col ? '#F0EDE5' : '#FBF6EE',
+          borderBottom: '1px solid #E8DEC8', textAlign: 'right' as const,
+        });
+        const thL = (col: keyof TenantAgingRow): React.CSSProperties => ({ ...thStyle(col), textAlign: 'left' as const });
+        const arrow = (col: keyof TenantAgingRow) => tenantSortCol === col ? (tenantSortAsc ? ' ▲' : ' ▼') : '';
+        const sort = (col: keyof TenantAgingRow) => {
+          if (tenantSortCol === col) setTenantSortAsc(a => !a);
+          else { setTenantSortCol(col); setTenantSortAsc(false); }
+        };
+        const ACTION_STYLE: Record<string, React.CSSProperties> = {
+          Review:  { background: '#FEE2E2', color: '#991B1B', border: '1px solid rgba(220,38,38,0.25)' },
+          Monitor: { background: '#FEF3C7', color: '#92400E', border: '1px solid rgba(245,158,11,0.3)' },
+          Current: { background: '#DCFCE7', color: '#166534', border: '1px solid rgba(34,197,94,0.3)'  },
+        };
+        return (
+          <div style={{ background: '#fff', border: '1px solid #E8DEC8', borderRadius: 10, overflow: 'hidden' }}>
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid #E8DEC8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1917' }}>Tenant AR Aging — {tenantAging.snapshot_month}</div>
+                <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>
+                  {sortedTenants.length} tenants · from QB AR Aging Detail upload · click column header to sort
+                </div>
+              </div>
+              <div style={{ fontSize: 11, color: '#78716C' }}>Last Payment Date: not captured in QB AR Aging export</div>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    {([
+                      ['customer',    'Tenant Name',      thL],
+                      ['unit_ref',    'Unit',             thL],
+                      ['lease_end',   'Lease End',        thL],
+                      ['current',     'Current',          thStyle],
+                      ['days_1_30',   '1–30',             thStyle],
+                      ['days_31_60',  '31–60',            thStyle],
+                      ['days_61_90',  '61–90',            thStyle],
+                      ['days_91_plus','91+',              thStyle],
+                      ['total',       'Total Due',        thStyle],
+                      ['action_status','Action Status',   thL],
+                    ] as [keyof TenantAgingRow, string, (c: keyof TenantAgingRow) => React.CSSProperties][]).map(([col, label, styleFn]) => (
+                      <th key={col} style={styleFn(col)} onClick={() => sort(col)}>
+                        {label}{arrow(col)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedTenants.map((row, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #F5F0E8', background: i % 2 === 0 ? '#fff' : '#FDFAF5' }}>
+                      <td style={{ padding: '8px 10px', color: '#1C1917', fontWeight: 500, whiteSpace: 'nowrap' }}>{row.customer}</td>
+                      <td style={{ padding: '8px 10px', color: '#78716C', whiteSpace: 'nowrap' }}>{row.unit_ref}</td>
+                      <td style={{ padding: '8px 10px', color: '#78716C', whiteSpace: 'nowrap' }}>
+                        {row.lease_end ?? <span style={{ color: '#D4AF37', fontStyle: 'italic' }}>Not tracked</span>}
+                      </td>
+                      {[row.current, row.days_1_30, row.days_31_60, row.days_61_90, row.days_91_plus, row.total].map((v, vi) => (
+                        <td key={vi} style={{ padding: '8px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums',
+                          color: vi >= 2 && v > 0 ? (vi >= 3 ? '#B91C1C' : '#92400E') : '#374151',
+                          fontWeight: vi === 5 ? 700 : 400 }}>
+                          {v > 0 ? fmt$(v) : '—'}
+                        </td>
+                      ))}
+                      <td style={{ padding: '8px 10px' }}>
+                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, fontWeight: 600, ...ACTION_STYLE[row.action_status] }}>
+                          {row.action_status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );

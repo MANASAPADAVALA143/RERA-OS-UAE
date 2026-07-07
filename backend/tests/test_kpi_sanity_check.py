@@ -186,3 +186,20 @@ def test_breakdown_fields_populated():
     assert "NOI =" in noi_row.substitution
     assert noi_row.inputs_detail.get("Total Revenue")
     assert len(noi_row.sources) >= 2
+
+
+def test_calc_monthly_kpis_noi_uses_pl_income_minus_expenses_plus_interest():
+  """Portfolio Overview NOI must match Financials: revenue - expenses + interest."""
+  from services.rental_kpi_engine import calc_monthly_kpis
+
+  pl = [
+      {"label": "Total for Income", "monthlyValues": {"Jun 2026": 10_000}},
+      {"label": "Total for Expenses", "monthlyValues": {"Jun 2026": 6_000}},
+      {"label": "Interest Paid", "monthlyValues": {"Jun 2026": 500}},
+  ]
+  k = calc_monthly_kpis(pl, "Jun 2026")
+  assert k["total_revenue"] == 10_000
+  assert k["total_expenses"] == 6_000
+  assert k["interest"] == 500
+  assert k["noi"] == 4_500
+  assert k["noi"] / k["total_revenue"] * 100 == 45.0

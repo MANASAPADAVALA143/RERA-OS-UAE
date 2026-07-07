@@ -4,10 +4,11 @@ interface CardProps {
   children: ReactNode;
   className?: string;
   title?: string;
+  titleClassName?: string;
   action?: ReactNode;
 }
 
-export function Card({ children, className = '', title, action }: CardProps) {
+export function Card({ children, className = '', title, titleClassName, action }: CardProps) {
   return (
     <div className={`rounded-xl border shadow-sm ${className}`}
       style={{ background: '#F7F5F0', borderColor: '#DDD8CC' }}>
@@ -15,7 +16,7 @@ export function Card({ children, className = '', title, action }: CardProps) {
         <div className="px-5 py-3 border-b flex items-center justify-between gap-3"
           style={{ borderColor: '#DDD8CC' }}>
           {title && (
-            <span className="font-semibold text-sm"
+            <span className={`font-semibold ${titleClassName ?? 'text-sm'}`}
               style={{ color: '#92400E' }}>{title}</span>
           )}
           {action && <div className="flex-shrink-0">{action}</div>}

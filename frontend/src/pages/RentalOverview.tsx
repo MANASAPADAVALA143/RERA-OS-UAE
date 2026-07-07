@@ -106,6 +106,10 @@ interface CompanySummary {
   arrears_total: number;
   total_expense_this_month: number;
   collected_source?: string;
+  has_pl_noi?: boolean;
+  pl_total_revenue?: number;
+  pl_total_expenses?: number;
+  pl_interest_paid?: number;
 }
 
 interface PortfolioSummary {
@@ -123,6 +127,10 @@ interface PortfolioSummary {
   partner_share_payable: number;
   has_partner_data: boolean;
   collected_source: string;
+  has_pl_noi?: boolean;
+  pl_total_revenue?: number;
+  pl_total_expenses?: number;
+  pl_interest_paid?: number;
   by_company: CompanySummary[];
   arrears_aging: Record<string, number>;
   income_trend: { month: string; billed: number; collected: number; expense: number; noi: number }[];
@@ -154,6 +162,66 @@ function riskFlag(c: CompanySummary): { label: string; color: string; bg: string
   if (c.arrears_total > 2000  || c.occupancy_pct < 0.85)
     return { label: 'MEDIUM', color: '#92400E', bg: 'rgba(242,193,78,0.18)'  };
   return   { label: 'LOW',    color: '#166534', bg: 'rgba(21,128,61,0.14)'   };
+}
+
+type AttentionItem = { type: string; message: string; severity: 'warning' | 'attention' };
+
+function buildAttentionNow(
+  data: PortfolioSummary,
+  selectedCo: CompanySummary | null,
+  qbAging: QBAgingLatest | null,
+): AttentionItem[] {
+  if (!selectedCo) return data.attention_now;
+
+  const attention: AttentionItem[] = [];
+  const { company_id, company_name: name } = selectedCo;
+
+  if (selectedCo.vacant_units > 0) {
+    attention.push({
+      type: 'vacant',
+      message: `${selectedCo.vacant_units} vacant unit(s) at ${name}`,
+      severity: 'warning',
+    });
+  }
+
+  const expiring60 = data.lease_expiry_pipeline.filter(
+    l => l.company_name === name && l.days_until_expiry <= 60,
+  );
+  if (expiring60.length > 0) {
+    attention.push({
+      type: 'lease_expiry',
+      message: `${expiring60.length} lease(s) at ${name} expire within 60 days`,
+      severity: 'attention',
+    });
+  }
+
+  const qbCo = qbAging?.by_company.find(c => c.company_id === company_id);
+  const aging31Plus = qbCo
+    ? qbCo.days_1_30 + qbCo.days_31_60 + qbCo.days_61_90 + qbCo.days_91_plus
+    : 0;
+  if (aging31Plus > 0) {
+    attention.push({
+      type: 'arrears_aging',
+      message: `${fmtUSD(aging31Plus)} in arrears older than 30 days at ${name}`,
+      severity: 'warning',
+    });
+  } else if (selectedCo.arrears_total > 0) {
+    attention.push({
+      type: 'arrears_aging',
+      message: `${fmtUSD(selectedCo.arrears_total)} in outstanding arrears at ${name}`,
+      severity: 'warning',
+    });
+  }
+
+  if (selectedCo.occupancy_pct < 0.75) {
+    attention.push({
+      type: 'low_occupancy',
+      message: `${name} at ${(selectedCo.occupancy_pct * 100).toFixed(1)}% occupancy (below 75% target)`,
+      severity: 'attention',
+    });
+  }
+
+  return attention;
 }
 
 // ── skeleton loaders ──────────────────────────────────────────────────────────
@@ -199,9 +267,10 @@ function MiniSparkline({ values, color }: { values: number[]; color: string }) {
 }
 
 function PriTile({
-  label, value, sub, accent, warn, sparkline, gold,
-}: { label: string; value: string; sub?: string; accent?: string; warn?: boolean; sparkline?: number[]; gold?: boolean }) {
-  const col = gold ? '#fff' : warn ? C_RED : (accent ?? '#1C1917');
+  label, value, sub, accent, warn, sparkline, gold, na,
+}: { label: string; value: string; sub?: string; accent?: string; warn?: boolean; sparkline?: number[]; gold?: boolean; na?: boolean }) {
+  const col = na ? '#9CA3AF' : gold ? '#fff' : warn ? C_RED : (accent ?? '#1C1917');
+  const displayValue = na && (value === 'NA' || value === '—') ? 'NA' : value;
   return (
     <div style={{
       ...CARD,
@@ -209,8 +278,8 @@ function PriTile({
       border: gold ? '1px solid #B8860B' : CARD.border,
     }} className="ov-tile">
       <div style={{ ...KPI_LBL, color: gold ? 'rgba(255,255,255,0.8)' : KPI_LBL.color }}>{label}</div>
-      <div style={{ ...KPI_VAL_PRI, color: col }}>{value}</div>
-      {sub && <div style={{ ...KPI_HELP, color: gold ? 'rgba(255,255,255,0.7)' : KPI_HELP.color }}>{sub}</div>}
+      <div style={{ ...KPI_VAL_PRI, color: col, letterSpacing: na ? '0.08em' : undefined }}>{displayValue}</div>
+      {sub && <div style={{ ...KPI_HELP, color: na ? '#C0C0C0' : gold ? 'rgba(255,255,255,0.7)' : KPI_HELP.color }}>{sub}</div>}
       {sparkline && sparkline.length >= 2 && <MiniSparkline values={sparkline} color={gold ? 'rgba(255,255,255,0.8)' : col === '#1C1917' ? C_GOLD : col} />}
     </div>
   );
@@ -319,8 +388,6 @@ export default function RentalOverview() {
 
   const arCoName = arCompanyOptions.find(c => c.id === arCoId)?.name ?? '';
 
-  const qbDso = qbAging?.has_data ? (qbAging.dso_estimate ?? null) : null;
-
   const qbDsoByCompany = useMemo(() => {
     const map = new Map<string, number>();
     if (!qbAging?.has_data) return map;
@@ -330,6 +397,12 @@ export default function RentalOverview() {
     }
     return map;
   }, [qbAging]);
+
+  const displayDso = useMemo(() => {
+    if (!qbAging?.has_data) return null;
+    if (selectedCoId) return qbDsoByCompany.get(selectedCoId) ?? null;
+    return qbAging.dso_estimate ?? null;
+  }, [qbAging, selectedCoId, qbDsoByCompany]);
 
   // ── data fetching ──────────────────────────────────────────────────────────
 
@@ -378,6 +451,7 @@ export default function RentalOverview() {
   const kpis = useMemo(() => {
     if (!data) return null;
     const base = selectedCo ?? data;
+    const hasPlNoi = !!(selectedCo ? selectedCo.has_pl_noi : data.has_pl_noi);
     return {
       total_units:              (base as CompanySummary).total_units              ?? data.total_units,
       occupied_units:           (base as CompanySummary).occupied_units           ?? data.occupied_units,
@@ -385,12 +459,16 @@ export default function RentalOverview() {
       occupancy_pct:            base.occupancy_pct,
       collected_this_month:     base.collected_this_month,
       billed_this_month:        base.billed_this_month,
-      noi_this_month:           base.noi_this_month,
+      noi_this_month:           hasPlNoi ? base.noi_this_month : null,
       gross_potential_rent:     base.gross_potential_rent,
       vacancy_loss:             base.vacancy_loss,
       arrears_total:            base.arrears_total,
       total_expense_this_month: base.total_expense_this_month,
       partner_share_payable:    data.partner_share_payable ?? 0,
+      has_pl_noi:               hasPlNoi,
+      pl_total_revenue:         hasPlNoi ? (base.pl_total_revenue ?? 0) : null,
+      pl_total_expenses:        hasPlNoi ? (base.pl_total_expenses ?? 0) : null,
+      pl_interest_paid:         hasPlNoi ? (base.pl_interest_paid ?? 0) : null,
     };
   }, [data, selectedCo]);
 
@@ -402,7 +480,9 @@ export default function RentalOverview() {
     const collected= kpis.collected_this_month;
     const collRate = billed > 0 ? (collected / billed) * 100 : null;
     const avgRent  = kpis.occupied_units > 0 ? kpis.gross_potential_rent / kpis.occupied_units : null;
-    const noiMgn   = collected > 0 ? (kpis.noi_this_month / collected) * 100 : null;
+    const noiMgn   = kpis.has_pl_noi && kpis.pl_total_revenue != null && kpis.pl_total_revenue > 0 && kpis.noi_this_month != null
+      ? (kpis.noi_this_month / kpis.pl_total_revenue) * 100
+      : null;
     const sortedByOcc = [...data.by_company]
       .filter(c => c.total_units > 0)
       .sort((a, b) => b.occupancy_pct - a.occupancy_pct);
@@ -410,6 +490,11 @@ export default function RentalOverview() {
     const worst = sortedByOcc[sortedByOcc.length - 1];
     return { collRate, avgRent, noiMgn, best, worst };
   }, [kpis, data]);
+
+  const attentionNow = useMemo(
+    () => (data ? buildAttentionNow(data, selectedCo, qbAging) : []),
+    [data, selectedCo, qbAging],
+  );
 
   // ── chart data ─────────────────────────────────────────────────────────────
 
@@ -589,6 +674,14 @@ export default function RentalOverview() {
           <p style={{ fontSize: 12, fontWeight: 400, color: '#A8A29E', marginTop: 3 }}>
             Portfolio drill-down · {monthLabel}
           </p>
+          <button
+            type="button"
+            onClick={() => setTab('ar-dashboard')}
+            style={{ fontSize: 12, fontWeight: 500, color: '#0F766E', marginTop: 6 }}
+            className="hover:underline"
+          >
+            → AR Dashboard Overview
+          </button>
         </div>
         <button
           onClick={() => setTab('portfolio-upload')}
@@ -681,14 +774,15 @@ export default function RentalOverview() {
           />
           <PriTile
             label="NOI This Month"
-            value={fmtUSD(kpis.noi_this_month)}
+            value={kpis.has_pl_noi && kpis.noi_this_month != null ? fmtUSD(kpis.noi_this_month) : 'NA'}
             sub={
-              collectedSource === 'pl_fallback'
-                ? `from P&L · Exp: ${fmtUSD(kpis.total_expense_this_month)}`
-                : `Expenses: ${fmtUSD(kpis.total_expense_this_month)}`
+              kpis.has_pl_noi
+                ? `P&L · Expenses: ${fmtUSD(kpis.pl_total_expenses ?? 0)}`
+                : 'No P&L data uploaded for this period'
             }
-            warn={kpis.noi_this_month < 0}
-            sparkline={sparkNoi}
+            warn={kpis.has_pl_noi && (kpis.noi_this_month ?? 0) < 0}
+            na={!kpis.has_pl_noi}
+            sparkline={kpis.has_pl_noi ? sparkNoi : undefined}
           />
           <PriTile
             label="Gross Potential Rent"
@@ -721,9 +815,17 @@ export default function RentalOverview() {
           />
           <SecTile
             label="Arrears Days Outstanding"
-            value={qbDso != null ? `${Math.round(qbDso)} days` : 'NA'}
-            sub={qbDso != null ? 'Weighted estimate · QB aging buckets' : 'Upload AR Aging below'}
-            na={qbDso == null}
+            value={displayDso != null ? `${displayDso} days` : 'NA'}
+            sub={
+              displayDso != null
+                ? selectedCoName
+                  ? `Weighted estimate · QB aging · ${selectedCoName}`
+                  : 'Weighted estimate · QB aging buckets'
+                : selectedCoName
+                  ? `No QB aging for ${selectedCoName}`
+                  : 'Upload AR Aging below'
+            }
+            na={displayDso == null}
           />
           <SecTile
             label="Vacant > 30 Days"
@@ -733,8 +835,12 @@ export default function RentalOverview() {
           />
           <SecTile
             label="NOI Margin"
-            value={sec.noiMgn !== null ? `${sec.noiMgn.toFixed(1)}%` : '—'}
-            sub="NOI ÷ Revenue"
+            value={sec.noiMgn !== null ? `${sec.noiMgn.toFixed(1)}%` : 'NA'}
+            sub={
+              sec.noiMgn !== null && kpis.pl_total_revenue != null && kpis.noi_this_month != null
+                ? `${fmtUSD(kpis.noi_this_month)} NOI ÷ ${fmtUSD(kpis.pl_total_revenue)} P&L revenue`
+                : 'No P&L data uploaded for this period'
+            }
             warn={sec.noiMgn !== null && sec.noiMgn < 0}
             na={sec.noiMgn === null}
           />
@@ -913,11 +1019,11 @@ export default function RentalOverview() {
       )}
 
       {/* ── Attention Now ────────────────────────────────────────────────────── */}
-      {data.attention_now.length > 0 && (
+      {attentionNow.length > 0 && (
         <div style={CARD}>
           <h3 className="ov-section-title">Attention Now</h3>
           <div className="space-y-2">
-            {data.attention_now.map((item, i) => (
+            {attentionNow.map((item, i) => (
               <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm"
                 style={item.severity === 'warning'
                   ? { background: '#FCEAEA', border: '1px solid rgba(239,68,68,0.30)', color: '#8B3A3A' }
@@ -1140,11 +1246,13 @@ export default function RentalOverview() {
             <ResponsiveContainer width="100%" height={COMPACT_CHART_H}>
               <BarChart data={(() => {
                 if (!data) return [];
-                return data.by_company.map(c => ({
-                  name: short(c.company_name, 13),
-                  company_id: c.company_id,
-                  noi: c.noi_this_month,
-                }));
+                return data.by_company
+                  .filter(c => c.has_pl_noi)
+                  .map(c => ({
+                    name: short(c.company_name, 13),
+                    company_id: c.company_id,
+                    noi: c.noi_this_month,
+                  }));
               })()}
                 onClick={d => handleBarClick(d?.activePayload?.[0]?.payload)}
                 style={{ cursor: 'pointer' }}>
@@ -1152,7 +1260,7 @@ export default function RentalOverview() {
                 <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} tick={TICK} />
                 <Tooltip formatter={(v: number) => fmtUSD(v)} {...TT} />
                 <Bar dataKey="noi" name="NOI" radius={[4, 4, 0, 0]}>
-                  {data.by_company.map((entry, idx) => (
+                  {data.by_company.filter(c => c.has_pl_noi).map((entry, idx) => (
                     <Cell key={idx}
                       fill={entry.noi_this_month < 0 ? C_RED : C_TEAL}
                       opacity={selectedCoId && selectedCoId !== entry.company_id ? 0.35 : 1} />

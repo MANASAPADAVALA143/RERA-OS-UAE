@@ -26,3 +26,26 @@ def test_occupancy_pct_zero_when_no_units():
     assert result["occupied_units"] == 0
     assert result["vacant_units"] == 0
     assert result["occupancy_pct"] == 0.0
+
+
+def test_income_trend_anchors_to_end_month():
+    from services.rental_calculations import income_trend
+
+    inv = [
+        {
+            "billing_period": "2026-01-01",
+            "amount_billed": 1000,
+            "collections": [{"collected_date": "2026-01-15", "amount_collected": 900}],
+        },
+        {
+            "billing_period": "2026-06-01",
+            "amount_billed": 2000,
+            "collections": [{"collected_date": "2026-06-15", "amount_collected": 1800}],
+        },
+    ]
+    trend = income_trend(inv, [], months=6, end_month="2026-03")
+    assert [t["month"] for t in trend] == [
+        "2025-10", "2025-11", "2025-12", "2026-01", "2026-02", "2026-03",
+    ]
+    assert trend[-1]["collected"] == 0.0
+    assert trend[3]["collected"] == 900.0

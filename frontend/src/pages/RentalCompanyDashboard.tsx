@@ -86,6 +86,8 @@ const TABS: { id: DashTab; label: string }[] = [
   { id: 'maintenance',  label: 'Maintenance'  },
 ];
 
+const CARD_TITLE_CLS = 'text-base lg:text-lg';
+
 // ── Unit filter + table sub-component ────────────────────────────────────────
 function UnitFilterBar({ units }: { units: UnitDetail[] }) {
   const [statusFilter, setStatusFilter] = useState('');
@@ -175,6 +177,33 @@ function buildMonthOptions(count = 24) {
 const MONTH_OPTS = buildMonthOptions(24);
 const THIS_MONTH = MONTH_OPTS[0].value;
 
+const TREND_MNAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function parseTrendMonth(month: string): Date | null {
+  const iso = month.match(/^(\d{4})-(\d{2})$/);
+  if (iso) return new Date(+iso[1], +iso[2] - 1, 1);
+  const parts = month.replace(/-/g, ' ').split(/\s+/);
+  if (parts.length >= 2) {
+    const mi = TREND_MNAMES.indexOf(parts[0]);
+    const yr = parseInt(parts[parts.length - 1], 10);
+    if (mi >= 0 && !Number.isNaN(yr)) return new Date(yr, mi, 1);
+  }
+  return null;
+}
+
+function trendMonthWindow(yyyymm: string) {
+  const [y, m] = yyyymm.split('-').map(Number);
+  const end = new Date(y, m - 1, 1);
+  const start = new Date(end);
+  start.setMonth(start.getMonth() - 5);
+  return { start, end };
+}
+
+function formatTrendMonthLabel(month: string): string {
+  const d = parseTrendMonth(month);
+  return d ? d.toLocaleString('default', { month: 'short', year: 'numeric' }) : month;
+}
+
 export default function RentalCompanyDashboard({ companyId, initialMonth }: Props) {
   const [selectedMonth, setSelectedMonth] = useState(initialMonth ?? THIS_MONTH);
   const [data, setData] = useState<DashboardData | null>(null);
@@ -232,6 +261,19 @@ export default function RentalCompanyDashboard({ companyId, initialMonth }: Prop
     });
   }, [data, plMonthBilled, plMonthExp]);
 
+  const chartTrend = useMemo(() => {
+    const { start, end } = trendMonthWindow(selectedMonth);
+    return enrichedTrend
+      .filter(pt => {
+        const d = parseTrendMonth(pt.month);
+        return d && d >= start && d <= end;
+      })
+      .sort((a, b) => parseTrendMonth(a.month)!.getTime() - parseTrendMonth(b.month)!.getTime())
+      .map(pt => ({ ...pt, month: formatTrendMonthLabel(pt.month) }));
+  }, [enrichedTrend, selectedMonth]);
+
+  const trendEndLabel = MONTH_OPTS.find(o => o.value === selectedMonth)?.label ?? selectedMonth;
+
   // Lazy-load maintenance on first visit to that tab
   useEffect(() => {
     if (dashTab === 'maintenance' && maintenance === null) {
@@ -251,7 +293,7 @@ export default function RentalCompanyDashboard({ companyId, initialMonth }: Prop
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-charcoal">{data.company_name}</h2>
+          <h2 className="text-2xl font-bold text-charcoal">{data.company_name}</h2>
           <p className="text-sm text-gray-500">
             {data.property_name} · {data.total_units} units · {data.occupied_units} occupied · {data.vacant_units} vacant
           </p>
@@ -301,9 +343,9 @@ export default function RentalCompanyDashboard({ companyId, initialMonth }: Prop
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card title="Income Trend — 6 Months">
+            <Card title={`Income Trend — 6 Months to ${trendEndLabel}`} titleClassName={CARD_TITLE_CLS}>
               <ResponsiveContainer width="100%" height={240}>
-                <LineChart data={enrichedTrend}>
+                <LineChart data={chartTrend}>
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                   <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                   <Tooltip formatter={(v: number) => fmtUSD(v)} />
@@ -315,7 +357,7 @@ export default function RentalCompanyDashboard({ companyId, initialMonth }: Prop
               </ResponsiveContainer>
             </Card>
 
-            <Card title="Expense Breakdown">
+            <Card title="Expense Breakdown" titleClassName={CARD_TITLE_CLS}>
               {localExpBreakdown.length === 0 ? (
                 <p className="text-gray-400 text-center py-10">No expense data — upload a P&amp;L to see breakdown</p>
               ) : (
@@ -344,14 +386,14 @@ export default function RentalCompanyDashboard({ companyId, initialMonth }: Prop
             </Card>
           </div>
 
-          <Card title={`Unit Occupancy — ${MONTH_OPTS.find(o => o.value === selectedMonth)?.label ?? selectedMonth}`}>
+          <Card title={`Unit Occupancy — ${MONTH_OPTS.find(o => o.value === selectedMonth)?.label ?? selectedMonth}`} titleClassName={CARD_TITLE_CLS}>
             <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3 font-sans">
               Unit status and tenant data reflect the <strong>current state</strong> in the registry — not a historical snapshot for the selected month. KPI tiles above (Collected, NOI, Billed) are correctly filtered by month.
             </p>
             <UnitFilterBar units={data.units} />
           </Card>
 
-          <Card title="Ownership & Partner NOI Share">
+          <Card title="Ownership & Partner NOI Share" titleClassName={CARD_TITLE_CLS}>
             <div className="space-y-3">
               {data.partner_distribution.map((p, i) => (
                 <div key={i} className="space-y-1">
@@ -375,7 +417,7 @@ export default function RentalCompanyDashboard({ companyId, initialMonth }: Prop
 
       {/* ── RENTALS ───────────────────────────────────────────────────────── */}
       {dashTab === 'leases' && (
-        <Card title="Active Rentals">
+        <Card title="Active Rentals" titleClassName={CARD_TITLE_CLS}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -426,7 +468,7 @@ export default function RentalCompanyDashboard({ companyId, initialMonth }: Prop
 
       {/* ── MAINTENANCE ───────────────────────────────────────────────────── */}
       {dashTab === 'maintenance' && (
-        <Card title="Maintenance Requests">
+        <Card title="Maintenance Requests" titleClassName={CARD_TITLE_CLS}>
           {subLoading ? (
             <LoadingSkeleton rows={4} />
           ) : !maintenance || maintenance.length === 0 ? (

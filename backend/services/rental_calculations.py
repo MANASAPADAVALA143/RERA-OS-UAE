@@ -161,6 +161,7 @@ def income_trend(
     invoices_with_collections: list[dict],
     expenses: list[dict],
     months: int = 6,
+    end_month: str | None = None,
 ) -> list[dict]:
     billed_by: dict[str, float] = defaultdict(float)
     collected_by: dict[str, float] = defaultdict(float)
@@ -181,7 +182,21 @@ def income_trend(
         if m:
             expense_by[m] += _f(exp["amount"])
 
-    all_months = sorted(set(list(billed_by.keys()) + list(expense_by.keys())))[-months:]
+    if end_month:
+        try:
+            y, mo = int(end_month[:4]), int(end_month[5:7])
+            cursor = date(y, mo, 1)
+        except (ValueError, IndexError):
+            cursor = date.today().replace(day=1)
+        month_keys: list[str] = []
+        d = cursor
+        for _ in range(months):
+            month_keys.append(d.strftime("%Y-%m"))
+            d = date(d.year - 1, 12, 1) if d.month == 1 else date(d.year, d.month - 1, 1)
+        month_keys.reverse()
+        all_months = month_keys
+    else:
+        all_months = sorted(set(list(billed_by.keys()) + list(expense_by.keys())))[-months:]
     return [
         {
             "month": m,

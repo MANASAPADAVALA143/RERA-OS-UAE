@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ComposedChart, BarChart, Bar, Line, Area, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, Cell, Legend,
@@ -48,6 +48,35 @@ const PAST_AND_CURRENT_MONTHS = ALL_MONTHS.filter(m => {
   const mDate = new Date(`${mon} 1, ${yr}`);
   return mDate <= new Date(_curMonthAbbrev.replace('-', ' 1, '));
 });
+
+const MNAME = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_DROPDOWN = MNAME.map((_, i) => ({
+  value: i + 1,
+  label: new Date(2000, i, 1).toLocaleString('default', { month: 'long' }),
+}));
+
+function monthKey(year: number, month: number): string {
+  return `${MNAME[month - 1]}-${year}`;
+}
+
+/** Last N months ending at year/month (inclusive), oldest first. */
+function monthsEndingAt(year: number, month: number, span = 12): string[] {
+  const out: string[] = [];
+  let y = year;
+  let m = month;
+  for (let i = 0; i < span; i++) {
+    out.push(monthKey(y, m));
+    m -= 1;
+    if (m < 1) { m = 12; y -= 1; }
+  }
+  return out.reverse();
+}
+
+function yearsFromMonthKeys(months: string[]): number[] {
+  const yrs = new Set(months.map(k => parseInt(k.split('-')[1], 10)));
+  yrs.add(new Date().getFullYear());
+  return [...yrs].sort((a, b) => a - b);
+}
 
 const STATUS_PILL: Record<string, string> = {
   occupied:         'bg-green-100 text-green-800',
@@ -379,6 +408,9 @@ function LTMPerformanceTab() {
   const [loading, setLoading]           = useState(true);
   const [filterCo, setFilterCo]         = useState('');
   const [filterBuilding, setFilterBuilding] = useState('');
+  const [endYear, setEndYear]           = useState(() => new Date().getFullYear());
+  const [endMonth, setEndMonth]         = useState(() => new Date().getMonth() + 1);
+  const periodInit = useRef(false);
 
   useEffect(() => {
     api.get<UnitRow[]>('/api/rentals/units')
@@ -386,7 +418,33 @@ function LTMPerformanceTab() {
       .finally(() => setLoading(false));
   }, []);
 
-  const availableMonths = useMemo(() => getAvailableMonths(allUnits), [allUnits]);
+  const dataMonths = useMemo(() => getAvailableMonths(allUnits), [allUnits]);
+
+  useEffect(() => {
+    if (periodInit.current || dataMonths.length === 0) return;
+    const last = dataMonths[dataMonths.length - 1];
+    const [mon, yr] = last.split('-');
+    const mi = MNAME.indexOf(mon) + 1;
+    if (mi > 0) {
+      setEndYear(parseInt(yr, 10));
+      setEndMonth(mi);
+      periodInit.current = true;
+    }
+  }, [dataMonths]);
+
+  const curYear = new Date().getFullYear();
+  const curMonth = new Date().getMonth() + 1;
+  const yearOptions = useMemo(() => yearsFromMonthKeys(dataMonths), [dataMonths]);
+  const maxSelectableMonth = endYear === curYear ? curMonth : 12;
+
+  useEffect(() => {
+    if (endMonth > maxSelectableMonth) setEndMonth(maxSelectableMonth);
+  }, [endYear, endMonth, maxSelectableMonth]);
+
+  const selectedLtmMonths = useMemo(
+    () => monthsEndingAt(endYear, endMonth, 12).filter(m => PAST_AND_CURRENT_MONTHS.includes(m)),
+    [endYear, endMonth],
+  );
 
   const companies = useMemo(
     () => [...new Set(allUnits.map(u => u.company_name).filter((n): n is string => !!n))].sort(),
@@ -407,8 +465,8 @@ function LTMPerformanceTab() {
   );
 
   const allLtm = useMemo(
-    () => filteredUnits.map(u => ({ unit: u, ltm: computeUnitLtm(u, availableMonths) })),
-    [filteredUnits, availableMonths],
+    () => filteredUnits.map(u => ({ unit: u, ltm: computeUnitLtm(u, selectedLtmMonths) })),
+    [filteredUnits, selectedLtmMonths],
   );
 
   // ── Portfolio KPIs ───────────────────────────────────────────────────────────
@@ -439,7 +497,7 @@ function LTMPerformanceTab() {
 
   // ── Monthly trend (portfolio aggregate) ──────────────────────────────────────
   const monthlyTrend = useMemo(() =>
-    availableMonths.map(month => {
+    selectedLtmMonths.map(month => {
       let collected = 0, expected = 0;
       for (const { unit, ltm } of allLtm) {
         collected += (unit.rent_history ?? {})[month] ?? 0;
@@ -447,7 +505,7 @@ function LTMPerformanceTab() {
       }
       return { month: month.slice(0, 3), collected, expected, lost: Math.max(0, expected - collected) };
     }),
-    [allLtm, availableMonths],
+    [allLtm, selectedLtmMonths],
   );
 
   // ── Building comparison ───────────────────────────────────────────────────────
@@ -511,11 +569,11 @@ function LTMPerformanceTab() {
 
   if (loading) return <LoadingSkeleton rows={8} />;
 
-  const periodLabel = availableMonths.length > 0
-    ? `${availableMonths[0]} – ${availableMonths[availableMonths.length - 1]} (${availableMonths.length} mo)`
-    : 'No rent history';
+  const periodLabel = selectedLtmMonths.length > 0
+    ? `${selectedLtmMonths[0]} – ${selectedLtmMonths[selectedLtmMonths.length - 1]} (${selectedLtmMonths.length} mo)`
+    : 'No months in range';
 
-  const hasData = availableMonths.length > 0 && allLtm.some(({ ltm }) => ltm.totalMonths > 0);
+  const hasData = dataMonths.length > 0 && allLtm.some(({ ltm }) => ltm.totalMonths > 0);
 
   return (
     <div className="space-y-5">
@@ -529,10 +587,29 @@ function LTMPerformanceTab() {
           <option value="" style={{ background: '#F7F5F0' }}>All Buildings</option>
           {buildings.map(b => <option key={b} value={b} style={{ background: '#F7F5F0' }}>{b}</option>)}
         </select>
-        <span className="text-sm ml-2" style={{ color: '#A8A29E' }}>{periodLabel}</span>
+        <span className="text-xs" style={{ color: '#A8A29E' }}>Period ending</span>
+        <select
+          value={endYear}
+          onChange={e => setEndYear(parseInt(e.target.value, 10))}
+          style={SEL_STYLE}
+        >
+          {yearOptions.map(y => (
+            <option key={y} value={y} style={{ background: '#F7F5F0' }}>{y}</option>
+          ))}
+        </select>
+        <select
+          value={endMonth}
+          onChange={e => setEndMonth(parseInt(e.target.value, 10))}
+          style={SEL_STYLE}
+        >
+          {MONTH_DROPDOWN.filter(m => m.value <= maxSelectableMonth).map(m => (
+            <option key={m.value} value={m.value} style={{ background: '#F7F5F0' }}>{m.label}</option>
+          ))}
+        </select>
+        <span className="text-sm" style={{ color: '#A8A29E' }}>{periodLabel}</span>
       </div>
 
-      {availableMonths.length === 0 && (
+      {dataMonths.length === 0 && (
         <div className="rounded-xl p-5 text-center" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)' }}>
           <p className="font-medium mb-1" style={{ color: '#D4AF37' }}>No rent history data yet</p>
           <p className="text-sm" style={{ color: '#A8A29E' }}>Use <strong>Sync Rent Data</strong> to upload the Rent Receivable Excel.</p>
