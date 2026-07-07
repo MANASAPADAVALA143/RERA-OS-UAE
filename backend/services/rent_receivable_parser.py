@@ -149,28 +149,53 @@ def _find_header(rows: list) -> Optional[Tuple[int, int]]:
     return None
 
 
-# Rows that are financial subtotals on some templates — not leasable units
+# Rows that are financial subtotals / column headers — not leasable units
 _SKIP_UNIT_LABELS = frozenset({
     'rent',
+    'rents',
+    'rental income',
+    'total rent',
     'sec dep',
     'sec-dep',
     'secdep',
     'security deposit',
+    'security deposits',
     'security dep',
     'collected',
     'gross potential',
     'vacancy loss',
     'vacancy',
+    'suite names',
+    'suite name',
+    'name of the unit',
+    'name of th',
 })
+
+_SKIP_UNIT_RE = re.compile(
+    r'^(rents?|suite\s+names?|security\s+dep(osit)?s?|name\s+of\s+th(e\s+unit)?)$',
+    re.I,
+)
+
+
+def _is_skipped_unit_name(name: str) -> bool:
+    """True for Excel header repeats and financial summary rows."""
+    if not name or name == 'total':
+        return True
+    if name in UNIT_NAME_LABELS or name in _SKIP_UNIT_LABELS:
+        return True
+    if _SKIP_UNIT_RE.match(name):
+        return True
+    if 'security deposit' in name:
+        return True
+    return False
+
 
 def _is_valid_unit_label(cell) -> bool:
     """Return True if a cell value looks like a unit/property name (not a header/summary)."""
     if not cell:
         return False
     name = _norm(cell)
-    if not name or name == 'total' or name in UNIT_NAME_LABELS:
-        return False
-    if name in _SKIP_UNIT_LABELS:
+    if _is_skipped_unit_name(name):
         return False
     raw = str(cell)
     if '—' in raw or '–' in raw or 'Occupied' in raw or 'Collected' in raw:

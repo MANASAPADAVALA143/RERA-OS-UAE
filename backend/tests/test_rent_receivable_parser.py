@@ -115,3 +115,22 @@ def test_parses_dollar_string_rent_cells(tmp_path):
     assert len(units) == 1
     assert units[0]["current_amount"] == 900.0
     assert units[0]["is_vacant"] is False
+
+
+def test_skips_suite_names_rents_and_security_deposit_rows(tmp_path):
+    """Column-header repeats and income summary rows must not become units."""
+    rows = [
+        ["SUITE NAMES", "Name Of the Unit", "Jan-2026", "Sec Dep", "Jun-2026", "Sec Dep"],
+        ["2414 Marsh", "Unit G", 880.00, None, 880.00, None],
+        ["2414 Marsh", "Unit H", 880.00, None, 880.00, None],
+        ["SUITE NAMES", "SUITE NAMES", None, None, None, None],
+        [None, "Rents", 6030.00, None, 6030.00, None],
+        [None, "Security Deposit", None, 2009.00, None, 2009.00],
+    ]
+    path = tmp_path / "skip_headers.xlsx"
+    path.write_bytes(_workbook_bytes(rows))
+
+    result = parse_rent_receivable_file(str(path), target_month="Jun-2026")
+    units = result["companies"]["Test Co"]["units"]
+    assert len(units) == 2
+    assert {u["name"] for u in units} == {"Unit G", "Unit H"}
