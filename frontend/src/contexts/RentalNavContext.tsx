@@ -50,7 +50,7 @@ export const RENTAL_TABS: RentalNavItem[] = [
   { id: "vacancy",           label: "Vacancy & Loss",    Icon: TrendingDown    },
   { id: "financials",        label: "Financials",        Icon: BookOpen        },
   { id: "financial-ratios",  label: "Financial Ratios",  Icon: Percent         },
-  { id: "calculations-review", label: "Calculations Review", Icon: Calculator, reviewerOnly: true, groupLabel: "CA FIRM QA" },
+  { id: "calculations-review", label: "Calculations Review", Icon: Calculator, groupLabel: "CA FIRM QA" },
   // ── OPERATIONS ────────────────────────────────────────────────────────────
   { id: "building-expenses", label: "Building Expenses", Icon: Receipt,         groupLabel: "OPERATIONS" },
   { id: "loan-tracker",      label: "Loan Tracker",      Icon: CircleDollarSign },

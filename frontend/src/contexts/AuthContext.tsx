@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import api, { fetchAuthConfig, getStoredToken, setStoredToken, type AuthConfig } from '../services/api';
+import { isKpiReviewerEmail, isKpiReviewerRole } from '../utils/kpiReviewerRoles';
 
 // Supabase client — only created when env vars are present (production).
 // In local dev VITE_SUPABASE_URL is not set, so supabase stays null and
@@ -125,7 +126,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const canWrite = profile ? WRITE_ROLES.has(profile.role) : false;
-  const isKpiReviewer = profile?.is_kpi_reviewer === true;
+  const isKpiReviewer =
+    profile?.is_kpi_reviewer === true
+    || isKpiReviewerRole(profile?.role)
+    || isKpiReviewerEmail(profile?.email);
 
   return (
     <AuthContext.Provider
