@@ -145,20 +145,19 @@ const MODULES: ModuleDef[] = [
     ],
     tableCols: ['Company Name', 'Property Type', 'Occupancy', 'Last Sync', 'Collected', 'Status'],
     rowCells: (c) => {
-      const syncTotal   = c.sync_total_units as number | null;
-      const syncOcc     = c.sync_occupied_units as number | null;
       const syncGross   = c.sync_gross_potential as number | null;
       const syncColl    = c.sync_collected as number | null;
       const syncVac     = c.sync_vacancy_loss as number | null;
       const lastSync    = (c.last_sync_month as string) || null;
-      const occPct      = syncTotal ? Math.round((syncOcc ?? 0) / syncTotal * 100) : null;
+      const { occ, total: occTotal } = occupancyCounts(c);
+      const occPct      = occTotal ? Math.round(occ / occTotal * 100) : null;
       const collPct     = syncGross && syncGross > 0 ? Math.round((syncColl ?? 0) / syncGross * 100) : null;
 
-      const occCell: ReactNode = syncTotal != null ? (
+      const occCell: ReactNode = occTotal > 0 ? (
         <div className="min-w-[110px]">
           <div className="flex items-center justify-between mb-0.5">
             <span className="text-sm font-mono font-medium" style={{ color: '#1C1917' }}>
-              {syncOcc ?? '?'} / {syncTotal}
+              {occ} / {occTotal}
             </span>
             <span className="text-xs font-medium ml-2"
               style={{ color: occPct != null && occPct >= 85 ? '#059669' : occPct != null && occPct >= 70 ? '#D97706' : '#DC2626' }}>
@@ -205,6 +204,7 @@ const MODULES: ModuleDef[] = [
       return (arr as Record<string, unknown>[]).map(r => ({
         id: r.id as string, company_name: (r.company_name as string) ?? '',
         property_type: r.property_type as string, total_units: r.total_units,
+        occupied_units: r.occupied_units ?? null,
         sync_occupied_units: r.sync_occupied_units ?? null,
         sync_total_units: r.sync_total_units ?? null,
         sync_collected: r.sync_collected ?? null,
@@ -291,6 +291,17 @@ const MODULES: ModuleDef[] = [
 ];
 
 const SUITE_PROP_TYPES = ['Apartment', 'Townhome', 'SFR', 'Loft', 'Commercial'];
+
+/** Registry unit rows trump Excel physical-unit inflation (combined labels like "Unit A,B,C"). */
+function occupancyCounts(c: Record<string, unknown>): { occ: number; total: number } {
+  const registryTotal = (c.total_units as number) ?? 0;
+  const registryOcc = (c.occupied_units as number) ?? 0;
+  if (registryTotal > 0) return { occ: registryOcc, total: registryTotal };
+  return {
+    occ: (c.sync_occupied_units as number) ?? 0,
+    total: (c.sync_total_units as number) ?? 0,
+  };
+}
 
 function StatusBadge({ status, onClick }: { status: string; onClick: () => void }) {
   const active = !status || status === 'active';
@@ -1127,8 +1138,8 @@ export default function CompanyRegistry({ embedded = false }: Props) {
       {activeId === 'rental' && companies.some(c => c.last_sync_month) && (() => {
         const synced = companies.filter(c => c.last_sync_month);
         const lastMonth = synced[0]?.last_sync_month as string;
-        const totalOcc  = synced.reduce((a, c) => a + ((c.sync_occupied_units as number) ?? 0), 0);
-        const totalUnits = synced.reduce((a, c) => a + ((c.sync_total_units as number) ?? 0), 0);
+        const totalOcc  = synced.reduce((a, c) => a + occupancyCounts(c).occ, 0);
+        const totalUnits = synced.reduce((a, c) => a + occupancyCounts(c).total, 0);
         const totalColl  = synced.reduce((a, c) => a + ((c.sync_collected as number) ?? 0), 0);
         const totalGross = synced.reduce((a, c) => a + ((c.sync_gross_potential as number) ?? 0), 0);
         const collPct = totalGross > 0 ? Math.round(totalColl / totalGross * 100) : 0;

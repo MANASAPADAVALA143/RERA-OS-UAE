@@ -302,6 +302,21 @@ def _load_company_data(company_id: uuid.UUID, tid: uuid.UUID, db: Session) -> tu
     return units, inv_dicts, exp_dicts
 
 
+def _registry_unit_counts(units: list) -> tuple[int, int]:
+    """Occupied / total from registry rows (one row = one unit)."""
+    total = len(units)
+    occupied = sum(1 for u in units if u.status == "occupied")
+    return occupied, total
+
+
+def _apply_registry_unit_counts(company, units: list) -> None:
+    """Prefer registry unit rows over Excel physical-unit inflation for occupancy."""
+    if units:
+        occupied, total = _registry_unit_counts(units)
+        company.occupied_units = occupied
+        company.total_units = total
+
+
 # ── portfolio summary ─────────────────────────────────────────────────────────
 
 @router.get("/portfolio-summary")
@@ -532,8 +547,15 @@ def list_companies(
     month_abbrev = today.strftime("%b-%Y")  # e.g. "Jul-2026"
     cur_month    = today.strftime("%Y-%m")  # e.g. "2026-07"
     result = []
+    counts_healed = False
     for co in companies:
         units, inv_dicts, exp_dicts = _load_company_data(co.id, tid, db)
+        if units:
+            occ, total = _registry_unit_counts(units)
+            if co.total_units != total or co.occupied_units != occ:
+                co.total_units = total
+                co.occupied_units = occ
+                counts_healed = True
         inv_by_unit: dict[str, list[dict]] = defaultdict(list)
         for inv in inv_dicts:
             inv_by_unit[inv["unit_id"]].append(inv)
@@ -557,6 +579,8 @@ def list_companies(
             "last_sync_month": co.last_sync_month,
             "monthly_rent_data": co.monthly_rent_data,
         })
+    if counts_healed:
+        db.commit()
     if fmt == "csv":
         output = io.StringIO()
         if result:
@@ -1671,8 +1695,6 @@ async def confirm_rent_receivable(
             company.vacancy_loss = data['vacancy_loss']
             company.gross_potential_rent = data['gross_potential']
             company.monthly_rent_data = data['monthly_totals']
-            company.occupied_units = data['occupied_count']
-            company.total_units = data['total_physical_units']
             company.last_sync_month = target_month
             company.last_sync_date = datetime.utcnow()
 
@@ -1704,6 +1726,15 @@ async def confirm_rent_receivable(
                         unit.monthly_rent = rent if not is_vacant else (unit_vac_loss or unit.monthly_rent)
                         unit.rent_history = history
                         unit.vacancy_loss = unit_vac_loss
+
+            registry_units = db.query(RentalUnit).filter(
+                RentalUnit.company_id == company.id,
+            ).all()
+            if registry_units:
+                _apply_registry_unit_counts(company, registry_units)
+            else:
+                company.occupied_units = data['occupied_count']
+                company.total_units = data['total_physical_units']
 
             db.commit()
             updated.append(co_name)
