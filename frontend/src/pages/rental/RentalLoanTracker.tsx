@@ -119,7 +119,7 @@ function AddLoanDrawer({ open, onClose, onSaved, companyNames }: {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent" />
                 <datalist id="co-opts">{companyNames.map(n => <option key={n} value={n} />)}</datalist>
               </div>
-              <F label="Building / Suite" id="property_name" required placeholder="Suite 123" />
+              <F label="Property Name" id="property_name" required placeholder="Property Name" />
             </div>
           </div>
 
@@ -194,23 +194,46 @@ export default function RentalLoanTracker() {
     const fd = new FormData();
     fd.append('file', file);
     try {
-      const res = await api.post<{ created: number; message: string }>('/api/real-estate/loans/import-excel', fd);
-      setImportMsg({ text: res.data.message, ok: true });
-      reload();
+      const res = await api.post<{
+        created: number;
+        message: string;
+        companies_updated?: string[];
+        sheets_parsed?: string[];
+      }>(
+        '/api/real-estate/loans/import-excel', fd,
+      );
+      if (res.data.created === 0) {
+        setImportMsg({ text: res.data.message || 'No loans imported — check column headers.', ok: false });
+      } else {
+        const cos = res.data.companies_updated?.length
+          ? ` Companies: ${res.data.companies_updated.slice(0, 5).join(', ')}${(res.data.companies_updated.length > 5) ? '…' : ''}.`
+          : '';
+        const sheets = res.data.sheets_parsed?.length
+          ? ` Sheets: ${res.data.sheets_parsed.join(', ')}.`
+          : '';
+        setImportMsg({ text: `${res.data.message}${sheets}${cos}`, ok: true });
+        await reload();
+      }
     } catch (ex: unknown) {
-      const msg = (ex as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setImportMsg({ text: msg ?? 'Import failed — check the file format.', ok: false });
+      const detail = (ex as { response?: { data?: { detail?: string | { msg: string }[] } } })?.response?.data?.detail;
+      const msg = typeof detail === 'string'
+        ? detail
+        : Array.isArray(detail)
+          ? detail.map(d => d.msg).join('; ')
+          : 'Import failed — check the file format.';
+      setImportMsg({ text: msg, ok: false });
     } finally {
       setImporting(false);
       if (importRef.current) importRef.current.value = '';
     }
   }
 
-  // Unique company names from loans (source of truth — avoids UUID→name lookup mismatch)
   const companyOptions = useMemo(() => {
-    const names = new Set(loans.map(l => l.company_name).filter(Boolean));
+    const names = new Set<string>();
+    companies.forEach(c => { if (c.company_name) names.add(c.company_name); });
+    loans.forEach(l => { if (l.company_name) names.add(l.company_name); });
     return [...names].sort();
-  }, [loans]);
+  }, [companies, loans]);
 
   const buildingOptions = useMemo(() => {
     const src = companyFilter !== 'all' ? loans.filter(l => l.company_name === companyFilter) : loans;

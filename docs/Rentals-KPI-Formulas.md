@@ -1,21 +1,47 @@
 # Rentals KPI Formula Sheet
 
-Reference for KPI calculations across **Rental Overview**, **Financials KPI Dashboard**, **CFO Dashboard**, and **CFO Portfolio**.
+Reference for KPI calculations across **Rental Overview**, **Financials KPI Dashboard**, **CFO Dashboard**, **CFO Portfolio**, and **Financial Ratios**.
+
+---
+
+## Excel / CSV export (open in Excel)
+
+| File | Purpose |
+|------|---------|
+| **`docs/Rentals-KPI-Formulas.csv`** | Full table: Dashboard, Formula, Data Source, API, DB tables, Benchmark |
+| **`docs/Rentals-KPI-Formulas.pdf`** | Printable PDF — run `python docs/generate_kpi_pdf.py` to regenerate |
+
+---
+
+## Data sources — which file feeds which dashboard
+
+| Input file / action | What it stores | Dashboards that use it |
+|---------------------|----------------|----------------------|
+| **Rent Receivable Excel** — Load Portfolio or Sync Rent Data | Unit `rent_history`, `monthly_rent_data`, collected, GPR, vacancy | Overview, Company Registry, Companies, CFO Portfolio, AR Dashboard |
+| **Financials Excel** (P&L + BS + CF) — Rentals → Financials upload | `r_financial_uploads` | KPI Dashboard, CFO Dashboard, Financial Ratios |
+| **QB AR Aging upload** | Aging buckets | Overview DSO, AR Dashboard |
+| **Manual expenses** | `r_expenses` | NOI everywhere |
+| **Loans module** | EMI, balance, LTV | CFO Portfolio DSCR, Financial Ratios |
+
+**Collected priority (operational):** Rent Receivable → P&L → invoice collections.
+
+**KPI Dashboard / Financial Ratios:** Uploaded P&L + Balance Sheet only (`rentalKpiEngine.ts`).
 
 ---
 
 ## A) Rental Overview (operational dashboard)
 
-**Data source:** unit registry, invoices, collections, expenses, QB AR Aging upload
+**Data source:** Rent Receivable Excel (primary), expenses, QB AR Aging, invoice fallback  
+**API:** `GET /api/rentals/portfolio-summary?month=YYYY-MM`
 
 | Card Label | Formula |
 |---|---|
 | **Occupancy Rate** | `Occupied Units ÷ Total Units × 100` |
 | **Occupied / Vacant** | `Occupied Units` and `Vacant Units` (vacant = total − occupied) |
-| **Collected This Month** | Sum of collections where `collected_date` = selected month |
+| **Collected This Month** | Sum of unit rents for selected month from **Rent Receivable** (`monthly_rent_data`); else P&L; else invoices |
 | **NOI This Month** | `Collected This Month − Total Expense This Month` |
-| **Gross Potential Rent** | Sum of all unit `monthly_rent` |
-| **Vacancy Loss** | Sum of `monthly_rent` for units with status = `vacant` only |
+| **Gross Potential Rent** | Sum of unit `monthly_rent` or peak month from Excel |
+| **Vacancy Loss** | Vacant units' rent or company `vacancy_loss` from Excel sync |
 | **Collection Rate** | `Collected This Month ÷ Billed This Month × 100` |
 | **Avg Rent / Unit** | `Gross Potential Rent ÷ Occupied Units` |
 | **Arrears Days Outstanding** | Weighted DSO from QB aging buckets: `(Current×0 + 1–30×15 + 31–60×45 + 61–90×75 + 90+×105) ÷ Total` |
@@ -312,4 +338,4 @@ DSCR            = Annual NOI / Annual Debt Service (EMI × 12)
 
 ---
 
-*Last updated: July 2026*
+*Last updated: July 2026 — CSV companion: `docs/Rentals-KPI-Formulas.csv`*

@@ -1548,14 +1548,25 @@ def list_ownership(
     by_partner: dict[str, list[dict]] = defaultdict(list)
     for row in rows:
         noi = co_noi.get(str(row.company_id), 0.0)
+        pct = float(row.ownership_pct)
+        if pct > 1:
+            pct = pct / 100
         by_partner[row.partner_name].append({
             "ownership_id": str(row.id),
             "company_id": str(row.company_id),
             "company_name": row.company.company_name if row.company else "",
-            "ownership_pct": float(row.ownership_pct),
+            "property_id": str(row.property_id) if row.property_id else None,
+            "property_name": row.property_name or (row.property.property_name if row.property else ""),
+            "property_address": row.property_address,
+            "entity_structure": row.entity_structure,
+            "ownership_pct": pct,
             "role": row.role.value,
+            "cost_basis": float(row.cost_basis) if row.cost_basis is not None else None,
+            "book_value": float(row.book_value) if row.book_value is not None else None,
+            "existing_debt": float(row.existing_debt) if row.existing_debt is not None else None,
+            "capital_contributed": float(row.capital_contributed) if row.capital_contributed is not None else None,
             "noi_this_month": noi,
-            "noi_share": round(noi * float(row.ownership_pct), 2),
+            "noi_share": round(noi * pct, 2),
         })
 
     result = []
@@ -1605,150 +1616,60 @@ def create_ownership(
     return {"id": str(o.id)}
 
 
+@router.get("/ownership/import-template")
+def download_ownership_template(
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    from services.ownership_excel_import import build_import_template_bytes
+
+    content = build_import_template_bytes()
+    return StreamingResponse(
+        iter([content]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=Ownership_Import_Template.xlsx"},
+    )
+
+
 @router.post("/ownership/import")
 async def import_ownership(
-    company_id: str = Form(...),
     file: UploadFile = File(...),
+    company_id: str | None = Form(None),
     current_user: CurrentUser = Depends(require_write_access()),
     db: Session = Depends(get_db),
 ):
-    """Import partners from Excel file. Auto-detects header row and column positions.
-    Supports flexible formats — looks for columns named Partner Name, Ownership %, Role.
-    Role aliases: Managing Partner → managing_member, Investor Partner → limited_partner, etc.
-    Also stores Capital Contributed and Current Equity Balance if present.
+    """Import property-level ownership positions from Excel (portfolio-wide).
+
+    Expected columns: Entity Name, Owned By, Property Address, Property Name,
+    Ownership %, Entity Structure, Cost Basis, Book Value, Existing Debt.
     """
-    import openpyxl
-    try:
-        content = await file.read()
-        wb = openpyxl.load_workbook(io.BytesIO(content))
-        ws = wb.active
+    from services.ownership_excel_import import import_ownership_from_excel
 
-        co_id = uuid.UUID(company_id)
-        imported_count = 0
-        errors = []
+    content = await file.read()
+    result = import_ownership_from_excel(db, current_user.tenant_id, content)
+    if result.get("error") == "no_rows":
+        detail = result.get("errors", [result.get("message", "No rows imported")])
+        if isinstance(detail, list):
+            raise HTTPException(status_code=400, detail="; ".join(detail))
+        raise HTTPException(status_code=400, detail=str(detail))
+    return result
 
-        ROLE_MAP = {
-            "managing_partner":   "managing_member",
-            "managing_member":    "managing_member",
-            "general_partner":    "general_partner",
-            "limited_partner":    "limited_partner",
-            "partner":            "limited_partner",
-            "investor_partner":   "limited_partner",
-            "passive_investor":   "passive_investor",
-            "silent_partner":     "silent_partner",
-            "management_entity":  "managing_member",
-        }
-        VALID_ROLES = set(ROLE_MAP.values())
 
-        # ── Auto-detect header row by scanning for "partner name" keyword ──
-        header_row_idx = None
-        col_map: dict[str, int] = {}
-        all_rows = list(ws.iter_rows(values_only=True))
+@router.post("/ownership/sync-jv-ledger")
+def sync_ownership_from_jv_ledger(
+    replace: bool = Query(False, description="Replace all rental ownership rows before sync"),
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    """Copy PropDev JV Ledger partners into Rentals ownership (matched by company name)."""
+    from services.jv_ledger_sync import sync_jv_ledger_to_ownership
 
-        for i, row in enumerate(all_rows):
-            cells = [str(c or "").strip().lower() for c in row]
-            if any("partner name" in c or c == "partner" for c in cells):
-                header_row_idx = i
-                for j, cell in enumerate(cells):
-                    if "partner name" in cell or cell == "partner":
-                        col_map["name"] = j
-                    elif "ownership" in cell or "own %" in cell or cell == "own%":
-                        col_map["pct"] = j
-                    elif "role" in cell:
-                        col_map["role"] = j
-                    elif "capital contributed" in cell or "capital in" in cell:
-                        col_map["capital"] = j
-                    elif "equity balance" in cell or "current equity" in cell:
-                        col_map["equity"] = j
-                break
-
-        # Fallback to positional (col 0=name, 1=pct, 2=role) if no header found
-        if header_row_idx is None:
-            col_map = {"name": 0, "pct": 1, "role": 2}
-            data_rows = all_rows[1:]  # skip first row
-        else:
-            data_rows = all_rows[header_row_idx + 1:]
-
-        name_col   = col_map.get("name", 0)
-        pct_col    = col_map.get("pct", 1)
-        role_col   = col_map.get("role", 2)
-        cap_col    = col_map.get("capital")
-        equity_col = col_map.get("equity")
-
-        for row_idx, row in enumerate(data_rows, start=1):
-            try:
-                raw_name = row[name_col] if len(row) > name_col else None
-                if not raw_name:
-                    continue
-                partner_name = str(raw_name).strip()
-                # Skip totals row
-                if partner_name.upper() in ("TOTAL", "GRAND TOTAL", "SUM"):
-                    continue
-
-                raw_pct = row[pct_col] if len(row) > pct_col else 0
-                try:
-                    ownership_pct = float(raw_pct or 0)
-                except (ValueError, TypeError):
-                    ownership_pct = 0.0
-
-                raw_role = str(row[role_col] if len(row) > role_col else "").strip().lower().replace(" ", "_") if role_col is not None else ""
-                role = ROLE_MAP.get(raw_role, "limited_partner")
-                if role not in VALID_ROLES:
-                    role = "limited_partner"
-
-                capital_contributed = None
-                if cap_col is not None and len(row) > cap_col:
-                    try:
-                        capital_contributed = float(row[cap_col] or 0)
-                    except (ValueError, TypeError):
-                        capital_contributed = None
-
-                equity_balance = None
-                if equity_col is not None and len(row) > equity_col:
-                    try:
-                        equity_balance = float(row[equity_col] or 0)
-                    except (ValueError, TypeError):
-                        equity_balance = None
-
-                existing = db.query(RentalOwnership).filter(
-                    RentalOwnership.tenant_id == current_user.tenant_id,
-                    RentalOwnership.company_id == co_id,
-                    RentalOwnership.partner_name == partner_name,
-                ).first()
-
-                if not existing:
-                    kwargs: dict = dict(
-                        tenant_id=current_user.tenant_id,
-                        company_id=co_id,
-                        partner_name=partner_name,
-                        ownership_pct=ownership_pct,
-                        role=RentalPartnerRole(role),
-                    )
-                    if capital_contributed is not None and hasattr(RentalOwnership, "capital_contributed"):
-                        kwargs["capital_contributed"] = capital_contributed
-                    if equity_balance is not None and hasattr(RentalOwnership, "equity_balance"):
-                        kwargs["equity_balance"] = equity_balance
-                    db.add(RentalOwnership(**kwargs))
-                    imported_count += 1
-                else:
-                    existing.ownership_pct = ownership_pct
-                    existing.role = RentalPartnerRole(role)
-                    if capital_contributed is not None and hasattr(existing, "capital_contributed"):
-                        existing.capital_contributed = capital_contributed
-                    if equity_balance is not None and hasattr(existing, "equity_balance"):
-                        existing.equity_balance = equity_balance
-
-            except Exception as e:
-                errors.append(f"Row {row_idx}: {str(e)}")
-
-        db.commit()
-        return {
-            "status": "imported",
-            "imported_count": imported_count,
-            "errors": errors,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Import failed: {str(e)}")
+    result = sync_jv_ledger_to_ownership(db, current_user.tenant_id, replace=replace)
+    if result.get("error") == "no_rows":
+        detail = result.get("errors", [result.get("message", "Nothing synced")])
+        if isinstance(detail, list):
+            raise HTTPException(status_code=400, detail="; ".join(detail))
+        raise HTTPException(status_code=400, detail=str(detail))
+    return result
 
 
 # ── vacancy ───────────────────────────────────────────────────────────────────

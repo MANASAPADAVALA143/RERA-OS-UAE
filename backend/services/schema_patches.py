@@ -96,6 +96,17 @@ RENTAL_UNIT_COLUMNS = {
     "vacancy_loss": "NUMERIC(14, 2) DEFAULT 0",
 }
 
+OWNERSHIP_COLUMNS = {
+    "property_id": "UUID",
+    "property_name": "VARCHAR(255)",
+    "property_address": "VARCHAR(500)",
+    "entity_structure": "VARCHAR(100)",
+    "cost_basis": "NUMERIC(16, 2)",
+    "book_value": "NUMERIC(16, 2)",
+    "existing_debt": "NUMERIC(16, 2)",
+    "capital_contributed": "NUMERIC(16, 2)",
+}
+
 
 def apply_schema_patches(engine) -> None:
     _add_missing_columns(engine, "projects", PROJECT_COLUMNS)
@@ -109,3 +120,4 @@ def apply_schema_patches(engine) -> None:
     # Rent Receivable upload sync columns
     _add_missing_columns(engine, "r_companies", RENTAL_COMPANY_COLUMNS)
     _add_missing_columns(engine, "r_units", RENTAL_UNIT_COLUMNS)
+    _add_missing_columns(engine, "r_ownership", OWNERSHIP_COLUMNS)

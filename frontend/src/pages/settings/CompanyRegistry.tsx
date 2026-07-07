@@ -435,10 +435,10 @@ function InlineSuites({
     try {
       await api.put(`/api/rentals/suites/${id}`, { property_name: editName.trim() });
       setEditingId(null);
-      push('Suite renamed');
+      push('Property Name updated');
       load();
     } catch {
-      push('Failed to rename suite', false);
+      push('Failed to update Property Name', false);
     }
   }
 
@@ -525,11 +525,11 @@ function InlineSuites({
             <div className="flex items-center gap-2">
               <div className="w-1 h-5 rounded-full" style={{ background: '#D4AF37' }} />
               <span className="text-sm font-semibold text-gray-700">
-                Suites — <span className="font-normal text-gray-500">{companyName}</span>
+                Property Name — <span className="font-normal text-gray-500">{companyName}</span>
               </span>
               {!loading && (
                 <span className="text-xs text-gray-400 bg-white border border-gray-200 px-2 py-0.5 rounded-full">
-                  {suites.length} suite{suites.length !== 1 ? 's' : ''}
+                  {suites.length} Property Name{suites.length !== 1 ? 's' : ''}
                 </span>
               )}
             </div>
@@ -537,7 +537,7 @@ function InlineSuites({
               <button onClick={() => onAdd(companyId, companyName)}
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors"
                 style={{ background: '#161310', color: '#D4AF37' }}>
-                <Plus size={12} /> Add Suite
+                <Plus size={12} /> Add Property Name
               </button>
             )}
           </div>
@@ -548,7 +548,7 @@ function InlineSuites({
             </div>
           ) : suites.length === 0 ? (
             <div className="text-center py-6 text-sm text-gray-400">
-              No suites yet.{canWrite && <> Click <span className="font-medium text-gray-600">Add Suite</span> to create one.</>}
+              No properties yet.{canWrite && <> Click <span className="font-medium text-gray-600">Add Property Name</span> to create one.</>}
             </div>
           ) : (
             <div className="bg-white rounded-xl border border-blue-100 overflow-hidden">
@@ -556,7 +556,7 @@ function InlineSuites({
                 <thead>
                   <tr className="bg-gray-50/80 border-b border-gray-100">
                     <th className="text-left px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide w-8">#</th>
-                    <th className="text-left px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Suite Name</th>
+                    <th className="text-left px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Property Name</th>
                     <th className="text-left px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Address</th>
                     <th className="text-left px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Property Type</th>
                     <th className="text-right px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Units</th>
@@ -669,7 +669,7 @@ function InlineSuites({
                                   <span className="text-xs text-gray-400">Loading units…</span>
                                 </div>
                               ) : unitsMap[s.id].length === 0 && addingUnitSuiteId !== s.id ? (
-                                <p className="text-xs text-gray-400 py-2">No units found for this suite. Click <span className="font-medium" style={{ color: '#D4AF37' }}>+ Add Unit</span> to create one.</p>
+                                <p className="text-xs text-gray-400 py-2">No units found for this property. Click <span className="font-medium" style={{ color: '#D4AF37' }}>+ Add Unit</span> to create one.</p>
                               ) : (
                                 <div className="bg-white rounded-lg border border-indigo-100 overflow-hidden">
                                   <table className="w-full text-xs">
@@ -1110,16 +1110,16 @@ export default function CompanyRegistry({ embedded = false }: Props) {
     try {
       if (suiteTarget) {
         await api.put(`/api/rentals/suites/${suiteTarget.id}`, payload);
-        push('Suite updated');
+        push('Property Name updated');
       } else {
         payload.company_id = suiteCompany!.id;
         await api.post('/api/rentals/suites', payload);
-        push('Suite added');
+        push('Property Name added');
       }
       closeSuiteModal();
       setSuiteReloadKey(k => k + 1);
     } catch {
-      push('Failed to save suite', false);
+      push('Failed to save Property Name', false);
       setSuiteSaving(false);
     }
   }
@@ -1129,11 +1129,11 @@ export default function CompanyRegistry({ embedded = false }: Props) {
     setSuiteDeleting(true);
     try {
       await api.delete(`/api/rentals/suites/${suiteTarget.id}`);
-      push('Suite deleted');
+      push('Property Name deleted');
       closeSuiteModal();
       setSuiteReloadKey(k => k + 1);
     } catch {
-      push('Failed to delete suite', false);
+      push('Failed to delete Property Name', false);
       setSuiteDeleting(false);
     }
   }
@@ -1287,7 +1287,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                     <th key={col} className="text-left px-4 py-3 text-sm font-semibold text-gray-400 uppercase tracking-wide">{col}</th>
                   ))}
                   {activeId === 'rental' && (
-                    <th className="text-left px-4 py-3 text-sm font-semibold text-gray-400 uppercase tracking-wide">Suites</th>
+                    <th className="text-left px-4 py-3 text-sm font-semibold text-gray-400 uppercase tracking-wide">Property Name</th>
                   )}
                   {canWrite && (
                     <th className="text-right px-4 py-3 text-sm font-semibold text-gray-400 uppercase tracking-wide">Actions</th>
@@ -1317,7 +1317,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                               style={isExpanded
                                 ? { background: '#D4AF37', color: '#161310', borderColor: '#D4AF37' }
                                 : { color: '#D4AF37', borderColor: 'rgba(212,175,55,0.35)', background: 'rgba(212,175,55,0.08)' }}>
-                              {isExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />} Suites
+                              {isExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />} Property Name
                             </button>
                           </td>
                         )}
@@ -1427,17 +1427,17 @@ export default function CompanyRegistry({ embedded = false }: Props) {
 
       {/* ── SUITE ADD / EDIT MODAL ── rendered at page level for proper focus & clipboard */}
       {(suiteModal === 'add' || suiteModal === 'edit') && (
-        <Modal title={suiteTarget ? `Edit Suite` : `Add Suite — ${suiteCompany?.name}`} onClose={closeSuiteModal}>
+        <Modal title={suiteTarget ? `Edit Property Name` : `Add Property Name — ${suiteCompany?.name}`} onClose={closeSuiteModal}>
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Suite Name <span className="text-red-500">*</span></label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Property Name <span className="text-red-500">*</span></label>
               <input
                 autoFocus
                 type="text"
                 value={suiteName}
                 onChange={e => setSuiteName(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && suiteName.trim()) handleSuiteSave(); }}
-                placeholder="e.g. Suite 123"
+                placeholder="e.g. Property Name"
                 className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </div>
@@ -1464,7 +1464,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
             <button onClick={closeSuiteModal} className="flex-1 text-sm border border-gray-200 text-gray-600 py-2.5 rounded-xl hover:bg-gray-50">Cancel</button>
             <button onClick={handleSuiteSave} disabled={suiteSaving || !suiteName.trim()}
               className="flex-1 flex items-center justify-center gap-2 text-sm bg-gray-900 text-white py-2.5 rounded-xl hover:bg-gray-800 font-medium disabled:opacity-50">
-              {suiteSaving ? 'Saving…' : <><Check size={14} />{suiteTarget ? 'Save Changes' : 'Add Suite'}</>}
+              {suiteSaving ? 'Saving…' : <><Check size={14} />{suiteTarget ? 'Save Changes' : 'Add Property Name'}</>}
             </button>
           </div>
         </Modal>
@@ -1472,7 +1472,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
 
       {/* ── SUITE DELETE CONFIRM ── */}
       {suiteModal === 'delete' && suiteTarget && (
-        <Modal title="Delete Suite" onClose={closeSuiteModal}>
+        <Modal title="Delete Property Name" onClose={closeSuiteModal}>
           <div className="text-center">
             <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
               <Trash2 size={20} className="text-red-500" />
@@ -1480,7 +1480,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
             <p className="text-sm text-gray-700 font-medium mb-1">Delete "{suiteTarget.property_name}"?</p>
             {suiteTarget.unit_count > 0 ? (
               <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4 text-left">
-                This suite has <strong>{suiteTarget.unit_count} unit{suiteTarget.unit_count !== 1 ? 's' : ''}</strong> with
+                This property has <strong>{suiteTarget.unit_count} unit{suiteTarget.unit_count !== 1 ? 's' : ''}</strong> with
                 all their leases, invoices, and payment records — all will be permanently deleted.
               </p>
             ) : (

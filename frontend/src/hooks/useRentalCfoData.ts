@@ -136,7 +136,7 @@ export function useRentalCfoData() {
         api.get<CompanyRow[]>('/api/rentals/companies'),
         api.get<ExpenseRow[]>('/api/rentals/expenses'),
         api.get<UnitRow[]>('/api/rentals/units'),
-        api.get<{ items: LoanRow[] }>('/api/real-estate/loans'),
+        api.get<{ items: LoanRow[] }>('/api/real-estate/loans', { params: { context_type: 'rental' } }),
         api.get<PortfolioSummary>('/api/rentals/portfolio-summary'),
         api.get<{ items: MaintRow[] }>('/api/rentals/maintenance').catch(() => ({ data: { items: [] } })),
       ]);
@@ -155,15 +155,9 @@ export function useRentalCfoData() {
 
   useEffect(() => { load(); }, [load]);
 
-  const companyNames = useMemo(() => new Set(companies.map(c => c.company_name)), [companies]);
-
   const rentalLoans = useMemo(() => {
-    return loans.filter(l => {
-      const isRentalContext = l.context_type === 'rental' || !l.context_type;
-      const isKnownCompany = companyNames.has(l.company_name);
-      return isRentalContext || isKnownCompany;
-    });
-  }, [loans, companyNames]);
+    return loans.filter(l => l.context_type === 'rental');
+  }, [loans]);
 
   const buildings = useMemo((): BuildingRow[] => {
     const curMonth = new Date().toISOString().slice(0, 7);

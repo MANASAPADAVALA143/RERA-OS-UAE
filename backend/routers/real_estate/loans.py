@@ -50,7 +50,7 @@ def _loan_dict(loan: Loan, *, masked: bool = True) -> dict:
         "loan_deduction_bank_account": loan.loan_deduction_bank_account,
         "noi_annual": noi_ann,
         "current_property_value": prop_val,
-        "context_type": getattr(loan, "context_type", "construction") or "construction",
+        "context_type": loan.context_type,
         "dscr": dscr_val,
         "ltv_current": ltv_val,
         "dscr_status": dscr_status(dscr_val),
@@ -112,6 +112,7 @@ class LoanUpdate(BaseModel):
 def list_loans(
     company_name: Optional[str] = None,
     property_name: Optional[str] = None,
+    context_type: Optional[str] = None,
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -120,6 +121,8 @@ def list_loans(
         q = q.filter(Loan.company_name.ilike(f"%{company_name}%"))
     if property_name:
         q = q.filter(Loan.property_name.ilike(f"%{property_name}%"))
+    if context_type:
+        q = q.filter(Loan.context_type == context_type)
 
     loans = q.order_by(Loan.loan_maturity_date.asc().nullslast()).all()
 
@@ -294,116 +297,15 @@ async def import_loans_excel(
     db: Session = Depends(get_db),
 ):
     """
-    Parse an Excel file and REPLACE existing rental loans for companies in the file.
-    Re-uploading the same file always produces a clean result with no duplicates.
-
-    Expected columns (by position, 0-indexed):
-      0  Sl No.
-      1  Company Name
-      2  Property Name
-      3  Loan Bank Name
-      4  Loan Date          (MM-DD-YYYY or date cell)
-      5  Loan Amount        ($1,399,000.00 or numeric)
-      6  Loan Interest Rate (4.25% or 0.0425 or 4.25)
-      7  Loan EMI           ($8,710.47 or numeric)
-      8  Lender Name
-      9  Loan Maturity Date
-      10 Loan Balance as of …
-      11 Loan EMI Day       (14th, 9th, 29th, or plain integer)
-      12 Loan Deduction Bank Account
+    Import rental loans from Excel. Supports header-based columns (any order),
+    multiple sheets, and matches Company / Suite names to Company Registry.
     """
-    import openpyxl
-    from io import BytesIO
+    from services.loan_excel_import import import_rental_loans_from_excel
 
     content = await file.read()
-    wb = openpyxl.load_workbook(BytesIO(content), data_only=True)
-    ws = wb.active
-
-    SKIP_KEYWORDS = {
-        "company name", "company", "sl no", "sl no.", "sl", "#",
-        "property name", "loan bank", "lender", "loan amount",
-    }
-
-    all_rows = list(ws.iter_rows(values_only=True))
-
-    # ── Pass 1: collect company names present in the file ─────────────────────
-    companies_in_file: set[str] = set()
-    for row in all_rows:
-        col1 = str(row[1] if len(row) > 1 else "").strip().lower()
-        if not col1 or col1 in SKIP_KEYWORDS:
-            continue
-        company = str(row[1] or "").strip()
-        if company:
-            companies_in_file.add(company)
-
-    # ── Delete all existing loans for those companies (any context_type) ────────
-    if companies_in_file:
-        existing = db.query(Loan).filter(
-            Loan.tenant_id == current_user.tenant_id,
-            Loan.company_name.in_(list(companies_in_file)),
-        ).all()
-        for old_loan in existing:
-            db.delete(old_loan)
-        db.flush()
-
-    # ── Pass 2: insert rows from file ─────────────────────────────────────────
-    created = 0
-    skipped_rows: list[int] = []
-
-    for row_idx, row in enumerate(all_rows, start=1):
-        col1 = str(row[1] if len(row) > 1 else "").strip().lower()
-        if not col1 or col1 in SKIP_KEYWORDS:
-            continue
-
-        company = str(row[1] or "").strip() if len(row) > 1 else ""
-        if not company:
-            continue
-
-        property_name = str(row[2] or "").strip() if len(row) > 2 else company
-        bank_name = str(row[3] or "").strip() if len(row) > 3 else ""
-        loan_date = _parse_date(row[4]) if len(row) > 4 else None
-        loan_amount = _parse_num(row[5]) if len(row) > 5 else None
-        if not loan_amount:
-            skipped_rows.append(row_idx)
-            continue
-
-        rate_raw = _parse_num(row[6]) if len(row) > 6 else None
-        if rate_raw is not None:
-            loan_interest_rate = rate_raw / 100 if rate_raw > 1 else rate_raw
-        else:
-            loan_interest_rate = None
-
-        loan_emi = _parse_num(row[7]) if len(row) > 7 else None
-        lender_name = str(row[8] or "").strip() if len(row) > 8 else None
-        maturity_date = _parse_date(row[9]) if len(row) > 9 else None
-        loan_balance = _parse_num(row[10]) if len(row) > 10 else None
-        loan_emi_day = _parse_emi_day(row[11]) if len(row) > 11 else None
-        deduction_acct = str(row[12] or "").strip() if len(row) > 12 else None
-
-        loan = Loan(
-            tenant_id=current_user.tenant_id,
-            company_name=company,
-            property_name=property_name,
-            loan_bank_name=bank_name or "—",
-            loan_date=loan_date,
-            loan_amount=loan_amount,
-            loan_interest_rate=loan_interest_rate,
-            loan_emi=loan_emi,
-            lender_name=lender_name or None,
-            loan_maturity_date=maturity_date,
-            loan_balance_as_of=loan_balance,
-            loan_balance_as_of_date=date.today(),
-            loan_emi_day=loan_emi_day,
-            loan_deduction_bank_account=deduction_acct or None,
-            context_type="rental",
-            created_by=current_user.email,
-        )
-        db.add(loan)
-        created += 1
-
-    db.commit()
-    return {
-        "created": created,
-        "skipped_rows": skipped_rows,
-        "message": f"Imported {created} loan(s) successfully.",
-    }
+    result = import_rental_loans_from_excel(
+        db, current_user.tenant_id, content, current_user.email,
+    )
+    if result.get("error") == "no_rows":
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result

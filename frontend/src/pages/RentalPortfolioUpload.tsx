@@ -229,7 +229,7 @@ export default function RentalPortfolioUpload() {
             Rent Receivable upload updates:
           </div>
           {[
-            'Company Registry — units, suites, company list',
+            'Company Registry — units, Property Name, company list',
             'Overview — occupancy, collected, NOI',
             'Companies — per-company KPIs',
             'Units — vacant/occupied status & rent history',

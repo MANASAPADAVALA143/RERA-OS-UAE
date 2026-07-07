@@ -202,12 +202,21 @@ class RentalOwnership(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
     company_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("r_companies.id"), nullable=False, index=True)
+    property_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("r_properties.id"), nullable=True, index=True)
     partner_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    property_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    property_address: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    entity_structure: Mapped[str | None] = mapped_column(String(100), nullable=True)
     ownership_pct: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False)
     role: Mapped[RentalPartnerRole] = mapped_column(Enum(RentalPartnerRole, name="rental_partner_role"), nullable=False)
+    cost_basis: Mapped[float | None] = mapped_column(Numeric(16, 2), nullable=True)
+    book_value: Mapped[float | None] = mapped_column(Numeric(16, 2), nullable=True)
+    existing_debt: Mapped[float | None] = mapped_column(Numeric(16, 2), nullable=True)
+    capital_contributed: Mapped[float | None] = mapped_column(Numeric(16, 2), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     company: Mapped["RentalCompany"] = relationship("RentalCompany", back_populates="ownership")
+    property: Mapped["RentalProp | None"] = relationship("RentalProp")
 
     __table_args__ = (Index("ix_r_ownership_tenant_company", "tenant_id", "company_id"),)
 

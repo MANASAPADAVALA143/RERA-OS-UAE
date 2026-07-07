@@ -67,8 +67,16 @@ interface Holding {
   ownership_id: string;
   company_id:   string;
   company_name: string;
+  property_id?: string | null;
+  property_name?: string;
+  property_address?: string | null;
+  entity_structure?: string | null;
   ownership_pct: number;
   role:          string;
+  cost_basis?: number | null;
+  book_value?: number | null;
+  existing_debt?: number | null;
+  capital_contributed?: number | null;
   noi_this_month: number;
   noi_share:     number;
 }
@@ -129,14 +137,31 @@ function holdingFinancials(
   holding: Holding,
   companyGpr: number,
   holdYears = HOLD_YEARS,
-): { marketValue: number; capitalContributed: number; costBasis: number; bookValue: number; unrealizedGain: number } {
+): { marketValue: number; capitalContributed: number; costBasis: number; bookValue: number; unrealizedGain: number; existingDebt: number } {
   const propertyMV = companyMarketValue(companyGpr);
-  const marketValue = propertyMV * holding.ownership_pct;
-  const capitalContributed = marketValue / 1.25;
-  const costBasis = capitalContributed * (1 + ACQ_COST);
-  const bookValue = Math.max(0, costBasis * (1 - DEP_RATE * holdYears));
+
+  const marketValue = propertyMV > 0
+    ? propertyMV * holding.ownership_pct
+    : (holding.book_value ?? holding.cost_basis ?? 0);
+
+  let capitalContributed = holding.capital_contributed ?? null;
+  if (capitalContributed == null && holding.cost_basis != null) {
+    capitalContributed = holding.cost_basis / (1 + ACQ_COST);
+  }
+  if (capitalContributed == null && marketValue > 0) {
+    capitalContributed = marketValue / 1.25;
+  }
+  capitalContributed = capitalContributed ?? 0;
+
+  const costBasis = holding.cost_basis
+    ?? (capitalContributed > 0 ? capitalContributed * (1 + ACQ_COST) : 0);
+
+  const bookValue = holding.book_value
+    ?? (costBasis > 0 ? Math.max(0, costBasis * (1 - DEP_RATE * holdYears)) : 0);
+
+  const existingDebt = holding.existing_debt ?? 0;
   const unrealizedGain = marketValue - costBasis;
-  return { marketValue, capitalContributed, costBasis, bookValue, unrealizedGain };
+  return { marketValue, capitalContributed, costBasis, bookValue, unrealizedGain, existingDebt };
 }
 
 function deriveFinancials(p: PartnerGroup, companyGpr: Record<string, number>): PFinancials {
@@ -155,7 +180,7 @@ function deriveFinancials(p: PartnerGroup, companyGpr: Record<string, number>): 
   });
 
   const unrealizedGain = marketValue - costBasis;
-  const returnToDate = capitalContributed * DIST_RATE * HOLD_YEARS;
+  const returnToDate = capitalContributed > 0 ? capitalContributed * DIST_RATE * HOLD_YEARS : 0;
   const roi = costBasis > 0 ? (returnToDate / costBasis) * 100 : 0;
   return { marketValue, capitalContributed, costBasis, bookValue, unrealizedGain, returnToDate, roi };
 }
@@ -223,6 +248,10 @@ export default function RentalOwnership() {
   const [showAddContrib, setShowAddContrib] = useState(false);
   const [contribForm, setContribForm]       = useState({ ...BLANK_CONTRIB });
   const importFileRef = useRef<HTMLInputElement>(null);
+  const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [breakdownTab, setBreakdownTab] = useState<'company' | 'partner' | 'property'>('company');
 
   const loadData = useCallback(async () => {
     setLoading(true); setError('');
@@ -271,10 +300,20 @@ export default function RentalOwnership() {
     return ps;
   }, [apiPartners, partnerFilter, companyFilter]);
 
+  const hasImportedFinancials = useMemo(
+    () => apiPartners.some(p => p.holdings.some(h =>
+      h.cost_basis != null || h.book_value != null || h.capital_contributed != null,
+    )),
+    [apiPartners],
+  );
+
   const kpis = useMemo(() => {
     const fs = filtered.map(p => financials[p.partner_name]).filter(Boolean);
     const totalMV  = fs.reduce((s, f) => s + f.marketValue, 0);
-    const totalDebt = totalMV * 0.6;
+    const totalDebt = filtered.reduce((s, p) => s + p.holdings.reduce((hs, h) => {
+      const gpr = companyGpr[h.company_id] ?? 0;
+      return hs + holdingFinancials(h, gpr).existingDebt;
+    }, 0), 0) || totalMV * 0.6;
     const totalEq  = totalMV - totalDebt;
     const totalCap = fs.reduce((s, f) => s + f.capitalContributed, 0);
     const totalCost = fs.reduce((s, f) => s + f.costBasis, 0);
@@ -286,30 +325,108 @@ export default function RentalOwnership() {
       totalCapital: totalCap,
       totalMV,
       totalEquity: totalEq,
+      totalDebt,
       avgROI: weightedROI,
     };
-  }, [financials, filtered]);
+  }, [financials, filtered, companyGpr]);
 
   const byCompany = useMemo(() => {
-    const map: Record<string, { id: string; name: string; units: number; noi: number; marketValue: number; slices: {partner: string; pct: number; color: string}[] }> = {};
+    type Slice = { partner: string; pct: number; color: string; costBasis: number; bookValue: number; marketValue: number; capitalIn: number };
+    const map: Record<string, {
+      id: string; name: string; units: number; noi: number;
+      marketValue: number; bookValue: number; costBasis: number; capitalIn: number; debt: number;
+      slices: Slice[];
+    }> = {};
     apiPartners.forEach((p, pi) => {
       p.holdings.forEach(h => {
+        const gpr = companyGpr[h.company_id] ?? 0;
+        const hf = holdingFinancials(h, gpr);
         if (!map[h.company_id]) {
-          const gpr = companyGpr[h.company_id] ?? 0;
           map[h.company_id] = {
             id: h.company_id,
             name: h.company_name,
             units: companyUnits[h.company_id] ?? 0,
             noi: h.noi_this_month,
             marketValue: companyMarketValue(gpr),
+            bookValue: 0,
+            costBasis: 0,
+            capitalIn: 0,
+            debt: 0,
             slices: [],
           };
         }
-        map[h.company_id].slices.push({ partner: p.partner_name, pct: h.ownership_pct * 100, color: COLORS[pi % COLORS.length] });
+        map[h.company_id].bookValue += hf.bookValue;
+        map[h.company_id].costBasis += hf.costBasis;
+        map[h.company_id].capitalIn += hf.capitalContributed;
+        map[h.company_id].debt += hf.existingDebt;
+        map[h.company_id].slices.push({
+          partner: p.partner_name,
+          pct: h.ownership_pct * 100,
+          color: COLORS[pi % COLORS.length],
+          costBasis: hf.costBasis,
+          bookValue: hf.bookValue,
+          marketValue: hf.marketValue,
+          capitalIn: hf.capitalContributed,
+        });
       });
     });
     return Object.values(map);
   }, [apiPartners, companyGpr, companyUnits]);
+
+  const byPartner = useMemo(() => {
+    return apiPartners.map((p, pi) => {
+      const f = financials[p.partner_name];
+      const totalPct = p.holdings.reduce((s, h) => s + h.ownership_pct * 100, 0);
+      return {
+        name: p.partner_name,
+        color: COLORS[pi % COLORS.length],
+        ownershipPct: totalPct,
+        capitalIn: f?.capitalContributed ?? 0,
+        costBasis: f?.costBasis ?? 0,
+        bookValue: f?.bookValue ?? 0,
+        marketValue: f?.marketValue ?? 0,
+        roi: f?.roi ?? 0,
+        holdings: p.holdings.length,
+      };
+    });
+  }, [apiPartners, financials]);
+
+  const byProperty = useMemo(() => {
+    const map: Record<string, {
+      key: string; propertyName: string; companyName: string; address: string;
+      costBasis: number; bookValue: number; marketValue: number; capitalIn: number; debt: number;
+      slices: { partner: string; pct: number; color: string }[];
+    }> = {};
+    apiPartners.forEach((p, pi) => {
+      p.holdings.forEach(h => {
+        const gpr = companyGpr[h.company_id] ?? 0;
+        const hf = holdingFinancials(h, gpr);
+        const propName = h.property_name || h.company_name;
+        const key = `${h.company_id}::${propName}`;
+        if (!map[key]) {
+          map[key] = {
+            key,
+            propertyName: propName,
+            companyName: h.company_name,
+            address: h.property_address || '—',
+            costBasis: 0,
+            bookValue: 0,
+            marketValue: 0,
+            capitalIn: 0,
+            debt: 0,
+            slices: [],
+          };
+        }
+        map[key].costBasis += hf.costBasis;
+        map[key].bookValue += hf.bookValue;
+        map[key].marketValue += hf.marketValue;
+        map[key].capitalIn += hf.capitalContributed;
+        map[key].debt += hf.existingDebt;
+        map[key].slices.push({ partner: p.partner_name, pct: h.ownership_pct * 100, color: COLORS[pi % COLORS.length] });
+      });
+    });
+    return Object.values(map).sort((a, b) => a.propertyName.localeCompare(b.propertyName));
+  }, [apiPartners, companyGpr, financials]);
 
   const totalRow = useMemo(() => {
     const fs = filtered.map(p => financials[p.partner_name]).filter(Boolean);
@@ -329,9 +446,28 @@ export default function RentalOwnership() {
 
   // All synthetic contributions merged with local
   const allContribs = useMemo(() => {
+    const imported: Contribution[] = [];
+    apiPartners.forEach(p => {
+      p.holdings.forEach(h => {
+        if (h.capital_contributed && h.capital_contributed > 0) {
+          imported.push({
+            id: `import-${h.ownership_id}`,
+            partner: p.partner_name,
+            company: h.company_name,
+            date: '—',
+            amount: h.capital_contributed,
+            type: 'Initial Contribution',
+            reference: 'Import',
+            notes: h.property_name ? `Property: ${h.property_name}` : '',
+            cumulative: h.capital_contributed,
+          });
+        }
+      });
+    });
+    if (imported.length > 0) return [...imported, ...localContribs];
     const synth = apiPartners.flatMap(p => {
       const f = financials[p.partner_name];
-      if (!f) return [];
+      if (!f || f.capitalContributed <= 0) return [];
       return genContributions(p.partner_name, p.holdings.map(h => h.company_name), f.capitalContributed);
     });
     return [...synth, ...localContribs];
@@ -372,25 +508,81 @@ export default function RentalOwnership() {
     setContribForm({ ...BLANK_CONTRIB });
   }
 
+  async function downloadImportTemplate() {
+    try {
+      const response = await api.get('/api/rentals/ownership/import-template', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data as BlobPart]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'Ownership_Import_Template.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      setImportMessage({ type: 'error', text: 'Failed to download import template.' });
+    }
+  }
+
   async function handleImportPartners(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || companyFilter === 'all') {
-      alert('Please select a specific company first');
-      return;
-    }
+    if (!file) return;
+    e.target.value = '';
 
     const formData = new FormData();
-    formData.append('company_id', companyFilter);
     formData.append('file', file);
 
+    setImporting(true);
+    setImportMessage(null);
     try {
       const response = await api.post('/api/rentals/ownership/import', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
-      alert(`Imported ${(response.data as any).imported_count} partners successfully`);
+      const data = response.data as { imported_count?: number; errors?: string[]; message?: string };
+      const count = data.imported_count ?? 0;
+      const warnings = (data.errors ?? []).filter(Boolean);
+      if (count === 0) {
+        setImportMessage({
+          type: 'error',
+          text: warnings.join('; ') || 'No ownership rows imported. Check column headers and Company Registry names.',
+        });
+      } else {
+        const warnText = warnings.length ? ` (${warnings.length} row warning(s): ${warnings.slice(0, 3).join('; ')}${warnings.length > 3 ? '…' : ''})` : '';
+        setImportMessage({ type: 'success', text: `Imported ${count} ownership position(s).${warnText}` });
+        loadData();
+      }
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setImportMessage({
+        type: 'error',
+        text: typeof detail === 'string' ? detail : 'Import failed. Use the template and ensure Entity Name matches Company Registry.',
+      });
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function handleSyncJvLedger() {
+    setSyncing(true);
+    setImportMessage(null);
+    try {
+      const response = await api.post('/api/rentals/ownership/sync-jv-ledger', null, {
+        params: { replace: true },
+      });
+      const data = response.data as { synced_count?: number; errors?: string[]; message?: string };
+      const count = data.synced_count ?? 0;
+      const warnings = (data.errors ?? []).filter(Boolean);
+      const warnText = warnings.length ? ` (${warnings.length} warning(s): ${warnings.slice(0, 2).join('; ')}${warnings.length > 2 ? '…' : ''})` : '';
+      setImportMessage({ type: 'success', text: `Synced ${count} position(s) from JV Ledger.${warnText}` });
       loadData();
-    } catch (err) {
-      alert('Failed to import partners');
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setImportMessage({
+        type: 'error',
+        text: typeof detail === 'string' ? detail : 'JV Ledger sync failed. Ensure PropDev company names match Rentals Company Registry.',
+      });
+    } finally {
+      setSyncing(false);
     }
   }
 
@@ -430,12 +622,21 @@ export default function RentalOwnership() {
           <button className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg text-xs text-gray-700 hover:bg-gray-50">
             <Download size={13} /> Export PDF
           </button>
+          <button onClick={downloadImportTemplate}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg text-xs text-gray-700 hover:bg-gray-50">
+            <Download size={13} /> Download Template
+          </button>
           <button onClick={() => importFileRef.current?.click()}
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg text-xs text-gray-700 hover:bg-gray-50"
-            disabled={companyFilter === 'all'}>
-            <Download size={13} /> Import Partners
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            disabled={importing}>
+            <Download size={13} /> {importing ? 'Importing…' : 'Import Partners'}
           </button>
           <input ref={importFileRef} type="file" accept=".xlsx" onChange={handleImportPartners} style={{ display: 'none' }} />
+          <button onClick={handleSyncJvLedger}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-indigo-300 rounded-lg text-xs text-indigo-800 hover:bg-indigo-50 disabled:opacity-50"
+            disabled={syncing}>
+            <Users size={13} /> {syncing ? 'Syncing…' : 'Sync from JV Ledger'}
+          </button>
           <button className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs hover:bg-indigo-700">
             <Zap size={13} /> AI Insights
           </button>
@@ -446,6 +647,12 @@ export default function RentalOwnership() {
         </div>
       </div>
 
+      {importMessage && (
+        <div className={`rounded-lg px-4 py-3 text-sm ${importMessage.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+          {importMessage.text}
+        </div>
+      )}
+
       {/* ═══════════════════════════════════════════════════════════════════════
           SECTION 1 — PORTFOLIO OWNERSHIP KPIs
       ═══════════════════════════════════════════════════════════════════════ */}
@@ -453,8 +660,8 @@ export default function RentalOwnership() {
         {[
           { label: 'Total Partners',      value: kpis.totalPartners.toString(),  icon: <Users size={18} />,       color: 'text-gray-900',   sub: 'active partners' },
           { label: 'Total Capital Raised', value: fmtK(kpis.totalCapital),       icon: <DollarSign size={18} />,  color: 'text-blue-700',   sub: 'contributed' },
-          { label: 'Portfolio Market Value', value: fmtK(kpis.totalMV),         icon: <Building2 size={18} />,   color: 'text-green-800',  sub: 'at 5.5% cap rate' },
-          { label: 'Total Equity',          value: fmtK(kpis.totalEquity),       icon: <TrendingUp size={18} />,  color: 'text-amber-700',  sub: 'market value − debt (60% LTV)' },
+          { label: 'Portfolio Market Value', value: fmtK(kpis.totalMV),         icon: <Building2 size={18} />,   color: 'text-green-800',  sub: hasImportedFinancials ? 'imported + cap rate where available' : 'at 5.5% cap rate' },
+          { label: 'Total Equity',          value: fmtK(kpis.totalEquity),       icon: <TrendingUp size={18} />,  color: 'text-amber-700',  sub: kpis.totalDebt > 0 && kpis.totalDebt !== kpis.totalMV * 0.6 ? 'market value − imported debt' : 'market value − debt (60% LTV)' },
           { label: 'Avg Partner ROI',       value: `${avgROI.toFixed(1)}%`,      icon: <TrendingUp size={18} />,  color: avgROI >= 20 ? 'text-green-800' : 'text-amber-700', sub: 'weighted by cost basis' },
         ].map(({ label, value, icon, color, sub }) => (
           <div key={label} className="bg-white rounded-xl border border-gray-200 p-4">
@@ -475,7 +682,7 @@ export default function RentalOwnership() {
         <div className="p-4 border-b border-gray-100 flex items-center justify-between">
           <div>
             <h3 className="font-semibold text-gray-800">Partner Registry</h3>
-            <p className="text-xs text-gray-400 mt-0.5">{filtered.length} partner{filtered.length !== 1 ? 's' : ''} · all financial values derived at 5.5% cap rate</p>
+            <p className="text-xs text-gray-400 mt-0.5">{filtered.length} partner{filtered.length !== 1 ? 's' : ''} · {hasImportedFinancials ? 'financials from import where provided' : 'all financial values derived at 5.5% cap rate'}</p>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -700,52 +907,64 @@ export default function RentalOwnership() {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          SECTION 3 — OWNERSHIP BY COMPANY
+          SECTION 3 — OWNERSHIP BREAKDOWN (Company / Partner / Property)
       ═══════════════════════════════════════════════════════════════════════ */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-800">Ownership by Company</h3>
-          <p className="text-xs text-gray-400 mt-0.5">Click header to expand · Donut shows partner share</p>
+        <div className="p-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-gray-800">Ownership Breakdown</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Group by company, partner, or property · Book value rolls up company-wise</p>
+          </div>
+          <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+            {(['company', 'partner', 'property'] as const).map(tab => (
+              <button key={tab}
+                onClick={() => setBreakdownTab(tab)}
+                className={`px-3 py-1.5 capitalize ${breakdownTab === tab ? 'bg-green-800 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                By {tab === 'company' ? 'Company' : tab === 'partner' ? 'Partner' : 'Property'}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="divide-y divide-gray-100">
-          {byCompany.map(co => {
-            const isExp = expandedCos.has(co.id);
-            return (
-              <div key={co.id}>
-                <button
-                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 text-left"
-                  onClick={() => setExpandedCos(prev => { const next = new Set(prev); if (next.has(co.id)) next.delete(co.id); else next.add(co.id); return next; })}
-                >
-                  <div className="flex items-center gap-3">
-                    {isExp ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
-                    <Building2 size={14} className="text-gray-400" />
-                    <span className="font-medium text-gray-900">{co.name}</span>
-                    <span className="text-xs text-gray-400">
-                      · {co.units} unit{co.units !== 1 ? 's' : ''} · {co.slices.length} partner{co.slices.length !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-4 text-xs text-gray-600">
-                    <span>Market Value: <strong className="text-green-800">{fmtK(co.marketValue)}</strong></span>
-                    <span>Monthly NOI: <strong>{fmtUSD(co.noi)}</strong></span>
-                  </div>
-                </button>
-                {isExp && (
-                  <div className="px-4 pb-4 bg-gray-50 grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {/* Partner table */}
-                    <table className="w-full text-xs mt-3">
-                      <thead className="text-gray-500">
-                        <tr>
-                          <th className="pb-1.5 text-left">Partner</th>
-                          <th className="pb-1.5 text-center">Type</th>
-                          <th className="pb-1.5 text-right">% Share</th>
-                          <th className="pb-1.5 text-right">Market Value</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {co.slices.map((s, si) => {
-                          const nm = natures[s.partner] ?? (apiPartners.find(p => p.partner_name === s.partner)?.holdings.find(h => h.company_id === co.id)?.role);
-                          const nature = ROLE_MAP[nm ?? ''] ?? 'Limited Partner (LP)';
-                          return (
+
+        {breakdownTab === 'company' && (
+          <div className="divide-y divide-gray-100">
+            {byCompany.length === 0 && <p className="text-center text-sm text-gray-400 py-8">No ownership data — import partners or add manually</p>}
+            {byCompany.map(co => {
+              const isExp = expandedCos.has(co.id);
+              return (
+                <div key={co.id}>
+                  <button
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 text-left"
+                    onClick={() => setExpandedCos(prev => { const next = new Set(prev); if (next.has(co.id)) next.delete(co.id); else next.add(co.id); return next; })}
+                  >
+                    <div className="flex items-center gap-3">
+                      {isExp ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
+                      <Building2 size={14} className="text-gray-400" />
+                      <span className="font-medium text-gray-900">{co.name}</span>
+                      <span className="text-xs text-gray-400">
+                        · {co.units} unit{co.units !== 1 ? 's' : ''} · {co.slices.length} partner{co.slices.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-gray-600">
+                      <span>Book Value: <strong>{fmtK(co.bookValue)}</strong></span>
+                      <span>Cost Basis: <strong>{fmtK(co.costBasis)}</strong></span>
+                      <span>Market Value: <strong className="text-green-800">{fmtK(co.marketValue)}</strong></span>
+                    </div>
+                  </button>
+                  {isExp && (
+                    <div className="px-4 pb-4 bg-gray-50 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      <table className="w-full text-xs mt-3">
+                        <thead className="text-gray-500">
+                          <tr>
+                            <th className="pb-1.5 text-left">Partner</th>
+                            <th className="pb-1.5 text-right">% Share</th>
+                            <th className="pb-1.5 text-right">Capital In</th>
+                            <th className="pb-1.5 text-right">Book Value</th>
+                            <th className="pb-1.5 text-right">Market Value</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {co.slices.map(s => (
                             <tr key={s.partner} className="hover:bg-white cursor-pointer" onClick={() => setSelectedPartner(s.partner)}>
                               <td className="py-1.5 pr-2">
                                 <div className="flex items-center gap-1.5">
@@ -753,31 +972,142 @@ export default function RentalOwnership() {
                                   {s.partner}
                                 </div>
                               </td>
-                              <td className="py-1.5 text-center"><NatureBadge nature={nature} /></td>
                               <td className="py-1.5 text-right">{s.pct.toFixed(1)}%</td>
-                              <td className="py-1.5 text-right font-mono text-green-800">{fmtK(co.marketValue * (s.pct / 100))}</td>
+                              <td className="py-1.5 text-right font-mono">{fmtK(s.capitalIn)}</td>
+                              <td className="py-1.5 text-right font-mono">{fmtK(s.bookValue)}</td>
+                              <td className="py-1.5 text-right font-mono text-green-800">{fmtK(s.marketValue)}</td>
                             </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                    {/* Donut */}
-                    <div className="flex items-center justify-center">
-                      <ResponsiveContainer width="100%" height={160}>
-                        <PieChart>
-                          <Pie data={co.slices.map(s => ({ name: s.partner, value: s.pct }))} dataKey="value" cx="50%" cy="50%" innerRadius={40} outerRadius={65} paddingAngle={2}>
-                            {co.slices.map((s, si) => <Cell key={si} fill={s.color} />)}
-                          </Pie>
-                          <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'Ownership']} />
-                          <Legend wrapperStyle={{ fontSize: 10 }} />
-                        </PieChart>
-                      </ResponsiveContainer>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div className="flex items-center justify-center">
+                        <ResponsiveContainer width="100%" height={160}>
+                          <PieChart>
+                            <Pie data={co.slices.map(s => ({ name: s.partner, value: s.pct }))} dataKey="value" cx="50%" cy="50%" innerRadius={40} outerRadius={65} paddingAngle={2}>
+                              {co.slices.map((s, si) => <Cell key={si} fill={s.color} />)}
+                            </Pie>
+                            <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'Ownership']} />
+                            <Legend wrapperStyle={{ fontSize: 10 }} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
                     </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {breakdownTab === 'partner' && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+                <tr>
+                  {['Partner','Own %','Capital In','Cost Basis','Book Value','Market Value','ROI','Holdings'].map(h => (
+                    <th key={h} className="px-3 py-3 text-right first:text-left whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {byPartner.map(p => (
+                  <tr key={p.name} className="hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedPartner(p.name)}>
+                    <td className="px-3 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full" style={{ background: p.color }} />
+                        <span className="font-medium">{p.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-right font-mono">{p.ownershipPct.toFixed(1)}%</td>
+                    <td className="px-3 py-3 text-right font-mono">{fmtK(p.capitalIn)}</td>
+                    <td className="px-3 py-3 text-right font-mono">{fmtK(p.costBasis)}</td>
+                    <td className="px-3 py-3 text-right font-mono">{fmtK(p.bookValue)}</td>
+                    <td className="px-3 py-3 text-right font-mono text-green-800">{fmtK(p.marketValue)}</td>
+                    <td className="px-3 py-3 text-right font-semibold">{p.roi.toFixed(1)}%</td>
+                    <td className="px-3 py-3 text-right text-gray-500">{p.holdings}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {byPartner.length === 0 && <p className="text-center text-sm text-gray-400 py-8">No partners</p>}
+          </div>
+        )}
+
+        {breakdownTab === 'property' && (
+          <div className="divide-y divide-gray-100">
+            {byProperty.length === 0 && <p className="text-center text-sm text-gray-400 py-8">No property-level ownership</p>}
+            {byProperty.map(prop => (
+              <div key={prop.key} className="px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                  <div>
+                    <p className="font-medium text-gray-900">{prop.propertyName}</p>
+                    <p className="text-xs text-gray-400">{prop.companyName} · {prop.address}</p>
                   </div>
-                )}
+                  <div className="flex flex-wrap gap-4 text-xs text-gray-600">
+                    <span>Cost Basis: <strong>{fmtK(prop.costBasis)}</strong></span>
+                    <span>Book Value: <strong>{fmtK(prop.bookValue)}</strong></span>
+                    <span>Market Value: <strong className="text-green-800">{fmtK(prop.marketValue)}</strong></span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {prop.slices.map(s => (
+                    <span key={s.partner} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100 text-xs">
+                      <span className="w-2 h-2 rounded-full" style={{ background: s.color }} />
+                      {s.partner}: {s.pct.toFixed(1)}%
+                    </span>
+                  ))}
+                </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          SECTION 3b — COST BASIS BY PROPERTY NAME
+      ═══════════════════════════════════════════════════════════════════════ */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="p-4 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-800">Cost Basis by Property Name</h3>
+          <p className="text-xs text-gray-400 mt-0.5">Property-name-wise rollup of cost basis, book value, and market value</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+              <tr>
+                {['Property Name','Company','Address','Cost Basis','Book Value','Market Value','Debt','Partners'].map(h => (
+                  <th key={h} className="px-3 py-3 text-right first:text-left whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {byProperty.map(prop => (
+                <tr key={prop.key} className="hover:bg-gray-50">
+                  <td className="px-3 py-3 font-medium text-gray-900">{prop.propertyName}</td>
+                  <td className="px-3 py-3 text-gray-600 text-xs">{prop.companyName}</td>
+                  <td className="px-3 py-3 text-gray-500 text-xs max-w-[200px] truncate">{prop.address}</td>
+                  <td className="px-3 py-3 text-right font-mono font-semibold">{fmtK(prop.costBasis)}</td>
+                  <td className="px-3 py-3 text-right font-mono">{fmtK(prop.bookValue)}</td>
+                  <td className="px-3 py-3 text-right font-mono text-green-800">{fmtK(prop.marketValue)}</td>
+                  <td className="px-3 py-3 text-right font-mono">{fmtK(prop.debt)}</td>
+                  <td className="px-3 py-3 text-right text-xs text-gray-500">{prop.slices.map(s => s.partner).join(', ')}</td>
+                </tr>
+              ))}
+            </tbody>
+            {byProperty.length > 0 && (
+              <tfoot>
+                <tr className="bg-gray-900 text-white text-xs font-semibold">
+                  <td className="px-3 py-3" colSpan={3}>Portfolio Total</td>
+                  <td className="px-3 py-3 text-right font-mono">{fmtK(byProperty.reduce((s, p) => s + p.costBasis, 0))}</td>
+                  <td className="px-3 py-3 text-right font-mono">{fmtK(byProperty.reduce((s, p) => s + p.bookValue, 0))}</td>
+                  <td className="px-3 py-3 text-right font-mono text-green-300">{fmtK(byProperty.reduce((s, p) => s + p.marketValue, 0))}</td>
+                  <td className="px-3 py-3 text-right font-mono">{fmtK(byProperty.reduce((s, p) => s + p.debt, 0))}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            )}
+          </table>
+          {byProperty.length === 0 && <p className="text-center text-sm text-gray-400 py-8">No property data — import ownership Excel with Property Name column</p>}
         </div>
       </div>
 
