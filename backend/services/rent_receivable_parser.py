@@ -100,24 +100,49 @@ def _find_header(rows: list) -> Optional[Tuple[int, int]]:
     return None
 
 
-def _is_unit_row(row, unit_name_col: int) -> bool:
-    """Return True if this row looks like a real unit data row."""
-    if unit_name_col >= len(row):
-        return False
-    cell = row[unit_name_col]
+def _is_valid_unit_label(cell) -> bool:
+    """Return True if a cell value looks like a unit/property name (not a header/summary)."""
     if not cell:
         return False
     name = _norm(cell)
-    if not name:
-        return False
-    if name == 'total':
-        return False
-    if name in UNIT_NAME_LABELS:
+    if not name or name == 'total' or name in UNIT_NAME_LABELS:
         return False
     raw = str(cell)
     if '—' in raw or '–' in raw or 'Occupied' in raw or 'Collected' in raw:
         return False
     return True
+
+
+def _row_has_month_data(row, month_col_map: Dict[str, int]) -> bool:
+    """True when any month column has a numeric or non-empty rent value."""
+    for col in month_col_map.values():
+        if col >= len(row):
+            continue
+        val = row[col]
+        if val is None:
+            continue
+        if isinstance(val, (int, float)):
+            return True
+        if str(val).strip():
+            return True
+    return False
+
+
+def _extract_unit_name(row, unit_name_col: int) -> Optional[str]:
+    """
+    Read unit name from the header column; fall back to column A when B is empty.
+    Some company sheets list the full property name only under SUITE NAMES.
+    """
+    if unit_name_col < len(row) and _is_valid_unit_label(row[unit_name_col]):
+        return str(row[unit_name_col]).strip()
+    if unit_name_col != 0 and 0 < len(row) and _is_valid_unit_label(row[0]):
+        return str(row[0]).strip()
+    return None
+
+
+def _is_unit_row(row, unit_name_col: int) -> bool:
+    """Return True if this row looks like a real unit data row."""
+    return _extract_unit_name(row, unit_name_col) is not None
 
 
 def _empty_result(co_name: str, error: str) -> Dict:
@@ -182,13 +207,19 @@ def parse_sheet(ws, sheet_name: str, target_month: str) -> Dict:
                 and col0_norm not in UNIT_NAME_LABELS:
             current_suite = col0_display
 
-        if not _is_unit_row(row, unit_name_col):
+        unit_name = _extract_unit_name(row, unit_name_col)
+        if not unit_name:
             continue
 
-        unit_name = str(row[unit_name_col]).strip()
-
-        # Skip rows where col B repeats the suite name (suite header rows, not real units)
-        if col0_norm and _norm(unit_name) == col0_norm:
+        # Skip suite-only header rows (col A == col B, no rent in month columns).
+        # When both columns carry the same property name AND rent data exists,
+        # treat as a valid single-property unit row.
+        if (
+            unit_name_col != SUITE_NAME_COL
+            and col0_norm
+            and _norm(unit_name) == col0_norm
+            and not _row_has_month_data(row, month_col_map)
+        ):
             continue
 
         # Suite for this unit: col 0 if populated (and not a header/total), else inherited

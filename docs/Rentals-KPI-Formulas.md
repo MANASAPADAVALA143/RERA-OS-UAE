@@ -178,7 +178,111 @@ Reference for KPI calculations across **Rental Overview**, **Financials KPI Dash
 
 ---
 
-## E) Quick reference — core definitions
+## G) Financial Ratios page
+
+**Route:** Rentals → Financial Ratios  
+**Frontend reference:** `frontend/src/pages/rental/RentalFinancialRatios.tsx`
+
+### Profitability ratios
+
+| Ratio | Formula | Benchmark |
+|---|---|---|
+| **NOI Margin** | `NOI ÷ Revenue × 100` | > 35% |
+| **Net Profit Margin** | `Net Income ÷ Revenue × 100` | > 10% |
+| **Operating Expense Ratio** | `Total OpEx ÷ Revenue × 100` | < 60% |
+| **EBITDA Margin** | `EBITDA ÷ Revenue × 100` | > 45% |
+| **Return on Assets (ROA)** | `Net Income ÷ Total Assets × 100` | > 4% |
+| **Return on Equity (ROE)** | `Net Income ÷ Equity × 100` | > 8% |
+| **Gross Rent Multiple** | `Asset Value ÷ Annual Revenue` | < 14x |
+| **Cash-on-Cash Return** | `Pre-tax Cash Flow ÷ Equity × 100` | > 7% |
+
+Where:
+- `NOI = Revenue − Expenses + Interest Expense`
+- `EBITDA = NOI + Depreciation + Amortization`
+
+### Liquidity ratios
+
+| Ratio | Formula | Benchmark |
+|---|---|---|
+| **Current Ratio** | `Current Assets ÷ Current Liabilities` | > 1.5x |
+| **Quick Ratio** | `(Current Assets − Inventory) ÷ Current Liabilities` | > 1.0x |
+| **Cash Ratio** | `Cash & Bank ÷ Current Liabilities` | > 0.2x |
+| **Operating CF Ratio** | `Operating Cash Flow ÷ Current Liabilities` | > 1.0x |
+| **Working Capital** | `Current Assets − Current Liabilities` | Positive |
+| **Days Cash on Hand** | `Cash ÷ (Annual OpEx ÷ 365)` | > 60 days |
+
+### Solvency / leverage ratios
+
+| Ratio | Formula | Benchmark |
+|---|---|---|
+| **Debt-to-Equity** | `Total Liabilities ÷ Equity` | < 5x (RE) |
+| **Debt-to-Asset** | `Total Liabilities ÷ Total Assets × 100` | < 80% |
+| **Equity Ratio** | `Equity ÷ Total Assets × 100` | > 20% |
+| **Interest Coverage** | `NOI ÷ Interest Expense` | > 1.5x |
+| **LTV** | `Mortgage / Long-term Loans ÷ Property Value (Buildings) × 100` | < 80% |
+| **Net Debt** | `Long-term Loans − Cash` | Monitor |
+| **DSCR** | `NOI ÷ Total Debt Service` (est: `NOI ÷ Interest × 1.2`) | > 1.25x |
+| **Debt Service Ratio** | `Debt Service ÷ NOI × 100` | < 65% |
+| **Fixed Charge Coverage** | `(NOI + Fixed Charges) ÷ Fixed Charges` | > 1.25x |
+
+### Occupancy & pricing ratios
+
+| Ratio | Formula | Benchmark |
+|---|---|---|
+| **Occupancy Rate** | `Occupied Units ÷ Total Units × 100` | > 90% |
+| **Economic Occupancy** | `Rent Collected ÷ Gross Potential × 100` | > 92% |
+| **Rent Collection Rate** | `Collected ÷ Billed × 100` | > 95% |
+| **Vacancy Rate** | `Vacant Units ÷ Total Units × 100` | < 10% |
+| **Loss to Lease** | `(Market Rent − Actual Rent) ÷ Market Rent × 100` | < 5% |
+| **Avg Days Vacant** | Average days between tenants | < 21–30 days |
+| **Rent per Sq Ft** | `Average Rent ÷ Average Sq Ft` | Market |
+| **Revenue per Unit** | `Total Revenue ÷ Total Units` | Trend |
+| **Expense per Unit** | `Total OpEx ÷ Occupied Units` | < $1,000/mo |
+| **Cap Rate** | `NOI ÷ Property Value × 100` | 4–6% (market) |
+| **Price / Rent Ratio** | `Property Value ÷ Annual Rent` | < 20x |
+| **EGIM** | `Property Value ÷ Effective Gross Income` | < 12x |
+
+### Returns / cost of capital
+
+| Ratio | Formula |
+|---|---|
+| **WACC** | Weighted average cost of debt and equity |
+| **Cost of Debt** | `Interest Expense ÷ Total Debt × 100` |
+| **Cost of Equity** | Required return on equity (CAPM estimate) |
+| **Return vs WACC** | `Portfolio Return − WACC` |
+| **Spread (Cap − WACC)** | `Cap Rate − WACC` |
+
+---
+
+## H) AR Dashboard
+
+**Route:** Rentals → AR Dashboard  
+**Frontend reference:** `frontend/src/pages/RentalArDashboard.tsx`
+
+| KPI | Formula |
+|---|---|
+| **Total Billed / Month** | Sum of billed rent from registry (occupied units) |
+| **Collected (Latest Mo)** | Sum of Rent Receivable collections for selected month |
+| **Outstanding AR** | `Billed − Collected` (open balance) |
+| **Collection Rate** | `Collected ÷ Billed × 100` |
+| **Vacancy Loss / Month** | Sum of rent for vacant/notice units from registry |
+| **Zero-Pay Companies** | Companies with billed > 0 and collected = 0 |
+| **Partial-Pay Companies** | `0 < Collected < Billed` |
+| **Month-End Shortfall** | `Billed − Collected` for selected month |
+| **Occupied — Billing Gap** | Occupied units with vs without billing data |
+| **Top 5 by Outstanding AR** | Companies ranked by highest open AR |
+| **DSO (Arrears Days)** | Weighted bucket formula (same as Overview) |
+
+**Collection detail table (per company × month):**
+- **Billed** = registry occupied-unit rent
+- **Collected** = Rent Receivable upload (or P&L fallback)
+- **Outstanding** = `Billed − Collected`
+- **Rate** = `Collected ÷ Billed × 100`
+- **Status:** Zero-Pay (0%), Partial (<100%), Paid (≥95%), Low (<85%)
+
+---
+
+## I) Quick reference — core definitions
 
 ```
 Occupancy %     = Occupied Units / Total Units
@@ -192,7 +296,7 @@ DSCR            = Annual NOI / Annual Debt Service (EMI × 12)
 
 ---
 
-## F) Code locations
+## J) Code locations
 
 | Area | Primary files |
 |---|---|
@@ -203,6 +307,7 @@ DSCR            = Annual NOI / Annual Debt Service (EMI × 12)
 | CFO Dashboard | `frontend/src/pages/RentalCfoDashboard.tsx` |
 | CFO Portfolio | `frontend/src/pages/rental/RentalCfoPortfolio.tsx` |
 | CFO data hook | `frontend/src/hooks/useRentalCfoData.ts` |
+| Financial Ratios | `frontend/src/pages/rental/RentalFinancialRatios.tsx` |
 | Executive Summary / PPT export | `frontend/src/utils/executiveSummaryPpt.ts`, `frontend/src/utils/gatherExecutiveExportData.ts` |
 
 ---
