@@ -911,13 +911,11 @@ export default function CompanyRegistry({ embedded = false }: Props) {
       const res = await api.get(mod.endpoint);
       setCompanies(mod.normalise(res.data));
     } catch (err: unknown) {
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      if (!status || status === 404) {
-        // endpoint not yet built or not reachable — show empty state silently
-        setCompanies([]);
-      } else {
-        push(`Failed to load ${mod.label} companies`, false);
-      }
+      const ax = err as { response?: { status?: number; data?: { detail?: string } }; message?: string };
+      const detail = ax.response?.data?.detail;
+      const msg = typeof detail === 'string' ? detail : ax.message || 'Unknown error';
+      push(`Failed to load ${mod.label} companies: ${msg}`, false);
+      setCompanies([]);
     } finally {
       setLoading(false);
     }

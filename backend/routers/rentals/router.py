@@ -597,63 +597,93 @@ def list_companies(
             companies = db.query(RentalCompany).filter(RentalCompany.tenant_id == tid).all()
         except Exception as exc2:
             _log.error("list_companies retry also failed: %s", exc2)
-            return []
+            raise HTTPException(
+                status_code=500,
+                detail="Could not load companies from database. Check server logs.",
+            ) from exc2
     month_abbrev = today.strftime("%b-%Y")  # e.g. "Jul-2026"
     cur_month    = today.strftime("%Y-%m")  # e.g. "2026-07"
     result = []
     counts_healed = False
     for co in companies:
-        units, inv_dicts, exp_dicts = _load_company_data(co.id, tid, db)
-        if units:
-            month = co.last_sync_month
-            if month and any(u.rent_history for u in units):
-                _reconcile_unit_status_for_month(units, month)
-            occ, total = _registry_unit_counts(units, month)
-            if co.total_units != total or co.occupied_units != occ:
-                co.total_units = total
-                co.occupied_units = occ
-                counts_healed = True
-            # Reconcile collected / vac loss from registry (not stale Excel summary totals)
-            if co.last_sync_month and any(u.rent_history for u in units):
-                reg_totals = _registry_monthly_totals(units)
-                reg_collected = reg_totals.get(co.last_sync_month)
-                reg_vac = _registry_vacancy_loss(units)
-                if reg_collected is not None and (
-                    co.collected_this_month != reg_collected
-                    or co.vacancy_loss != reg_vac
-                    or co.monthly_rent_data != reg_totals
-                ):
-                    co.collected_this_month = reg_collected
-                    co.vacancy_loss = reg_vac
-                    co.monthly_rent_data = reg_totals
-                    if reg_totals:
-                        co.gross_potential_rent = max(reg_totals.values())
-                    counts_healed = True
-        inv_by_unit: dict[str, list[dict]] = defaultdict(list)
-        for inv in inv_dicts:
-            inv_by_unit[inv["unit_id"]].append(inv)
-        unit_dicts = [_unit_dict(u, inv_by_unit.get(str(u.id), []), today) for u in units]
-        summ = company_summary(unit_dicts, inv_dicts, exp_dicts, today, cur_month=cur_month)
-        # Apply Excel-sync → P&L fallback (same priority as portfolio summary)
-        _apply_collected_fallback(summ, co, month_abbrev, db, tid)
-        props = db.query(RentalProp).filter(RentalProp.company_id == co.id).all()
-        result.append({
-            "id": str(co.id),
-            "company_name": co.company_name,
-            "property_name": props[0].property_name if props else "",
-            "property_count": len(props),
-            **summ,
-            # Upload-synced values (set by Rent Receivable Excel upload)
-            "sync_collected": float(co.collected_this_month) if co.collected_this_month is not None else None,
-            "sync_vacancy_loss": float(co.vacancy_loss) if co.vacancy_loss is not None else None,
-            "sync_gross_potential": float(co.gross_potential_rent) if co.gross_potential_rent is not None else None,
-            "sync_occupied_units": co.occupied_units,
-            "sync_total_units": co.total_units,
-            "last_sync_month": co.last_sync_month,
-            "monthly_rent_data": co.monthly_rent_data,
-        })
+        try:
+            units, inv_dicts, exp_dicts = _load_company_data(co.id, tid, db)
+            if units:
+                month = co.last_sync_month
+                try:
+                    if month and any(u.rent_history for u in units):
+                        _reconcile_unit_status_for_month(units, month)
+                    occ, total = _registry_unit_counts(units, month)
+                    if co.total_units != total or co.occupied_units != occ:
+                        co.total_units = total
+                        co.occupied_units = occ
+                        counts_healed = True
+                    if co.last_sync_month and any(u.rent_history for u in units):
+                        reg_totals = _registry_monthly_totals(units)
+                        reg_collected = reg_totals.get(co.last_sync_month)
+                        reg_vac = _registry_vacancy_loss(units)
+                        if reg_collected is not None and (
+                            co.collected_this_month != reg_collected
+                            or co.vacancy_loss != reg_vac
+                            or co.monthly_rent_data != reg_totals
+                        ):
+                            co.collected_this_month = reg_collected
+                            co.vacancy_loss = reg_vac
+                            co.monthly_rent_data = reg_totals
+                            if reg_totals:
+                                co.gross_potential_rent = max(reg_totals.values())
+                            counts_healed = True
+                except Exception as heal_exc:
+                    _log.warning(
+                        "list_companies heal skipped for %s: %s",
+                        co.company_name, heal_exc,
+                    )
+            inv_by_unit: dict[str, list[dict]] = defaultdict(list)
+            for inv in inv_dicts:
+                inv_by_unit[inv["unit_id"]].append(inv)
+            unit_dicts = [_unit_dict(u, inv_by_unit.get(str(u.id), []), today) for u in units]
+            summ = company_summary(unit_dicts, inv_dicts, exp_dicts, today, cur_month=cur_month)
+            _apply_collected_fallback(summ, co, month_abbrev, db, tid)
+            props = db.query(RentalProp).filter(RentalProp.company_id == co.id).all()
+            result.append({
+                "id": str(co.id),
+                "company_name": co.company_name,
+                "property_name": props[0].property_name if props else "",
+                "property_count": len(props),
+                **summ,
+                "sync_collected": float(co.collected_this_month) if co.collected_this_month is not None else None,
+                "sync_vacancy_loss": float(co.vacancy_loss) if co.vacancy_loss is not None else None,
+                "sync_gross_potential": float(co.gross_potential_rent) if co.gross_potential_rent is not None else None,
+                "sync_occupied_units": co.occupied_units,
+                "sync_total_units": co.total_units,
+                "last_sync_month": co.last_sync_month,
+                "monthly_rent_data": co.monthly_rent_data,
+            })
+        except Exception as row_exc:
+            _log.error("list_companies row failed for %s: %s", co.company_name, row_exc)
+            result.append({
+                "id": str(co.id),
+                "company_name": co.company_name,
+                "property_name": "",
+                "property_count": 0,
+                "total_units": co.total_units or 0,
+                "occupied_units": co.occupied_units or 0,
+                "vacant_units": 0,
+                "occupancy_pct": 0,
+                "sync_collected": float(co.collected_this_month) if co.collected_this_month is not None else None,
+                "sync_vacancy_loss": float(co.vacancy_loss) if co.vacancy_loss is not None else None,
+                "sync_gross_potential": float(co.gross_potential_rent) if co.gross_potential_rent is not None else None,
+                "sync_occupied_units": co.occupied_units,
+                "sync_total_units": co.total_units,
+                "last_sync_month": co.last_sync_month,
+                "monthly_rent_data": co.monthly_rent_data,
+            })
     if counts_healed:
-        db.commit()
+        try:
+            db.commit()
+        except Exception as commit_exc:
+            db.rollback()
+            _log.warning("list_companies heal commit failed: %s", commit_exc)
     if fmt == "csv":
         output = io.StringIO()
         if result:
