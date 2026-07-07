@@ -74,9 +74,16 @@ def _fmt_pct(n: float | None, d: int = 1) -> str:
 
 
 def _fmt_x(n: float | None, d: int = 2) -> str:
-    if n is None or n <= 0:
+    if n is None:
         return "N/A"
     return f"{n:.{d}f}x"
+
+
+def _debt_to_equity(k: KpiData) -> float | None:
+    """Liabilities / Equity; negative when equity is negative; N/A only when equity = 0."""
+    if k.equity == 0:
+        return None
+    return k.total_liabilities / k.equity
 
 
 def _pct(num: float, den: float) -> float | None:
@@ -246,6 +253,14 @@ def _substitution_steps(name: str, k: KpiData, k_prev: KpiData | None, c_val: fl
     if name == "Debt-to-Equity":
         liab = _fmt_currency(k.total_liabilities)
         eq = _fmt_currency(k.equity)
+        if k.equity == 0:
+            return f"Debt-to-Equity = N/A because Equity = $0\nLiabilities = {liab}"
+        if k.equity < 0:
+            return (
+                f"Debt-to-Equity = Total Liabilities / Equity\n"
+                f"= {liab} / {eq} = {_fmt_x(c_val, 1)}\n"
+                f"(negative equity — ratio is negative; balance sheet is underwater)"
+            )
         return f"Debt-to-Equity = Total Liabilities / Equity\n= {liab} / {eq} = {_fmt_x(c_val, 1)}"
     if name == "Cash Balance":
         return f"Cash Balance = sum of bank / cash accounts on balance sheet\n= {_fmt_currency(k.cash)}"
@@ -298,7 +313,7 @@ def _canonical_metrics(k: KpiData, k_prev: KpiData | None) -> dict[str, float | 
         "Repair % of Revenue": _pct(k.repairs, k.total_revenue),
         "LTV": (k.long_term_loans / k.buildings) * 100 if k.buildings > 0 else None,
         "Asset/Liability Ratio": (k.total_assets / k.total_liabilities) if k.total_liabilities > 0 else None,
-        "Debt-to-Equity": (k.total_liabilities / k.equity) if k.equity > 0 else None,
+        "Debt-to-Equity": _debt_to_equity(k),
         "Cash Balance": k.cash,
         "Debt-to-Asset": (k.total_liabilities / k.total_assets) * 100 if k.total_assets > 0 else None,
         "Equity Ratio": (k.equity / k.total_assets) * 100 if k.total_assets > 0 else None,
@@ -327,7 +342,7 @@ def _displayed_metrics_kpi_tab(k: KpiData, k_prev: KpiData | None) -> dict[str, 
         "Repair % of Revenue": (k.repairs / k.total_revenue * 100) if k.total_revenue > 0 else 0.0,
         "LTV": (k.long_term_loans / k.buildings * 100) if k.buildings > 0 else 0.0,
         "Asset/Liability Ratio": (k.total_assets / k.total_liabilities) if k.total_liabilities > 0 else 0.0,
-        "Debt-to-Equity": (k.total_liabilities / k.equity) if k.equity > 0 else 0.0,
+        "Debt-to-Equity": _debt_to_equity(k),
         "Cash Balance": k.cash,
         "Debt-to-Asset": (k.total_liabilities / k.total_assets * 100) if k.total_assets > 0 else 0.0,
         "Equity Ratio": (k.equity / k.total_assets * 100) if k.total_assets > 0 else 0.0,
@@ -354,7 +369,8 @@ KPI_META: list[dict[str, Any]] = [
     {"kpi": "LTV", "section": "Balance Sheet",
      "formula": "Long-term Loans / Buildings × 100 — N/A when building value missing"},
     {"kpi": "Asset/Liability Ratio", "section": "Balance Sheet", "formula": "Total Assets / Total Liabilities"},
-    {"kpi": "Debt-to-Equity", "section": "Balance Sheet", "formula": "Total Liabilities / Equity"},
+    {"kpi": "Debt-to-Equity", "section": "Balance Sheet",
+     "formula": "Total Liabilities / Equity — N/A when Equity = $0; negative when equity < 0"},
     {"kpi": "Cash Balance", "section": "Balance Sheet", "formula": "Sum of bank account balances (BS)", "exact": True},
     {"kpi": "Debt-to-Asset", "section": "Balance Sheet", "formula": "Total Liabilities / Total Assets × 100"},
     {"kpi": "Equity Ratio", "section": "Balance Sheet", "formula": "Equity / Total Assets × 100"},
@@ -432,6 +448,12 @@ def audit_company_financials(
             if d_val == 0.0 and c_val is None:
                 check_logic = True
                 notes = "Revenue Growth should be N/A when no prior period exists"
+        if name == "Debt-to-Equity" and k.equity < 0 and c_val is not None:
+            check_logic = True
+            notes = (
+                f"Negative equity ({_fmt_currency(k.equity)}) — D/E is {_fmt_x(c_val, 1)}; "
+                "review distressed balance sheet"
+            )
 
         diff_abs, diff_pct = _diff(c_val, d_val)
         status = _status_compare(

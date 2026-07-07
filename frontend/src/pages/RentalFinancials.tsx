@@ -1078,7 +1078,7 @@ function KPITab({
   const repP  = k.totalRevenue > 0 ? k.repairs / k.totalRevenue * 100 : 0;
   const ltv   = k.buildings > 0 ? k.longTermLoans / k.buildings * 100 : 0;
   const alR   = k.totalLiabilities > 0 ? k.totalAssets / k.totalLiabilities : 0;
-  const dte   = k.equity > 0 ? k.totalLiabilities / k.equity : 0;
+  const dte   = k.equity !== 0 ? k.totalLiabilities / k.equity : null;
   const ebitdaM = k.totalRevenue > 0 ? (k.noi + depreciation) / k.totalRevenue * 100 : 0;
   const dscr  = k.interestExpense > 0 ? k.noi / (k.interestExpense * 1.2) : 0;
   const roa   = k.totalAssets > 0 ? k.netIncome / k.totalAssets * 100 : 0;
@@ -1125,7 +1125,7 @@ function KPITab({
   const balanceBulletCards: BulletCard[] = [
     { name: 'LTV',                 value: ltv > 0 ? `${ltv.toFixed(1)}%` : 'No bldg value',  status: ltv > 0 ? toBS(ltv<=75?'good':ltv<=85?'warn':'bad') : 'info' },
     { name: 'Asset/Liability',     value: `${alR.toFixed(2)}x`,                               status: toBS(alR>=1.5?'good':alR>=1?'warn':'bad') },
-    { name: 'Debt-to-Equity',      value: `${dte.toFixed(2)}x`,                               status: toBS(dte>0&&dte<=2?'good':dte<=4?'warn':'bad') },
+    { name: 'Debt-to-Equity',      value: dte != null ? `${dte.toFixed(2)}x` : 'N/A',          status: toBS(dte!=null&&dte>0&&dte<=2?'good':dte!=null&&dte<=4?'warn':'bad') },
   ];
 
   const PROF_BULLET_DEFS: BulletDef[] = [
@@ -1155,7 +1155,7 @@ function KPITab({
     { kpi: 'NOI Margin', current: noiM, previous: kP.totalRevenue > 0 ? kP.noi / kP.totalRevenue * 100 : 0 },
     { kpi: 'Net Margin', current: netM, previous: kP.totalRevenue > 0 ? kP.netIncome / kP.totalRevenue * 100 : 0 },
     { kpi: 'Expense Ratio', current: expR, previous: kP.totalRevenue > 0 ? kP.totalExpenses / kP.totalRevenue * 100 : 0 },
-    { kpi: 'D/E Ratio', current: dte, previous: kP.equity > 0 ? kP.totalLiabilities / kP.equity : 0 },
+    { kpi: 'D/E Ratio', current: dte ?? 0, previous: kP.equity !== 0 ? kP.totalLiabilities / kP.equity : 0 },
   ] : [];
 
   return (
@@ -1187,7 +1187,7 @@ function KPITab({
         <div className="grid grid-cols-4 gap-4">
           <KCard label="LTV (Loans / Building)" value={ltv>0?`${ltv.toFixed(1)}%`:'Not available'} sub={ltv>0?`Loans: ${fmt(k.longTermLoans)}`:'Property value not found in balance sheet'} status={ltv>0&&ltv<=75?'good':ltv>0&&ltv<=85?'warn':ltv>0?'bad':'info'} {...kpiCardProps('LTV')} />
           <KCard label="Asset / Liability Ratio" value={alR>0?`${alR.toFixed(2)}x`:'N/A'} sub={`Assets: ${fmt(k.totalAssets)}`} status={alR>=1.5?'good':alR>=1?'warn':'bad'} {...kpiCardProps('Asset/Liability Ratio')} />
-          <KCard label="Debt-to-Equity" value={dte>0?`${dte.toFixed(2)}x`:'N/A'} sub={`Equity: ${fmt(k.equity)}`} status={dte>0&&dte<=2?'good':dte<=4?'warn':'bad'} {...kpiCardProps('Debt-to-Equity')} />
+          <KCard label="Debt-to-Equity" value={dte != null ? `${dte.toFixed(2)}x` : 'N/A'} sub={`Equity: ${fmt(k.equity)}`} status={dte!=null&&dte>0&&dte<=2?'good':dte!=null&&dte<=4?'warn':'bad'} {...kpiCardProps('Debt-to-Equity')} />
           <KCard label="Cash Balance" value={fmt(k.cash)} sub={`As of ${label}`} status={k.cash>10000?'good':k.cash>0?'warn':'bad'} trendData={cashTrend} {...kpiCardProps('Cash Balance')} />
         </div>
       </div>

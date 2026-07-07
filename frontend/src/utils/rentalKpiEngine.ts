@@ -462,7 +462,7 @@ export function fmtKpiPct(n: number, d = 1): string {
 }
 
 export function fmtKpiX(n: number, d = 2): string {
-  return Number.isFinite(n) && n > 0 ? `${n.toFixed(d)}x` : NA;
+  return Number.isFinite(n) ? `${n.toFixed(d)}x` : NA;
 }
 
 function pill(status: KpiStatus): string {
@@ -500,7 +500,7 @@ export function buildExportKpiSets(
   const repP = pctVal(k.repairs, k.totalRevenue);
   const ltv = k.buildings > 0 ? (k.longTermLoans / k.buildings) * 100 : null;
   const alR = k.totalLiabilities > 0 ? k.totalAssets / k.totalLiabilities : null;
-  const dte = k.equity > 0 ? k.totalLiabilities / k.equity : null;
+  const dte = k.equity !== 0 ? k.totalLiabilities / k.equity : null;
   const dta = k.totalAssets > 0 ? (k.totalLiabilities / k.totalAssets) * 100 : null;
   const equR = k.totalAssets > 0 ? (k.equity / k.totalAssets) * 100 : null;
   const netDebt = k.longTermLoans - k.cash;

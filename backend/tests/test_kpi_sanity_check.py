@@ -121,6 +121,38 @@ def test_ytd_still_sums_months():
     assert k.total_revenue > 7875.0  # includes Jan + Feb + Mar
 
 
+def test_debt_to_equity_negative_equity():
+    fin = {
+        "years": [2026],
+        "periods": ["Mar 2026"],
+        "pl": [],
+        "bs": [
+            {"label": "Total for Liabilities", "values": {2026: 606_600},
+             "monthlyValues": {"Mar 2026": 606_600},
+             "indent": 0, "isTotal": True, "isSectionHeader": False, "isNetIncome": False},
+            {"label": "Total for Equity", "values": {2026: -142_200},
+             "monthlyValues": {"Mar 2026": -142_200},
+             "indent": 0, "isTotal": True, "isSectionHeader": False, "isNetIncome": False},
+            {"label": "Total for Assets", "values": {2026: 464_400},
+             "monthlyValues": {"Mar 2026": 464_400},
+             "indent": 0, "isTotal": True, "isSectionHeader": False, "isNetIncome": False},
+            {"label": "Buildings", "values": {2026: 500_000},
+             "monthlyValues": {"Mar 2026": 500_000},
+             "indent": 1, "isTotal": False, "isSectionHeader": False, "isNetIncome": False},
+        ],
+        "cf": [],
+    }
+    result = audit_company_financials(
+        fin, company_id="co", company_name="Co", month=3, year=2026,
+    )
+    dte_row = next(r for r in result.rows if r.kpi == "Debt-to-Equity")
+    assert dte_row.canonical_value is not None
+    assert abs(dte_row.canonical_value - (-4.27)) < 0.05
+    assert dte_row.canonical_display == "-4.3x"
+    assert dte_row.status in ("MATCH", "CHECK_LOGIC")
+    assert dte_row.status != "MISMATCH"
+
+
 def test_noi_excludes_interest_add_back():
     k, _, _ = resolve_kpi_view(_sample_fin(), 2026, 6)
     assert k.total_revenue == 2_000_000
