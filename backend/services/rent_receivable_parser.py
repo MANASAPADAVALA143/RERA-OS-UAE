@@ -100,12 +100,28 @@ def _find_header(rows: list) -> Optional[Tuple[int, int]]:
     return None
 
 
+# Rows that are financial subtotals on some templates — not leasable units
+_SKIP_UNIT_LABELS = frozenset({
+    'rent',
+    'sec dep',
+    'sec-dep',
+    'secdep',
+    'security deposit',
+    'security dep',
+    'collected',
+    'gross potential',
+    'vacancy loss',
+    'vacancy',
+})
+
 def _is_valid_unit_label(cell) -> bool:
     """Return True if a cell value looks like a unit/property name (not a header/summary)."""
     if not cell:
         return False
     name = _norm(cell)
     if not name or name == 'total' or name in UNIT_NAME_LABELS:
+        return False
+    if name in _SKIP_UNIT_LABELS:
         return False
     raw = str(cell)
     if '—' in raw or '–' in raw or 'Occupied' in raw or 'Collected' in raw:

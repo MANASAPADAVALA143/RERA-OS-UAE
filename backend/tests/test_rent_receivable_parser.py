@@ -66,3 +66,21 @@ def test_unit_name_only_in_column_a_parses(tmp_path):
     units = result["companies"]["Test Co"]["units"]
     assert len(units) == 1
     assert units[0]["name"] == "Property Gamma"
+
+
+def test_skips_rent_and_sec_dep_summary_rows(tmp_path):
+    """RENT / SEC DEP footer rows on some templates must not become units."""
+    rows = [
+        ["SUITE NAMES", "Name Of the Unit", "Jan-2026", "Sec Dep", "Feb-2026", "Sec Dep"],
+        ["Suite 1", "Unit A", 850.00, None, 850.00, None],
+        ["Suite 1", "Unit B", 700.00, None, 700.00, None],
+        [None, "RENT", 1050.00, None, 1050.00, None],
+        [None, "SEC DEP", None, 1593.00, None, 1593.00],
+    ]
+    path = tmp_path / "skip_summary.xlsx"
+    path.write_bytes(_workbook_bytes(rows))
+
+    result = parse_rent_receivable_file(str(path), target_month="Jan-2026")
+    units = result["companies"]["Test Co"]["units"]
+    assert len(units) == 2
+    assert {u["name"] for u in units} == {"Unit A", "Unit B"}
