@@ -29,7 +29,7 @@ export default function RentalAnalytics() {
 
   const {
     companies, selectedCompanyId, setSelectedCompanyId,
-    selected, ttmTrend, alerts, propertySlices, exceptionRows, loading,
+    selected, ttmTrend, alerts, propertySlices, exceptionRows, loading, loadError,
   } = useRentalAnalyticsData(period, pMonth, pYear);
 
   const availableKeys = useMemo(() => {
@@ -97,8 +97,16 @@ export default function RentalAnalytics() {
         })}
       </nav>
 
+      {loadError && (
+        <div style={{ background: '#FFF0F0', border: '1px solid #FECACA', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#B91C1C' }}>
+          {loadError}
+        </div>
+      )}
+
       {loading ? (
         <p style={{ color: '#78716C', fontSize: 14 }}>Loading analytics data…</p>
+      ) : companies.length === 0 ? (
+        <p style={{ color: '#78716C', fontSize: 14 }}>No rental companies found. Add companies under Rentals → Companies first.</p>
       ) : (
         <>
           {activeSub === '/rental/analytics' && (
