@@ -1,19 +1,22 @@
-"""Single primary operator — full app access for one CA firm email only."""
+"""CA firm operator emails — Calculations Review access (not login gating)."""
 from __future__ import annotations
 
 from config import settings
 
 
-def normalized_primary_email() -> str:
-    return (settings.primary_user_email or "").strip().lower()
+def kpi_reviewer_email_set() -> set[str]:
+    raw = settings.kpi_reviewer_emails or settings.primary_user_email or ""
+    emails = {e.strip().lower() for e in raw.split(",") if e.strip()}
+    if settings.primary_user_email:
+        emails.add(settings.primary_user_email.strip().lower())
+    return emails
 
 
 def is_primary_app_user(email: str | None) -> bool:
-    """True only for the configured primary operator (e.g. consulting.akk@gmail.com)."""
-    primary = normalized_primary_email()
-    if not primary or not email:
+    """True for configured CA firm reviewer emails (Calculations Review tools)."""
+    if not email:
         return False
-    return email.strip().lower() == primary
+    return email.strip().lower() in kpi_reviewer_email_set()
 
 
 def assert_primary_app_user(email: str | None) -> None:
@@ -22,8 +25,5 @@ def assert_primary_app_user(email: str | None) -> None:
     if not is_primary_app_user(email):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                f"This application is restricted to {settings.primary_user_email}. "
-                "No additional user accounts are enabled."
-            ),
+            detail="Calculations review is restricted to CA firm reviewer accounts.",
         )

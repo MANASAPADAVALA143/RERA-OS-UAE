@@ -25,7 +25,9 @@ class Settings(BaseSettings):
     # ── Anthropic ─────────────────────────────────────────────────────────────
     anthropic_api_key: str = ""
 
-    # ── Single CA firm operator (full app + calculations review) ─────────────
+    # ── CA firm KPI reviewer emails (Calculations Review + ⓘ breakdown) ───────
+    kpi_reviewer_emails: str = "consulting.akk@gmail.com,consultingakk@gmail.com"
+    # Legacy alias — first email in kpi_reviewer_emails if unset
     primary_user_email: str = "consulting.akk@gmail.com"
 
     # ── S3 file storage ───────────────────────────────────────────────────────

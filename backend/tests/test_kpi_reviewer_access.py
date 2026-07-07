@@ -15,7 +15,8 @@ def test_kpi_reviewer_roles_allowed():
 
 
 def test_kpi_reviewer_primary_email_allowed():
-    assert is_kpi_reviewer(UserRole.owner, PRIMARY)
+    assert is_kpi_reviewer(UserRole.owner, "consulting.akk@gmail.com")
+    assert is_kpi_reviewer(UserRole.owner, "consultingakk@gmail.com")
 
 
 def test_kpi_reviewer_roles_blocked():
@@ -38,9 +39,9 @@ async def test_require_kpi_reviewer_blocks_client():
 
 @pytest.mark.asyncio
 async def test_require_kpi_reviewer_allows_primary_email():
-    owner = CurrentUser("u2", "t1", UserRole.owner, PRIMARY)
+    owner = CurrentUser("u2", "t1", UserRole.owner, "consultingakk@gmail.com")
     result = await require_kpi_reviewer(owner)
-    assert result.email == PRIMARY
+    assert result.email == "consultingakk@gmail.com"
 
 
 @pytest.mark.asyncio
