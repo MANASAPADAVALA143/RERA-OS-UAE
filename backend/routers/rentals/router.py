@@ -1699,33 +1699,44 @@ async def confirm_rent_receivable(
             company.last_sync_date = datetime.utcnow()
 
             # ── Update each unit status and rent ───────────────────────────
+            from services.rent_receivable_parser import expand_unit_match_names, scale_amount_map
+
             for unit_data in data['units']:
                 raw_name = unit_data['name'].strip()
-                is_vacant = unit_data['is_vacant']
-                current_amount = unit_data['current_amount']
-                unit_vac_loss = unit_data['vacancy_loss']
-                history = unit_data['history']
-                rent = current_amount if not is_vacant else unit_vac_loss
+                is_vacant: bool = unit_data['is_vacant']
+                current_amount: float = unit_data['current_amount']
+                unit_vac_loss: float = unit_data['vacancy_loss']
+                history: dict = unit_data['history']
 
-                for part in [raw_name]:
-                    # Try exact match (unit name as-is from Excel)
-                    unit = db.query(RentalUnit).filter(
-                        RentalUnit.company_id == company.id,
-                        func.lower(func.trim(RentalUnit.unit_number)) == part.lower(),
-                    ).first()
-
-                    # Try with "Unit " prefix for short labels like "E", "F"
-                    if not unit and not part.lower().startswith('unit'):
+                matched_units = []
+                seen_unit_ids: set = set()
+                for part in expand_unit_match_names(raw_name):
+                    candidates = [part]
+                    if not part.lower().startswith('unit'):
+                        candidates.append(f'unit {part.lower()}')
+                    for cand in candidates:
                         unit = db.query(RentalUnit).filter(
                             RentalUnit.company_id == company.id,
-                            func.lower(func.trim(RentalUnit.unit_number)) == f'unit {part.lower()}',
+                            func.lower(func.trim(RentalUnit.unit_number)) == cand.lower().strip(),
                         ).first()
+                        if unit and unit.id not in seen_unit_ids:
+                            seen_unit_ids.add(unit.id)
+                            matched_units.append(unit)
 
-                    if unit:
-                        unit.status = 'vacant' if is_vacant else 'occupied'
-                        unit.monthly_rent = rent if not is_vacant else (unit_vac_loss or unit.monthly_rent)
-                        unit.rent_history = history
-                        unit.vacancy_loss = unit_vac_loss
+                if not matched_units:
+                    continue
+
+                n = len(matched_units)
+                hist = scale_amount_map(history, float(n))
+                per_rent = round(current_amount / n, 2) if n > 1 else current_amount
+                per_vac = round(unit_vac_loss / n, 2) if n > 1 else unit_vac_loss
+                rent = per_rent if not is_vacant else per_vac
+
+                for unit in matched_units:
+                    unit.status = 'vacant' if is_vacant else 'occupied'
+                    unit.monthly_rent = rent if not is_vacant else (per_vac or unit.monthly_rent)
+                    unit.rent_history = hist
+                    unit.vacancy_loss = per_vac
 
             registry_units = db.query(RentalUnit).filter(
                 RentalUnit.company_id == company.id,

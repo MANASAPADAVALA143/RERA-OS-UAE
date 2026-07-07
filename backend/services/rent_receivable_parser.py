@@ -55,11 +55,60 @@ def count_physical_units(unit_name: str) -> int:
     return 1
 
 
+def expand_unit_match_names(raw_name: str) -> List[str]:
+    """
+    Names to try when matching an Excel row to registry units.
+    'Unit K, L' → ['Unit K, L', 'Unit K', 'Unit L'] so split registry rows still sync.
+    """
+    name = ' '.join(str(raw_name).split()).strip()
+    keys = [name]
+    m = re.match(r'^(unit\s+)(.+)$', name, re.I)
+    if not m:
+        return keys
+    prefix, rest = m.group(1), m.group(2)
+    if ',' not in rest and '&' not in rest:
+        return keys
+    parts = [p.strip() for p in re.split(r'[,&]', rest) if p.strip()]
+    if len(parts) <= 1:
+        return keys
+    for p in parts:
+        keys.append(p if p.lower().startswith('unit') else f"{prefix}{p}")
+    seen: set[str] = set()
+    out: List[str] = []
+    for k in keys:
+        nk = k.lower()
+        if nk not in seen:
+            seen.add(nk)
+            out.append(k)
+    return out
+
+
+def scale_amount_map(amounts: Dict[str, float], divisor: float) -> Dict[str, float]:
+    """Split a combined-row rent total across multiple registry units."""
+    if divisor <= 1:
+        return amounts
+    return {k: round(v / divisor, 2) for k, v in amounts.items()}
+
+
 def safe_float(val) -> float:
+    """Parse numeric rent cells — handles raw numbers, $1,234.56 strings, and blanks."""
     if val is None:
         return 0.0
-    try:
+    if isinstance(val, (int, float)):
         return float(val)
+    s = str(val).strip()
+    if not s or s in ('—', '–', '-'):
+        return 0.0
+    # Accounting negatives: ($1,234.56)
+    neg = s.startswith('(') and s.endswith(')')
+    if neg:
+        s = s[1:-1]
+    s = s.replace('$', '').replace(',', '').strip()
+    if not s:
+        return 0.0
+    try:
+        n = float(s)
+        return -n if neg else n
     except (ValueError, TypeError):
         return 0.0
 

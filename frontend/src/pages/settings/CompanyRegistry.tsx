@@ -321,17 +321,15 @@ const ALL_MONTHS = [
   'Jul-2026','Aug-2026','Sep-2026','Oct-2026','Nov-2026','Dec-2026',
 ];
 
-function unitForMonth(u: UnitRow, month: string): { status: string; rent: number; vacancyLoss: number } {
+function unitRentForMonth(u: UnitRow, month: string): { rent: number; vacancyLoss: number } {
   const h = u.rent_history;
-  if (!h || !month) return { status: u.status, rent: u.monthly_rent, vacancyLoss: 0 };
-  const val = h[month] ?? null; // null = future month not in history
-  const isFuture = val === null;
-  const rent = isFuture ? 0 : val;
-  const occupied = rent > 0;
+  if (!h || !month || !(month in h)) {
+    return { rent: u.monthly_rent ?? 0, vacancyLoss: u.vacancy_loss ?? 0 };
+  }
+  const rent = h[month] ?? 0;
 
   let vacancyLoss = 0;
-  if (!occupied) {
-    // Use manually saved value if set, otherwise auto-calculate from history
+  if (rent <= 0) {
     if (u.vacancy_loss != null && u.vacancy_loss > 0) {
       vacancyLoss = u.vacancy_loss;
     } else {
@@ -345,7 +343,7 @@ function unitForMonth(u: UnitRow, month: string): { status: string; rent: number
     }
   }
 
-  return { status: isFuture ? 'vacant' : (occupied ? 'occupied' : 'vacant'), rent, vacancyLoss };
+  return { rent, vacancyLoss };
 }
 
 function InlineSuites({
@@ -649,7 +647,9 @@ function InlineSuites({
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
                                       {unitsMap[s.id].map((u, j) => {
-                                        const { status: dispStatus, rent: dispRent, vacancyLoss } = unitForMonth(u, viewMonth);
+                                        const { rent: dispRent, vacancyLoss } = unitRentForMonth(u, viewMonth);
+                                        const dispStatus = u.status;
+                                        const showRent = dispRent > 0 ? dispRent : (dispStatus === 'occupied' ? (u.monthly_rent ?? 0) : 0);
                                         return (
                                         <tr key={u.id}
                                           className="hover:bg-indigo-50/20"
@@ -709,8 +709,8 @@ function InlineSuites({
                                                 className="text-xs border border-indigo-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-24 text-right"
                                               />
                                             ) : (
-                                              dispRent > 0
-                                                ? `$${dispRent.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+                                              showRent > 0
+                                                ? `$${showRent.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
                                                 : '—'
                                             )}
                                           </td>
@@ -1311,7 +1311,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                           onEdit={openSuiteEdit}
                           onDelete={openSuiteDelete}
                           reloadKey={suiteReloadKey}
-                          viewMonth={importMonth}
+                          viewMonth={(c.last_sync_month as string) || importMonth}
                         />
                       )}
                     </Fragment>

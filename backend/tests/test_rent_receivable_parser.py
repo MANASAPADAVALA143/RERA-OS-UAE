@@ -3,7 +3,11 @@ import io
 
 import openpyxl
 
-from services.rent_receivable_parser import parse_rent_receivable_file
+from services.rent_receivable_parser import (
+    expand_unit_match_names,
+    parse_rent_receivable_file,
+    safe_float,
+)
 
 
 def _workbook_bytes(sheet_rows: list[list]) -> bytes:
@@ -84,3 +88,30 @@ def test_skips_rent_and_sec_dep_summary_rows(tmp_path):
     units = result["companies"]["Test Co"]["units"]
     assert len(units) == 2
     assert {u["name"] for u in units} == {"Unit A", "Unit B"}
+
+
+def test_safe_float_parses_currency_strings():
+    assert safe_float("$800.00") == 800.0
+    assert safe_float("2,401.70") == 2401.70
+    assert safe_float("($100.00)") == -100.0
+    assert safe_float(None) == 0.0
+
+
+def test_expand_unit_match_names_splits_combined_labels():
+    assert expand_unit_match_names("Unit K, L") == ["Unit K, L", "Unit K", "Unit L"]
+    assert expand_unit_match_names("Unit A") == ["Unit A"]
+
+
+def test_parses_dollar_string_rent_cells(tmp_path):
+    rows = [
+        ["Name Of the Unit", "Jan-2026", "Sec Dep", "Jun-2026", "Sec Dep"],
+        ["Unit A", "$850.00", None, "$900.00", None],
+    ]
+    path = tmp_path / "currency.xlsx"
+    path.write_bytes(_workbook_bytes(rows))
+
+    result = parse_rent_receivable_file(str(path), target_month="Jun-2026")
+    units = result["companies"]["Test Co"]["units"]
+    assert len(units) == 1
+    assert units[0]["current_amount"] == 900.0
+    assert units[0]["is_vacant"] is False
