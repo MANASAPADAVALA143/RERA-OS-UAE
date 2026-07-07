@@ -317,6 +317,42 @@ def _apply_registry_unit_counts(company, units: list) -> None:
         company.total_units = total
 
 
+def _registry_monthly_totals(units: list) -> dict[str, float]:
+    """Sum rent_history across registry units — excludes Excel summary rows."""
+    totals: dict[str, float] = {}
+    for u in units:
+        for m, v in (u.rent_history or {}).items():
+            totals[m] = totals.get(m, 0.0) + float(v or 0)
+    return {m: round(v, 2) for m, v in totals.items()}
+
+
+def _registry_vacancy_loss(units: list) -> float:
+    return round(
+        sum(float(u.vacancy_loss or 0) for u in units if u.status == "vacant"),
+        2,
+    )
+
+
+def _apply_registry_financials(company, units: list, target_month: str | None = None) -> None:
+    """
+    Collected / monthly totals from registry unit rows only.
+    Prevents Excel footer rows (Rents, Security Deposit) from inflating company totals.
+    """
+    if not units:
+        return
+    month = target_month or company.last_sync_month
+    totals = _registry_monthly_totals(units)
+    if totals:
+        company.monthly_rent_data = totals
+        company.gross_potential_rent = max(totals.values())
+    if month:
+        company.collected_this_month = round(
+            sum(float((u.rent_history or {}).get(month, 0) or 0) for u in units),
+            2,
+        )
+    company.vacancy_loss = _registry_vacancy_loss(units)
+
+
 # ── portfolio summary ─────────────────────────────────────────────────────────
 
 @router.get("/portfolio-summary")
@@ -556,6 +592,22 @@ def list_companies(
                 co.total_units = total
                 co.occupied_units = occ
                 counts_healed = True
+            # Reconcile collected / vac loss from registry (not stale Excel summary totals)
+            if co.last_sync_month and any(u.rent_history for u in units):
+                reg_totals = _registry_monthly_totals(units)
+                reg_collected = reg_totals.get(co.last_sync_month)
+                reg_vac = _registry_vacancy_loss(units)
+                if reg_collected is not None and (
+                    co.collected_this_month != reg_collected
+                    or co.vacancy_loss != reg_vac
+                    or co.monthly_rent_data != reg_totals
+                ):
+                    co.collected_this_month = reg_collected
+                    co.vacancy_loss = reg_vac
+                    co.monthly_rent_data = reg_totals
+                    if reg_totals:
+                        co.gross_potential_rent = max(reg_totals.values())
+                    counts_healed = True
         inv_by_unit: dict[str, list[dict]] = defaultdict(list)
         for inv in inv_dicts:
             inv_by_unit[inv["unit_id"]].append(inv)
@@ -1690,11 +1742,6 @@ async def confirm_rent_receivable(
             if not company:
                 continue
 
-            # ── Update company sync fields ──────────────────────────────────
-            company.collected_this_month = data['collected']
-            company.vacancy_loss = data['vacancy_loss']
-            company.gross_potential_rent = data['gross_potential']
-            company.monthly_rent_data = data['monthly_totals']
             company.last_sync_month = target_month
             company.last_sync_date = datetime.utcnow()
 
@@ -1743,7 +1790,12 @@ async def confirm_rent_receivable(
             ).all()
             if registry_units:
                 _apply_registry_unit_counts(company, registry_units)
+                _apply_registry_financials(company, registry_units, target_month)
             else:
+                company.collected_this_month = data['collected']
+                company.vacancy_loss = data['vacancy_loss']
+                company.gross_potential_rent = data['gross_potential']
+                company.monthly_rent_data = data['monthly_totals']
                 company.occupied_units = data['occupied_count']
                 company.total_units = data['total_physical_units']
 
