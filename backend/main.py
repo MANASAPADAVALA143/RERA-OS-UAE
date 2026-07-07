@@ -64,6 +64,7 @@ import models.rentals.vendor  # noqa: F401
 import models.rentals.ar_ap  # noqa: F401
 import models.rentals.qb_ar_aging  # noqa: F401
 import models.rentals.qb_ap_aging  # noqa: F401
+import models.rentals.kpi_audit  # noqa: F401
 import models.propdev.company  # noqa: F401
 import models.propdev.lot  # noqa: F401
 import models.propdev.partner  # noqa: F401
@@ -153,6 +154,7 @@ from routers.propdev.seed_wwbg import router as propdev_seed_wwbg_router  # noqa
 from routers.propdev.qb_import import router as propdev_qb_router  # noqa: E402
 from routers.reit.companies import router as reit_companies_router  # noqa: E402
 from routers.real_estate.construction_companies import router as construction_companies_router  # noqa: E402
+from routers.kpi_audit import router as kpi_audit_router  # noqa: E402
 app.include_router(deal_advisor_router)
 app.include_router(propdev_companies_router)
 app.include_router(propdev_excel_router)
@@ -161,6 +163,7 @@ app.include_router(propdev_seed_wwbg_router)
 app.include_router(propdev_qb_router)
 app.include_router(reit_companies_router)
 app.include_router(construction_companies_router)
+app.include_router(kpi_audit_router)
 
 # Serve uploaded files from local disk only when S3 is not configured (local dev).
 # In production, files are served via S3 pre-signed URLs — no static mount needed.

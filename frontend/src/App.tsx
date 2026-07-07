@@ -18,6 +18,7 @@ import Settings from './pages/Settings';
 import CompanyRegistry from './pages/settings/CompanyRegistry';
 import REITCompanies from './pages/reit/REITCompanies';
 import ConstructionCompanies from './pages/construction/ConstructionCompanies';
+import KpiSanityCheck from './pages/admin/KpiSanityCheck';
 
 export default function App() {
   return (
@@ -53,6 +54,7 @@ export default function App() {
             <Route path="/settings/companies" element={<CompanyRegistry />} />
             <Route path="/reit/companies" element={<REITCompanies />} />
             <Route path="/construction/companies" element={<ConstructionCompanies />} />
+            <Route path="/admin/kpi-sanity-check" element={<KpiSanityCheck />} />
           </Route>
           <Route path="/" element={<Navigate to="/executive-summary" replace />} />
           <Route path="*" element={<Navigate to="/executive-summary" replace />} />

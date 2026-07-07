@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     # ── Anthropic ─────────────────────────────────────────────────────────────
     anthropic_api_key: str = ""
 
+    # ── KPI admin (sanity check panel) ────────────────────────────────────────
+    # Comma-separated emails allowed besides owner/platform_admin.
+    # Override via KPI_ADMIN_EMAILS env on Render if needed.
+    kpi_admin_emails: str = "manasa@estatecfo.com"
+
     # ── S3 file storage ───────────────────────────────────────────────────────
     # Set to the bucket name output by Terraform (outputs.tf → s3_bucket_name).
     # Leave empty for local dev (files go to backend/uploads/ on disk).

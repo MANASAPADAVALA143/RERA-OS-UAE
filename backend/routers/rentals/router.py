@@ -2686,6 +2686,21 @@ def save_financials(
         db.add(row)
 
     db.commit()
+
+    try:
+        from services.kpi_sanity_check import run_tenant_audit
+        run_tenant_audit(
+            db,
+            current_user.tenant_id,
+            month=6,
+            year=2026,
+            company_id=str(company_id),
+            triggered_by=f"upload:{current_user.email}",
+        )
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("KPI audit after financials save failed (non-fatal)")
+
     return {
         "status": "saved",
         "years": body.get("years", []),
