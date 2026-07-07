@@ -351,6 +351,83 @@ def _registry_vacancy_loss(units: list) -> float:
     )
 
 
+def _infer_sync_month(units: list, prefer: str | None = None) -> str | None:
+    """Pick Mon-YYYY from rent_history; fall back to prefer when only monthly_rent exists."""
+    months_with_data: set[str] = set()
+    for u in units:
+        for m, v in (u.rent_history or {}).items():
+            if float(v or 0) > 0:
+                months_with_data.add(m)
+    if prefer and prefer in months_with_data:
+        return prefer
+    for m in reversed(MONTH_OPTIONS):
+        if m in months_with_data:
+            return m
+    if prefer and any(
+        float(u.monthly_rent or 0) > 0 or (u.status or "").lower() == "occupied"
+        for u in units
+    ):
+        return prefer
+    return None
+
+
+def _registry_collected_for_month(units: list, month: str) -> float:
+    """Sum collected rent for a month — rent_history first, monthly_rent fallback."""
+    total = 0.0
+    for u in units:
+        h = u.rent_history or {}
+        if month in h:
+            total += float(h.get(month, 0) or 0)
+        elif (u.status or "").lower() == "occupied":
+            total += float(u.monthly_rent or 0)
+    return round(total, 2)
+
+
+def _heal_company_sync_fields(company, units: list, prefer_month: str | None = None) -> bool:
+    """Backfill last_sync_month / collected from registry when Load Portfolio skipped sync."""
+    if not units:
+        return False
+    changed = False
+    month = company.last_sync_month or _infer_sync_month(units, prefer_month)
+    if month and not company.last_sync_month:
+        company.last_sync_month = month
+        changed = True
+    if not month:
+        return changed
+    try:
+        if any(u.rent_history for u in units):
+            _reconcile_unit_status_for_month(units, month)
+        occ, total = _registry_unit_counts(units, month)
+        if company.total_units != total or company.occupied_units != occ:
+            company.occupied_units = occ
+            company.total_units = total
+            changed = True
+        reg_totals = _registry_monthly_totals(units)
+        if reg_totals:
+            if company.monthly_rent_data != reg_totals:
+                company.monthly_rent_data = reg_totals
+                changed = True
+            gpr = max(reg_totals.values())
+            if company.gross_potential_rent != gpr:
+                company.gross_potential_rent = gpr
+                changed = True
+        reg_collected = _registry_collected_for_month(units, month)
+        reg_vac = _registry_vacancy_loss(units)
+        if company.collected_this_month != reg_collected:
+            company.collected_this_month = reg_collected
+            changed = True
+        if company.vacancy_loss != reg_vac:
+            company.vacancy_loss = reg_vac
+            changed = True
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning(
+            "heal_company_sync_fields failed for %s: %s",
+            getattr(company, "company_name", "?"), exc,
+        )
+    return changed
+
+
 def _apply_registry_financials(company, units: list, target_month: str | None = None) -> None:
     """
     Collected / monthly totals from registry unit rows only.
@@ -364,10 +441,7 @@ def _apply_registry_financials(company, units: list, target_month: str | None = 
         company.monthly_rent_data = totals
         company.gross_potential_rent = max(totals.values())
     if month:
-        company.collected_this_month = round(
-            sum(float((u.rent_history or {}).get(month, 0) or 0) for u in units),
-            2,
-        )
+        company.collected_this_month = _registry_collected_for_month(units, month)
     company.vacancy_loss = _registry_vacancy_loss(units)
 
 
@@ -609,35 +683,8 @@ def list_companies(
         try:
             units, inv_dicts, exp_dicts = _load_company_data(co.id, tid, db)
             if units:
-                month = co.last_sync_month
-                try:
-                    if month and any(u.rent_history for u in units):
-                        _reconcile_unit_status_for_month(units, month)
-                    occ, total = _registry_unit_counts(units, month)
-                    if co.total_units != total or co.occupied_units != occ:
-                        co.total_units = total
-                        co.occupied_units = occ
-                        counts_healed = True
-                    if co.last_sync_month and any(u.rent_history for u in units):
-                        reg_totals = _registry_monthly_totals(units)
-                        reg_collected = reg_totals.get(co.last_sync_month)
-                        reg_vac = _registry_vacancy_loss(units)
-                        if reg_collected is not None and (
-                            co.collected_this_month != reg_collected
-                            or co.vacancy_loss != reg_vac
-                            or co.monthly_rent_data != reg_totals
-                        ):
-                            co.collected_this_month = reg_collected
-                            co.vacancy_loss = reg_vac
-                            co.monthly_rent_data = reg_totals
-                            if reg_totals:
-                                co.gross_potential_rent = max(reg_totals.values())
-                            counts_healed = True
-                except Exception as heal_exc:
-                    _log.warning(
-                        "list_companies heal skipped for %s: %s",
-                        co.company_name, heal_exc,
-                    )
+                if _heal_company_sync_fields(co, units):
+                    counts_healed = True
             inv_by_unit: dict[str, list[dict]] = defaultdict(list)
             for inv in inv_dicts:
                 inv_by_unit[inv["unit_id"]].append(inv)
@@ -2220,6 +2267,7 @@ async def confirm_portfolio_import(
     tid = current_user.tenant_id
     companies_data = payload.get("companies", [])
     force_replace: bool = bool(payload.get("force_replace", False))
+    target_month: str = payload.get("target_month") or "Jun-2026"
 
     created_companies = 0
     replaced_companies = 0
@@ -2304,9 +2352,44 @@ async def confirm_portfolio_import(
                             )
                             .first()
                         )
-                        if ex and ex.monthly_rent == 0:
-                            ex.monthly_rent = float(unit.get("monthly_rent", 0))
-                            updated_units += 1
+                        if ex:
+                            hist = unit.get("history") or {}
+                            if hist and not (ex.rent_history or {}):
+                                ex.rent_history = hist
+                            if float(unit.get("monthly_rent", 0)) > 0:
+                                if ex.monthly_rent == 0:
+                                    ex.monthly_rent = float(unit.get("monthly_rent", 0))
+                                    updated_units += 1
+                                ex.status = unit.get("status", ex.status)
+                    elif unit_action == "skip" and unit.get("match_unit_id"):
+                        ex = (
+                            db.query(RentalUnit)
+                            .filter(
+                                RentalUnit.id == uuid.UUID(unit["match_unit_id"]),
+                                RentalUnit.tenant_id == tid,
+                            )
+                            .first()
+                        )
+                        if ex:
+                            hist = unit.get("history") or {}
+                            if hist and not (ex.rent_history or {}):
+                                ex.rent_history = hist
+                                if float(unit.get("monthly_rent", 0)) > 0 and ex.monthly_rent == 0:
+                                    ex.monthly_rent = float(unit.get("monthly_rent", 0))
+                                ex.status = unit.get("status", ex.status)
+                                updated_units += 1
+
+                co_month = co.get("target_month") or target_month
+                company_row = db.query(RentalCompany).filter(
+                    RentalCompany.id == company_id,
+                    RentalCompany.tenant_id == tid,
+                ).first()
+                if company_row:
+                    registry_units = db.query(RentalUnit).filter(
+                        RentalUnit.company_id == company_id,
+                        RentalUnit.tenant_id == tid,
+                    ).all()
+                    _heal_company_sync_fields(company_row, registry_units, prefer_month=co_month)
 
             except Exception as row_err:
                 errors.append(f"{co.get('excel_name', '?')}: {row_err}")

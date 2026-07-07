@@ -954,6 +954,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
       const res = await api.post<{ message: string }>('/api/rentals/import-portfolio/confirm', {
         companies: importPreview.companies,
         force_replace: forceReplace,
+        target_month: importMonth,
       });
       push(res.data.message ?? 'Portfolio imported!', true);
       setImportState('idle');
