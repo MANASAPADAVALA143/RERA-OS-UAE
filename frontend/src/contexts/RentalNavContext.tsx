@@ -7,6 +7,7 @@ import {
   TrendingUp, ArrowDownUp, Table2, CalendarCheck, Activity,
   Landmark, Store, BookOpen,
   CircleDollarSign, CalendarRange, Tag, Percent, ClipboardList, Calculator,
+  BarChart3,
 } from "lucide-react";
 
 export type RentalTab =
@@ -19,7 +20,8 @@ export type RentalTab =
   | "portfolio-upload" | "cfo-dashboard" | "income-bridge" | "entity-rollup" | "compliance"
   | "building-expenses" | "loan-tracker" | "cfo-portfolio" | "13-week-cf"
   | "discounts" | "financial-ratios"
-  | "calculations-review";
+  | "calculations-review"
+  | "analytics";
 
 type LucideIcon = React.FC<{ size?: number; className?: string }>;
 export interface RentalNavItem {
@@ -50,6 +52,7 @@ export const RENTAL_TABS: RentalNavItem[] = [
   { id: "vacancy",           label: "Vacancy & Loss",    Icon: TrendingDown    },
   { id: "financials",        label: "Financials",        Icon: BookOpen        },
   { id: "financial-ratios",  label: "Financial Ratios",  Icon: Percent         },
+  { id: "analytics",         label: "Analytics",         Icon: BarChart3,       groupLabel: "ANALYTICS" },
   { id: "calculations-review", label: "Calculations Review", Icon: Calculator, groupLabel: "CA FIRM QA" },
   // ── OPERATIONS ────────────────────────────────────────────────────────────
   { id: "building-expenses", label: "Building Expenses", Icon: Receipt,         groupLabel: "OPERATIONS" },
@@ -71,6 +74,7 @@ const TAB_PATHS: Partial<Record<RentalTab, string>> = {
   "cfo-portfolio":     "/rental/cfo-portfolio",
   "13-week-cf":        "/rental/13-week-cf",
   "financial-ratios":  "/rental/financial-ratios",
+  "analytics":         "/rental/analytics",
   "calculations-review": "/rental/calculations-review",
 };
 
@@ -80,6 +84,11 @@ const PATH_TO_TAB: Record<string, RentalTab> = {
   "/rental/cfo-portfolio":     "cfo-portfolio",
   "/rental/13-week-cf":        "13-week-cf",
   "/rental/financial-ratios":  "financial-ratios",
+  "/rental/analytics":         "analytics",
+  "/rental/analytics/profitability": "analytics",
+  "/rental/analytics/cash-debt": "analytics",
+  "/rental/analytics/property": "analytics",
+  "/rental/analytics/exceptions": "analytics",
   "/rental/calculations-review": "calculations-review",
 };
 

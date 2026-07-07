@@ -47,6 +47,11 @@ export default function App() {
             <Route path="/rental/cfo-portfolio" element={<Rental />} />
             <Route path="/rental/13-week-cf" element={<Rental />} />
             <Route path="/rental/financial-ratios" element={<Rental />} />
+            <Route path="/rental/analytics" element={<Rental />} />
+            <Route path="/rental/analytics/profitability" element={<Rental />} />
+            <Route path="/rental/analytics/cash-debt" element={<Rental />} />
+            <Route path="/rental/analytics/property" element={<Rental />} />
+            <Route path="/rental/analytics/exceptions" element={<Rental />} />
             <Route path="/rental/calculations-review" element={<Rental />} />
             <Route path="/property-dev" element={<PropertyDev />} />
             <Route path="/capital-risk" element={<CapitalRisk />} />

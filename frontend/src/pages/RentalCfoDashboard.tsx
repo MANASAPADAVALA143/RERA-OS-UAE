@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-  PieChart, Pie, Cell, Legend, LineChart, Line, ComposedChart,
+  Legend, LineChart, Line, ComposedChart,
 } from 'recharts';
 import api from '../services/api';
-import { TrendingUp, TrendingDown, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { TrendingUp, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { LoadingSkeleton } from '../components/ui/Table';
+import { apiResponseToParsedFinancials, calcKpis, type ParsedFinancials } from '../utils/rentalKpiEngine';
 
 const fmt$ = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -27,98 +28,106 @@ interface FinData {
   cf: FinItem[];
 }
 
-function getYValue(items: FinItem[], pattern: RegExp, year: number): number {
-  const item = items.find(it => pattern.test(it.label));
-  return item?.values[year] ?? 0;
-}
-
-function sumItems(items: FinItem[], pattern: RegExp, year: number): number {
-  return items
-    .filter(it => pattern.test(it.label))
-    .reduce((s, it) => s + (it.values[year] ?? 0), 0);
+interface CompanyOption {
+  id: string;
+  company_name: string;
 }
 
 export default function RentalCfoDashboard() {
   const [fin, setFin] = useState<FinData | null>(null);
-  const [companies, setCompanies] = useState<any[]>([]);
+  const [parsedFin, setParsedFin] = useState<ParsedFinancials | null>(null);
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchCompanies = async () => {
       try {
         setLoading(true);
-        const [coRes, portfolioRes] = await Promise.all([
-          api.get('/api/rentals/companies'),
-          api.get('/api/rentals/portfolio-summary'),
-        ]);
-
-        const cos = coRes.data || [];
+        const coRes = await api.get('/api/rentals/companies');
+        const cos: CompanyOption[] = coRes.data || [];
         setCompanies(cos);
-
         if (cos.length > 0) {
-          const mainCo = cos[0];
-          try {
-            const finRes = await api.get(`/api/rentals/financials/${mainCo.id}`);
-            setFin(finRes.data);
-            if (finRes.data?.years?.length > 0) {
-              setSelectedYear(finRes.data.years[finRes.data.years.length - 1]);
-            }
-          } catch {
-            console.warn('No financials data for primary company');
-          }
+          setSelectedCompanyId(cos[0].id);
         }
       } catch (err) {
-        console.error('Error fetching CFO data:', err);
+        console.error('Error fetching CFO companies:', err);
       } finally {
         setLoading(false);
       }
     };
-    fetchData();
+    fetchCompanies();
   }, []);
 
+  useEffect(() => {
+    if (!selectedCompanyId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        const finRes = await api.get(`/api/rentals/financials/${selectedCompanyId}`);
+        if (cancelled) return;
+        const raw = finRes.data;
+        setFin(raw);
+        setParsedFin(apiResponseToParsedFinancials(raw));
+        if (raw?.years?.length > 0) {
+          setSelectedYear(raw.years[raw.years.length - 1]);
+        }
+      } catch {
+        if (!cancelled) {
+          setFin(null);
+          setParsedFin(null);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedCompanyId]);
+
   if (loading) return <LoadingSkeleton rows={8} />;
-  if (!fin) return <div className="p-6 text-gray-500">No financial data available. Upload CASH_FLOWS.xlsx on the Financials page.</div>;
+  if (!fin || !parsedFin) {
+    return <div className="p-6 text-gray-500">No financial data available. Upload CASH_FLOWS.xlsx on the Financials page.</div>;
+  }
 
   const years = fin.years;
-  const pl = fin.pl;
-  const bs = fin.bs;
+  const kpisForYear = (y: number) => calcKpis(parsedFin, y);
 
   // ── Data Series ───────────────────────────────────────────────────────────────
 
   // 1. Net Income Trajectory
   const niTrajectory = years.map(y => ({
     year: y,
-    netIncome: getYValue(pl, /^net\s+income$/i, y),
+    netIncome: kpisForYear(y).netIncome,
   }));
 
-  // 2. Revenue vs Expenses Combo
+  // 2. Revenue vs Expenses Combo — same calcKpis as KPI Dashboard
   const revExpCombo = years.map(y => {
-    const revenue = Math.abs(getYValue(pl, /^total\s+(revenue|income)$/i, y) || sumItems(pl, /revenue|rental\s+income/i, y));
-    const expenses = Math.abs(sumItems(pl, /expense/i, y));
-    return { year: y, Revenue: revenue, Expenses: expenses };
+    const k = kpisForYear(y);
+    return { year: y, Revenue: k.totalRevenue, Expenses: k.totalExpenses };
   });
 
   // 3. Expense Ratio Trend
   const expRatioTrend = years.map(y => {
-    const revenue = Math.abs(getYValue(pl, /^total\s+(revenue|income)$/i, y) || sumItems(pl, /revenue|rental\s+income/i, y));
-    const expenses = Math.abs(sumItems(pl, /expense/i, y));
-    const ratio = revenue > 0 ? (expenses / revenue) : 0;
-    return { year: y, ratio: ratio * 100 };
+    const k = kpisForYear(y);
+    const ratio = k.totalRevenue > 0 ? (k.totalExpenses / k.totalRevenue) * 100 : 0;
+    return { year: y, ratio };
   });
 
   // 4. Cash Balance Trend
   const cashTrend = years.map(y => ({
     year: y,
-    cash: getYValue(bs, /^total\s+for\s+bank\s+accounts$/i, y) || sumItems(bs, /^bank|checking|savings/i, y),
+    cash: kpisForYear(y).cash,
   }));
 
   // 5. Year Insights
   const getYearInsight = (year: number) => {
-    const revenue = Math.abs(getYValue(pl, /^total\s+(revenue|income)$/i, year) || sumItems(pl, /revenue|rental\s+income/i, year));
-    const expenses = Math.abs(sumItems(pl, /expense/i, year));
-    const netIncome = getYValue(pl, /^net\s+income$/i, year);
-    const cash = getYValue(bs, /^total\s+for\s+bank\s+accounts$/i, year) || sumItems(bs, /^bank|checking|savings/i, year);
+    const k = kpisForYear(year);
+    const revenue = k.totalRevenue;
+    const expenses = k.totalExpenses;
+    const netIncome = k.netIncome;
+    const cash = k.cash;
     const margin = revenue > 0 ? (netIncome / revenue) * 100 : 0;
 
     let insight = '';
@@ -148,15 +157,29 @@ export default function RentalCfoDashboard() {
 
   const yearInsight = selectedYear ? getYearInsight(selectedYear) : null;
 
-  const PIE_COLORS = ['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981'];
-
   return (
     <div className="space-y-8 -m-6 p-6" style={{ background: 'transparent' }}>
       {/* Header */}
-      <div>
-        <p className="text-xs uppercase tracking-wider" style={{ color: '#B8860B' }}>CFO VIEW</p>
-        <h1 className="text-3xl font-bold text-gray-900 mt-1">CFO Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-1">{fin.companyName} · Financial Overview 2021–2026</p>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+        <div>
+          <p className="text-xs uppercase tracking-wider" style={{ color: '#B8860B' }}>CFO VIEW</p>
+          <h1 className="text-3xl font-bold text-gray-900 mt-1">CFO Dashboard</h1>
+          <p className="text-sm text-gray-500 mt-1">{fin.companyName} · Financial Overview {years[0]}–{years[years.length - 1]}</p>
+        </div>
+        {companies.length > 1 && (
+          <select
+            value={selectedCompanyId ?? ''}
+            onChange={e => setSelectedCompanyId(e.target.value)}
+            style={{
+              fontSize: 13, padding: '8px 12px', borderRadius: 8,
+              border: '1px solid #E8DEC8', background: '#FBF6EE', minWidth: 220,
+            }}
+          >
+            {companies.map(c => (
+              <option key={c.id} value={c.id}>{c.company_name}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* Year Selector */}
@@ -189,10 +212,12 @@ export default function RentalCfoDashboard() {
                 <div>
                   <p className="text-xs text-gray-500 uppercase">Revenue</p>
                   <p className="text-lg font-bold text-gray-900">{fmt$(yearInsight.revenue)}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Total for Income</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 uppercase">Expenses</p>
                   <p className="text-lg font-bold text-gray-900">{fmt$(yearInsight.expenses)}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Total for Expenses</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 uppercase">Net Income</p>
@@ -274,8 +299,8 @@ export default function RentalCfoDashboard() {
         {years.length > 0 && (() => {
           const latestYear = years[years.length - 1];
           const prevYear = years.length > 1 ? years[years.length - 2] : null;
-          const latestNI = getYValue(pl, /^net\s+income$/i, latestYear);
-          const prevNI = prevYear ? getYValue(pl, /^net\s+income$/i, prevYear) : 0;
+          const latestNI = kpisForYear(latestYear).netIncome;
+          const prevNI = prevYear ? kpisForYear(prevYear).netIncome : 0;
           const niChange = prevNI !== 0 ? ((latestNI - prevNI) / Math.abs(prevNI)) * 100 : 0;
 
           return (
@@ -292,9 +317,8 @@ export default function RentalCfoDashboard() {
                 <p className="text-2xl font-bold text-gray-900 mt-2">
                   {(() => {
                     const margins = years.map(y => {
-                      const rev = Math.abs(getYValue(pl, /^total\s+(revenue|income)$/i, y) || sumItems(pl, /revenue|rental\s+income/i, y));
-                      const ni = getYValue(pl, /^net\s+income$/i, y);
-                      return rev > 0 ? (ni / rev) * 100 : 0;
+                      const k = kpisForYear(y);
+                      return k.totalRevenue > 0 ? (k.netIncome / k.totalRevenue) * 100 : 0;
                     });
                     const avg = margins.reduce((a, b) => a + b, 0) / margins.length;
                     return `${avg.toFixed(1)}%`;
@@ -303,7 +327,7 @@ export default function RentalCfoDashboard() {
               </div>
               <div style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: '12px', padding: '16px' }}>
                 <p className="text-xs text-gray-600 uppercase font-semibold">Latest Cash Position</p>
-                <p className="text-2xl font-bold text-gray-900 mt-2">{fmt$(getYValue(bs, /^total\s+for\s+bank\s+accounts$/i, latestYear) || sumItems(bs, /^bank|checking|savings/i, latestYear))}</p>
+                <p className="text-2xl font-bold text-gray-900 mt-2">{fmt$(kpisForYear(latestYear).cash)}</p>
               </div>
             </>
           );
