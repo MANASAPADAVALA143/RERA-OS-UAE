@@ -146,16 +146,13 @@ const MODULES: ModuleDef[] = [
     tableCols: ['Company Name', 'Property Type', 'Occupancy', 'Month', 'Collected', 'Status'],
     rowCells: (c, viewMonth = 'Jun-2026') => {
       const mrd = (c.monthly_rent_data ?? {}) as Record<string, number>;
-      const syncGross   = (c.sync_gross_potential as number | null)
-        ?? (Object.keys(mrd).length ? Math.max(...Object.values(mrd)) : null);
-      const monthColl   = viewMonth && mrd[viewMonth] != null ? mrd[viewMonth] : null;
-      const syncColl    = monthColl ?? (c.sync_collected as number | null);
+      const syncGross   = grossPotential(c);
       const syncVac     = c.sync_vacancy_loss as number | null;
+      const displayColl = collectedForMonth(c, viewMonth);
+      const hasMonthData = Boolean(viewMonth && Object.keys(mrd).length > 0 && viewMonth in mrd);
       const { occ, total: occTotal } = occupancyCounts(c);
       const occPct      = occTotal ? Math.round(occ / occTotal * 100) : null;
-      const hasMonthData = Boolean(viewMonth && Object.keys(mrd).length > 0 && viewMonth in mrd);
-      const displayColl = hasMonthData ? mrd[viewMonth!] : syncColl;
-      const collPct     = syncGross && syncGross > 0 ? Math.round((displayColl ?? 0) / syncGross * 100) : null;
+      const collPct     = syncGross > 0 ? Math.round(displayColl / syncGross * 100) : null;
 
       const occCell: ReactNode = occTotal > 0 ? (
         <div className="min-w-[110px]">
@@ -299,6 +296,23 @@ const MODULES: ModuleDef[] = [
 ];
 
 const SUITE_PROP_TYPES = ['Apartment', 'Townhome', 'SFR', 'Loft', 'Commercial'];
+
+/** Collected for a month — monthly_rent_data (registry rollup) trumps stale sync_collected. */
+function collectedForMonth(c: Record<string, unknown>, viewMonth: string): number {
+  const mrd = (c.monthly_rent_data ?? {}) as Record<string, number>;
+  if (viewMonth && Object.keys(mrd).length > 0 && viewMonth in mrd) {
+    return mrd[viewMonth];
+  }
+  return (c.sync_collected as number) ?? 0;
+}
+
+function grossPotential(c: Record<string, unknown>): number {
+  const mrd = (c.monthly_rent_data ?? {}) as Record<string, number>;
+  const syncGross = c.sync_gross_potential as number | null;
+  if (syncGross != null) return syncGross;
+  if (Object.keys(mrd).length) return Math.max(...Object.values(mrd));
+  return 0;
+}
 
 /** Registry unit rows trump Excel physical-unit inflation (combined labels like "Unit A,B,C"). */
 function occupancyCounts(c: Record<string, unknown>): { occ: number; total: number } {
@@ -1157,20 +1171,19 @@ export default function CompanyRegistry({ embedded = false }: Props) {
       </div>
 
       {/* Rental sync banner */}
-      {activeId === 'rental' && companies.some(c => c.last_sync_month) && (() => {
-        const synced = companies.filter(c => c.last_sync_month);
-        const lastMonth = synced[0]?.last_sync_month as string;
-        const totalOcc  = synced.reduce((a, c) => a + occupancyCounts(c).occ, 0);
-        const totalUnits = synced.reduce((a, c) => a + occupancyCounts(c).total, 0);
-        const totalColl  = synced.reduce((a, c) => a + ((c.sync_collected as number) ?? 0), 0);
-        const totalGross = synced.reduce((a, c) => a + ((c.sync_gross_potential as number) ?? 0), 0);
+      {activeId === 'rental' && companies.length > 0 && (() => {
+        const totalOcc  = companies.reduce((a, c) => a + occupancyCounts(c).occ, 0);
+        const totalUnits = companies.reduce((a, c) => a + occupancyCounts(c).total, 0);
+        const totalColl  = companies.reduce((a, c) => a + collectedForMonth(c, importMonth), 0);
+        const totalGross = companies.reduce((a, c) => a + grossPotential(c), 0);
         const collPct = totalGross > 0 ? Math.round(totalColl / totalGross * 100) : 0;
+        const syncedCount = companies.filter(c => c.last_sync_month || c.monthly_rent_data).length;
         return (
           <div className="flex items-center justify-between px-4 py-2.5 rounded-xl"
             style={{ background: 'rgba(212,175,55,0.10)', border: '1px solid rgba(212,175,55,0.30)' }}>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#92400E' }}>Live Sync</span>
-              <span className="text-sm font-semibold" style={{ color: '#1C1917' }}>{lastMonth}</span>
+              <span className="text-sm font-semibold" style={{ color: '#1C1917' }}>{importMonth}</span>
               <span className="text-sm" style={{ color: '#78716C' }}>·</span>
               <span className="text-sm" style={{ color: '#1C1917' }}>{totalOcc}/{totalUnits} occupied</span>
               <span className="text-sm" style={{ color: '#78716C' }}>·</span>
@@ -1178,7 +1191,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
               <span className="text-sm" style={{ color: '#78716C' }}>·</span>
               <span className="text-sm font-medium" style={{ color: collPct >= 95 ? '#059669' : '#D97706' }}>{collPct}% collection rate</span>
             </div>
-            <span className="text-[10px]" style={{ color: '#A8A29E' }}>{synced.length} companies synced</span>
+            <span className="text-[10px]" style={{ color: '#A8A29E' }}>{syncedCount} companies</span>
           </div>
         );
       })()}

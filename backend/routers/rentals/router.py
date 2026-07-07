@@ -454,6 +454,17 @@ def _heal_company_sync_fields(company, units: list, prefer_month: str | None = N
     return changed
 
 
+def _company_sync_collected(co, month: str | None = None) -> float | None:
+    """Prefer monthly_rent_data rollup — stays aligned with registry unit sums."""
+    mrd = co.monthly_rent_data or {}
+    m = month or co.last_sync_month
+    if m and m in mrd:
+        return float(mrd[m])
+    if co.collected_this_month is not None:
+        return float(co.collected_this_month)
+    return None
+
+
 def _apply_registry_financials(company, units: list, target_month: str | None = None) -> None:
     """
     Collected / monthly totals from registry unit rows only.
@@ -724,7 +735,7 @@ def list_companies(
                 "property_name": props[0].property_name if props else "",
                 "property_count": len(props),
                 **summ,
-                "sync_collected": float(co.collected_this_month) if co.collected_this_month is not None else None,
+                "sync_collected": _company_sync_collected(co),
                 "sync_vacancy_loss": float(co.vacancy_loss) if co.vacancy_loss is not None else None,
                 "sync_gross_potential": float(co.gross_potential_rent) if co.gross_potential_rent is not None else None,
                 "sync_occupied_units": co.occupied_units,
@@ -743,7 +754,7 @@ def list_companies(
                 "occupied_units": co.occupied_units or 0,
                 "vacant_units": 0,
                 "occupancy_pct": 0,
-                "sync_collected": float(co.collected_this_month) if co.collected_this_month is not None else None,
+                "sync_collected": _company_sync_collected(co),
                 "sync_vacancy_loss": float(co.vacancy_loss) if co.vacancy_loss is not None else None,
                 "sync_gross_potential": float(co.gross_potential_rent) if co.gross_potential_rent is not None else None,
                 "sync_occupied_units": co.occupied_units,
