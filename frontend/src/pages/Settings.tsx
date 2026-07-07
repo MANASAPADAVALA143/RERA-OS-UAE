@@ -84,11 +84,9 @@ export default function Settings() {
 
   useEffect(() => {
     setLoading(true);
-    const fetches = singleUserMode
-      ? [fetchSettings(), fetchAudit()]
-      : [fetchTeam(), fetchSettings(), fetchAudit()];
-    Promise.all(fetches).finally(() => setLoading(false));
-  }, [fetchTeam, fetchSettings, fetchAudit, singleUserMode]);
+    Promise.all([fetchTeam(), fetchSettings(), fetchAudit()])
+      .finally(() => setLoading(false));
+  }, [fetchTeam, fetchSettings, fetchAudit]);
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -175,7 +173,7 @@ export default function Settings() {
       <h1 className="text-2xl font-bold text-charcoal">Settings</h1>
 
       <div className="flex gap-1 border-b border-gray-200">
-        {visibleTabs.map(({ id, label }) => (
+        {TABS.map(({ id, label }) => (
           <button
             key={id}
             onClick={() => setTab(id)}

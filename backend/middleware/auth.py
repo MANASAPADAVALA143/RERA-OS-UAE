@@ -12,10 +12,10 @@ from sqlalchemy.orm import Session
 from config import settings
 from database import get_db, set_rls_tenant
 from models.tenancy import Tenant, TenantUser, UserRole, UserStatus
-from services.app_access import assert_primary_app_user, is_primary_app_user
+from services.app_access import is_primary_app_user
 from services.local_auth import decode_local_token
 
-# CA firm KPI cross-check — primary operator email (+ platform ops).
+# CA firm KPI cross-check — internal_reviewer (+ platform ops, primary operator email).
 KPI_REVIEWER_ROLES = {UserRole.platform_admin, UserRole.internal_reviewer}
 
 WRITE_ROLES = {
@@ -28,7 +28,7 @@ WRITE_ROLES = {
 
 
 def is_kpi_reviewer(role: UserRole, email: str | None = None) -> bool:
-    if role == UserRole.platform_admin:
+    if role in KPI_REVIEWER_ROLES:
         return True
     return is_primary_app_user(email)
 
@@ -167,12 +167,12 @@ async def get_current_user(
     )
 
     if not tenant_user:
+        # Auto-provision: new Supabase user logging in for the first time.
         if settings.effective_auth_mode != "supabase":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="User has no tenant membership",
             )
-        assert_primary_app_user(email)
         company_label = email.split("@")[0].replace(".", " ").replace("_", " ").title()
         tenant = Tenant(id=_uuid.UUID(user_id), company_name=f"{company_label} Co.")
         db.add(tenant)
@@ -181,7 +181,7 @@ async def get_current_user(
             tenant_id=tenant.id,
             supabase_user_id=user_id,
             email=email,
-            role=UserRole.internal_reviewer,
+            role=UserRole.owner,
             status=UserStatus.active,
             joined_at=datetime.now(timezone.utc),
         )
@@ -194,9 +194,6 @@ async def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is disabled",
         )
-
-    effective_email = tenant_user.email or email
-    assert_primary_app_user(effective_email)
 
     # Set Postgres RLS tenant context for this session.
     # FastAPI caches Depends(get_db) per request, so `db` here is the same
@@ -219,7 +216,7 @@ async def require_kpi_reviewer(
     if not is_kpi_reviewer(current_user.role, current_user.email):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Calculations review is restricted to the primary CA firm account.",
+            detail="Calculations review is restricted to CA firm reviewer accounts.",
         )
     return current_user
 

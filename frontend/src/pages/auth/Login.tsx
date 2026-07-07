@@ -4,7 +4,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 export default function Login() {
-  const { signIn, authConfig } = useAuth();
+  const { signIn } = useAuth();
   const navigate = useNavigate();
 
   const [email,    setEmail]    = useState('');
@@ -116,9 +116,7 @@ export default function Login() {
         </form>
 
         <p className="text-center text-xs mt-6" style={{ color: '#78716C' }}>
-          {authConfig?.primary_user_email
-            ? `Access is limited to ${authConfig.primary_user_email}`
-            : 'Contact your administrator to get access'}
+          Contact your administrator to get access
         </p>
       </div>
     </div>
