@@ -78,6 +78,25 @@ def _norm_header(cell: Any) -> str:
     return re.sub(r"\s+", " ", str(cell or "").strip().lower())
 
 
+def normalize_entity_line(val: Any) -> str | None:
+    """Canonical Entity label: Rental, Land, Consulting, Partner, etc."""
+    if val is None or not str(val).strip():
+        return None
+    key = _norm_header(val)
+    if not key:
+        return None
+    if key in ("rental", "rentals", "property management", "real estate rental", "rental portfolio"):
+        return "Rental"
+    if key in ("land", "lands", "land holding", "land holdings"):
+        return "Land"
+    if "consult" in key:
+        return "Consulting"
+    if key in ("partner", "partners", "jv partner"):
+        return "Partner"
+    # Title-case leftover values for UI dropdown
+    return str(val).strip().title()
+
+
 def is_rental_entity_line(val: Any) -> bool:
     """True when Entity / business-line column indicates Rentals (or is blank)."""
     if val is None or not str(val).strip():
@@ -92,6 +111,14 @@ def is_rental_entity_line(val: Any) -> bool:
     if key in ("rentals", "property management", "real estate rental", "rental portfolio"):
         return True
     return False
+
+
+def is_ownership_entity_line(val: Any) -> bool:
+    """True for Ownership import scope: Rental, Land, or blank Entity."""
+    if val is None or not str(val).strip():
+        return True
+    normalized = normalize_entity_line(val)
+    return normalized in ("Rental", "Land")
 
 
 def _parse_num(v: Any) -> float | None:
@@ -178,19 +205,24 @@ def _parse_row_mapped(
     row_num: int,
     *,
     filter_entity_line: bool,
+    carried_book_value: float | None = None,
 ) -> ParsedOwnershipRow | None:
     company = str(_cell(row, col_map, "company") or "").strip()
     partner = str(_cell(row, col_map, "partner") or "").strip()
     entity_line_raw = _cell(row, col_map, "entity_line") if "entity_line" in col_map else None
-    entity_line = str(entity_line_raw).strip() if entity_line_raw is not None else None
+    entity_line = normalize_entity_line(entity_line_raw)
 
-    if filter_entity_line and not is_rental_entity_line(entity_line_raw):
+    if filter_entity_line and not is_ownership_entity_line(entity_line_raw):
         return None
     if not company or not partner:
         return None
     if _norm_header(company) in _SKIP_ROW or _norm_header(partner) in _SKIP_ROW:
         return None
     prop = str(_cell(row, col_map, "property") or "").strip() or company
+    book_value = _parse_num(_cell(row, col_map, "book_value"))
+    # Excel often merges Book Value across Cost Basis rows — carry previous non-blank value.
+    if book_value is None and carried_book_value is not None:
+        book_value = carried_book_value
     return ParsedOwnershipRow(
         entity_name=company,
         partner_name=partner,
@@ -199,15 +231,20 @@ def _parse_row_mapped(
         ownership_pct=_parse_pct(_cell(row, col_map, "ownership_pct")),
         entity_structure=str(_cell(row, col_map, "structure") or "").strip() or None,
         cost_basis=_parse_num(_cell(row, col_map, "cost_basis")),
-        book_value=_parse_num(_cell(row, col_map, "book_value")),
+        book_value=book_value,
         existing_debt=_parse_num(_cell(row, col_map, "debt")),
-        entity_line=entity_line or None,
+        entity_line=entity_line or ("Rental" if "entity_line" not in col_map else None),
         sheet=sheet,
         row_num=row_num,
     )
 
 
 def parse_ownership_workbook(content: bytes, *, rental_only: bool = True) -> ParseOwnershipResult:
+    """Parse ownership workbook.
+
+    When rental_only=True (default), keep Entity = Rental or Land (plus blank).
+    Other entity lines (Consulting, Partner, Construction, …) are skipped.
+    """
     import openpyxl
 
     wb = openpyxl.load_workbook(BytesIO(content), data_only=True)
@@ -225,15 +262,20 @@ def parse_ownership_workbook(content: bytes, *, rental_only: bool = True) -> Par
         hdr_idx, col_map = header
         if "entity_line" in col_map:
             has_entity_line_column = True
+        carried_book_value: float | None = None
         for row_num, row in enumerate(rows[hdr_idx + 1:], start=hdr_idx + 2):
             if rental_only and "entity_line" in col_map:
                 raw_line = _cell(row, col_map, "entity_line")
-                if raw_line is not None and str(raw_line).strip() and not is_rental_entity_line(raw_line):
+                if raw_line is not None and str(raw_line).strip() and not is_ownership_entity_line(raw_line):
                     skipped_non_rental += 1
                     continue
+            raw_bv = _parse_num(_cell(row, col_map, "book_value")) if "book_value" in col_map else None
+            if raw_bv is not None:
+                carried_book_value = raw_bv
             parsed = _parse_row_mapped(
                 row, col_map, ws.title, row_num,
                 filter_entity_line=rental_only,
+                carried_book_value=carried_book_value,
             )
             if parsed and parsed.ownership_pct > 0:
                 out.append(parsed)
@@ -290,8 +332,8 @@ def import_ownership_from_excel(db: Session, tid, content: bytes) -> dict:
     parsed = parsed_result.rows
     if not parsed:
         hint = (
-            "No rental ownership rows found. When the file has an Entity column, "
-            "only rows with Entity = Rental are imported."
+            "No ownership rows found for Entity = Rental or Land. "
+            "Consulting/Partner/Construction rows are skipped."
             if parsed_result.has_entity_line_column
             else "No ownership rows found."
         )
@@ -299,7 +341,7 @@ def import_ownership_from_excel(db: Session, tid, content: bytes) -> dict:
             "imported_count": 0,
             "skipped_non_rental": parsed_result.skipped_non_rental,
             "errors": [
-                f"{hint} Expected columns: Entity (Rental), Entity Name, Owned By, "
+                f"{hint} Expected columns: Entity (Rental/Land), Entity Name, Owned By, "
                 "Property Address, Property Name, Ownership %, Entity Structure, "
                 "Cost Basis, Book Value, Existing Debt.",
             ],
@@ -323,6 +365,7 @@ def import_ownership_from_excel(db: Session, tid, content: bytes) -> dict:
             property_name=suite.property_name if suite else row.property_name,
             property_address=row.property_address,
             entity_structure=row.entity_structure,
+            entity_line=row.entity_line or "Rental",
             ownership_pct=row.ownership_pct,
             role=_role_from_structure(row.entity_structure),
             cost_basis=row.cost_basis,

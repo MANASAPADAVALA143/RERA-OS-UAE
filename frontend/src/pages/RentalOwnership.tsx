@@ -88,6 +88,7 @@ interface Holding {
   property_name?: string;
   property_address?: string | null;
   entity_structure?: string | null;
+  entity_line?: string | null;
   ownership_pct: number;
   role:          string;
   cost_basis?: number | null;
@@ -317,6 +318,7 @@ export default function RentalOwnership() {
   // Filters
   const [companyFilter, setCompanyFilter] = useState('all');
   const [partnerFilter, setPartnerFilter] = useState('all');
+  const [entityFilter, setEntityFilter] = useState('all');
 
   // UI state
   const [selectedPartner, setSelectedPartner] = useState<string | null>(null);
@@ -391,24 +393,54 @@ export default function RentalOwnership() {
     return m;
   }, [companies]);
 
-  const financials = useMemo(() => {
-    const m: Record<string, PFinancials> = {};
-    apiPartners.forEach(p => { m[p.partner_name] = deriveFinancials(p, companyGpr); });
-    return m;
-  }, [apiPartners, companyGpr]);
-
   const allCompanies = useMemo(() => {
     const map: Record<string, string> = {};
     apiPartners.forEach(p => p.holdings.forEach(h => { map[h.company_id] = h.company_name; }));
     return Object.entries(map).map(([id, name]) => ({ id, name }));
   }, [apiPartners]);
 
+  const entityOptions = useMemo(() => {
+    const set = new Set<string>();
+    apiPartners.forEach(p => {
+      p.holdings.forEach(h => {
+        const line = (h.entity_line || 'Rental').trim();
+        if (line) set.add(line);
+      });
+    });
+    return [...set].sort((a, b) => {
+      const rank = (x: string) => (x === 'Rental' ? 0 : x === 'Land' ? 1 : 2);
+      return rank(a) - rank(b) || a.localeCompare(b);
+    });
+  }, [apiPartners]);
+
   const filtered = useMemo(() => {
     let ps = apiPartners;
     if (partnerFilter !== 'all') ps = ps.filter(p => p.partner_name === partnerFilter);
-    if (companyFilter !== 'all') ps = ps.filter(p => p.holdings.some(h => h.company_id === companyFilter));
+    if (companyFilter !== 'all' || entityFilter !== 'all') {
+      ps = ps
+        .map(p => ({
+          ...p,
+          holdings: p.holdings.filter(h => {
+            if (companyFilter !== 'all' && h.company_id !== companyFilter) return false;
+            if (entityFilter !== 'all' && (h.entity_line || 'Rental') !== entityFilter) return false;
+            return true;
+          }),
+        }))
+        .filter(p => p.holdings.length > 0)
+        .map(p => ({
+          ...p,
+          company_count: p.holdings.length,
+          total_noi_share: p.holdings.reduce((s, h) => s + h.noi_share, 0),
+        }));
+    }
     return ps;
-  }, [apiPartners, partnerFilter, companyFilter]);
+  }, [apiPartners, partnerFilter, companyFilter, entityFilter]);
+
+  const financials = useMemo(() => {
+    const m: Record<string, PFinancials> = {};
+    filtered.forEach(p => { m[p.partner_name] = deriveFinancials(p, companyGpr); });
+    return m;
+  }, [filtered, companyGpr]);
 
   const scopedCompanyIds = useMemo(() => {
     const ids = new Set<string>();
@@ -428,7 +460,7 @@ export default function RentalOwnership() {
 
   const propertiesPerCompany = useMemo(() => {
     const uniq: Record<string, Set<string>> = {};
-    apiPartners.forEach(p => {
+    filtered.forEach(p => {
       p.holdings.forEach(h => {
         if (!uniq[h.company_id]) uniq[h.company_id] = new Set();
         uniq[h.company_id].add(h.property_name || h.company_name);
@@ -437,13 +469,13 @@ export default function RentalOwnership() {
     const out: Record<string, number> = {};
     Object.entries(uniq).forEach(([id, set]) => { out[id] = set.size; });
     return out;
-  }, [apiPartners]);
+  }, [filtered]);
 
   const hasImportedFinancials = useMemo(
-    () => apiPartners.some(p => p.holdings.some(h =>
+    () => filtered.some(p => p.holdings.some(h =>
       h.cost_basis != null || h.book_value != null || h.capital_contributed != null,
     )),
-    [apiPartners],
+    [filtered],
   );
 
   const kpis = useMemo(() => {
@@ -475,7 +507,7 @@ export default function RentalOwnership() {
       marketValue: number; bookValue: number; costBasis: number; capitalIn: number; debt: number;
       slices: CompanySlice[];
     }> = {};
-    apiPartners.forEach((p, pi) => {
+    filtered.forEach((p, pi) => {
       p.holdings.forEach(h => {
         const gpr = companyGpr[h.company_id] ?? 0;
         const hf = holdingFinancials(h, gpr);
@@ -510,10 +542,10 @@ export default function RentalOwnership() {
       });
     });
     return Object.values(map);
-  }, [apiPartners, companyGpr, companyUnits]);
+  }, [filtered, companyGpr, companyUnits]);
 
   const byPartner = useMemo(() => {
-    return apiPartners.map((p, pi) => {
+    return filtered.map((p, pi) => {
       const f = financials[p.partner_name];
       return {
         name: p.partner_name,
@@ -527,7 +559,7 @@ export default function RentalOwnership() {
         holdings: p.holdings.length,
       };
     });
-  }, [apiPartners, financials, companyGpr]);
+  }, [filtered, financials, companyGpr]);
 
   const byProperty = useMemo(() => {
     const map: Record<string, {
@@ -536,7 +568,7 @@ export default function RentalOwnership() {
       effectiveCapRate: number | null; valuationAssumed: boolean;
       slices: { partner: string; pct: number; color: string }[];
     }> = {};
-    apiPartners.forEach((p, pi) => {
+    filtered.forEach((p, pi) => {
       p.holdings.forEach(h => {
         const gpr = companyGpr[h.company_id] ?? 0;
         const hf = holdingFinancials(h, gpr);
@@ -581,7 +613,7 @@ export default function RentalOwnership() {
       r.valuationAssumed = (companyGpr[r.companyId] ?? 0) > 0;
     });
     return rows.sort((a, b) => a.propertyName.localeCompare(b.propertyName));
-  }, [apiPartners, companyGpr, companyKpis, propertiesPerCompany]);
+  }, [filtered, companyGpr, companyKpis, propertiesPerCompany]);
 
   const totalRow = useMemo(() => {
     const fs = filtered.map(p => financials[p.partner_name]).filter(Boolean);
@@ -595,7 +627,7 @@ export default function RentalOwnership() {
     };
   }, [filtered, financials]);
 
-  const selPartnerData = selectedPartner ? apiPartners.find(p => p.partner_name === selectedPartner) : null;
+  const selPartnerData = selectedPartner ? filtered.find(p => p.partner_name === selectedPartner) : null;
   const selF = selPartnerData ? financials[selPartnerData.partner_name] : null;
   const selNature = selectedPartner ? (natures[selectedPartner] ?? ROLE_MAP[selPartnerData?.holdings[0]?.role ?? ''] ?? 'Limited Partner (LP)') : '';
 
@@ -785,7 +817,7 @@ export default function RentalOwnership() {
       if (count === 0) {
         setImportMessage({
           type: 'error',
-          text: warnings.join('; ') || 'No rental ownership rows imported. Use Entity = Rental and match Entity Name to Company Registry.',
+          text: warnings.join('; ') || 'No ownership rows imported. Use Entity = Rental or Land and match Entity Name to Company Registry.',
         });
       } else {
         const skipText = skipped > 0 ? ` Skipped ${skipped} non-rental row(s).` : '';
@@ -817,9 +849,18 @@ export default function RentalOwnership() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-charcoal">Ownership</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Partner registry · Capital tracking · Equity analytics · Rental entity rows only</p>
+          <p className="text-sm text-gray-500 mt-0.5">Partner registry · Capital tracking · Equity analytics · Entity = Rental + Land</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {/* Entity filter */}
+          <div className="flex items-center gap-1.5 text-sm">
+            <span className="text-gray-500 text-xs">Entity:</span>
+            <select value={entityFilter} onChange={e => setEntityFilter(e.target.value)}
+              className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600">
+              <option value="all">All Entities (Rental + Land)</option>
+              {entityOptions.map(e => <option key={e} value={e}>{e}</option>)}
+            </select>
+          </div>
           {/* Company filter */}
           <div className="flex items-center gap-1.5 text-sm">
             <span className="text-gray-500 text-xs">Company:</span>
@@ -935,7 +976,7 @@ export default function RentalOwnership() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
               <tr>
-                {['Partner','Nature','Wtd Own %','Capital In','Cost Basis','Book Value','Market Value','Unrealized G/L','Return to Date','ROI','IRR','Eq. Mult.','Status',''].map(h => (
+                {['Partner','Entity','Nature','Wtd Own %','Capital In','Cost Basis','Book Value','Market Value','Unrealized G/L','Return to Date','ROI','IRR','Eq. Mult.','Status',''].map(h => (
                   <th key={h} className="px-3 py-3 text-right first:text-left whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -948,6 +989,7 @@ export default function RentalOwnership() {
                 const totalPct = weightedOwnershipPct(p.holdings, companyGpr);
                 const pMetrics = partnerMetricsByName[p.partner_name];
                 const isSelected = selectedPartner === p.partner_name;
+                const entityLines = [...new Set(p.holdings.map(h => h.entity_line || 'Rental'))];
                 return (
                   <tr key={p.partner_name}
                     className={`hover:bg-gray-50 cursor-pointer transition-colors ${isSelected ? 'bg-green-50 ring-1 ring-inset ring-green-200' : ''}`}
@@ -959,6 +1001,15 @@ export default function RentalOwnership() {
                           {p.partner_name[0]}
                         </span>
                         <span className="font-medium text-gray-900 whitespace-nowrap">{p.partner_name}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {entityLines.map(line => (
+                          <span key={line} className={`px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${
+                            line === 'Land' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                          }`}>{line}</span>
+                        ))}
                       </div>
                     </td>
                     <td className="px-3 py-3">
@@ -1009,7 +1060,7 @@ export default function RentalOwnership() {
             </tbody>
             <tfoot>
               <tr className="bg-gray-900 text-white text-xs font-semibold">
-                <td className="px-3 py-3" colSpan={3}>Portfolio Total</td>
+                <td className="px-3 py-3" colSpan={4}>Portfolio Total</td>
                 <td className="px-3 py-3 text-right font-mono">{fmtK(totalRow.capitalContributed)}</td>
                 <td className="px-3 py-3 text-right font-mono">{fmtK(totalRow.costBasis)}</td>
                 <td className="px-3 py-3 text-right font-mono">{fmtK(totalRow.bookValue)}</td>
@@ -1036,7 +1087,9 @@ export default function RentalOwnership() {
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="p-4 border-b border-gray-100">
           <h3 className="font-semibold text-gray-800">Ownership Analytics</h3>
-          <p className="text-xs text-gray-400 mt-0.5">Portfolio-wide equity, return and gain/loss comparison</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {entityFilter === 'all' ? 'Rental + Land' : entityFilter} · equity, return and gain/loss comparison
+          </p>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-px bg-gray-100">
           {/* Chart 1: Ownership Distribution Donut */}
@@ -1045,7 +1098,7 @@ export default function RentalOwnership() {
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
                 <Pie
-                  data={apiPartners.map((p, i) => ({
+                  data={filtered.map((p, i) => ({
                     name: p.partner_name,
                     value: portfolioMarketValue > 0
                       ? parseFloat((((financials[p.partner_name]?.marketValue ?? 0) / portfolioMarketValue) * 100).toFixed(1))
@@ -1053,7 +1106,7 @@ export default function RentalOwnership() {
                   }))}
                   dataKey="value" cx="45%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={2}
                 >
-                  {apiPartners.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  {filtered.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'Portfolio Equity']} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -1065,7 +1118,7 @@ export default function RentalOwnership() {
           <div className="bg-white p-4">
             <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Capital vs Market Value per Partner</p>
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={apiPartners.map(p => {
+              <BarChart data={filtered.map(p => {
                 const f = financials[p.partner_name];
                 return { name: p.partner_name.split(' ')[0], costBasis: Math.round((f?.costBasis ?? 0) / 1000), marketValue: Math.round((f?.marketValue ?? 0) / 1000) };
               })} barCategoryGap="30%" barGap={2}>
@@ -1085,7 +1138,7 @@ export default function RentalOwnership() {
             <ResponsiveContainer width="100%" height={220}>
               <BarChart
                 layout="vertical"
-                data={[...apiPartners].sort((a, b) => (financials[b.partner_name]?.roi ?? 0) - (financials[a.partner_name]?.roi ?? 0)).map(p => ({
+                data={[...filtered].sort((a, b) => (financials[b.partner_name]?.roi ?? 0) - (financials[a.partner_name]?.roi ?? 0)).map(p => ({
                   name: p.partner_name.split(' ')[0],
                   roi: parseFloat((financials[p.partner_name]?.roi ?? 0).toFixed(1)),
                 }))}
@@ -1104,7 +1157,7 @@ export default function RentalOwnership() {
           <div className="bg-white p-4">
             <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Unrealized Gain / Loss per Partner</p>
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={apiPartners.map((p, i) => {
+              <BarChart data={filtered.map((p, i) => {
                 const f = financials[p.partner_name];
                 return { name: p.partner_name.split(' ')[0], gain: Math.round((f?.unrealizedGain ?? 0) / 1000), color: (f?.unrealizedGain ?? 0) >= 0 ? '#16A34A' : '#DC2626' };
               })} barSize={28}>
@@ -1113,7 +1166,7 @@ export default function RentalOwnership() {
                 <Tooltip formatter={(v: number) => [`$${v}K`, 'Unrealized G/L']} />
                 <ReferenceLine y={0} stroke="#9CA3AF" />
                 <Bar dataKey="gain" name="Unrealized G/L" radius={[3,3,0,0]}>
-                  {apiPartners.map((p, i) => (
+                  {filtered.map((p, i) => (
                     <Cell key={i} fill={(financials[p.partner_name]?.unrealizedGain ?? 0) >= 0 ? '#16A34A' : '#DC2626'} />
                   ))}
                 </Bar>

@@ -103,6 +103,7 @@ OWNERSHIP_COLUMNS = {
     "property_name": "VARCHAR(255)",
     "property_address": "VARCHAR(500)",
     "entity_structure": "VARCHAR(100)",
+    "entity_line": "VARCHAR(100)",
     "cost_basis": "NUMERIC(16, 2)",
     "book_value": "NUMERIC(16, 2)",
     "existing_debt": "NUMERIC(16, 2)",

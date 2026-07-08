@@ -1664,6 +1664,7 @@ def list_ownership(
             "property_name": row.property_name or (row.property.property_name if row.property else ""),
             "property_address": row.property_address,
             "entity_structure": row.entity_structure,
+            "entity_line": getattr(row, "entity_line", None) or "Rental",
             "ownership_pct": pct,
             "role": row.role.value,
             "cost_basis": float(row.cost_basis) if row.cost_basis is not None else None,

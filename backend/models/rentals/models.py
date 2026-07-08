@@ -208,6 +208,7 @@ class RentalOwnership(Base):
     property_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     property_address: Mapped[str | None] = mapped_column(String(500), nullable=True)
     entity_structure: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    entity_line: Mapped[str | None] = mapped_column(String(100), nullable=True)
     ownership_pct: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False)
     role: Mapped[RentalPartnerRole] = mapped_column(Enum(RentalPartnerRole, name="rental_partner_role"), nullable=False)
     cost_basis: Mapped[float | None] = mapped_column(Numeric(16, 2), nullable=True)
