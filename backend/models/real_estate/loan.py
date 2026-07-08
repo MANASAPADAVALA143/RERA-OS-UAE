@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Uuid, func
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, JSON, Numeric, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -27,6 +27,7 @@ class Loan(Base):
     loan_maturity_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     loan_balance_as_of: Mapped[float | None] = mapped_column(Numeric(16, 2), nullable=True)
     loan_balance_as_of_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    balance_by_month: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     loan_emi_day: Mapped[int | None] = mapped_column(Integer, nullable=True)   # day-of-month 1–31
     loan_deduction_bank_account: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # DSCR/LTV fields — added for Lender Risk (Construction + Rental context)

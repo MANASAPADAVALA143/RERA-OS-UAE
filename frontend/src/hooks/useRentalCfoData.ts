@@ -47,6 +47,9 @@ export interface LoanRow {
   loan_interest_rate: number | null;
   loan_emi: number | null;
   loan_balance_as_of: number | null;
+  loan_balance_as_of_date: string | null;
+  balance_by_month?: Record<string, number>;
+  balance_periods?: string[];
   loan_maturity_date: string | null;
   loan_emi_day: number | null;
   noi_annual: number | null;
@@ -118,7 +121,7 @@ export function dscrStatus(dscr: number | null): 'green' | 'amber' | 'red' | 'gr
   return 'red';
 }
 
-export function useRentalCfoData(monthYm?: string) {
+export function useRentalCfoData(monthYm?: string, balancePeriod?: string) {
   const [companies, setCompanies] = useState<CompanyRow[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
   const [units, setUnits] = useState<UnitRow[]>([]);
@@ -137,7 +140,12 @@ export function useRentalCfoData(monthYm?: string) {
         api.get<CompanyRow[]>(`/api/rentals/companies${monthQ}`),
         api.get<ExpenseRow[]>('/api/rentals/expenses'),
         api.get<UnitRow[]>('/api/rentals/units'),
-        api.get<{ items: LoanRow[] }>('/api/real-estate/loans', { params: { context_type: 'rental' } }),
+        api.get<{ items: LoanRow[]; balance_periods?: string[] }>('/api/real-estate/loans', {
+          params: {
+            context_type: 'rental',
+            ...(balancePeriod ? { balance_period: balancePeriod } : {}),
+          },
+        }),
         api.get<PortfolioSummary>(`/api/rentals/portfolio-summary${monthQ}`),
         api.get<{ items: MaintRow[] }>('/api/rentals/maintenance').catch(() => ({ data: { items: [] } })),
       ]);
@@ -152,7 +160,7 @@ export function useRentalCfoData(monthYm?: string) {
     } finally {
       setLoading(false);
     }
-  }, [monthYm]);
+  }, [monthYm, balancePeriod]);
 
   useEffect(() => { load(); }, [load]);
 

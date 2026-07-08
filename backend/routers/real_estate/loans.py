@@ -10,6 +10,7 @@ from database import get_db
 from middleware.auth import CurrentUser, get_current_user, require_write_access
 from models.real_estate.entity import Entity
 from models.real_estate.loan import Loan
+from models.rentals.models import RentalCompany
 from services.lender_calculations import dscr as calc_dscr, dscr_status, ltv_current as calc_ltv
 
 router = APIRouter(prefix="/api/real-estate/loans", tags=["real-estate"])
@@ -22,13 +23,30 @@ def _mask_account(acct: str | None) -> str | None:
     return f"****{tail}"
 
 
-def _loan_dict(loan: Loan, *, masked: bool = True) -> dict:
+def _balance_for_month(loan: Loan, period: str | None) -> tuple[float | None, str | None]:
+    """Resolve outstanding balance for YYYY-MM period key."""
+    history = loan.balance_by_month or {}
+    if period and period in history:
+        y, m = period.split("-")
+        return float(history[period]), date(int(y), int(m), 1).isoformat()
+    if loan.loan_balance_as_of is not None:
+        bal_date = loan.loan_balance_as_of_date.isoformat() if loan.loan_balance_as_of_date else None
+        return float(loan.loan_balance_as_of), bal_date
+    if history:
+        latest = max(history.keys())
+        y, m = latest.split("-")
+        return float(history[latest]), date(int(y), int(m), 1).isoformat()
+    return None, None
+
+
+def _loan_dict(loan: Loan, *, masked: bool = True, balance_period: str | None = None) -> dict:
     noi_ann  = float(loan.noi_annual) if loan.noi_annual is not None else None
     annual_ds = float(loan.loan_emi) * 12 if loan.loan_emi is not None else None
-    bal      = float(loan.loan_balance_as_of) if loan.loan_balance_as_of is not None else None
+    bal, bal_ref = _balance_for_month(loan, balance_period)
     prop_val = float(loan.current_property_value) if loan.current_property_value is not None else None
     dscr_val = calc_dscr(noi_ann, annual_ds)
     ltv_val  = calc_ltv(bal, prop_val)
+    balance_periods = sorted((loan.balance_by_month or {}).keys())
     return {
         "id": str(loan.id),
         "entity_id": str(loan.entity_id) if loan.entity_id else None,
@@ -45,7 +63,9 @@ def _loan_dict(loan: Loan, *, masked: bool = True) -> dict:
         "lender_phone": loan.lender_phone,
         "loan_maturity_date": loan.loan_maturity_date.isoformat() if loan.loan_maturity_date else None,
         "loan_balance_as_of": bal,
-        "loan_balance_as_of_date": loan.loan_balance_as_of_date.isoformat() if loan.loan_balance_as_of_date else None,
+        "loan_balance_as_of_date": bal_ref,
+        "balance_by_month": loan.balance_by_month or {},
+        "balance_periods": balance_periods,
         "loan_emi_day": loan.loan_emi_day,
         "loan_deduction_bank_account": loan.loan_deduction_bank_account,
         "noi_annual": noi_ann,
@@ -113,6 +133,7 @@ def list_loans(
     company_name: Optional[str] = None,
     property_name: Optional[str] = None,
     context_type: Optional[str] = None,
+    balance_period: Optional[str] = None,
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -126,11 +147,27 @@ def list_loans(
 
     loans = q.order_by(Loan.loan_maturity_date.asc().nullslast()).all()
 
+    if context_type == "rental":
+        registry_names = {
+            c.company_name.lower().strip()
+            for c in db.query(RentalCompany).filter(
+                RentalCompany.tenant_id == current_user.tenant_id,
+            ).all()
+        }
+        if registry_names:
+            loans = [
+                l for l in loans
+                if l.company_name and l.company_name.lower().strip() in registry_names
+            ]
+
     today = date.today()
     cutoff_90 = today + timedelta(days=90)
 
     total_amount = sum(float(l.loan_amount) for l in loans)
-    total_balance = sum(float(l.loan_balance_as_of) for l in loans if l.loan_balance_as_of is not None)
+    total_balance = sum(
+        (_balance_for_month(l, balance_period)[0] or 0)
+        for l in loans
+    )
     total_emi = sum(float(l.loan_emi) for l in loans if l.loan_emi is not None)
     maturing_90 = sum(
         1 for l in loans
@@ -145,7 +182,10 @@ def list_loans(
             "total_monthly_emi": round(total_emi, 2),
             "maturing_in_90_days": maturing_90,
         },
-        "items": [_loan_dict(l, masked=True) for l in loans],
+        "items": [_loan_dict(l, masked=True, balance_period=balance_period) for l in loans],
+        "balance_periods": sorted({
+            p for l in loans for p in (l.balance_by_month or {}).keys()
+        }),
     }
 
 
@@ -293,18 +333,21 @@ def _parse_emi_day(v) -> int | None:
 @router.post("/import-excel", status_code=201)
 async def import_loans_excel(
     file: UploadFile = File(...),
+    balance_period: Optional[str] = None,
     current_user: CurrentUser = Depends(require_write_access()),
     db: Session = Depends(get_db),
 ):
     """
     Import rental loans from Excel. Supports header-based columns (any order),
-    multiple sheets, and matches Company / Suite names to Company Registry.
+    multiple sheets, Entity=Rental filter, and monthly balance columns.
+    Optional balance_period (YYYY-MM) selects which balance column to use.
     """
     from services.loan_excel_import import import_rental_loans_from_excel
 
     content = await file.read()
     result = import_rental_loans_from_excel(
         db, current_user.tenant_id, content, current_user.email,
+        balance_period=balance_period,
     )
     if result.get("error") == "no_rows":
         raise HTTPException(status_code=400, detail=result["message"])

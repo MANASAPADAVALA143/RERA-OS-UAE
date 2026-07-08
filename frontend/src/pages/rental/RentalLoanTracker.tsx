@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Download, Zap, CheckCircle2, TrendingDown, Plus, X, FileSpreadsheet, DollarSign, Briefcase, AlertCircle, TrendingUp, Calendar } from 'lucide-react';
 import { useRentalCfoData, dscrStatus } from '../../hooks/useRentalCfoData';
 import { LoadingSkeleton } from '../../components/ui/Table';
@@ -9,6 +9,8 @@ import { BulletChartStrip } from '../../components/shared/BulletChartStrip';
 import type { BulletDef, BulletCard } from '../../components/shared/BulletChartStrip';
 
 const MARKET_RATE = 0.065;
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const NOW = new Date();
 
 const DSCR_STYLE = { green: 'bg-green-100 text-green-800', amber: 'bg-amber-100 text-amber-800', red: 'bg-red-100 text-red-800', grey: 'bg-gray-100 text-gray-600' };
 
@@ -174,7 +176,10 @@ function AddLoanDrawer({ open, onClose, onSaved, companyNames }: {
 }
 
 export default function RentalLoanTracker() {
-  const { companies, buildings, loans, loading, error, reload } = useRentalCfoData();
+  const [selectedYear, setSelectedYear] = useState(NOW.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(NOW.getMonth() + 1);
+  const balancePeriod = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+  const { companies, buildings, loans, loading, error, reload } = useRentalCfoData(undefined, balancePeriod);
   const [companyFilter, setCompanyFilter] = useState('all');
   const [buildingFilter, setBuildingFilter] = useState('all');
   const [showAdd, setShowAdd] = useState(false);
@@ -182,10 +187,21 @@ export default function RentalLoanTracker() {
   const [importMsg, setImportMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
 
-  // DEBUG: Log data state
-  useEffect(() => {
-    console.log('🔍 Loan Tracker Debug:', { loading, error, loansCount: loans?.length ?? 0, companiesCount: companies?.length ?? 0 });
-  }, [loading, error, loans, companies]);
+  const availableYears = useMemo(() => {
+    const fromLoans = new Set<number>();
+    loans.forEach(l => {
+      (l.balance_periods ?? Object.keys(l.balance_by_month ?? {})).forEach(p => {
+        const y = parseInt(p.slice(0, 4), 10);
+        if (Number.isFinite(y)) fromLoans.add(y);
+      });
+    });
+    if (fromLoans.size === 0) {
+      return Array.from({ length: 5 }, (_, i) => NOW.getFullYear() - i);
+    }
+    const min = Math.min(...fromLoans);
+    const max = Math.max(...fromLoans, NOW.getFullYear());
+    return Array.from({ length: max - min + 1 }, (_, i) => max - i);
+  }, [loans]);
 
   async function handleImportExcel(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -199,8 +215,13 @@ export default function RentalLoanTracker() {
         message: string;
         companies_updated?: string[];
         sheets_parsed?: string[];
+        balance_periods?: string[];
+        balance_period_used?: string;
+        skipped_non_rental?: number;
+        skipped_registry?: number;
+        skipped_rows?: string[];
       }>(
-        '/api/real-estate/loans/import-excel', fd,
+        `/api/real-estate/loans/import-excel?balance_period=${encodeURIComponent(balancePeriod)}`, fd,
       );
       if (res.data.created === 0) {
         setImportMsg({ text: res.data.message || 'No loans imported — check column headers.', ok: false });
@@ -211,7 +232,13 @@ export default function RentalLoanTracker() {
         const sheets = res.data.sheets_parsed?.length
           ? ` Sheets: ${res.data.sheets_parsed.join(', ')}.`
           : '';
-        setImportMsg({ text: `${res.data.message}${sheets}${cos}`, ok: true });
+        const registrySkip = res.data.skipped_registry
+          ? ` Skipped ${res.data.skipped_registry} row(s) not in Company Registry.`
+          : '';
+        const rowWarn = res.data.skipped_rows?.length
+          ? ` (${res.data.skipped_rows.length} warning(s): ${res.data.skipped_rows.slice(0, 2).join('; ')}${res.data.skipped_rows.length > 2 ? '…' : ''})`
+          : '';
+        setImportMsg({ text: `${res.data.message}${sheets}${cos}${registrySkip}${rowWarn}`, ok: true });
         await reload();
       }
     } catch (ex: unknown) {
@@ -228,25 +255,36 @@ export default function RentalLoanTracker() {
     }
   }
 
-  const companyOptions = useMemo(() => {
+  const registryCompanyNames = useMemo(() => {
     const names = new Set<string>();
     companies.forEach(c => { if (c.company_name) names.add(c.company_name); });
-    loans.forEach(l => { if (l.company_name) names.add(l.company_name); });
-    return [...names].sort();
-  }, [companies, loans]);
+    return names;
+  }, [companies]);
+
+  const registryLoans = useMemo(() => {
+    if (registryCompanyNames.size === 0) return loans;
+    return loans.filter(l => registryCompanyNames.has(l.company_name));
+  }, [loans, registryCompanyNames]);
+
+  const companyOptions = useMemo(
+    () => [...registryCompanyNames].sort(),
+    [registryCompanyNames],
+  );
 
   const buildingOptions = useMemo(() => {
-    const src = companyFilter !== 'all' ? loans.filter(l => l.company_name === companyFilter) : loans;
+    const src = companyFilter !== 'all'
+      ? registryLoans.filter(l => l.company_name === companyFilter)
+      : registryLoans;
     const names = new Set(src.map(l => l.property_name));
     return [...names].sort();
-  }, [loans, companyFilter]);
+  }, [registryLoans, companyFilter]);
 
   const filtered = useMemo(() => {
-    let rows = loans;
+    let rows = registryLoans;
     if (companyFilter !== 'all') rows = rows.filter(l => l.company_name === companyFilter);
     if (buildingFilter !== 'all') rows = rows.filter(l => l.property_name === buildingFilter);
     return rows;
-  }, [loans, companyFilter, buildingFilter]);
+  }, [registryLoans, companyFilter, buildingFilter]);
 
   const kpis = useMemo(() => {
     const portfolio = filtered.reduce((s, l) => s + (l.loan_balance_as_of ?? l.loan_amount), 0);
@@ -273,7 +311,7 @@ export default function RentalLoanTracker() {
   const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
 
   const dscrHealth = useMemo(() => buildings.map(b => {
-    const bLoans = loans.filter(l => l.company_name === b.companyName && l.property_name === b.buildingName);
+    const bLoans = registryLoans.filter(l => l.company_name === b.companyName && l.property_name === b.buildingName);
     const debtService = bLoans.reduce((s, l) => s + (l.loan_emi ?? 0) * 12, 0);
     const noiAnnual = b.noi * 12;
     const dscr = debtService > 0 ? noiAnnual / debtService : null;
@@ -286,7 +324,7 @@ export default function RentalLoanTracker() {
       status: st,
       recommendation: st === 'red' ? 'Reduce debt or boost NOI' : st === 'amber' ? 'Monitor closely' : 'Healthy coverage',
     };
-  }), [buildings, loans]);
+  }), [buildings, registryLoans]);
 
   const debtByBuildingData = useMemo(() => {
     const map: Record<string, number> = {};
@@ -459,9 +497,27 @@ export default function RentalLoanTracker() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 style={{ fontSize: 26, fontWeight: 600, color: '#1C1917', lineHeight: 1.25 }}>Loan Tracker</h1>
-          <p style={{ fontSize: 13, fontWeight: 400, color: '#6B6B6B', marginTop: 2 }}>Rental property debt portfolio · DSCR analysis, refinancing &amp; amortization</p>
+          <p style={{ fontSize: 13, fontWeight: 400, color: '#6B6B6B', marginTop: 2 }}>
+            Rental debt for {companyOptions.length || '—'} Company Registry entities · DSCR, refinancing &amp; amortization
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={selectedMonth}
+            onChange={e => setSelectedMonth(parseInt(e.target.value, 10))}
+            className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm"
+            title="Balance month">
+            {MONTH_LABELS.map((label, i) => (
+              <option key={label} value={i + 1}>{label}</option>
+            ))}
+          </select>
+          <select
+            value={selectedYear}
+            onChange={e => setSelectedYear(parseInt(e.target.value, 10))}
+            className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm"
+            title="Balance year">
+            {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
           <select value={companyFilter} onChange={e => { setCompanyFilter(e.target.value); setBuildingFilter('all'); }}
             className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm">
             <option value="all">All Companies</option>
@@ -618,7 +674,12 @@ export default function RentalLoanTracker() {
 
       <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, overflow: 'hidden' }}>
         <div style={{ padding: '12px 16px', borderBottom: `1px solid ${PT.border}` }}>
-          <h3 style={{ fontSize: 16, fontWeight: 600, color: PT.text }}>Loan Register</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: PT.text }}>
+            Loan Register — {MONTH_LABELS[selectedMonth - 1]} {selectedYear}
+          </h3>
+          <p style={{ fontSize: 12, color: PT.muted, marginTop: 2 }}>
+            Outstanding balances for selected month · import uses columns from your Bank Loan Information sheet
+          </p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full" style={{ borderCollapse: 'collapse' }}>

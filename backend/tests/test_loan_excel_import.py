@@ -28,23 +28,52 @@ def test_header_based_import():
          500000, "5.25%", 3200, "Jane Doe", "01-15-2032", 480000, 15],
     ]
     parsed = parse_loan_workbook(_workbook_bytes({"Loans": rows}))
-    assert len(parsed) == 1
-    assert parsed[0].company == "Entity Alpha LLC"
-    assert parsed[0].property_name == "Building One"
-    assert parsed[0].loan_amount == 500000
-    assert parsed[0].loan_interest_rate == 0.0525
-    assert parsed[0].loan_emi == 3200
+    assert len(parsed.rows) == 1
+    assert parsed.rows[0].company == "Entity Alpha LLC"
+    assert parsed.rows[0].property_name == "Building One"
+    assert parsed.rows[0].loan_amount == 500000
+    assert parsed.rows[0].loan_interest_rate == 0.0525
+    assert parsed.rows[0].loan_emi == 3200
 
 
-def test_legacy_positional_import():
-    """Legacy layout without header row — use a named sheet (not Sheet1)."""
+def test_entity_name_and_rental_filter():
     rows = [
-        [1, "Entity Beta LLC", "Suite 100", "Metro Bank", "03-01-2020",
-         "$1,200,000.00", "4.25%", "$8,500.00", "John Smith",
-         "03-01-2030", "$1,100,000.00", "1st"],
+        ["Entity", "Entity Name", "Property Name", "Loan Bank Name", "Loan Amount",
+         "Loan Interest Rate", "Loan EMI", "Loan Maurity Date", "Loan Balance"],
+        ["Rental", "Alpha LLC", "Suite 100", "First Bank", 400000, 5.5, 2800, "01-01-2030", 390000],
+        ["Construction", "Beta LLC", "Site A", "Second Bank", 900000, 6.0, 5000, "01-01-2031", 850000],
     ]
-    parsed = parse_loan_workbook(_workbook_bytes({"Active Loans": rows}))
-    assert len(parsed) == 0  # no header row — legacy path removed; header-based only
+    parsed = parse_loan_workbook(_workbook_bytes({"Bank Loan Information": rows}))
+    assert len(parsed.rows) == 1
+    assert parsed.rows[0].company == "Alpha LLC"
+    assert parsed.skipped_non_rental == 1
+    assert parsed.has_entity_line_column is True
+
+
+def test_monthly_balance_columns():
+    rows = [
+        ["Company Name", "Property Name", "Loan Bank Name", "Loan Amount",
+         "Loan Interest Rate", "Loan EMI", "Mar-2026", "Apr-2026"],
+        ["Gamma LLC", "Building Two", "Metro Bank", 750000, 6.0, 4500, 700000, 695000],
+    ]
+    parsed = parse_loan_workbook(_workbook_bytes({"Bank Loan Information": rows}))
+    assert len(parsed.rows) == 1
+    assert parsed.rows[0].balance_by_month["2026-03"] == 700000
+    assert parsed.rows[0].balance_by_month["2026-04"] == 695000
+    assert parsed.balance_periods == ["2026-03", "2026-04"]
+
+
+def test_wwbg_style_typo_headers():
+    rows = [
+        ["Company Name", "Property Name", "Loan Bank Name", "Loan Acc No", "Loan Amount",
+         "Loan interest Rate", "Loan EMI ", "Loan Date", "Loan Maurity Date"],
+        ["Delta LLC", "Park Plaza", "Wells Fargo", "12345", 1200000, 4.75, 8500, "03-01-2020", "03-01-2030"],
+    ]
+    parsed = parse_loan_workbook(_workbook_bytes({"Bank Loan Information": rows}))
+    assert len(parsed.rows) == 1
+    assert parsed.rows[0].account_no == "12345"
+    assert parsed.rows[0].loan_interest_rate == 0.0475
+    assert parsed.rows[0].loan_emi == 8500
 
 
 def test_sheet_title_used_when_company_column_empty():
@@ -56,6 +85,6 @@ def test_sheet_title_used_when_company_column_empty():
          750000, 6.0, 4500, "Alex Kim", "06-01-2031", 700000, 1],
     ]
     parsed = parse_loan_workbook(_workbook_bytes({"Gamma Holdings LLC": rows}))
-    assert len(parsed) == 1
-    assert parsed[0].company == "Gamma Holdings LLC"
-    assert parsed[0].property_name == "Building Two"
+    assert len(parsed.rows) == 1
+    assert parsed.rows[0].company == "Gamma Holdings LLC"
+    assert parsed.rows[0].property_name == "Building Two"

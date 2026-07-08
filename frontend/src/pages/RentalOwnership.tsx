@@ -164,6 +164,73 @@ function holdingFinancials(
   return { marketValue, capitalContributed, costBasis, bookValue, unrealizedGain, existingDebt };
 }
 
+function holdingMetricWeight(holding: Holding, companyGpr: number): number {
+  const hf = holdingFinancials(holding, companyGpr);
+  return hf.marketValue || hf.bookValue || hf.costBasis || hf.capitalContributed || 1;
+}
+
+/** Value-weighted average ownership % across holdings — never sums raw % across properties. */
+function weightedOwnershipPct(
+  holdings: Holding[],
+  companyGpr: Record<string, number>,
+): number {
+  if (holdings.length === 0) return 0;
+  let weighted = 0;
+  let totalWeight = 0;
+  for (const h of holdings) {
+    const w = holdingMetricWeight(h, companyGpr[h.company_id] ?? 0);
+    weighted += h.ownership_pct * 100 * w;
+    totalWeight += w;
+  }
+  if (totalWeight <= 0) {
+    const avg = holdings.reduce((s, h) => s + h.ownership_pct * 100, 0) / holdings.length;
+    return Math.min(100, avg);
+  }
+  return Math.min(100, weighted / totalWeight);
+}
+
+type CompanySlice = {
+  partner: string;
+  propertyName: string;
+  pct: number;
+  color: string;
+  costBasis: number;
+  bookValue: number;
+  marketValue: number;
+  capitalIn: number;
+};
+
+/** Partner equity share within a company (for pie charts) — sums to 100%. */
+function partnerEquityShareInCompany(slices: CompanySlice[]): { name: string; value: number; color: string }[] {
+  const byPartner = new Map<string, { mv: number; color: string }>();
+  let totalMv = 0;
+  for (const s of slices) {
+    totalMv += s.marketValue;
+    const cur = byPartner.get(s.partner) ?? { mv: 0, color: s.color };
+    cur.mv += s.marketValue;
+    byPartner.set(s.partner, cur);
+  }
+  if (totalMv > 0) {
+    return [...byPartner.entries()].map(([name, { mv, color }]) => ({
+      name,
+      value: (mv / totalMv) * 100,
+      color,
+    }));
+  }
+  const byPct = new Map<string, { sum: number; color: string }>();
+  for (const s of slices) {
+    const cur = byPct.get(s.partner) ?? { sum: 0, color: s.color };
+    cur.sum += s.pct;
+    byPct.set(s.partner, cur);
+  }
+  const total = [...byPct.values()].reduce((s, v) => s + v.sum, 0);
+  return [...byPct.entries()].map(([name, { sum, color }]) => ({
+    name,
+    value: total > 0 ? (sum / total) * 100 : 0,
+    color,
+  }));
+}
+
 function deriveFinancials(p: PartnerGroup, companyGpr: Record<string, number>): PFinancials {
   let marketValue = 0;
   let capitalContributed = 0;
@@ -250,7 +317,6 @@ export default function RentalOwnership() {
   const importFileRef = useRef<HTMLInputElement>(null);
   const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [importing, setImporting] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [breakdownTab, setBreakdownTab] = useState<'company' | 'partner' | 'property'>('company');
 
   const loadData = useCallback(async () => {
@@ -331,11 +397,10 @@ export default function RentalOwnership() {
   }, [financials, filtered, companyGpr]);
 
   const byCompany = useMemo(() => {
-    type Slice = { partner: string; pct: number; color: string; costBasis: number; bookValue: number; marketValue: number; capitalIn: number };
     const map: Record<string, {
       id: string; name: string; units: number; noi: number;
       marketValue: number; bookValue: number; costBasis: number; capitalIn: number; debt: number;
-      slices: Slice[];
+      slices: CompanySlice[];
     }> = {};
     apiPartners.forEach((p, pi) => {
       p.holdings.forEach(h => {
@@ -361,6 +426,7 @@ export default function RentalOwnership() {
         map[h.company_id].debt += hf.existingDebt;
         map[h.company_id].slices.push({
           partner: p.partner_name,
+          propertyName: h.property_name || h.company_name,
           pct: h.ownership_pct * 100,
           color: COLORS[pi % COLORS.length],
           costBasis: hf.costBasis,
@@ -376,11 +442,10 @@ export default function RentalOwnership() {
   const byPartner = useMemo(() => {
     return apiPartners.map((p, pi) => {
       const f = financials[p.partner_name];
-      const totalPct = p.holdings.reduce((s, h) => s + h.ownership_pct * 100, 0);
       return {
         name: p.partner_name,
         color: COLORS[pi % COLORS.length],
-        ownershipPct: totalPct,
+        ownershipPct: weightedOwnershipPct(p.holdings, companyGpr),
         capitalIn: f?.capitalContributed ?? 0,
         costBasis: f?.costBasis ?? 0,
         bookValue: f?.bookValue ?? 0,
@@ -389,7 +454,7 @@ export default function RentalOwnership() {
         holdings: p.holdings.length,
       };
     });
-  }, [apiPartners, financials]);
+  }, [apiPartners, financials, companyGpr]);
 
   const byProperty = useMemo(() => {
     const map: Record<string, {
@@ -569,35 +634,12 @@ export default function RentalOwnership() {
     }
   }
 
-  async function handleSyncJvLedger() {
-    setSyncing(true);
-    setImportMessage(null);
-    try {
-      const response = await api.post('/api/rentals/ownership/sync-jv-ledger', null, {
-        params: { replace: true },
-      });
-      const data = response.data as { synced_count?: number; errors?: string[]; message?: string };
-      const count = data.synced_count ?? 0;
-      const warnings = (data.errors ?? []).filter(Boolean);
-      const warnText = warnings.length ? ` (${warnings.length} warning(s): ${warnings.slice(0, 2).join('; ')}${warnings.length > 2 ? '…' : ''})` : '';
-      setImportMessage({ type: 'success', text: `Synced ${count} position(s) from JV Ledger.${warnText}` });
-      loadData();
-    } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setImportMessage({
-        type: 'error',
-        text: typeof detail === 'string' ? detail : 'JV Ledger sync failed. Ensure PropDev company names match Rentals Company Registry.',
-      });
-    } finally {
-      setSyncing(false);
-    }
-  }
-
   // ── Render ───────────────────────────────────────────────────────────────────
   if (loading) return <LoadingSkeleton rows={8} />;
   if (error)   return <div className="text-red-700 p-4">{error}<button className="ml-3 underline" onClick={loadData}>Retry</button></div>;
 
   const avgROI = kpis.avgROI;
+  const portfolioMarketValue = kpis.totalMV;
 
   return (
     <div className="space-y-6 -m-6 p-6" style={{ background: 'transparent' }}>
@@ -639,11 +681,6 @@ export default function RentalOwnership() {
             <Download size={13} /> {importing ? 'Importing…' : 'Import Partners'}
           </button>
           <input ref={importFileRef} type="file" accept=".xlsx" onChange={handleImportPartners} style={{ display: 'none' }} />
-          <button onClick={handleSyncJvLedger}
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-indigo-300 rounded-lg text-xs text-indigo-800 hover:bg-indigo-50 disabled:opacity-50"
-            disabled={syncing}>
-            <Users size={13} /> {syncing ? 'Syncing…' : 'Sync from JV Ledger'}
-          </button>
           <button className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs hover:bg-indigo-700">
             <Zap size={13} /> AI Insights
           </button>
@@ -696,7 +733,7 @@ export default function RentalOwnership() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
               <tr>
-                {['Partner','Nature','Own %','Capital In','Cost Basis','Book Value','Market Value','Unrealized G/L','Return to Date','ROI','Status',''].map(h => (
+                {['Partner','Nature','Wtd Own %','Capital In','Cost Basis','Book Value','Market Value','Unrealized G/L','Return to Date','ROI','Status',''].map(h => (
                   <th key={h} className="px-3 py-3 text-right first:text-left whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -706,7 +743,7 @@ export default function RentalOwnership() {
                 const f = financials[p.partner_name];
                 if (!f) return null;
                 const nature = natures[p.partner_name] ?? ROLE_MAP[p.holdings[0]?.role ?? ''] ?? 'Limited Partner (LP)';
-                const totalPct = p.holdings.reduce((s, h) => s + h.ownership_pct * 100, 0);
+                const totalPct = weightedOwnershipPct(p.holdings, companyGpr);
                 const isSelected = selectedPartner === p.partner_name;
                 return (
                   <tr key={p.partner_name}
@@ -735,7 +772,7 @@ export default function RentalOwnership() {
                       <div className="flex flex-col items-end gap-1">
                         <span className="font-mono text-xs font-semibold">{totalPct.toFixed(1)}%</span>
                         <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                          <div className="h-1.5 rounded-full bg-green-700" style={{ width: `${Math.min(totalPct, 100)}%` }} />
+                          <div className="h-1.5 rounded-full bg-green-700" style={{ width: `${totalPct}%` }} />
                         </div>
                       </div>
                     </td>
@@ -938,6 +975,7 @@ export default function RentalOwnership() {
             {byCompany.length === 0 && <p className="text-center text-sm text-gray-400 py-8">No ownership data — import partners or add manually</p>}
             {byCompany.map(co => {
               const isExp = expandedCos.has(co.id);
+              const companyPieData = partnerEquityShareInCompany(co.slices);
               return (
                 <div key={co.id}>
                   <button
@@ -964,6 +1002,7 @@ export default function RentalOwnership() {
                         <thead className="text-gray-500">
                           <tr>
                             <th className="pb-1.5 text-left">Partner</th>
+                            <th className="pb-1.5 text-left">Property</th>
                             <th className="pb-1.5 text-right">% Share</th>
                             <th className="pb-1.5 text-right">Capital In</th>
                             <th className="pb-1.5 text-right">Book Value</th>
@@ -971,14 +1010,15 @@ export default function RentalOwnership() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                          {co.slices.map(s => (
-                            <tr key={s.partner} className="hover:bg-white cursor-pointer" onClick={() => setSelectedPartner(s.partner)}>
+                          {co.slices.map((s, si) => (
+                            <tr key={`${s.partner}-${s.propertyName}-${si}`} className="hover:bg-white cursor-pointer" onClick={() => setSelectedPartner(s.partner)}>
                               <td className="py-1.5 pr-2">
                                 <div className="flex items-center gap-1.5">
                                   <span className="w-3 h-3 rounded-full inline-block" style={{ background: s.color }} />
                                   {s.partner}
                                 </div>
                               </td>
+                              <td className="py-1.5 pr-2 text-gray-600">{s.propertyName}</td>
                               <td className="py-1.5 text-right">{s.pct.toFixed(1)}%</td>
                               <td className="py-1.5 text-right font-mono">{fmtK(s.capitalIn)}</td>
                               <td className="py-1.5 text-right font-mono">{fmtK(s.bookValue)}</td>
@@ -990,10 +1030,15 @@ export default function RentalOwnership() {
                       <div className="flex items-center justify-center">
                         <ResponsiveContainer width="100%" height={160}>
                           <PieChart>
-                            <Pie data={co.slices.map(s => ({ name: s.partner, value: s.pct }))} dataKey="value" cx="50%" cy="50%" innerRadius={40} outerRadius={65} paddingAngle={2}>
-                              {co.slices.map((s, si) => <Cell key={si} fill={s.color} />)}
+                            <Pie
+                              data={companyPieData}
+                              dataKey="value" cx="50%" cy="50%" innerRadius={40} outerRadius={65} paddingAngle={2}
+                            >
+                              {companyPieData.map((s, si) => (
+                                <Cell key={si} fill={s.color} />
+                              ))}
                             </Pie>
-                            <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'Ownership']} />
+                            <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'Equity Share']} />
                             <Legend wrapperStyle={{ fontSize: 10 }} />
                           </PieChart>
                         </ResponsiveContainer>
@@ -1011,7 +1056,7 @@ export default function RentalOwnership() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
                 <tr>
-                  {['Partner','Own %','Capital In','Cost Basis','Book Value','Market Value','ROI','Holdings'].map(h => (
+                  {['Partner','Wtd Own %','Capital In','Cost Basis','Book Value','Market Value','ROI','Holdings'].map(h => (
                     <th key={h} className="px-3 py-3 text-right first:text-left whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -1068,54 +1113,6 @@ export default function RentalOwnership() {
             ))}
           </div>
         )}
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════════════
-          SECTION 3b — COST BASIS BY PROPERTY NAME
-      ═══════════════════════════════════════════════════════════════════════ */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-800">Cost Basis by Property Name</h3>
-          <p className="text-xs text-gray-400 mt-0.5">Property-name-wise rollup of cost basis, book value, and market value</p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
-              <tr>
-                {['Property Name','Company','Address','Cost Basis','Book Value','Market Value','Debt','Partners'].map(h => (
-                  <th key={h} className="px-3 py-3 text-right first:text-left whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {byProperty.map(prop => (
-                <tr key={prop.key} className="hover:bg-gray-50">
-                  <td className="px-3 py-3 font-medium text-gray-900">{prop.propertyName}</td>
-                  <td className="px-3 py-3 text-gray-600 text-xs">{prop.companyName}</td>
-                  <td className="px-3 py-3 text-gray-500 text-xs max-w-[200px] truncate">{prop.address}</td>
-                  <td className="px-3 py-3 text-right font-mono font-semibold">{fmtK(prop.costBasis)}</td>
-                  <td className="px-3 py-3 text-right font-mono">{fmtK(prop.bookValue)}</td>
-                  <td className="px-3 py-3 text-right font-mono text-green-800">{fmtK(prop.marketValue)}</td>
-                  <td className="px-3 py-3 text-right font-mono">{fmtK(prop.debt)}</td>
-                  <td className="px-3 py-3 text-right text-xs text-gray-500">{prop.slices.map(s => s.partner).join(', ')}</td>
-                </tr>
-              ))}
-            </tbody>
-            {byProperty.length > 0 && (
-              <tfoot>
-                <tr className="bg-gray-900 text-white text-xs font-semibold">
-                  <td className="px-3 py-3" colSpan={3}>Portfolio Total</td>
-                  <td className="px-3 py-3 text-right font-mono">{fmtK(byProperty.reduce((s, p) => s + p.costBasis, 0))}</td>
-                  <td className="px-3 py-3 text-right font-mono">{fmtK(byProperty.reduce((s, p) => s + p.bookValue, 0))}</td>
-                  <td className="px-3 py-3 text-right font-mono text-green-300">{fmtK(byProperty.reduce((s, p) => s + p.marketValue, 0))}</td>
-                  <td className="px-3 py-3 text-right font-mono">{fmtK(byProperty.reduce((s, p) => s + p.debt, 0))}</td>
-                  <td />
-                </tr>
-              </tfoot>
-            )}
-          </table>
-          {byProperty.length === 0 && <p className="text-center text-sm text-gray-400 py-8">No property data — import ownership Excel with Property Name column</p>}
-        </div>
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════════
@@ -1207,13 +1204,15 @@ export default function RentalOwnership() {
                 <Pie
                   data={apiPartners.map((p, i) => ({
                     name: p.partner_name,
-                    value: parseFloat((p.holdings.reduce((s, h) => s + h.ownership_pct * 100, 0) / Math.max(1, p.company_count)).toFixed(1)),
+                    value: portfolioMarketValue > 0
+                      ? parseFloat((((financials[p.partner_name]?.marketValue ?? 0) / portfolioMarketValue) * 100).toFixed(1))
+                      : 0,
                   }))}
                   dataKey="value" cx="45%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={2}
                 >
                   {apiPartners.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
-                <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'Avg Ownership']} />
+                <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'Portfolio Equity']} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
               </PieChart>
             </ResponsiveContainer>
@@ -1278,6 +1277,54 @@ export default function RentalOwnership() {
               </BarChart>
             </ResponsiveContainer>
           </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          SECTION 7 — COST BASIS BY PROPERTY NAME
+      ═══════════════════════════════════════════════════════════════════════ */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="p-4 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-800">Cost Basis by Property Name</h3>
+          <p className="text-xs text-gray-400 mt-0.5">Property-name-wise rollup of cost basis, book value, and market value</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+              <tr>
+                {['Property Name','Company','Address','Cost Basis','Book Value','Market Value','Debt','Partners'].map(h => (
+                  <th key={h} className="px-3 py-3 text-right first:text-left whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {byProperty.map(prop => (
+                <tr key={prop.key} className="hover:bg-gray-50">
+                  <td className="px-3 py-3 font-medium text-gray-900">{prop.propertyName}</td>
+                  <td className="px-3 py-3 text-gray-600 text-xs">{prop.companyName}</td>
+                  <td className="px-3 py-3 text-gray-500 text-xs max-w-[200px] truncate">{prop.address}</td>
+                  <td className="px-3 py-3 text-right font-mono font-semibold">{fmtK(prop.costBasis)}</td>
+                  <td className="px-3 py-3 text-right font-mono">{fmtK(prop.bookValue)}</td>
+                  <td className="px-3 py-3 text-right font-mono text-green-800">{fmtK(prop.marketValue)}</td>
+                  <td className="px-3 py-3 text-right font-mono">{fmtK(prop.debt)}</td>
+                  <td className="px-3 py-3 text-right text-xs text-gray-500">{prop.slices.map(s => s.partner).join(', ')}</td>
+                </tr>
+              ))}
+            </tbody>
+            {byProperty.length > 0 && (
+              <tfoot>
+                <tr className="bg-gray-900 text-white text-xs font-semibold">
+                  <td className="px-3 py-3" colSpan={3}>Portfolio Total</td>
+                  <td className="px-3 py-3 text-right font-mono">{fmtK(byProperty.reduce((s, p) => s + p.costBasis, 0))}</td>
+                  <td className="px-3 py-3 text-right font-mono">{fmtK(byProperty.reduce((s, p) => s + p.bookValue, 0))}</td>
+                  <td className="px-3 py-3 text-right font-mono text-green-300">{fmtK(byProperty.reduce((s, p) => s + p.marketValue, 0))}</td>
+                  <td className="px-3 py-3 text-right font-mono">{fmtK(byProperty.reduce((s, p) => s + p.debt, 0))}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            )}
+          </table>
+          {byProperty.length === 0 && <p className="text-center text-sm text-gray-400 py-8">No property data — import ownership Excel with Property Name column</p>}
         </div>
       </div>
 

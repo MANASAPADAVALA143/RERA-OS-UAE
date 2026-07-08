@@ -352,6 +352,8 @@ def import_ownership_from_excel(db: Session, tid, content: bytes) -> dict:
     msg = f"Imported {len(to_insert)} rental ownership position(s)."
     if parsed_result.skipped_non_rental:
         msg += f" Skipped {parsed_result.skipped_non_rental} non-rental row(s)."
+    if errors:
+        msg += f" Skipped {len(errors)} row(s) not in Company Registry."
     return {
         "imported_count": len(to_insert),
         "skipped_non_rental": parsed_result.skipped_non_rental,

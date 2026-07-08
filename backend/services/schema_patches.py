@@ -72,6 +72,7 @@ LOAN_COLUMNS = {
     "noi_annual":             "NUMERIC(16, 2)",
     "current_property_value": "NUMERIC(16, 2)",
     "context_type":           "VARCHAR(20) DEFAULT 'construction'",
+    "balance_by_month":       "JSONB",
 }
 
 
