@@ -497,6 +497,14 @@ def _merge_audit_rows(financial: CompanyAuditResult, ops_rows: list[KpiCheckRow]
     )
 
 
+def _loan_tracker_imports():
+    from services.loan_tracker_kpi_audit import (
+        audit_company_loan_tracker,
+        audit_portfolio_loan_tracker,
+    )
+    return audit_company_loan_tracker, audit_portfolio_loan_tracker
+
+
 def _rental_ops_imports():
     from services.rental_ops_kpi_audit import (
         audit_company_rental_ops,
@@ -528,6 +536,7 @@ def run_tenant_audit(
         load_qb_aging_by_company,
         load_qb_portfolio_totals,
     ) = _rental_ops_imports()
+    audit_company_loan_tracker, audit_portfolio_loan_tracker = _loan_tracker_imports()
 
     companies = db.query(RentalCompany).filter(RentalCompany.tenant_id == tenant_id).all()
     if company_id:
@@ -565,14 +574,21 @@ def run_tenant_audit(
         ops_rows = audit_company_rental_ops(
             db, tenant_id, co, month=month, year=year, qb_by_company=qb_by_company,
         )
-        if fin_result.period_label == "—" and ops_rows:
+        loan_rows = audit_company_loan_tracker(
+            db, tenant_id, co, month=month, year=year,
+        )
+        if fin_result.period_label == "—" and (ops_rows or loan_rows):
             fin_result.period_label = datetime.strptime(
                 f"{year}-{month:02d}", "%Y-%m",
             ).strftime("%b-%Y")
-        results.append(_merge_audit_rows(fin_result, ops_rows))
+        merged = _merge_audit_rows(fin_result, ops_rows)
+        results.append(_merge_audit_rows(merged, loan_rows))
 
     portfolio_ops_rows = audit_portfolio_rental_ops(
         db, tenant_id, companies, month=month, year=year, qb_portfolio=qb_portfolio,
+    )
+    portfolio_loan_rows = audit_portfolio_loan_tracker(
+        db, tenant_id, month=month, year=year,
     )
 
     total_mismatch = sum(r.mismatch_count for r in results)
@@ -594,6 +610,7 @@ def run_tenant_audit(
             "total_check_logic": total_check,
         },
         "portfolio_ops_rows": [asdict(row) for row in portfolio_ops_rows],
+        "portfolio_loan_rows": [asdict(row) for row in portfolio_loan_rows],
         "companies": [_company_to_dict(r) for r in results],
     }
 
@@ -651,6 +668,7 @@ def get_company_audit_from_db(
         load_qb_aging_by_company,
         _load_qb_portfolio_totals,
     ) = _rental_ops_imports()
+    audit_company_loan_tracker, _audit_portfolio_loan_tracker = _loan_tracker_imports()
 
     upload = (
         db.query(RentalFinancialUpload)
@@ -682,11 +700,14 @@ def get_company_audit_from_db(
     ops_rows = audit_company_rental_ops(
         db, tenant_id, co, month=month, year=year, qb_by_company=qb_by_company,
     )
-    if result.period_label == "—" and ops_rows:
+    loan_rows = audit_company_loan_tracker(
+        db, tenant_id, co, month=month, year=year,
+    )
+    if result.period_label == "—" and (ops_rows or loan_rows):
         result.period_label = datetime.strptime(
             f"{year}-{month:02d}", "%Y-%m",
         ).strftime("%b-%Y")
-    result = _merge_audit_rows(result, ops_rows)
+    result = _merge_audit_rows(_merge_audit_rows(result, ops_rows), loan_rows)
     return _company_to_dict(result)
 
 

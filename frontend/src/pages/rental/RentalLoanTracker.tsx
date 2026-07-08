@@ -297,7 +297,7 @@ export default function RentalLoanTracker() {
     const nextMat = filtered
       .filter(l => l.loan_maturity_date)
       .sort((a, b) => (a.loan_maturity_date ?? '').localeCompare(b.loan_maturity_date ?? ''))[0];
-    return { portfolio, emi, wAvg, nextMat };
+    return { portfolio, emi, wAvg, nextMat, loanCount: filtered.length };
   }, [filtered]);
 
   const highRateLoans = filtered.filter(l => (l.loan_interest_rate ?? 0) > MARKET_RATE);
@@ -552,11 +552,18 @@ export default function RentalLoanTracker() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
         {[
           { label: 'Total Loan Portfolio', value: fmtUSD(kpis.portfolio ?? 0), hero: true },
           { label: 'Total Monthly EMI', value: fmtUSD(kpis.emi ?? 0) },
           { label: 'Weighted Avg Rate', value: `${((kpis.wAvg ?? 0) * 100).toFixed(2)}%` },
+          {
+            label: companyFilter !== 'all' ? 'Company Loans' : 'Total Loans',
+            value: String(kpis.loanCount ?? 0),
+            sub: companyFilter !== 'all'
+              ? (buildingFilter !== 'all' ? `${companyFilter} · ${buildingFilter}` : companyFilter)
+              : `${companyOptions.length} companies`,
+          },
           { label: 'Next Maturity', value: kpis.nextMat?.loan_maturity_date ?? '—', sub: kpis.nextMat?.property_name },
           { label: 'Total Outstanding', value: fmtUSD(filtered.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0) ?? 0) },
         ].map(k => (

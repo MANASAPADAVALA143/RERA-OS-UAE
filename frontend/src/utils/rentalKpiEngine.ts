@@ -444,6 +444,23 @@ export function aggregateKpiDataList(items: KpiData[]): KpiData {
   };
 }
 
+/** Solvency metrics — same formulas as Financial Ratios / buildExportKpiSets. */
+export function solvencyMetricsFromKpi(k: KpiData): { ltvPct: number | null; dscr: number | null } {
+  const ltvPct = k.buildings > 0 ? (k.longTermLoans / k.buildings) * 100 : null;
+  const dscr = k.interestExpense > 0 ? k.noi / (k.interestExpense * 1.2) : null;
+  return { ltvPct, dscr };
+}
+
+export function formatSolvencyLtv(ltvPct: number | null): string {
+  if (ltvPct === null) return 'No bldg value';
+  return fmtKpiPct(ltvPct);
+}
+
+export function formatSolvencyDscr(dscr: number | null): string {
+  if (dscr === null || dscr <= 0) return '—';
+  return fmtKpiX(dscr);
+}
+
 // ── Formatting + status pills (matches KPI Dashboard / Benchmark Comparison) ──
 
 const NA = 'Data not available';

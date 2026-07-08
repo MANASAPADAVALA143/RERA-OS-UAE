@@ -5,11 +5,28 @@ import { fmtUSD } from '../components/ProtectedRoute';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line, ReferenceLine,
+  ScatterChart, Scatter, ZAxis,
 } from 'recharts';
 import {
   ChevronDown, ChevronRight, Plus, Download, Zap,
   Building2, Users, TrendingUp, DollarSign, X,
 } from 'lucide-react';
+import {
+  aggregateKpiDataList,
+  apiResponseToParsedFinancials,
+  calcKpis,
+  formatSolvencyDscr,
+  formatSolvencyLtv,
+  solvencyMetricsFromKpi,
+  type KpiData,
+} from '../../utils/rentalKpiEngine';
+import {
+  effectiveCapRate,
+  partnerReturnMetrics,
+  portfolioEquityMultiple,
+  portfolioIrr,
+  type PartnerReturnMetrics,
+} from '../../utils/ownershipMetrics';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const CAP_RATE    = 0.055;
@@ -318,6 +335,8 @@ export default function RentalOwnership() {
   const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [importing, setImporting] = useState(false);
   const [breakdownTab, setBreakdownTab] = useState<'company' | 'partner' | 'property'>('company');
+  const [companyKpis, setCompanyKpis] = useState<Record<string, KpiData | null>>({});
+  const [scatterMode, setScatterMode] = useState<'partner' | 'property'>('partner');
 
   const loadData = useCallback(async () => {
     setLoading(true); setError('');
@@ -333,6 +352,31 @@ export default function RentalOwnership() {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  useEffect(() => {
+    const ids = [...new Set(apiPartners.flatMap(p => p.holdings.map(h => h.company_id)))];
+    if (!ids.length) {
+      setCompanyKpis({});
+      return;
+    }
+    let cancelled = false;
+    Promise.all(ids.map(async id => {
+      try {
+        const res = await api.get(`/api/rentals/financials/${id}`);
+        const fin = apiResponseToParsedFinancials(res.data);
+        const year = fin.years.length ? fin.years[fin.years.length - 1] : null;
+        return [id, year ? calcKpis(fin, year) : null] as const;
+      } catch {
+        return [id, null] as const;
+      }
+    })).then(rows => {
+      if (cancelled) return;
+      const m: Record<string, KpiData | null> = {};
+      rows.forEach(([id, k]) => { m[id] = k; });
+      setCompanyKpis(m);
+    });
+    return () => { cancelled = true; };
+  }, [apiPartners]);
 
   // ── Derived ──────────────────────────────────────────────────────────────────
   const companyGpr = useMemo(() => {
@@ -365,6 +409,35 @@ export default function RentalOwnership() {
     if (companyFilter !== 'all') ps = ps.filter(p => p.holdings.some(h => h.company_id === companyFilter));
     return ps;
   }, [apiPartners, partnerFilter, companyFilter]);
+
+  const scopedCompanyIds = useMemo(() => {
+    const ids = new Set<string>();
+    filtered.forEach(p => p.holdings.forEach(h => ids.add(h.company_id)));
+    return ids;
+  }, [filtered]);
+
+  const portfolioSolvency = useMemo(() => {
+    const kpis = [...scopedCompanyIds]
+      .map(id => companyKpis[id])
+      .filter((k): k is KpiData => k != null);
+    if (!kpis.length) {
+      return { ltvPct: null as number | null, dscr: null as number | null, hasFinancials: false };
+    }
+    return { ...solvencyMetricsFromKpi(aggregateKpiDataList(kpis)), hasFinancials: true };
+  }, [scopedCompanyIds, companyKpis]);
+
+  const propertiesPerCompany = useMemo(() => {
+    const uniq: Record<string, Set<string>> = {};
+    apiPartners.forEach(p => {
+      p.holdings.forEach(h => {
+        if (!uniq[h.company_id]) uniq[h.company_id] = new Set();
+        uniq[h.company_id].add(h.property_name || h.company_name);
+      });
+    });
+    const out: Record<string, number> = {};
+    Object.entries(uniq).forEach(([id, set]) => { out[id] = set.size; });
+    return out;
+  }, [apiPartners]);
 
   const hasImportedFinancials = useMemo(
     () => apiPartners.some(p => p.holdings.some(h =>
@@ -458,8 +531,9 @@ export default function RentalOwnership() {
 
   const byProperty = useMemo(() => {
     const map: Record<string, {
-      key: string; propertyName: string; companyName: string; address: string;
+      key: string; propertyName: string; companyName: string; companyId: string; address: string;
       costBasis: number; bookValue: number; marketValue: number; capitalIn: number; debt: number;
+      effectiveCapRate: number | null; valuationAssumed: boolean;
       slices: { partner: string; pct: number; color: string }[];
     }> = {};
     apiPartners.forEach((p, pi) => {
@@ -473,12 +547,15 @@ export default function RentalOwnership() {
             key,
             propertyName: propName,
             companyName: h.company_name,
+            companyId: h.company_id,
             address: h.property_address || '—',
             costBasis: 0,
             bookValue: 0,
             marketValue: 0,
             capitalIn: 0,
             debt: 0,
+            effectiveCapRate: null,
+            valuationAssumed: gpr > 0,
             slices: [],
           };
         }
@@ -490,8 +567,21 @@ export default function RentalOwnership() {
         map[key].slices.push({ partner: p.partner_name, pct: h.ownership_pct * 100, color: COLORS[pi % COLORS.length] });
       });
     });
-    return Object.values(map).sort((a, b) => a.propertyName.localeCompare(b.propertyName));
-  }, [apiPartners, companyGpr, financials]);
+    const rows = Object.values(map);
+    const companyMvTotals: Record<string, number> = {};
+    rows.forEach(r => {
+      companyMvTotals[r.companyId] = (companyMvTotals[r.companyId] ?? 0) + r.marketValue;
+    });
+    rows.forEach(r => {
+      const kpi = companyKpis[r.companyId];
+      const propCount = propertiesPerCompany[r.companyId] ?? 1;
+      const companyNoi = kpi?.noi ?? 0;
+      const allocatedNoi = propCount > 0 ? companyNoi / propCount : companyNoi;
+      r.effectiveCapRate = effectiveCapRate(allocatedNoi, r.marketValue);
+      r.valuationAssumed = (companyGpr[r.companyId] ?? 0) > 0;
+    });
+    return rows.sort((a, b) => a.propertyName.localeCompare(b.propertyName));
+  }, [apiPartners, companyGpr, companyKpis, propertiesPerCompany]);
 
   const totalRow = useMemo(() => {
     const fs = filtered.map(p => financials[p.partner_name]).filter(Boolean);
@@ -547,6 +637,86 @@ export default function RentalOwnership() {
     }
     return cs;
   }, [allContribs, partnerFilter, companyFilter, allCompanies]);
+
+  const partnerMetricsByName = useMemo(() => {
+    const m: Record<string, PartnerReturnMetrics> = {};
+    apiPartners.forEach(p => {
+      const f = financials[p.partner_name];
+      const contribs = allContribs
+        .filter(c => c.partner === p.partner_name)
+        .map(c => ({ date: c.date, amount: c.amount, type: c.type }));
+      m[p.partner_name] = partnerReturnMetrics(
+        contribs,
+        f?.capitalContributed ?? 0,
+        f?.marketValue ?? 0,
+      );
+    });
+    return m;
+  }, [apiPartners, financials, allContribs]);
+
+  const portfolioReturnMetrics = useMemo(() => {
+    const rows = filtered.map(p => {
+      const f = financials[p.partner_name];
+      const contribs = allContribs.filter(c => c.partner === p.partner_name);
+      const distributions = contribs
+        .filter(c => c.amount < 0 || /distribution|return of capital/i.test(c.type))
+        .reduce((s, c) => s + Math.abs(c.amount), 0);
+      return {
+        capital: f?.capitalContributed ?? 0,
+        distributions,
+        marketValue: f?.marketValue ?? 0,
+        metrics: partnerMetricsByName[p.partner_name],
+        weight: f?.capitalContributed ?? 0,
+      };
+    });
+    const em = portfolioEquityMultiple(rows);
+    const irr = portfolioIrr(rows.map(r => ({ metrics: r.metrics, weight: r.weight })));
+    return {
+      equityMultiple: em,
+      equityMultipleLabel: em !== null ? `${em.toFixed(2)}x` : '—',
+      irrLabel: irr.label,
+    };
+  }, [filtered, financials, allContribs, partnerMetricsByName]);
+
+  const propertyCapStats = useMemo(() => {
+    let assumed = 0;
+    let realMv = 0;
+    byProperty.forEach(prop => {
+      if (prop.valuationAssumed) assumed += 1;
+      else realMv += 1;
+    });
+    return { assumed, realMv, total: byProperty.length };
+  }, [byProperty]);
+
+  const scatterPoints = useMemo(() => {
+    if (scatterMode === 'partner') {
+      return filtered.map(p => {
+        const f = financials[p.partner_name];
+        const metrics = partnerMetricsByName[p.partner_name];
+        const companyIds = [...new Set(p.holdings.map(h => h.company_id))];
+        const kpis = companyIds.map(id => companyKpis[id]).filter((k): k is KpiData => k != null);
+        const solvency = kpis.length ? solvencyMetricsFromKpi(aggregateKpiDataList(kpis)) : { ltvPct: null, dscr: null };
+        const risk = solvency.ltvPct ?? (solvency.dscr != null ? solvency.dscr * 100 : null);
+        return {
+          name: p.partner_name,
+          irr: metrics?.irr ?? null,
+          risk,
+          size: Math.max(f?.marketValue ?? 0, 1),
+        };
+      }).filter(pt => pt.irr != null && pt.risk != null);
+    }
+    return byProperty.map(prop => {
+      const kpi = companyKpis[prop.companyId];
+      const solvency = kpi ? solvencyMetricsFromKpi(kpi) : { ltvPct: null, dscr: null };
+      const risk = solvency.ltvPct ?? (solvency.dscr != null ? solvency.dscr * 100 : null);
+      return {
+        name: prop.propertyName,
+        irr: prop.effectiveCapRate,
+        risk,
+        size: Math.max(prop.marketValue, 1),
+      };
+    }).filter(pt => pt.irr != null && pt.risk != null);
+  }, [scatterMode, filtered, financials, partnerMetricsByName, companyKpis, byProperty]);
 
   function savePartner() {
     if (!partnerForm.name.trim()) return;
@@ -719,6 +889,38 @@ export default function RentalOwnership() {
         ))}
       </div>
 
+      {/* Secondary solvency KPIs — same source as Financial Ratios */}
+      <div className="grid grid-cols-2 lg:grid-cols-2 gap-4">
+        {[
+          {
+            label: 'Portfolio LTV',
+            value: portfolioSolvency.hasFinancials
+              ? formatSolvencyLtv(portfolioSolvency.ltvPct)
+              : 'No bldg value',
+            sub: portfolioSolvency.hasFinancials
+              ? 'Mortgage ÷ property value (P&L balance sheet)'
+              : 'Upload company financials for LTV',
+            color: 'text-blue-800',
+          },
+          {
+            label: 'Portfolio DSCR (Est.)',
+            value: portfolioSolvency.hasFinancials
+              ? formatSolvencyDscr(portfolioSolvency.dscr)
+              : '—',
+            sub: portfolioSolvency.hasFinancials
+              ? 'NOI ÷ (interest × 1.2) — matches Financial Ratios'
+              : 'Upload company financials for DSCR',
+            color: 'text-emerald-800',
+          },
+        ].map(({ label, value, sub, color }) => (
+          <div key={label} className="bg-white rounded-xl border border-gray-200 p-4">
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">{label}</p>
+            <p className={`text-xl font-bold font-mono ${color}`}>{value}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
+          </div>
+        ))}
+      </div>
+
       {/* ═══════════════════════════════════════════════════════════════════════
           SECTION 2 — PARTNER REGISTRY TABLE
       ═══════════════════════════════════════════════════════════════════════ */}
@@ -733,7 +935,7 @@ export default function RentalOwnership() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
               <tr>
-                {['Partner','Nature','Wtd Own %','Capital In','Cost Basis','Book Value','Market Value','Unrealized G/L','Return to Date','ROI','Status',''].map(h => (
+                {['Partner','Nature','Wtd Own %','Capital In','Cost Basis','Book Value','Market Value','Unrealized G/L','Return to Date','ROI','IRR','Eq. Mult.','Status',''].map(h => (
                   <th key={h} className="px-3 py-3 text-right first:text-left whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -744,6 +946,7 @@ export default function RentalOwnership() {
                 if (!f) return null;
                 const nature = natures[p.partner_name] ?? ROLE_MAP[p.holdings[0]?.role ?? ''] ?? 'Limited Partner (LP)';
                 const totalPct = weightedOwnershipPct(p.holdings, companyGpr);
+                const pMetrics = partnerMetricsByName[p.partner_name];
                 const isSelected = selectedPartner === p.partner_name;
                 return (
                   <tr key={p.partner_name}
@@ -787,6 +990,12 @@ export default function RentalOwnership() {
                         {f.roi.toFixed(1)}%
                       </span>
                     </td>
+                    <td className="px-3 py-3 text-right text-xs font-mono text-gray-700" title={pMetrics?.irrLabel}>
+                      {pMetrics?.irrLabel ?? '—'}
+                    </td>
+                    <td className="px-3 py-3 text-right text-xs font-mono font-semibold text-gray-800">
+                      {pMetrics?.equityMultipleLabel ?? '—'}
+                    </td>
                     <td className="px-3 py-3 text-right">
                       <span className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-800">Active</span>
                     </td>
@@ -812,6 +1021,8 @@ export default function RentalOwnership() {
                 </td>
                 <td className="px-3 py-3 text-right font-mono text-blue-300">{fmtK(totalRow.returnToDate)}</td>
                 <td className="px-3 py-3 text-right font-mono">{avgROI.toFixed(1)}%</td>
+                <td className="px-3 py-3 text-right font-mono text-xs">{portfolioReturnMetrics.irrLabel}</td>
+                <td className="px-3 py-3 text-right font-mono">{portfolioReturnMetrics.equityMultipleLabel}</td>
                 <td colSpan={2} />
               </tr>
             </tfoot>
@@ -1277,6 +1488,60 @@ export default function RentalOwnership() {
               </BarChart>
             </ResponsiveContainer>
           </div>
+
+          {/* Chart 5: IRR vs Risk scatter */}
+          <div className="bg-white p-4 lg:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                {scatterMode === 'partner' ? 'IRR vs LTV — by Partner' : 'Effective Cap Rate vs LTV — by Property'}
+              </p>
+              <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+                {(['partner', 'property'] as const).map(mode => (
+                  <button
+                    key={mode}
+                    onClick={() => setScatterMode(mode)}
+                    className={`px-2.5 py-1 capitalize ${scatterMode === mode ? 'bg-amber-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                  >
+                    By {mode}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {scatterPoints.length > 0 ? (
+              <ResponsiveContainer width="100%" height={240}>
+                <ScatterChart margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
+                  <XAxis type="number" dataKey="risk" name="LTV %" tick={{ fontSize: 10 }} unit="%" />
+                  <YAxis
+                    type="number"
+                    dataKey="irr"
+                    name={scatterMode === 'partner' ? 'IRR %' : 'Cap Rate %'}
+                    tick={{ fontSize: 10 }}
+                    unit="%"
+                  />
+                  <ZAxis type="number" dataKey="size" range={[60, 400]} />
+                  <Tooltip
+                    cursor={{ strokeDasharray: '3 3' }}
+                    formatter={(v: number, name: string) => [
+                      scatterMode === 'partner' && name === 'IRR %' ? `${v.toFixed(1)}%`
+                        : scatterMode === 'property' && name === 'Cap Rate %' ? `${v.toFixed(2)}%`
+                          : name === 'LTV %' ? `${v.toFixed(1)}%`
+                            : fmtK(v),
+                      name,
+                    ]}
+                    labelFormatter={(_, payload) => payload?.[0]?.payload?.name ?? ''}
+                  />
+                  <Scatter data={scatterPoints} fill="#B8860B" fillOpacity={0.75} />
+                </ScatterChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-16">
+                {scatterMode === 'partner'
+                  ? 'IRR scatter requires dated contribution/distribution cash flows and uploaded financials for LTV.'
+                  : 'Property scatter requires P&L NOI and balance-sheet LTV per company.'}
+              </p>
+            )}
+            <p className="text-[10px] text-gray-400 mt-2">Bubble size = market value · Risk proxy = portfolio LTV % (Financial Ratios formula)</p>
+          </div>
         </div>
       </div>
 
@@ -1286,13 +1551,18 @@ export default function RentalOwnership() {
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="p-4 border-b border-gray-100">
           <h3 className="font-semibold text-gray-800">Cost Basis by Property Name</h3>
-          <p className="text-xs text-gray-400 mt-0.5">Property-name-wise rollup of cost basis, book value, and market value</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Property rollup · Effective cap rate uses P&L NOI ÷ market value
+            {propertyCapStats.total > 0 && (
+              <> · {propertyCapStats.assumed} assumed @ {(CAP_RATE * 100).toFixed(1)}% cap, {propertyCapStats.realMv} with book/cost-based value</>
+            )}
+          </p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
               <tr>
-                {['Property Name','Company','Address','Cost Basis','Book Value','Market Value','Debt','Partners'].map(h => (
+                {['Property Name','Company','Address','Cost Basis','Book Value','Market Value','Eff. Cap Rate','Valuation','Debt','Partners'].map(h => (
                   <th key={h} className="px-3 py-3 text-right first:text-left whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -1306,6 +1576,18 @@ export default function RentalOwnership() {
                   <td className="px-3 py-3 text-right font-mono font-semibold">{fmtK(prop.costBasis)}</td>
                   <td className="px-3 py-3 text-right font-mono">{fmtK(prop.bookValue)}</td>
                   <td className="px-3 py-3 text-right font-mono text-green-800">{fmtK(prop.marketValue)}</td>
+                  <td className="px-3 py-3 text-right font-mono text-xs">
+                    {prop.effectiveCapRate != null ? `${prop.effectiveCapRate.toFixed(2)}%` : '—'}
+                  </td>
+                  <td className="px-3 py-3 text-right text-xs">
+                    {prop.valuationAssumed ? (
+                      <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800" title={`Market value derived at ${(CAP_RATE * 100).toFixed(1)}% cap from GPR`}>
+                        Assumed {(CAP_RATE * 100).toFixed(1)}%
+                      </span>
+                    ) : (
+                      <span className="px-1.5 py-0.5 rounded bg-green-100 text-green-800">Imported / book</span>
+                    )}
+                  </td>
                   <td className="px-3 py-3 text-right font-mono">{fmtK(prop.debt)}</td>
                   <td className="px-3 py-3 text-right text-xs text-gray-500">{prop.slices.map(s => s.partner).join(', ')}</td>
                 </tr>
@@ -1318,6 +1600,8 @@ export default function RentalOwnership() {
                   <td className="px-3 py-3 text-right font-mono">{fmtK(byProperty.reduce((s, p) => s + p.costBasis, 0))}</td>
                   <td className="px-3 py-3 text-right font-mono">{fmtK(byProperty.reduce((s, p) => s + p.bookValue, 0))}</td>
                   <td className="px-3 py-3 text-right font-mono text-green-300">{fmtK(byProperty.reduce((s, p) => s + p.marketValue, 0))}</td>
+                  <td className="px-3 py-3 text-right font-mono text-xs">—</td>
+                  <td />
                   <td className="px-3 py-3 text-right font-mono">{fmtK(byProperty.reduce((s, p) => s + p.debt, 0))}</td>
                   <td />
                 </tr>
