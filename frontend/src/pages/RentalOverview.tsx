@@ -163,6 +163,57 @@ interface SyncCompany {
   sync_total_units: number | null;
 }
 
+interface VacantUnitDetail {
+  id: string;
+  unit_number: string;
+  company_name: string;
+  property_name: string;
+  monthly_rent: number;
+  vacancy_loss: number | null;
+  rent_history: Record<string, number> | null;
+  status: string;
+}
+
+const ALL_MONTHS_HIST = [
+  'Jan-2026','Feb-2026','Mar-2026','Apr-2026','May-2026','Jun-2026',
+  'Jul-2026','Aug-2026','Sep-2026','Oct-2026','Nov-2026','Dec-2026',
+];
+
+/** Convert YYYY-MM → Mon-YYYY for rent_history keys. */
+function toHistMonth(ym: string): string {
+  const [y, m] = ym.split('-');
+  const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${names[parseInt(m, 10) - 1]}-${y}`;
+}
+
+/** Lookback months with rent > 0 before target (up to 3) — same rule as rent receivable sync. */
+function vacancyLookback(h: Record<string, number> | null | undefined, histMonth: string): number[] {
+  if (!h) return [];
+  const idx = ALL_MONTHS_HIST.indexOf(histMonth);
+  const prev = (idx >= 0 ? ALL_MONTHS_HIST.slice(0, idx) : ALL_MONTHS_HIST).slice().reverse();
+  const lookback: number[] = [];
+  for (const m of prev) {
+    const v = h[m] ?? 0;
+    if (v > 0) lookback.push(v);
+    if (lookback.length >= 3) break;
+  }
+  return lookback;
+}
+
+function vacancyLossMethod(
+  loss: number,
+  lookback: number[],
+): string {
+  if (loss <= 0) return 'No prior rent — $0 assigned';
+  if (lookback.length > 0) {
+    const avg = lookback.reduce((a, b) => a + b, 0) / lookback.length;
+    if (Math.abs(avg - loss) < 1) {
+      return `Avg of last ${lookback.length} month${lookback.length > 1 ? 's' : ''} (${lookback.map(v => fmtUSD(v)).join(', ')})`;
+    }
+  }
+  return 'Stored vacancy loss (suite avg or manual)';
+}
+
 // ── small helpers ─────────────────────────────────────────────────────────────
 
 function short(name: string, max = 14): string {
@@ -278,16 +329,30 @@ function MiniSparkline({ values, color }: { values: number[]; color: string }) {
 }
 
 function PriTile({
-  label, value, sub, accent, warn, sparkline, gold, na,
-}: { label: string; value: string; sub?: string; accent?: string; warn?: boolean; sparkline?: number[]; gold?: boolean; na?: boolean }) {
+  label, value, sub, accent, warn, sparkline, gold, na, onClick, clickHint,
+}: {
+  label: string; value: string; sub?: string; accent?: string; warn?: boolean;
+  sparkline?: number[]; gold?: boolean; na?: boolean;
+  onClick?: () => void; clickHint?: string;
+}) {
   const col = na ? '#9CA3AF' : gold ? '#fff' : warn ? C_RED : (accent ?? '#1C1917');
   const displayValue = na && (value === 'NA' || value === '—') ? 'NA' : value;
   return (
-    <div style={{
-      ...KPI_CARD,
-      background: gold ? 'linear-gradient(135deg,#D4AF37,#B8860B)' : KPI_CARD.background,
-      border: gold ? '1px solid #B8860B' : KPI_CARD.border,
-    }} className="ov-tile">
+    <div
+      style={{
+        ...KPI_CARD,
+        background: gold ? 'linear-gradient(135deg,#D4AF37,#B8860B)' : KPI_CARD.background,
+        border: gold ? '1px solid #B8860B' : KPI_CARD.border,
+        cursor: onClick ? 'pointer' : undefined,
+        transition: onClick ? 'box-shadow 0.15s, border-color 0.15s' : undefined,
+      }}
+      className="ov-tile"
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+      title={onClick ? (clickHint ?? 'Click for details') : undefined}
+    >
       <div style={{ ...KPI_LBL, color: gold ? 'rgba(255,255,255,0.8)' : KPI_LBL.color }}>{label}</div>
       <div style={{ ...KPI_VAL_PRI, color: col, letterSpacing: na ? '0.08em' : undefined }}>{displayValue}</div>
       {sub && <div style={{ ...KPI_HELP, color: na ? '#C0C0C0' : gold ? 'rgba(255,255,255,0.7)' : KPI_HELP.color }}>{sub}</div>}
@@ -378,6 +443,29 @@ export default function RentalOverview() {
   const [qbAging, setQbAging] = useState<QBAgingLatest | null>(null);
   const [qbLoading, setQbLoading] = useState(true);
   const [arCoId, setArCoId] = useState('');
+
+  // Vacancy Loss drill-down
+  const [vacModalOpen, setVacModalOpen] = useState(false);
+  const [vacUnits, setVacUnits] = useState<VacantUnitDetail[]>([]);
+  const [vacLoading, setVacLoading] = useState(false);
+  const [vacError, setVacError] = useState('');
+
+  const openVacancyDrilldown = useCallback(async () => {
+    setVacModalOpen(true);
+    setVacLoading(true);
+    setVacError('');
+    try {
+      const params: Record<string, string> = { status: 'vacant' };
+      if (selectedCoId) params.company_id = selectedCoId;
+      const res = await api.get<VacantUnitDetail[]>('/api/rentals/units', { params });
+      setVacUnits(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      setVacError('Failed to load vacant units.');
+      setVacUnits([]);
+    } finally {
+      setVacLoading(false);
+    }
+  }, [selectedCoId]);
 
   const fetchQbAging = useCallback(() => {
     setQbLoading(true);
@@ -794,7 +882,7 @@ export default function RentalOverview() {
             sub={`${kpis.total_units} total units`}
           />
           <PriTile
-            label="Collected This Month"
+            label="Monthly Rent"
             value={fmtUSD(kpis.collected_this_month)}
             sub={
               collectedSource === 'pl_fallback'
@@ -824,8 +912,10 @@ export default function RentalOverview() {
           <PriTile
             label="Vacancy Loss"
             value={fmtUSD(kpis.vacancy_loss)}
-            sub={`${kpis.vacant_units} vacant unit${kpis.vacant_units !== 1 ? 's' : ''}`}
+            sub={`${kpis.vacant_units} vacant unit${kpis.vacant_units !== 1 ? 's' : ''} · click for detail`}
             warn={kpis.vacancy_loss > 0}
+            onClick={openVacancyDrilldown}
+            clickHint="Click to see vacant units and average rent used"
           />
         </div>
       )}
@@ -1356,6 +1446,155 @@ export default function RentalOverview() {
           </div>
         </div>
       )}
+
+      {/* ── Vacancy Loss drill-down ─────────────────────────────────────────── */}
+      {vacModalOpen && (() => {
+        const histMonth = toHistMonth(selectedMonth);
+        const rows = vacUnits.map(u => {
+          const loss = u.vacancy_loss != null && u.vacancy_loss > 0
+            ? u.vacancy_loss
+            : (u.monthly_rent > 0 ? u.monthly_rent : 0);
+          const lookback = vacancyLookback(u.rent_history, histMonth);
+          return { ...u, loss, lookback, method: vacancyLossMethod(loss, lookback) };
+        }).sort((a, b) => b.loss - a.loss);
+        const totalLoss = rows.reduce((s, r) => s + r.loss, 0);
+
+        return (
+          <div
+            style={{
+              position: 'fixed', inset: 0, zIndex: 80,
+              background: 'rgba(28, 25, 23, 0.45)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 16,
+            }}
+            onClick={() => setVacModalOpen(false)}
+          >
+            <div
+              style={{
+                ...CARD,
+                width: 'min(920px, 100%)',
+                maxHeight: '85vh',
+                overflow: 'auto',
+                padding: 0,
+                boxShadow: '0 20px 50px rgba(0,0,0,0.25)',
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{
+                display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+                gap: 12, padding: '16px 18px', borderBottom: `1px solid ${C_BORD}`,
+                position: 'sticky', top: 0, background: C_CARD, zIndex: 1,
+              }}>
+                <div>
+                  <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#78716C', marginBottom: 4 }}>
+                    Vacancy Loss Detail
+                  </p>
+                  <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1C1917', margin: 0 }}>
+                    {selectedCoName || 'All companies'} · {monthLabel}
+                  </h3>
+                  <p style={{ fontSize: 12, color: '#78716C', marginTop: 6, maxWidth: 640 }}>
+                    Loss per vacant unit uses the average of the last 1–3 months with rent &gt; $0 before this month.
+                    If no prior rent exists, suite average or a stored vacancy-loss value is used.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setVacModalOpen(false)}
+                  aria-label="Close"
+                  style={{
+                    background: 'transparent', border: `1px solid ${C_BORD}`, borderRadius: 8,
+                    padding: 6, cursor: 'pointer', color: '#78716C',
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div style={{ padding: '12px 18px 18px' }}>
+                {vacLoading ? (
+                  <p style={{ fontSize: 14, color: '#78716C', padding: '24px 0', textAlign: 'center' }}>Loading vacant units…</p>
+                ) : vacError ? (
+                  <p style={{ fontSize: 14, color: C_RED, padding: '24px 0', textAlign: 'center' }}>{vacError}</p>
+                ) : rows.length === 0 ? (
+                  <p style={{ fontSize: 14, color: '#A8A29E', padding: '24px 0', textAlign: 'center' }}>No vacant units found.</p>
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
+                      <div style={{ fontSize: 13, color: '#78716C' }}>
+                        Units: <strong style={{ color: '#1C1917' }}>{rows.length}</strong>
+                      </div>
+                      <div style={{ fontSize: 13, color: '#78716C' }}>
+                        Total vacancy loss:{' '}
+                        <strong style={{ color: C_RED }}>{fmtUSD(totalLoss)}</strong>
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full" style={{ fontSize: 13, borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ borderBottom: `1px solid ${C_BORD}`, background: '#F0EDE5' }}>
+                            {['Unit', 'Company', 'Property', 'Prior months used', 'Avg / Loss', 'Method'].map(h => (
+                              <th
+                                key={h}
+                                className="py-2.5 px-3 text-left"
+                                style={{
+                                  fontSize: 11, fontWeight: 600, color: '#78716C',
+                                  textTransform: 'uppercase', letterSpacing: '0.04em',
+                                  textAlign: h === 'Avg / Loss' ? 'right' : 'left',
+                                }}
+                              >
+                                {h}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((r, i) => (
+                            <tr
+                              key={r.id}
+                              style={{
+                                borderBottom: `1px solid ${C_BORD}55`,
+                                background: i % 2 === 0 ? C_CARD : '#F7F1E6',
+                              }}
+                            >
+                              <td className="py-2.5 px-3" style={{ fontWeight: 600, color: '#1C1917' }}>{r.unit_number}</td>
+                              <td className="py-2.5 px-3" style={{ color: '#78716C' }}>{r.company_name || '—'}</td>
+                              <td className="py-2.5 px-3" style={{ color: '#78716C' }}>{r.property_name || '—'}</td>
+                              <td className="py-2.5 px-3" style={{ color: '#78716C', ...TAB_NUM }}>
+                                {r.lookback.length
+                                  ? r.lookback.map(v => fmtUSD(v)).join(' · ')
+                                  : '—'}
+                              </td>
+                              <td className="py-2.5 px-3" style={{
+                                textAlign: 'right', fontWeight: 700, color: r.loss > 0 ? C_RED : '#A8A29E', ...TAB_NUM,
+                              }}>
+                                {fmtUSD(r.loss)}
+                              </td>
+                              <td className="py-2.5 px-3" style={{ color: '#78716C', fontSize: 12 }}>{r.method}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr style={{ borderTop: `2px solid ${C_BORD}`, background: '#F0EDE5' }}>
+                            <td colSpan={4} className="py-2.5 px-3" style={{ fontWeight: 700, color: '#1C1917' }}>
+                              Total
+                            </td>
+                            <td className="py-2.5 px-3" style={{
+                              textAlign: 'right', fontWeight: 700, color: C_RED, fontSize: 15, ...TAB_NUM,
+                            }}>
+                              {fmtUSD(totalLoss)}
+                            </td>
+                            <td />
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

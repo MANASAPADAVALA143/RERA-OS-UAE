@@ -1297,9 +1297,16 @@ function KPITab({
 
 // ── CFO Dashboard Tab ─────────────────────────────────────────────────────────
 
-function CFOTab({ fin }: { fin: ParsedFinancials }) {
+function CFOTab({
+  fin, period, pMonth, pYear, selectedYear,
+}: {
+  fin: ParsedFinancials;
+  period: Period | null;
+  pMonth: number;
+  pYear: number;
+  selectedYear: number;
+}) {
   const lastY = fin.years[fin.years.length - 1];
-  const [selectedYear, setSelectedYear] = useState<number>(lastY);
 
   const snapshotRows = fin.years.map(y => {
     const kk = calcKpis(fin, y);
@@ -1371,17 +1378,6 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
   if (revGrowth !== null) insights.push({ color: 'bg-green-50 border-green-200', text: `✅ Revenue grew from ${fmt(firstK.totalRevenue)} (${fin.years[0]}) to ${fmt(k.totalRevenue)} (${lastY}) — ${revGrowth}% over ${fin.years.length - 1} years. Average annual revenue: ${fmt(avgRev)}/year.` });
   if (k.buildings > 0) insights.push({ color: 'bg-gray-50 border-gray-200', text: `📋 Property value (Buildings): ${fmt(k.buildings)} | Outstanding loans: ${fmt(k.longTermLoans)} | LTV: ${ltv.toFixed(1)}% — ${ltvLabel}` });
 
-  // ── Period toggle state — default to latest period in uploaded data ───────
-  const availableKeys = getAvailableKeys(fin);
-  const _PMONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const _latestKey   = availableKeys[availableKeys.length - 1] ?? '';
-  const _latestMonth = _latestKey ? _PMONTHS.indexOf(_latestKey.split(' ')[0]) + 1 : new Date().getMonth() + 1;
-  const _latestYear  = _latestKey ? parseInt(_latestKey.split(' ')[1]) : new Date().getFullYear();
-
-  const [period, setPeriod] = useState<Period | null>(null);
-  const [pMonth, setPMonth] = useState(_latestMonth || new Date().getMonth() + 1);
-  const [pYear, setPYear] = useState(_latestYear  || new Date().getFullYear());
-
   const periodKeys = useMemo(
     () => period ? getPeriodKeys(period, pMonth, pYear) : [],
     [period, pMonth, pYear],
@@ -1420,18 +1416,6 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
 
   return (
     <div className="space-y-6">
-
-      {/* Period Toggle */}
-      <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: '14px 16px' }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Income Analysis Period</div>
-        <PeriodToggle
-          period={period}
-          month={pMonth}
-          year={pYear}
-          onChange={(p, m, y) => { setPeriod(p); setPMonth(m); setPYear(y); }}
-          availableKeys={availableKeys}
-        />
-      </div>
 
       {/* Period Panels — shown when a period is active */}
       {period && periodAgg && (
@@ -1584,24 +1568,7 @@ function CFOTab({ fin }: { fin: ParsedFinancials }) {
         </div>
       )}
 
-      {/* Year Selector */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span style={{ fontSize: 13, color: '#92400E', fontWeight: 600, marginRight: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>YEAR:</span>
-        {fin.years.map(y => (
-          <button
-            key={y}
-            onClick={() => setSelectedYear(y)}
-            style={{
-              background: selectedYear === y ? '#D4AF37' : '#F7F5F0',
-              color: selectedYear === y ? '#FFFFFF' : '#92400E',
-              border: '1px solid ' + (selectedYear === y ? '#D4AF37' : '#2D3A56'),
-              padding: '5px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-            }}
-          >
-            {y}
-          </button>
-        ))}
-      </div>
+      {/* Period panels / content continue — year picks live in header (right) */}
 
       {/* Year Insight Card */}
       <div style={{ background: insightBg, border: `1px solid ${insightBorder}`, borderRadius: '12px', padding: '16px' }}>
@@ -1960,6 +1927,7 @@ export default function RentalFinancials() {
   const [pYear, setPYear] = useState(new Date().getFullYear());
   const [kpiYear, setKpiYear] = useState(new Date().getFullYear());
   const [kpiMonth, setKpiMonth] = useState<number | null>(null);
+  const [cfoYear, setCfoYear] = useState(new Date().getFullYear());
 
   const auditMonth = activeTab === ADMIN_TAB ? pMonth : (kpiMonth ?? pMonth);
   const auditYear = activeTab === ADMIN_TAB ? pYear : kpiYear;
@@ -2001,10 +1969,12 @@ export default function RentalFinancials() {
       if (!isNaN(y)) setPYear(y);
       if (m > 0) setKpiMonth(m);
       if (!isNaN(y)) setKpiYear(y);
+      if (!isNaN(y)) setCfoYear(y);
     } else {
       const latestYear = currentFin.years[currentFin.years.length - 1] ?? new Date().getFullYear();
       setKpiYear(latestYear);
       setKpiMonth(null);
+      setCfoYear(latestYear);
     }
   }, [selectedCompanyId, currentFin?.uploadedAt, currentFin?.fileName]);
 
@@ -2223,8 +2193,43 @@ export default function RentalFinancials() {
                 {currentFin.dateRange || 'Financial Statements'} · Years: {currentFin.years.join(', ')}
               </p>
             </div>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {activeTab === 'KPI Dashboard' && currentFin ? (
+            <div className="flex items-center gap-1.5 flex-wrap" style={{ justifyContent: 'flex-end' }}>
+              {activeTab === 'CFO Dashboard' && currentFin ? (
+                <div style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8,
+                  background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: '10px 12px',
+                }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Income Analysis Period
+                    </div>
+                    <PeriodToggle
+                      period={period}
+                      month={pMonth}
+                      year={pYear}
+                      onChange={(p, m, y) => { setPeriod(p); setPMonth(m); setPYear(y); }}
+                      availableKeys={getAvailableKeys(currentFin)}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                    <span style={{ fontSize: 11, color: '#92400E', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>YEAR:</span>
+                    {currentFin.years.map(y => (
+                      <button
+                        key={y}
+                        onClick={() => setCfoYear(y)}
+                        style={{
+                          background: cfoYear === y ? '#D4AF37' : '#F7F5F0',
+                          color: cfoYear === y ? '#FFFFFF' : '#92400E',
+                          border: '1px solid ' + (cfoYear === y ? '#D4AF37' : '#C8C0B0'),
+                          padding: '3px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                        }}
+                      >
+                        {y}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : activeTab === 'KPI Dashboard' && currentFin ? (
                 <>
                   <span style={{ fontSize: 11, color: '#92400E', fontWeight: 600, marginRight: 4 }}>PERIOD:</span>
                   <select
@@ -2322,8 +2327,8 @@ export default function RentalFinancials() {
               )}
 
               {/* MoM/YTD/TTM — shows on P&L always when monthly data exists;
-                  shows on BS/CF only when drilled into a year */}
-              {(() => {
+                  shows on BS/CF only when drilled into a year (not on CFO — controls live above) */}
+              {activeTab !== 'CFO Dashboard' && (() => {
                 const showForPL  = activeTab === 'P&L Statement' && getAvailableKeys(currentFin).length > 0;
                 const showForKPI = activeTab === 'KPI Dashboard' && getAvailableKeys(currentFin).length > 0;
                 const showForBS  = activeTab === 'Balance Sheet'  && !!selectedYear && getItemKeys(currentFin.bs).length > 0;
@@ -2387,7 +2392,15 @@ export default function RentalFinancials() {
                 onToggleKpi={(name) => setExpandedKpi(prev => prev === name ? null : name)}
               />
             )}
-            {activeTab === 'CFO Dashboard'  && <CFOTab  fin={currentFin} />}
+            {activeTab === 'CFO Dashboard'  && (
+              <CFOTab
+                fin={currentFin}
+                period={period}
+                pMonth={pMonth}
+                pYear={pYear}
+                selectedYear={currentFin.years.includes(cfoYear) ? cfoYear : (currentFin.years[currentFin.years.length - 1] ?? cfoYear)}
+              />
+            )}
             {activeTab === 'Financial Metrics' && <FinancialMetricsTab companyName={currentFin.companyName} />}
             {activeTab === ADMIN_TAB && isKpiAdmin && (
               <CompanyKpiAuditTab

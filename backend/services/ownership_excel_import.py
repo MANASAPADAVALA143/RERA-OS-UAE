@@ -78,8 +78,13 @@ def _norm_header(cell: Any) -> str:
     return re.sub(r"\s+", " ", str(cell or "").strip().lower())
 
 
+OWNERSHIP_ENTITY_LINES = frozenset({
+    "Rental", "Land", "Consulting", "Partner", "Personal",
+})
+
+
 def normalize_entity_line(val: Any) -> str | None:
-    """Canonical Entity label: Rental, Land, Consulting, Partner, etc."""
+    """Canonical Entity label: Rental, Land, Consulting, Partner, Personal, etc."""
     if val is None or not str(val).strip():
         return None
     key = _norm_header(val)
@@ -93,6 +98,8 @@ def normalize_entity_line(val: Any) -> str | None:
         return "Consulting"
     if key in ("partner", "partners", "jv partner"):
         return "Partner"
+    if key in ("personal", "personnal", "individual", "self"):
+        return "Personal"
     # Title-case leftover values for UI dropdown
     return str(val).strip().title()
 
@@ -114,11 +121,17 @@ def is_rental_entity_line(val: Any) -> bool:
 
 
 def is_ownership_entity_line(val: Any) -> bool:
-    """True for Ownership import scope: Rental, Land, or blank Entity."""
+    """True for Ownership import: Rental, Land, Consulting, Partner, Personal (or blank).
+
+    Construction / Development / Holding / REIT / PropDev lines are skipped.
+    """
     if val is None or not str(val).strip():
         return True
+    key = _norm_header(val)
+    if any(token in key for token in _NON_RENTAL_ENTITY_TOKENS):
+        return False
     normalized = normalize_entity_line(val)
-    return normalized in ("Rental", "Land")
+    return normalized in OWNERSHIP_ENTITY_LINES
 
 
 def _parse_num(v: Any) -> float | None:
@@ -242,8 +255,9 @@ def _parse_row_mapped(
 def parse_ownership_workbook(content: bytes, *, rental_only: bool = True) -> ParseOwnershipResult:
     """Parse ownership workbook.
 
-    When rental_only=True (default), keep Entity = Rental or Land (plus blank).
-    Other entity lines (Consulting, Partner, Construction, …) are skipped.
+    When rental_only=True (default), keep Entity in
+    {Rental, Land, Consulting, Partner, Personal} (plus blank).
+    Construction / Development / PropDev lines are skipped.
     """
     import openpyxl
 
@@ -332,8 +346,9 @@ def import_ownership_from_excel(db: Session, tid, content: bytes) -> dict:
     parsed = parsed_result.rows
     if not parsed:
         hint = (
-            "No ownership rows found for Entity = Rental or Land. "
-            "Consulting/Partner/Construction rows are skipped."
+            "No ownership rows found for Entity in "
+            "Rental / Land / Consulting / Partner / Personal. "
+            "Construction/Development rows are skipped."
             if parsed_result.has_entity_line_column
             else "No ownership rows found."
         )
@@ -341,7 +356,7 @@ def import_ownership_from_excel(db: Session, tid, content: bytes) -> dict:
             "imported_count": 0,
             "skipped_non_rental": parsed_result.skipped_non_rental,
             "errors": [
-                f"{hint} Expected columns: Entity (Rental/Land), Entity Name, Owned By, "
+                f"{hint} Expected columns: Entity, Entity Name, Owned By, "
                 "Property Address, Property Name, Ownership %, Entity Structure, "
                 "Cost Basis, Book Value, Existing Debt.",
             ],
