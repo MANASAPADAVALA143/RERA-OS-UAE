@@ -13,6 +13,8 @@ import {
   type ParsedFinancials,
 } from '../utils/rentalKpiEngine';
 import { buildLoanScheduleKpis } from '../utils/executiveSummaryLoans';
+import { aggregateRegistryOps } from '../utils/executiveSummaryRegistry';
+import type { UnitRow } from './useRentalCfoData';
 
 function resolvePortfolioKpi(
   fins: ParsedFinancials[],
@@ -65,12 +67,14 @@ export interface ExecutiveOverviewMetrics {
   totalDebt: number | null;
   hasFinancials: boolean;
   periodLabel: string;
+  registryMonth: string | null;
 }
 
 export function useExecutiveSummaryKpis(
   companies: CompanyRow[],
   portfolio: PortfolioSummary | null,
   loans: LoanRow[],
+  units: UnitRow[],
   entityId: string,
   period: Period | null,
   month: number,
@@ -122,6 +126,11 @@ export function useExecutiveSummaryKpis(
     return () => { cancelled = true; };
   }, [companies]);
 
+  const registryOps = useMemo(
+    () => aggregateRegistryOps(companies, units, entityId, month, year),
+    [companies, units, entityId, month, year],
+  );
+
   const scopedPortfolio = useMemo(
     () => scopePortfolio(portfolio, companies, entityId),
     [portfolio, companies, entityId],
@@ -145,20 +154,23 @@ export function useExecutiveSummaryKpis(
   );
 
   const ops = useMemo(() => {
-    const occ = scopedPortfolio?.occupancy_pct;
-    const billed = scopedPortfolio?.billed_this_month ?? 0;
-    const collected = scopedPortfolio?.collected_this_month ?? 0;
+    const occ = registryOps.occupancyPct;
+    const billed = registryOps.billed ?? scopedPortfolio?.billed_this_month ?? 0;
+    const collected = registryOps.collected ?? scopedPortfolio?.collected_this_month ?? 0;
     const collRate = arCollectionRate > 0
       ? arCollectionRate
-      : billed > 0 ? (collected / billed) * 100 : undefined;
+      : billed > 0 ? (collected / billed) * 100
+        : (registryOps.grossPotentialRent != null && registryOps.grossPotentialRent > 0 && collected > 0)
+          ? (collected / registryOps.grossPotentialRent) * 100
+          : undefined;
     return {
-      occupancyPct: occ != null ? occ * 100 : undefined,
+      occupancyPct: occ ?? undefined,
       collectionRate: collRate,
-      vacancyRate: occ != null ? (1 - occ) * 100 : undefined,
-      totalUnits: scopedPortfolio?.total_units,
+      vacancyRate: occ != null ? (100 - occ) : undefined,
+      totalUnits: registryOps.totalUnits || scopedPortfolio?.total_units,
       avgDaysVacant: undefined,
     };
-  }, [scopedPortfolio, arCollectionRate]);
+  }, [registryOps, scopedPortfolio, arCollectionRate]);
 
   const kpiSets = useMemo(() => {
     if (!kpiView) {
@@ -179,25 +191,29 @@ export function useExecutiveSummaryKpis(
 
   const overview = useMemo((): ExecutiveOverviewMetrics => {
     const k = kpiView?.k ?? null;
-    const p = scopedPortfolio;
     const hasFinancials = activeFins.length > 0;
-
     const debtTotal = scopedLoans.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0);
 
+    const gpr = registryOps.grossPotentialRent;
+    const collected = registryOps.collected;
+    const vacancyLoss = registryOps.vacancyLoss
+      ?? (gpr != null && collected != null ? Math.max(0, gpr - collected) : null);
+
     return {
-      grossPotentialRent: p?.gross_potential_rent ?? (hasFinancials ? k!.totalRevenue : null),
-      totalCollected: p?.collected_this_month ?? (hasFinancials ? k!.rentalIncome : null),
-      noi: hasFinancials ? k!.noi : (p?.noi_this_month ?? null),
-      occupancyPct: p?.occupancy_pct != null ? p.occupancy_pct * 100 : null,
-      vacancyLoss: p?.vacancy_loss ?? null,
-      totalExpenses: hasFinancials ? k!.totalExpenses : (p?.total_expense_this_month ?? null),
-      arOutstanding: p?.arrears_total ?? null,
+      grossPotentialRent: gpr,
+      totalCollected: collected,
+      noi: hasFinancials && k ? k.noi : null,
+      occupancyPct: registryOps.occupancyPct,
+      vacancyLoss,
+      totalExpenses: hasFinancials && k ? k.totalExpenses : null,
+      arOutstanding: registryOps.arrears ?? scopedPortfolio?.arrears_total ?? null,
       collectionRate: ops.collectionRate ?? null,
       totalDebt: scopedLoans.length > 0 ? debtTotal : null,
       hasFinancials,
       periodLabel: kpiView?.label ?? '',
+      registryMonth: registryOps.registryMonth,
     };
-  }, [kpiView, scopedPortfolio, scopedLoans, ops.collectionRate, activeFins.length]);
+  }, [kpiView, registryOps, scopedPortfolio, scopedLoans, ops.collectionRate, activeFins.length]);
 
   return {
     kpiView,
@@ -205,6 +221,7 @@ export function useExecutiveSummaryKpis(
     loanSchedule,
     scopedPortfolio,
     scopedLoans,
+    registryOps,
     parsedByCompany,
     activeFins,
     overview,

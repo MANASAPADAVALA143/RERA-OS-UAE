@@ -15,6 +15,14 @@ export interface CompanyRow {
   noi_this_month: number;
   total_expense_this_month: number;
   arrears_total: number;
+  /** Company Registry Excel sync — returned by /api/rentals/companies */
+  sync_gross_potential?: number | null;
+  sync_collected?: number | null;
+  sync_vacancy_loss?: number | null;
+  sync_occupied_units?: number | null;
+  sync_total_units?: number | null;
+  monthly_rent_data?: Record<string, number> | null;
+  last_sync_month?: string | null;
 }
 
 export interface ExpenseRow {

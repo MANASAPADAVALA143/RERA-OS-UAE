@@ -21,6 +21,7 @@ import {
 import { buildEmiStatusRows, EMI_STATUS_DISCLAIMER } from './executiveSummaryEmi';
 import { buildRiskActionRows } from './executiveSummaryActionRules';
 import { generateExecutiveNarrative, generateStrategicRecommendations } from './executiveSummaryNarrative';
+import { aggregateRegistryOps, buildRegistryTrend } from './executiveSummaryRegistry';
 
 const CAP_RATE = 0.055;
 
@@ -291,6 +292,8 @@ export async function gatherCeoBoardExportPayload(opts: GatherExportOptions): Pr
     } as PortfolioSummary;
   })();
 
+  const registryOps = aggregateRegistryOps(scopedCompanies, units, entityId, month, year);
+
   const [fins, ownRes, arAgingRes, apAgingRes] = await Promise.all([
     loadFinancials(companyIds),
     api.get<OwnerRow[]>('/api/rentals/ownership').catch(() => ({ data: [] as OwnerRow[] })),
@@ -313,10 +316,10 @@ export async function gatherCeoBoardExportPayload(opts: GatherExportOptions): Pr
     : { k: null as KpiData | null, kPrev: null as KpiData | null };
 
   const ops = {
-    occupancyPct: scopedPortfolio?.occupancy_pct != null ? scopedPortfolio.occupancy_pct * 100 : undefined,
+    occupancyPct: registryOps.occupancyPct ?? undefined,
     collectionRate: collectionRate > 0 ? collectionRate : undefined,
-    vacancyRate: scopedPortfolio ? (1 - scopedPortfolio.occupancy_pct) * 100 : undefined,
-    totalUnits: scopedPortfolio?.total_units,
+    vacancyRate: registryOps.occupancyPct != null ? (100 - registryOps.occupancyPct) : undefined,
+    totalUnits: registryOps.totalUnits || scopedPortfolio?.total_units,
   };
 
   const kpiSets = k ? buildExportKpiSets(k, kPrev, ops) : {
@@ -324,7 +327,8 @@ export async function gatherCeoBoardExportPayload(opts: GatherExportOptions): Pr
     occupancy: [] as ExportKpiItem[], pricing: [] as ExportKpiItem[], returns: [] as ExportKpiItem[],
   };
 
-  const portfolioGpr = scopedPortfolio?.gross_potential_rent
+  const portfolioGpr = registryOps.grossPotentialRent
+    ?? scopedPortfolio?.gross_potential_rent
     ?? scopedCompanies.reduce((s, c) => s + (c.gross_potential_rent ?? 0), 0);
   const mvResult = resolvePortfolioMarketValue({
     loans: scopedLoans,
@@ -382,16 +386,19 @@ export async function gatherCeoBoardExportPayload(opts: GatherExportOptions): Pr
     return { name: (l.property_name || l.company_name).slice(0, 16), ltv: val > 0 ? (bal / val) * 100 : 0 };
   }).filter(r => r.ltv > 0);
 
-  const occPct = scopedPortfolio?.occupancy_pct != null ? scopedPortfolio.occupancy_pct * 100 : null;
-  const gprTrend = getTrailingMonthKeys(month, year, 6).map(m => {
-    const ar = arData.find(a => a.month === m);
-    return {
-      month: m.split(' ')[0],
-      gpr: ar?.billed ?? 0,
-      collected: ar?.collected ?? 0,
-      occupancy: occPct,
-    };
-  });
+  const occPct = registryOps.occupancyPct;
+  const registryTrend = buildRegistryTrend(scopedCompanies, entityId, occPct, 6);
+  const gprTrend = registryTrend.length
+    ? registryTrend.map(p => ({ month: p.month, gpr: p.gpr, collected: p.collected, occupancy: p.occupancy }))
+    : getTrailingMonthKeys(month, year, 6).map(m => {
+      const ar = arData.find(a => a.month === m);
+      return {
+        month: m.split(' ')[0],
+        gpr: ar?.billed ?? 0,
+        collected: ar?.collected ?? 0,
+        occupancy: occPct,
+      };
+    });
 
   const monthlyEmi = scopedLoans.reduce((s, l) => s + (l.loan_emi ?? 0), 0);
   const runwayMonths = monthlyEmi > 0 && cash > 0 ? (cash / monthlyEmi).toFixed(1) : null;
@@ -409,9 +416,9 @@ export async function gatherCeoBoardExportPayload(opts: GatherExportOptions): Pr
     }),
 
     portfolioSnapshot: {
-      totalUnits: scopedPortfolio ? String(scopedPortfolio.total_units) : 'Data not available — see Company Registry',
-      occupiedUnits: scopedPortfolio ? String(scopedPortfolio.occupied_units) : 'Data not available',
-      vacantUnits: scopedPortfolio?.vacant_units ?? 0,
+      totalUnits: registryOps.totalUnits > 0 ? String(registryOps.totalUnits) : 'Data not available — see Company Registry',
+      occupiedUnits: registryOps.occupiedUnits > 0 ? String(registryOps.occupiedUnits) : 'Data not available',
+      vacantUnits: registryOps.vacantUnits,
       marketValue: mvResult.value > 0 ? fmtUsd(mvResult.value) : 'Data not available — see Loan Tracker / Financials',
       marketValueSource: mvResult.label,
       totalDebt: fmtUsd(totalDebt),
@@ -422,12 +429,12 @@ export async function gatherCeoBoardExportPayload(opts: GatherExportOptions): Pr
     },
 
     rentalPerformance: {
-      occupancy: scopedPortfolio ? pct(scopedPortfolio.occupancy_pct * 100) : 'Data not available',
-      gpr: fmtUsd(scopedPortfolio?.gross_potential_rent ?? k?.totalRevenue ?? 0),
-      collected: fmtUsd(scopedPortfolio?.collected_this_month ?? 0),
-      vacancyLoss: fmtUsd(scopedPortfolio?.vacancy_loss ?? 0),
+      occupancy: occPct != null ? pct(occPct) : 'Data not available',
+      gpr: fmtUsd(registryOps.grossPotentialRent ?? k?.totalRevenue ?? 0),
+      collected: fmtUsd(registryOps.collected ?? 0),
+      vacancyLoss: fmtUsd(registryOps.vacancyLoss ?? 0),
       collectionRate: collectionRate > 0 ? pct(collectionRate) : 'Data not available',
-      arOutstanding: fmtUsd(scopedPortfolio?.arrears_total ?? qbAr?.portfolio_totals?.total ?? 0),
+      arOutstanding: fmtUsd(registryOps.arrears ?? scopedPortfolio?.arrears_total ?? qbAr?.portfolio_totals?.total ?? 0),
       gprTrend,
     },
 

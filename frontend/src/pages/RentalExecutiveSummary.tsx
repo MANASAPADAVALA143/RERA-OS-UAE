@@ -10,6 +10,7 @@ import {
   ActionPlanTab,
 } from '../components/rental/ExecutiveSummaryDetailTabs';
 import { type Period, periodChipText, getPeriodKeys } from '../utils/periodWindow';
+import { resolveRegistryMonthKey, registryKeyToMonthYm } from '../utils/executiveSummaryRegistry';
 import { useRentalCfoData } from '../hooks/useRentalCfoData';
 import { useExecutiveSummaryKpis } from '../hooks/useExecutiveSummaryKpis';
 import { useExecutiveSummaryData } from '../hooks/useExecutiveSummaryData';
@@ -46,7 +47,14 @@ export default function RentalExecutiveSummary() {
   const [showExportModal, setShowExportModal] = useState(false);
 
   const monthYm = `${year}-${String(month).padStart(2, '0')}`;
-  const { companies, loans, portfolio, units, loading: cfoLoading } = useRentalCfoData(monthYm);
+  const [registryMonthYm, setRegistryMonthYm] = useState(monthYm);
+  const { companies, loans, portfolio, units, loading: cfoLoading } = useRentalCfoData(registryMonthYm);
+
+  useEffect(() => {
+    const key = resolveRegistryMonthKey(month, year, companies);
+    const ym = key ? registryKeyToMonthYm(key) : monthYm;
+    if (ym && ym !== registryMonthYm) setRegistryMonthYm(ym);
+  }, [companies, month, year, monthYm, registryMonthYm]);
   const { arSummary, arMonths, ownership, qbArAging, qbApAging, hasApAging, loading: arLoading, hasOwnership, hasAr, availableArMonths } =
     useExecutiveSummaryData(monthYm);
 
@@ -59,8 +67,8 @@ export default function RentalExecutiveSummary() {
   }, [arMonths, arSummary, period, month, year]);
 
   const {
-    kpiView, kpiSets, loanSchedule, overview, activeFins, availableKeys: finAvailableKeys, loading: finLoading,
-  } = useExecutiveSummaryKpis(companies, portfolio, loans, entityId, period, month, year, arCollectionRate);
+    kpiView, kpiSets, loanSchedule, overview, activeFins, registryOps, availableKeys: finAvailableKeys, loading: finLoading,
+  } = useExecutiveSummaryKpis(companies, portfolio, loans, units, entityId, period, month, year, arCollectionRate);
 
   const scopedLoans = useMemo(() => {
     if (entityId === 'portfolio') return loans;
@@ -236,6 +244,7 @@ export default function RentalExecutiveSummary() {
           hasOwnership={hasOwnership}
           hasAr={hasAr}
           latestFinMonth={latestFinMonth}
+          registryOps={registryOps}
         />
       )}
 

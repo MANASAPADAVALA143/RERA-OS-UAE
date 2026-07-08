@@ -24,6 +24,7 @@ import {
 import {
   buildCashCycleTrend, buildMarginTrend, hasCashCycleData, hasMarginTrendData,
 } from '../../utils/executiveSummaryCharts';
+import { buildRegistryTrend, type RegistryOpsMetrics } from '../../utils/executiveSummaryRegistry';
 import type { FinRow } from '../../utils/executiveSummaryFinRows';
 
 const P = {
@@ -173,6 +174,7 @@ export interface SixBandsProps {
   hasOwnership: boolean;
   hasAr: boolean;
   latestFinMonth: string | null;
+  registryOps: RegistryOpsMetrics;
 }
 
 export default function ExecutiveSummarySixBands(props: SixBandsProps) {
@@ -181,7 +183,7 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
     arSummary, arMonths, ownership, finRows, activeFins,
     qbArAging, qbApAging, hasApAging,
     period, month, year, periodLabel,
-    entityId, hasFinancials, hasOwnership, hasAr, latestFinMonth,
+    entityId, hasFinancials, hasOwnership, hasAr, latestFinMonth, registryOps,
   } = props;
 
   const k = kpiView?.k ?? null;
@@ -225,10 +227,15 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
   );
 
   const rentalTrend = useMemo(() => {
+    const fromRegistry = buildRegistryTrend(
+      scopedCompanies, entityId, overview.occupancyPct, 6,
+    );
+    if (fromRegistry.length) return fromRegistry;
+
     const keys = getTrailingMonthKeys(month, year, 6);
     return keys.map(m => {
       const ar = arMonths.find(a => a.month === m);
-      const occ = portfolio?.occupancy_pct != null ? portfolio.occupancy_pct * 100 : null;
+      const occ = overview.occupancyPct;
       return {
         month: m.split(' ')[0],
         gpr: ar?.billed ?? 0,
@@ -236,7 +243,12 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
         occupancy: occ ?? 0,
       };
     });
-  }, [arMonths, month, year, portfolio]);
+  }, [scopedCompanies, entityId, overview.occupancyPct, arMonths, month, year]);
+
+  const hasRegistryOps = registryOps.totalUnits > 0
+    || registryOps.grossPotentialRent != null
+    || registryOps.collected != null
+    || overview.occupancyPct != null;
 
   const totalDebt = overview.totalDebt ?? loans.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0);
   const buildingsFromFin = k?.buildings ?? 0;
@@ -256,10 +268,10 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
   );
   const debtComposition = useMemo(() => buildDebtComposition(loans), [loans]);
 
-  const ownedUnits = portfolio?.occupied_units ?? 0;
-  const vacantUnits = portfolio?.vacant_units ?? 0;
-  const totalUnits = portfolio?.total_units ?? 0;
-  const occupancyPct = portfolio?.occupancy_pct != null ? portfolio.occupancy_pct * 100 : null;
+  const ownedUnits = registryOps.occupiedUnits || portfolio?.occupied_units || 0;
+  const vacantUnits = registryOps.vacantUnits || portfolio?.vacant_units || 0;
+  const totalUnits = registryOps.totalUnits || portfolio?.total_units || 0;
+  const occupancyPct = overview.occupancyPct;
   const unitDonut = [
     { name: 'Occupied', value: ownedUnits },
     { name: 'Vacant', value: vacantUnits },
@@ -390,9 +402,13 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
       </BandShell>
 
       {/* BAND 2 */}
-      <BandShell title="Band 2 — Rental Performance" subtitle="Rent Receivable · Company Registry">
-        {!hasAr && !portfolio ? (
-          <DataGap message={`${UPLOAD_HINTS.rentReceivable} for ${periodLabel}.`} />
+      <BandShell title="Band 2 — Rental Performance" subtitle={
+        overview.registryMonth
+          ? `Company Registry · ${overview.registryMonth}`
+          : 'Company Registry'
+      }>
+        {!hasRegistryOps ? (
+          <DataGap message={`${UPLOAD_HINTS.registry} for ${periodLabel}.`} />
         ) : (
           <>
             <KpiGrid>
