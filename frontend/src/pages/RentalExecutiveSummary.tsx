@@ -3,6 +3,12 @@ import { Download } from 'lucide-react';
 import PeriodToggle from '../components/shared/PeriodToggle';
 import ExecSummaryExportModal from '../components/rental/ExecSummaryExportModal';
 import ExecutiveSummarySixBands from '../components/rental/ExecutiveSummarySixBands';
+import {
+  IncomeStatementTab,
+  BalanceSheetTab,
+  CashFlowTab,
+  ActionPlanTab,
+} from '../components/rental/ExecutiveSummaryDetailTabs';
 import { type Period, periodChipText, getPeriodKeys } from '../utils/periodWindow';
 import { useRentalCfoData } from '../hooks/useRentalCfoData';
 import { useExecutiveSummaryKpis } from '../hooks/useExecutiveSummaryKpis';
@@ -16,12 +22,23 @@ const P = {
 
 const MNAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+const TABS = [
+  { id: 'overview', label: 'Executive Overview' },
+  { id: 'income', label: 'Income Statement' },
+  { id: 'balance', label: 'Balance Sheet' },
+  { id: 'cashflow', label: 'Cash Flow' },
+  { id: 'actions', label: 'Action Plan' },
+] as const;
+
+type TabId = typeof TABS[number]['id'];
+
 function monthSortKey(m: string): number {
   const [mon, yr] = m.split(/[\s-]/);
   return (Number(yr) || 0) * 100 + (MNAMES.indexOf(mon) + 1);
 }
 
 export default function RentalExecutiveSummary() {
+  const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [period, setPeriod] = useState<Period | null>('MoM');
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
@@ -44,6 +61,13 @@ export default function RentalExecutiveSummary() {
   const {
     kpiView, kpiSets, loanSchedule, overview, activeFins, availableKeys: finAvailableKeys, loading: finLoading,
   } = useExecutiveSummaryKpis(companies, portfolio, loans, entityId, period, month, year, arCollectionRate);
+
+  const scopedLoans = useMemo(() => {
+    if (entityId === 'portfolio') return loans;
+    const co = companies.find(c => c.id === entityId);
+    if (!co) return [];
+    return loans.filter(l => l.company_name === co.company_name);
+  }, [loans, companies, entityId]);
 
   const [finRows, setFinRows] = useState<ReturnType<typeof mergeFinRows>>([]);
   useEffect(() => { setFinRows(mergeFinRows(activeFins)); }, [activeFins]);
@@ -105,7 +129,7 @@ export default function RentalExecutiveSummary() {
         <div>
           <h1 style={{ fontSize: 26, fontWeight: 700, color: P.text, margin: 0 }}>Executive Summary</h1>
           <p style={{ fontSize: 13, color: P.muted, margin: '6px 0 0' }}>
-            CEO dashboard — 6 bands · {entityLabel} · {periodLabel}
+            {entityLabel} · {periodLabel}
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -147,32 +171,70 @@ export default function RentalExecutiveSummary() {
         </div>
       </div>
 
-      {loading && (
+      <div style={{ display: 'flex', gap: 2, marginBottom: 24,
+        background: P.cardBg, border: `1px solid ${P.border}`, borderRadius: 10, padding: 4, width: 'fit-content', flexWrap: 'wrap' }}>
+        {TABS.map(t => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setActiveTab(t.id)}
+            style={{
+              padding: '7px 20px', borderRadius: 7, border: 'none', cursor: 'pointer',
+              fontSize: 13, fontWeight: activeTab === t.id ? 700 : 500,
+              background: activeTab === t.id ? P.gold : 'transparent',
+              color: activeTab === t.id ? P.text : P.muted,
+              transition: 'all 0.15s',
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {loading && activeTab === 'overview' && (
         <p style={{ fontSize: 13, color: P.muted, marginBottom: 16 }}>Loading portfolio, financials, and rent receivable data…</p>
       )}
 
-      <ExecutiveSummarySixBands
-        overview={overview}
-        kpiView={kpiView ? { k: kpiView.k, label: kpiView.label } : null}
-        kpiSets={kpiSets}
-        loanSchedule={loanSchedule}
-        portfolio={portfolio}
-        companies={companies}
-        loans={loans}
-        arSummary={arSummary}
-        arMonths={arMonths}
-        ownership={ownership}
-        finRows={finRows}
-        period={period}
-        month={month}
-        year={year}
-        periodLabel={periodLabel}
-        entityId={entityId}
-        hasFinancials={overview.hasFinancials}
-        hasOwnership={hasOwnership}
-        hasAr={hasAr}
-        latestFinMonth={latestFinMonth}
-      />
+      {activeTab === 'overview' && (
+        <ExecutiveSummarySixBands
+          overview={overview}
+          kpiView={kpiView ? { k: kpiView.k, label: kpiView.label } : null}
+          kpiSets={kpiSets}
+          loanSchedule={loanSchedule}
+          portfolio={portfolio}
+          companies={companies}
+          loans={scopedLoans}
+          arSummary={arSummary}
+          arMonths={arMonths}
+          ownership={ownership}
+          finRows={finRows}
+          period={period}
+          month={month}
+          year={year}
+          periodLabel={periodLabel}
+          entityId={entityId}
+          hasFinancials={overview.hasFinancials}
+          hasOwnership={hasOwnership}
+          hasAr={hasAr}
+          latestFinMonth={latestFinMonth}
+        />
+      )}
+
+      {activeTab === 'income' && (
+        <IncomeStatementTab finRows={filteredFin} arData={filteredAr} />
+      )}
+
+      {activeTab === 'balance' && (
+        <BalanceSheetTab loans={scopedLoans} arData={filteredAr} />
+      )}
+
+      {activeTab === 'cashflow' && (
+        <CashFlowTab loans={scopedLoans} arData={filteredAr} finRows={filteredFin} />
+      )}
+
+      {activeTab === 'actions' && (
+        <ActionPlanTab portfolio={portfolio} loans={scopedLoans} arData={filteredAr} units={units} />
+      )}
     </div>
   );
 }

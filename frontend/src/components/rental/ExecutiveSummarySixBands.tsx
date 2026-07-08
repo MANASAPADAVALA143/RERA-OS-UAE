@@ -119,85 +119,6 @@ function trailingFinMonths(endMonth: number, endYear: number, count: number): st
   return getTrailingMonthKeys(endMonth, endYear, count);
 }
 
-export function buildCeoActionRows(
-  portfolio: PortfolioSummary | null,
-  loans: LoanRow[],
-  arMonths: ArMonth[],
-  ownership: OwnerRow[],
-  kpi: KpiData | null,
-): { property: string; issue: string; kpi: string; impact: string; owner: string; due: string }[] {
-  const rows: { property: string; issue: string; kpi: string; impact: string; owner: string; due: string }[] = [];
-  const occ = (portfolio?.occupancy_pct ?? 0) * 100;
-  if (portfolio && occ > 0 && occ < 85) {
-    rows.push({
-      property: 'Portfolio', issue: 'Low occupancy', kpi: fmtPct(occ),
-      impact: 'Revenue shortfall', owner: 'Asset Mgmt', due: '30 days',
-    });
-  } else if (portfolio && occ >= 85 && occ < 95) {
-    rows.push({
-      property: 'Portfolio', issue: 'Vacancy above target', kpi: fmtPct(occ),
-      impact: 'GPR gap', owner: 'Leasing', due: '60 days',
-    });
-  }
-
-  const billed = arMonths.reduce((s, r) => s + r.billed, 0);
-  const collected = arMonths.reduce((s, r) => s + r.collected, 0);
-  const collRate = billed > 0 ? (collected / billed) * 100 : null;
-  if (collRate != null && collRate < 95) {
-    rows.push({
-      property: 'Portfolio', issue: 'Collection rate below target', kpi: fmtPct(collRate),
-      impact: 'Cash flow', owner: 'Collections', due: '14 days',
-    });
-  }
-
-  if (kpi) {
-    const noiM = kpi.totalRevenue > 0 ? (kpi.noi / kpi.totalRevenue) * 100 : null;
-    if (noiM != null && noiM < 15) {
-      rows.push({
-        property: 'Portfolio', issue: 'NOI margin below target', kpi: fmtPct(noiM),
-        impact: 'Profitability', owner: 'CFO', due: '90 days',
-      });
-    }
-    const oer = kpi.totalRevenue > 0 ? (kpi.totalExpenses / kpi.totalRevenue) * 100 : null;
-    if (oer != null && oer > 70) {
-      rows.push({
-        property: 'Portfolio', issue: 'Expense ratio high', kpi: fmtPct(oer),
-        impact: 'Margin compression', owner: 'CFO', due: '60 days',
-      });
-    }
-  }
-
-  for (const l of loans) {
-    const bal = l.loan_balance_as_of ?? 0;
-    const val = l.current_property_value ?? 0;
-    const ltv = val > 0 ? (bal / val) * 100 : null;
-    if (ltv != null && ltv > 75) {
-      rows.push({
-        property: l.property_name || l.company_name,
-        issue: 'LTV above 75%', kpi: fmtPct(ltv),
-        impact: 'Refinance / equity risk', owner: 'Treasury', due: '90 days',
-      });
-    }
-    const dscr = l.dscr ?? (l.noi_annual && l.loan_emi ? (l.noi_annual / 12) / l.loan_emi : null);
-    if (dscr != null && dscr < 1.1) {
-      rows.push({
-        property: l.property_name || l.company_name,
-        issue: 'DSCR below 1.1x', kpi: `${dscr.toFixed(2)}x`,
-        impact: 'Covenant risk', owner: 'Treasury', due: '30 days',
-      });
-    }
-  }
-
-  const partner = ownership[0]?.partner_name ?? '—';
-  if (rows.length === 0 && (portfolio || loans.length)) {
-    rows.push({
-      property: 'Portfolio', issue: 'On track', kpi: 'Healthy',
-      impact: '—', owner: partner, due: '—',
-    });
-  }
-  return rows;
-}
-
 export default function ExecutiveSummarySixBands(props: SixBandsProps) {
   const {
     overview, kpiView, loanSchedule, portfolio, companies, loans,
@@ -337,8 +258,6 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
       noiMargin: parseFloat(r.noiMargin),
       units: r.units || 1,
     }));
-
-  const ceoActions = buildCeoActionRows(portfolio, loans, periodAr, ownership, k);
 
   const finGap = !hasFinancials
     ? periodGapMessage('P&L financials', periodLabel, latestFinMonth)
@@ -551,37 +470,6 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
               </div>
             )}
           </>
-        )}
-      </BandShell>
-
-      {/* BAND 6 */}
-      <BandShell title="Band 6 — CEO Action List" subtitle="Rule-based flags across AR · P&L · Loans · Ownership">
-        {ceoActions.length === 0 ? (
-          <DataGap message="Upload data across Financials, Rent Receivable, and Loan Tracker to generate action items." />
-        ) : (
-          <div style={{ overflowX: 'auto', ...CARD, padding: 0 }}>
-            <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: P.pageBg }}>
-                  {['Property', 'Issue', 'KPI', 'Impact', 'Owner', 'Due Date'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '10px 12px', color: P.muted, fontWeight: 600 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {ceoActions.map((r, i) => (
-                  <tr key={i} style={{ borderTop: `1px solid ${P.border}` }}>
-                    <td style={{ padding: '10px 12px' }}>{r.property}</td>
-                    <td style={{ padding: '10px 12px', fontWeight: 600 }}>{r.issue}</td>
-                    <td style={{ padding: '10px 12px' }}>{r.kpi}</td>
-                    <td style={{ padding: '10px 12px' }}>{r.impact}</td>
-                    <td style={{ padding: '10px 12px' }}>{r.owner}</td>
-                    <td style={{ padding: '10px 12px' }}>{r.due}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         )}
       </BandShell>
     </div>
