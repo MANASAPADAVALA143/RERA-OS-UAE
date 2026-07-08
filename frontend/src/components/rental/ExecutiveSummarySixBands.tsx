@@ -4,16 +4,16 @@ import {
   Pie, PieChart, ResponsiveContainer, Scatter, ScatterChart,
   Tooltip, XAxis, YAxis, ZAxis,
 } from 'recharts';
-import type { Period } from '../utils/periodWindow';
-import { getPeriodKeys, getTrailingMonthKeys } from '../utils/periodWindow';
-import type { CompanyRow, LoanRow, PortfolioSummary } from '../hooks/useRentalCfoData';
-import type { ExecutiveOverviewMetrics } from '../hooks/useExecutiveSummaryKpis';
-import type { ExportKpiItem, KpiData } from '../utils/rentalKpiEngine';
-import type { ArMonth, ArSummaryResponse, OwnerRow } from '../hooks/useExecutiveSummaryData';
+import type { Period } from '../../utils/periodWindow';
+import { getPeriodKeys, getTrailingMonthKeys } from '../../utils/periodWindow';
+import type { CompanyRow, LoanRow, PortfolioSummary } from '../../hooks/useRentalCfoData';
+import type { ExecutiveOverviewMetrics } from '../../hooks/useExecutiveSummaryKpis';
+import type { ExportKpiItem, KpiData } from '../../utils/rentalKpiEngine';
+import type { ArMonth, ArSummaryResponse, OwnerRow } from '../../hooks/useExecutiveSummaryData';
 import {
   fmtMetricMoney, fmtMetricPct, fmtMoney, fmtPct, UPLOAD_HINTS, periodGapMessage,
-} from '../utils/executiveSummaryFormatters';
-import type { FinRow } from '../utils/executiveSummaryFinRows';
+} from '../../utils/executiveSummaryFormatters';
+import type { FinRow } from '../../utils/executiveSummaryFinRows';
 
 const P = {
   pageBg: '#F7F1E6', cardBg: '#FBF6EE', border: '#E8DEC8',

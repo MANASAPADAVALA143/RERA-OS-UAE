@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Download, X } from 'lucide-react';
-import type { Period } from '../utils/periodWindow';
-import type { CompanyRow, PortfolioSummary, LoanRow } from '../hooks/useRentalCfoData';
+import type { Period } from '../../utils/periodWindow';
+import type { CompanyRow, PortfolioSummary, LoanRow } from '../../hooks/useRentalCfoData';
 import { gatherExecutiveExportPayload } from '../../utils/gatherExecutiveExportData';
 import { generateExecutiveSummaryPpt } from '../../utils/executiveSummaryPpt';
 
