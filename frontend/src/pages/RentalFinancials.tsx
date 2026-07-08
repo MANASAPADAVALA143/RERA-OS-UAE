@@ -16,6 +16,8 @@ import { useCompanyKpiAudit } from '../hooks/useCompanyKpiAudit';
 import { KpiBreakdownPanel } from '../components/admin/KpiBreakdownPanel';
 import { CompanyKpiAuditTab } from '../components/admin/CompanyKpiAuditTab';
 import type { KpiAuditRow } from '../types/kpiAudit';
+import CfoMultiYearTrendCharts from '../components/rental/CfoMultiYearTrendCharts';
+import type { ParsedFinancials as EngineParsedFinancials } from '../utils/rentalKpiEngine';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1423,13 +1425,11 @@ function CFOTab({
   const [drillOpexCat, setDrillOpexCat] = useState<string | null>(null);
   const [drillRevenueType, setDrillRevenueType] = useState<string | null>(null);
   const [drillMonth, setDrillMonth] = useState<string | null>(null);
-  const [drillAnnualCat, setDrillAnnualCat] = useState<string | null>(null);
 
   useEffect(() => {
     setDrillOpexCat(null);
     setDrillRevenueType(null);
     setDrillMonth(null);
-    setDrillAnnualCat(null);
   }, [period, pMonth, pYear, selectedYear]);
 
   const snapshotRows = fin.years.map(y => {
@@ -1437,27 +1437,7 @@ function CFOTab({
     return { year: y, revenue: kk.totalRevenue, expenses: kk.totalExpenses, netIncome: kk.netIncome, noi: kk.noi, cash: kk.cash, margin: kk.totalRevenue > 0 ? kk.netIncome / kk.totalRevenue * 100 : 0 };
   });
 
-  const niTrajectory  = snapshotRows.map(r => ({ year: String(r.year), netIncome: r.netIncome }));
-  const expRatioTrend = snapshotRows.map(r => ({ year: String(r.year), ratio: r.revenue > 0 ? (r.expenses / r.revenue) * 100 : 0 }));
-  const revExpCombo   = snapshotRows.map(r => ({ year: String(r.year), Revenue: r.revenue, Expenses: r.expenses }));
-  const cashTrend     = snapshotRows.map(r => ({ year: String(r.year), cash: r.cash }));
-
-  const revChart = fin.years.map(y => {
-    const kk = calcKpis(fin, y);
-    return { year: String(y), 'Rental Income': kk.rentalIncome, 'Other Income': kk.otherIncome, 'Services': Math.max(0, kk.totalRevenue - kk.rentalIncome - kk.otherIncome) };
-  });
-
   const k = calcKpis(fin, selectedYear);
-  const expPie = [
-    { name: 'Interest Paid', value: k.interestExpense },
-    { name: 'Property Tax',  value: k.propertyTax },
-    { name: 'HOA Fees',      value: k.hoaFees },
-    { name: 'Legal Fees',    value: k.legalFees },
-    { name: 'Mgmt Fee',      value: k.managementFee },
-    { name: 'Utilities',     value: k.utilities },
-    { name: 'Repairs',       value: k.repairs },
-    { name: 'Other',         value: Math.max(0, k.totalExpenses - k.interestExpense - k.propertyTax - k.hoaFees - k.legalFees - k.managementFee - k.utilities - k.repairs) },
-  ].filter(e => e.value > 0);
 
   // Year insight card
   const margin = k.totalRevenue > 0 ? (k.netIncome / k.totalRevenue) * 100 : 0;
@@ -1553,19 +1533,13 @@ function CFOTab({
     if (drillMonth) {
       return plLinesForDrill(fin.pl, [drillMonth], /income|revenue|rent/i);
     }
-    if (drillAnnualCat) {
-      const key = PIE_TO_OPEX_KEY[drillAnnualCat] ?? drillAnnualCat;
-      const pat = OPEX_LINE_PATTERNS[key] ?? /expense|fee|cost|repair|utility|tax|interest|insurance|depreciation/i;
-      return plLinesForDrill(fin.pl, [], pat, selectedYear);
-    }
     return [];
-  }, [drillOpexCat, drillRevenueType, drillMonth, drillAnnualCat, fin.pl, drillKeys, selectedYear]);
+  }, [drillOpexCat, drillRevenueType, drillMonth, fin.pl, drillKeys, selectedYear]);
 
   const clearDrill = () => {
     setDrillOpexCat(null);
     setDrillRevenueType(null);
     setDrillMonth(null);
-    setDrillAnnualCat(null);
   };
 
   const drillTitle = drillOpexCat
@@ -1574,9 +1548,7 @@ function CFOTab({
       ? `Revenue drill-down · ${drillRevenueType}`
       : drillMonth
         ? `Month drill-down · ${drillMonth}`
-        : drillAnnualCat
-          ? `Expense drill-down · ${drillAnnualCat} (${selectedYear})`
-          : '';
+        : '';
 
   return (
     <div className="space-y-6">
@@ -1853,129 +1825,13 @@ function CFOTab({
         </div>
       </div>
 
-      {/* Charts Grid 2×2 */}
-      <div className="grid grid-cols-2 gap-4">
-        <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
-          <p style={{ fontSize:15, fontWeight:600, color:'#1C1917', marginBottom:4 }}>Net Income Trajectory</p>
-          <p className="cfo-chart-hint">Click a point to jump to that year</p>
-          <ResponsiveContainer width="100%" height={210}>
-            <LineChart
-              data={niTrajectory}
-              margin={{ left: 0, right: 10, top: 5, bottom: 5 }}
-              onClick={(d: { activeLabel?: string }) => {
-                const y = parseInt(String(d?.activeLabel ?? ''), 10);
-                if (!isNaN(y)) onYearSelect?.(y);
-              }}
-              style={{ cursor: 'pointer' }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
-              <XAxis dataKey="year" tick={{ fontSize: 11, fill: '#78716C' }} />
-              <YAxis tick={{ fontSize: 11, fill: '#78716C' }} tickFormatter={v => fmt(v as number)} />
-              <Tooltip formatter={(v: number) => [fmtFull(v), 'Net Income']} {...CFO_TT} />
-              <Line type="monotone" dataKey="netIncome" stroke="#22C55E" strokeWidth={2} dot={{ fill: '#22C55E', r: 4 }} activeDot={{ r: 6, fill: '#22C55E' }} name="Net Income" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
-          <p style={{ fontSize:15, fontWeight:600, color:'#1C1917', marginBottom:12 }}>Expense Ratio Trend</p>
-          <ResponsiveContainer width="100%" height={210}>
-            <LineChart data={expRatioTrend} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
-              <XAxis dataKey="year" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 9 }} tickFormatter={v => `${(v as number).toFixed(0)}%`} />
-              <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} />
-              <Line type="monotone" dataKey="ratio" stroke="#F59E0B" strokeWidth={2} dot={{ fill: '#F59E0B', r: 4 }} activeDot={{ r: 6, fill: '#F59E0B' }} name="Expense %" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
-          <p style={{ fontSize:15, fontWeight:600, color:'#1C1917', marginBottom:12 }}>Revenue vs Expenses</p>
-          <ResponsiveContainer width="100%" height={210}>
-            <BarChart data={revExpCombo} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
-              <XAxis dataKey="year" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 9 }} tickFormatter={v => fmt(v as number)} />
-              <Tooltip formatter={(v: number) => fmtFull(v)} />
-              <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-              <Bar dataKey="Revenue"  fill="#3B82F6" radius={[4,4,0,0]} />
-              <Bar dataKey="Expenses" fill="#EF4444" radius={[4,4,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
-          <p style={{ fontSize:15, fontWeight:600, color:'#1C1917', marginBottom:12 }}>Cash Balance Trend (Bank Accounts)</p>
-          <ResponsiveContainer width="100%" height={210}>
-            <LineChart data={cashTrend} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
-              <XAxis dataKey="year" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 9 }} tickFormatter={v => fmt(v as number)} />
-              <Tooltip formatter={(v: number) => fmtFull(v)} />
-              <Line type="monotone" dataKey="cash" stroke="#8B5CF6" strokeWidth={2} dot={{ fill: '#8B5CF6', r: 4 }} activeDot={{ r: 6, fill: '#8B5CF6' }} name="Cash" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Revenue Breakdown + Expense Pie for selected year */}
-      <div className="grid grid-cols-2 gap-4">
-        <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
-          <p style={{ fontSize:15, fontWeight:600, color:'#1C1917', marginBottom:12 }}>Revenue Breakdown by Year</p>
-          <ResponsiveContainer width="100%" height={210}>
-            <BarChart data={revChart} margin={{ left: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
-              <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-              <YAxis tickFormatter={v => fmt(v as number)} tick={{ fontSize: 10 }} />
-              <Tooltip formatter={(v: number) => fmtFull(v)} contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 }} />
-              <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="Rental Income" stackId="a" fill="#D4AF37" />
-              <Bar dataKey="Other Income"  stackId="a" fill="#B8860B" />
-              <Bar dataKey="Services"      stackId="a" fill="#8B6914" radius={[4,4,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
-          <p style={{ fontSize:15, fontWeight:600, color:'#1C1917', marginBottom:12 }}>Expense Breakdown ({selectedYear})</p>
-          <p className="cfo-chart-hint">Click a segment to drill into P&amp;L expense lines</p>
-          {drillAnnualCat && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 10px', borderRadius: 20, background: '#D4AF37', color: '#fff' }}>{drillAnnualCat}</span>
-              <button type="button" onClick={() => setDrillAnnualCat(null)} style={{ fontSize: 12, color: '#A8A29E', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>× clear</button>
-            </div>
-          )}
-          <ResponsiveContainer width="100%" height={210}>
-            <PieChart>
-              <Pie
-                data={expPie}
-                cx="50%"
-                cy="50%"
-                outerRadius={75}
-                dataKey="value"
-                onClick={(d) => setDrillAnnualCat(prev => prev === d.name ? null : String(d.name))}
-                style={{ cursor: 'pointer' }}
-              >
-                {expPie.map((e, i) => (
-                  <Cell key={i} fill={['#D4AF37','#C0392B','#166534','#F2994A','#8B6914','#A8A29E','#C08B40','#78716C'][i % 8]}
-                    opacity={drillAnnualCat && drillAnnualCat !== e.name ? 0.35 : 1} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(v: number, name: string) => [fmtFull(v), name]} {...CFO_TT} />
-              <Legend iconSize={10} wrapperStyle={{ fontSize: 12, color: '#57534E' }} />
-            </PieChart>
-          </ResponsiveContainer>
-          {drillAnnualCat && (
-            <CfoDrillPanel
-              title={`Expense drill-down · ${drillAnnualCat} (${selectedYear})`}
-              rows={plLinesForDrill(
-                fin.pl,
-                [],
-                OPEX_LINE_PATTERNS[PIE_TO_OPEX_KEY[drillAnnualCat] ?? drillAnnualCat] ?? /expense|fee|cost|repair|utility|tax|interest|insurance|depreciation/i,
-                selectedYear,
-              )}
-              onClear={() => setDrillAnnualCat(null)}
-            />
-          )}
-        </div>
-      </div>
+      {/* Charts Grid — shared with Executive Summary → Income Statement */}
+      <CfoMultiYearTrendCharts
+        fins={[fin as unknown as EngineParsedFinancials]}
+        selectedYear={selectedYear}
+        onYearSelect={onYearSelect}
+        enableDrill
+      />
 
       {/* Summary Tiles */}
       <div className="grid grid-cols-3 gap-4">

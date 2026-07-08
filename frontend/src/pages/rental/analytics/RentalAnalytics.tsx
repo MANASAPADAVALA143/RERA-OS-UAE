@@ -63,9 +63,6 @@ export default function RentalAnalytics({ embedded = false }: Props) {
               <BarChart3 size={28} color="#B8860B" />
               <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1C1917', margin: 0 }}>Analytics</h1>
             </div>
-            <p style={{ fontSize: 13, color: '#78716C', marginTop: 6, marginBottom: 0 }}>
-              Power BI-style visual layer — same live KPI data as KPI Dashboard, new presentation only
-            </p>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
             <select
@@ -92,35 +89,30 @@ export default function RentalAnalytics({ embedded = false }: Props) {
       )}
 
       {embedded && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <p style={{ fontSize: 13, color: '#78716C', margin: 0 }}>
-            Power BI-style visual layer — same live KPI data as KPI Dashboard
-          </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
-            <select
-              value={selectedCompanyId ?? ''}
-              onChange={e => setSelectedCompanyId(e.target.value || null)}
-              style={{
-                fontSize: 13, padding: '8px 12px', borderRadius: 8,
-                border: '1px solid #E8DEC8', background: '#FBF6EE', minWidth: 200,
-              }}
-            >
-              {companies.map(c => (
-                <option key={c.id} value={c.id}>{c.company_name}</option>
-              ))}
-            </select>
-            <PeriodToggle
-              period={period}
-              month={pMonth}
-              year={pYear}
-              availableKeys={availableKeys}
-              onChange={(p, m, y) => { setPeriod(p); setPMonth(m); setPYear(y); }}
-            />
-          </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 12 }}>
+          <select
+            value={selectedCompanyId ?? ''}
+            onChange={e => setSelectedCompanyId(e.target.value || null)}
+            style={{
+              fontSize: 13, padding: '8px 12px', borderRadius: 8,
+              border: '1px solid #E8DEC8', background: '#FBF6EE', minWidth: 200,
+            }}
+          >
+            {companies.map(c => (
+              <option key={c.id} value={c.id}>{c.company_name}</option>
+            ))}
+          </select>
+          <PeriodToggle
+            period={period}
+            month={pMonth}
+            year={pYear}
+            availableKeys={availableKeys}
+            onChange={(p, m, y) => { setPeriod(p); setPMonth(m); setPYear(y); }}
+          />
         </div>
       )}
 
-      <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 6, borderBottom: '1px solid #E8DEC8', paddingBottom: 0 }}>
+      <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 6, borderBottom: embedded ? 'none' : '1px solid #E8DEC8', paddingBottom: 0 }}>
         {SUB_PAGES.map(sp => {
           const active = activeSub === sp.id;
           return (

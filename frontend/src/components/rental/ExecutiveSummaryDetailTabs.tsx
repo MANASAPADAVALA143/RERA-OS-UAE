@@ -6,6 +6,9 @@ import {
 import { AlertTriangle, CheckCircle } from 'lucide-react';
 import type { LoanRow, PortfolioSummary, UnitRow } from '../../hooks/useRentalCfoData';
 import type { FinRow } from '../../utils/executiveSummaryFinRows';
+import type { ParsedFinancials } from '../../utils/rentalKpiEngine';
+import { unionYears } from '../../utils/cfoMultiYearTrendData';
+import CfoMultiYearTrendCharts from './CfoMultiYearTrendCharts';
 
 interface ArMonth { month: string; billed: number; collected: number; }
 
@@ -80,7 +83,15 @@ function isRevenueLine(row: FinRow): boolean {
   return false;
 }
 
-export function IncomeStatementTab({ finRows, arData }: { finRows: FinRow[]; arData: ArMonth[] }) {
+export function IncomeStatementTab({
+  finRows,
+  arData,
+  activeFins = [],
+}: {
+  finRows: FinRow[];
+  arData: ArMonth[];
+  activeFins?: ParsedFinancials[];
+}) {
   const dataRows = finRows.filter(r => !r.isSectionHeader && !r.isTotal);
 
   const monthlyAgg = useMemo(() => {
@@ -124,6 +135,11 @@ export function IncomeStatementTab({ finRows, arData }: { finRows: FinRow[]; arD
   }, [dataRows]);
 
   const DONUT_COLORS = [P.gold, P.teal, P.green, P.red, P.amber, '#8B7355', '#A0937D', '#C4A882'];
+
+  const expensePieYear = useMemo(() => {
+    const years = unionYears(activeFins);
+    return years[years.length - 1];
+  }, [activeFins]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -208,6 +224,18 @@ export function IncomeStatementTab({ finRows, arData }: { finRows: FinRow[]; arD
 
       {catBreakdown.length === 0 && chartData.length > 0 && (
         <NA msg="Upload categorized P&L data to see expense breakdown" />
+      )}
+
+      {activeFins.length > 0 && (
+        <>
+          <SectionTitle>Multi-Year Income Statement Trends</SectionTitle>
+          <CfoMultiYearTrendCharts
+            fins={activeFins}
+            selectedYear={expensePieYear}
+            enableDrill={activeFins.length === 1}
+            showPeriodNote
+          />
+        </>
       )}
     </div>
   );

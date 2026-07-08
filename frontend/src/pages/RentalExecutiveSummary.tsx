@@ -255,7 +255,7 @@ export default function RentalExecutiveSummary() {
       )}
 
       {activeTab === 'income' && (
-        <IncomeStatementTab finRows={filteredFin} arData={filteredAr} />
+        <IncomeStatementTab finRows={filteredFin} arData={filteredAr} activeFins={activeFins} />
       )}
 
       {activeTab === 'balance' && (
