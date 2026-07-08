@@ -99,6 +99,9 @@ def safe_float(val) -> float:
     s = str(val).strip()
     if not s or s in ('—', '–', '-'):
         return 0.0
+    # Excel text-forcing prefix: '$1,575.00 stored as a string
+    while s and s[0] in ("'", '"', '\u2018', '\u2019'):
+        s = s[1:].strip()
     # Accounting negatives: ($1,234.56)
     neg = s.startswith('(') and s.endswith(')')
     if neg:

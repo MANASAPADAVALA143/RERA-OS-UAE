@@ -10,11 +10,14 @@ export interface QBAgingTotals {
   days_91_plus: number;
   total: number;
   overdue: number;
+  credit_balance?: number;
+  positive_ar_total?: number;
 }
 
 export interface QBAgingCompany extends QBAgingTotals {
   company_id: string;
   company_name: string;
+  dso_estimate?: number | null;
 }
 
 export interface QBAgingLatest {
@@ -71,17 +74,50 @@ function guessCompanyId(filename: string, companies: CompanyRow[]): string {
   return companies[0]?.id ?? '';
 }
 
-/** Weighted DSO from QB aging buckets — same formula as backend. */
-export function estimateDsoFromBuckets(t: Pick<QBAgingTotals, 'current' | 'days_1_30' | 'days_31_60' | 'days_61_90' | 'days_91_plus' | 'total'>): number | null {
-  if (!t.total || t.total <= 0) return null;
-  const weighted = (
-    t.current * 0 +
-    t.days_1_30 * 15 +
-    t.days_31_60 * 45 +
-    t.days_61_90 * 75 +
-    t.days_91_plus * 105
-  ) / t.total;
+const BUCKET_KEYS = ['current', 'days_1_30', 'days_31_60', 'days_61_90', 'days_91_plus'] as const;
+const BUCKET_WEIGHTS = [0, 15, 45, 75, 105] as const;
+
+function bucketValues(t: Pick<QBAgingTotals, typeof BUCKET_KEYS[number]>): number[] {
+  return BUCKET_KEYS.map(k => t[k] ?? 0);
+}
+
+/** Sum of absolute negative bucket amounts — credits/overpayments excluded from DSO. */
+export function creditBalanceFromBuckets(
+  t: Pick<QBAgingTotals, typeof BUCKET_KEYS[number]> | undefined | null,
+): number {
+  if (!t) return 0;
+  return Math.round(
+    bucketValues(t).filter(v => v < 0).reduce((s, v) => s + Math.abs(v), 0) * 100,
+  ) / 100;
+}
+
+/** Weighted DSO from QB aging buckets — credits zero-floored, never negative. */
+export function estimateDsoFromBuckets(
+  t: Pick<QBAgingTotals, typeof BUCKET_KEYS[number]> | undefined | null,
+): number | null {
+  if (!t) return null;
+  const pos = bucketValues(t).map(v => Math.max(0, v));
+  const positiveTotal = pos.reduce((s, v) => s + v, 0);
+  if (positiveTotal <= 0) return null;
+  const weighted = pos.reduce((s, v, i) => s + v * BUCKET_WEIGHTS[i], 0) / positiveTotal;
   return Math.round(weighted);
+}
+
+export function formatDsoDisplay(dso: number | null | undefined, hasCredit: boolean): string {
+  if (dso != null) return `${dso} days`;
+  if (hasCredit) return 'N/A';
+  return 'NA';
+}
+
+export function dsoSubtext(
+  creditBalance: number,
+  scopeLabel?: string,
+): string {
+  const scope = scopeLabel ? ` · ${scopeLabel}` : '';
+  if (creditBalance > 0) {
+    return `Includes ${fmtUSD(creditBalance)} in credit balances — excluded from DSO calc${scope}`;
+  }
+  return `Weighted estimate · QB aging buckets${scope}`;
 }
 
 interface Props {

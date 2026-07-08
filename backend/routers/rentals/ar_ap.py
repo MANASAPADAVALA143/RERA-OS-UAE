@@ -864,26 +864,25 @@ def qb_aging_latest(
             "total":       round(sum(float(r.total)           for r in rlist), 2),
         }
 
-    port_totals = _sum_rows(rows)
-    port_totals["overdue"] = round(
-        port_totals["days_1_30"] + port_totals["days_31_60"] +
-        port_totals["days_61_90"] + port_totals["days_91_plus"], 2
+    from services.qb_dso import (
+        credit_balance_from_buckets,
+        estimate_dso_from_buckets,
+        positive_ar_total,
     )
 
-    # Weighted DSO estimate using bucket midpoints
-    # Current=0d, 1-30=15d, 31-60=45d, 61-90=75d, 91+=105d
-    total_bal = port_totals["total"]
-    if total_bal > 0:
-        weighted = (
-            port_totals["current"]     * 0   +
-            port_totals["days_1_30"]   * 15  +
-            port_totals["days_31_60"]  * 45  +
-            port_totals["days_61_90"]  * 75  +
-            port_totals["days_91_plus"]* 105
-        ) / total_bal
-        dso_estimate = round(weighted, 1)
-    else:
-        dso_estimate = None
+    def _enrich_totals(raw: dict) -> dict:
+        enriched = {**raw}
+        enriched["credit_balance"] = credit_balance_from_buckets(raw)
+        enriched["positive_ar_total"] = positive_ar_total(raw)
+        return enriched
+
+    port_totals = _enrich_totals(_sum_rows(rows))
+    port_totals["overdue"] = round(
+        max(0, port_totals["days_1_30"]) + max(0, port_totals["days_31_60"]) +
+        max(0, port_totals["days_61_90"]) + max(0, port_totals["days_91_plus"]), 2
+    )
+
+    dso_estimate = estimate_dso_from_buckets(port_totals)
 
     # By-company breakdown (matched rows only)
     co_groups: dict[str, list] = defaultdict(list)
@@ -896,11 +895,15 @@ def qb_aging_latest(
 
     by_company = []
     for cid, crows in co_groups.items():
-        s = _sum_rows(crows)
-        s["overdue"] = round(s["days_1_30"] + s["days_31_60"] + s["days_61_90"] + s["days_91_plus"], 2)
+        s = _enrich_totals(_sum_rows(crows))
+        s["overdue"] = round(
+            max(0, s["days_1_30"]) + max(0, s["days_31_60"]) +
+            max(0, s["days_61_90"]) + max(0, s["days_91_plus"]), 2
+        )
         by_company.append({
             "company_id":   cid,
             "company_name": co_map.get(cid, cid),
+            "dso_estimate": estimate_dso_from_buckets(s),
             **s,
         })
     by_company.sort(key=lambda x: x["overdue"], reverse=True)

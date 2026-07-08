@@ -86,6 +86,32 @@ _ONE_TIME = _re.compile(
 )
 
 
+def _merge_monthly_rent_totals(existing: dict | None, incoming: dict | None) -> dict[str, float]:
+    """Merge month totals — keep the higher value per month (Excel vs registry)."""
+    merged: dict[str, float] = {}
+    for src in (existing or {}, incoming or {}):
+        for m, v in src.items():
+            fv = float(v or 0)
+            merged[m] = max(merged.get(m, 0.0), fv)
+    return {m: round(v, 2) for m, v in merged.items()}
+
+
+def _excel_sync_collected(co, month_abbrev: str) -> float:
+    """Rent Receivable total for a month — primary collected source."""
+    monthly_data: dict = co.monthly_rent_data or {}
+    synced = float(monthly_data.get(month_abbrev, 0.0))
+    if synced == 0.0 and co.last_sync_month and co.collected_this_month:
+        try:
+            if (
+                datetime.strptime(co.last_sync_month, "%b-%Y").strftime("%Y-%m")
+                == datetime.strptime(month_abbrev, "%b-%Y").strftime("%Y-%m")
+            ):
+                synced = float(co.collected_this_month)
+        except ValueError:
+            pass
+    return synced
+
+
 def _apply_collected_fallback(
     summ: dict,
     co,
@@ -94,31 +120,21 @@ def _apply_collected_fallback(
     tid,
 ) -> None:
     """
-    Apply Excel-sync → P&L fallback for collected rent metrics in-place.
+    Apply Excel-sync → P&L → invoice fallback for collected rent metrics in-place.
 
     Called by list_companies, company_dashboard, and get_portfolio_summary.
     NOI is applied separately via _apply_pl_noi (P&L upload only).
-      Source B: Excel-synced monthly_rent_data / collected_this_month column
-      Source C: Latest P&L upload for the company (collected/rent income only)
+      Source A: Excel-synced monthly_rent_data (Rent Receivable — primary)
+      Source B: Latest P&L upload for the company (collected/rent income only)
+      Source C: Invoice collections (already in summ from company_summary)
     """
-    # ── Source B: Excel sync ──────────────────────────────────────────────────
-    if summ["collected_this_month"] == 0.0:
-        monthly_data: dict = co.monthly_rent_data or {}
-        synced = float(monthly_data.get(month_abbrev, 0.0))
-        if synced == 0.0 and co.last_sync_month and co.collected_this_month:
-            try:
-                if (
-                    datetime.strptime(co.last_sync_month, "%b-%Y").strftime("%Y-%m")
-                    == datetime.strptime(month_abbrev, "%b-%Y").strftime("%Y-%m")
-                ):
-                    synced = float(co.collected_this_month)
-            except ValueError:
-                pass
-        if synced > 0.0:
-            summ["collected_this_month"] = synced
-            summ["collected_source"] = "excel_sync"
+    # ── Source A: Excel sync (primary — overrides partial invoice data) ───────
+    synced = _excel_sync_collected(co, month_abbrev)
+    if synced > 0.0:
+        summ["collected_this_month"] = synced
+        summ["collected_source"] = "excel_sync"
 
-    # ── Source C: P&L upload (collected rent only — not NOI) ─────────────────
+    # ── Source B: P&L upload (collected rent only — not NOI) ─────────────────
     if summ["collected_this_month"] == 0.0:
         upload = (
             db.query(_RFU)
@@ -501,17 +517,20 @@ def _heal_company_sync_fields(company, units: list, prefer_month: str | None = N
             changed = True
         reg_totals = _registry_monthly_totals(units)
         if reg_totals:
-            if company.monthly_rent_data != reg_totals:
-                company.monthly_rent_data = reg_totals
+            merged_totals = _merge_monthly_rent_totals(company.monthly_rent_data, reg_totals)
+            if company.monthly_rent_data != merged_totals:
+                company.monthly_rent_data = merged_totals
                 changed = True
-            gpr = max(reg_totals.values())
+            gpr = max(merged_totals.values())
             if company.gross_potential_rent != gpr:
                 company.gross_potential_rent = gpr
                 changed = True
         reg_collected = _registry_collected_for_month(units, month)
+        mrd_collected = float((company.monthly_rent_data or {}).get(month, 0) or 0)
+        best_collected = max(reg_collected, mrd_collected)
         reg_vac = _registry_vacancy_loss(units)
-        if company.collected_this_month != reg_collected:
-            company.collected_this_month = reg_collected
+        if company.collected_this_month != best_collected:
+            company.collected_this_month = best_collected
             changed = True
         if company.vacancy_loss != reg_vac:
             company.vacancy_loss = reg_vac
@@ -546,10 +565,12 @@ def _apply_registry_financials(company, units: list, target_month: str | None = 
     month = target_month or company.last_sync_month
     totals = _registry_monthly_totals(units)
     if totals:
-        company.monthly_rent_data = totals
-        company.gross_potential_rent = max(totals.values())
+        company.monthly_rent_data = _merge_monthly_rent_totals(company.monthly_rent_data, totals)
+        company.gross_potential_rent = max(company.monthly_rent_data.values())
     if month:
-        company.collected_this_month = _registry_collected_for_month(units, month)
+        reg_collected = _registry_collected_for_month(units, month)
+        mrd_collected = float((company.monthly_rent_data or {}).get(month, 0) or 0)
+        company.collected_this_month = max(reg_collected, mrd_collected)
     company.vacancy_loss = _registry_vacancy_loss(units)
 
 
@@ -637,10 +658,12 @@ def get_portfolio_summary(
     portfolio = company_summary(all_units_dicts, all_inv_dicts, all_exp_dicts, today, cur_month=selected_month)
 
     # Roll up corrected per-company values into portfolio totals
-    if portfolio["collected_this_month"] == 0.0:
-        total_col = sum(c["collected_this_month"] for c in by_company)
+    total_col = sum(c["collected_this_month"] for c in by_company)
+    if any(c.get("collected_source") in ("excel_sync", "pl_fallback") for c in by_company):
         if total_col > 0:
-            portfolio["collected_this_month"] = total_col
+            portfolio["collected_this_month"] = round(total_col, 2)
+    elif portfolio["collected_this_month"] == 0.0 and total_col > 0:
+        portfolio["collected_this_month"] = total_col
     if portfolio["total_expense_this_month"] == 0.0:
         total_exp = sum(c["total_expense_this_month"] for c in by_company)
         if total_exp > 0:
@@ -1942,6 +1965,16 @@ async def confirm_rent_receivable(
                 _reconcile_unit_status_for_month(registry_units, target_month)
                 _apply_registry_unit_counts(company, registry_units, target_month)
                 _apply_registry_financials(company, registry_units, target_month)
+                # Keep full Excel month totals (rows not yet matched to registry units)
+                parsed_totals = data.get('monthly_totals') or {}
+                if parsed_totals:
+                    company.monthly_rent_data = _merge_monthly_rent_totals(
+                        company.monthly_rent_data, parsed_totals,
+                    )
+                    if target_month in parsed_totals:
+                        company.collected_this_month = float(
+                            company.monthly_rent_data.get(target_month, 0) or 0
+                        )
             else:
                 company.collected_this_month = data['collected']
                 company.vacancy_loss = data['vacancy_loss']

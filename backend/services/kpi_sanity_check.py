@@ -3,13 +3,14 @@ from __future__ import annotations
 
 import json
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict
 from datetime import datetime, timezone
-from typing import Any, Literal
+from typing import Any
 
 from sqlalchemy.orm import Session
 
 from models.rentals.models import RentalCompany, RentalFinancialUpload
+from services.kpi_audit_types import CompanyAuditResult, KpiCheckRow, Status
 from services.rental_kpi_engine import (
     KpiData,
     fin_upload_to_dict,
@@ -18,40 +19,7 @@ from services.rental_kpi_engine import (
     resolve_kpi_view_for_period,
 )
 
-Status = Literal["MATCH", "MISMATCH", "CHECK_LOGIC", "INSUFFICIENT_DATA"]
-
 DEFAULT_TOLERANCE_PCT = 0.5
-
-
-@dataclass
-class KpiCheckRow:
-    kpi: str
-    section: str
-    formula: str
-    raw_inputs: dict[str, Any]
-    inputs_detail: dict[str, Any]
-    substitution: str
-    sources: list[dict[str, str]]
-    canonical_value: float | None
-    canonical_display: str
-    displayed_value: float | None
-    displayed_display: str
-    difference: float | None
-    difference_pct: float | None
-    status: Status
-    notes: str = ""
-
-
-@dataclass
-class CompanyAuditResult:
-    company_id: str
-    company_name: str
-    period_label: str
-    has_data: bool
-    summary_status: Status
-    rows: list[KpiCheckRow] = field(default_factory=list)
-    mismatch_count: int = 0
-    check_logic_count: int = 0
 
 
 def _fmt_currency(n: float) -> str:
@@ -499,6 +467,51 @@ def audit_company_financials(
     )
 
 
+def _merge_audit_rows(financial: CompanyAuditResult, ops_rows: list[KpiCheckRow]) -> CompanyAuditResult:
+    """Append Rental Overview + AR Dashboard rows; widen has_data when ops exist."""
+    if not ops_rows:
+        return financial
+    all_rows = financial.rows + ops_rows
+    mismatch_count = sum(1 for r in all_rows if r.status == "MISMATCH")
+    check_logic_count = sum(1 for r in all_rows if r.status == "CHECK_LOGIC")
+    has_data = financial.has_data or any(
+        r.status != "INSUFFICIENT_DATA" for r in ops_rows
+    )
+    if mismatch_count:
+        summary = "MISMATCH"
+    elif check_logic_count:
+        summary = "CHECK_LOGIC"
+    elif not has_data:
+        summary = "INSUFFICIENT_DATA"
+    else:
+        summary = "MATCH"
+    return CompanyAuditResult(
+        company_id=financial.company_id,
+        company_name=financial.company_name,
+        period_label=financial.period_label,
+        has_data=has_data,
+        summary_status=summary,
+        rows=all_rows,
+        mismatch_count=mismatch_count,
+        check_logic_count=check_logic_count,
+    )
+
+
+def _rental_ops_imports():
+    from services.rental_ops_kpi_audit import (
+        audit_company_rental_ops,
+        audit_portfolio_rental_ops,
+        load_qb_aging_by_company,
+        load_qb_portfolio_totals,
+    )
+    return (
+        audit_company_rental_ops,
+        audit_portfolio_rental_ops,
+        load_qb_aging_by_company,
+        load_qb_portfolio_totals,
+    )
+
+
 def run_tenant_audit(
     db: Session,
     tenant_id,
@@ -509,6 +522,13 @@ def run_tenant_audit(
     company_id: str | None = None,
     triggered_by: str = "manual",
 ) -> dict:
+    (
+        audit_company_rental_ops,
+        audit_portfolio_rental_ops,
+        load_qb_aging_by_company,
+        load_qb_portfolio_totals,
+    ) = _rental_ops_imports()
+
     companies = db.query(RentalCompany).filter(RentalCompany.tenant_id == tenant_id).all()
     if company_id:
         companies = [c for c in companies if str(c.id) == company_id]
@@ -518,27 +538,42 @@ def run_tenant_audit(
         for u in db.query(RentalFinancialUpload).filter(RentalFinancialUpload.tenant_id == tenant_id).all()
     }
 
+    qb_by_company = load_qb_aging_by_company(db, tenant_id)
+    qb_portfolio = load_qb_portfolio_totals(db, tenant_id)
+
     results: list[CompanyAuditResult] = []
     for co in companies:
         upload = uploads.get(str(co.id))
         if not upload or not upload.pl_data:
-            results.append(CompanyAuditResult(
+            fin_result = CompanyAuditResult(
                 company_id=str(co.id),
                 company_name=co.company_name,
                 period_label="—",
                 has_data=False,
                 summary_status="INSUFFICIENT_DATA",
-            ))
-            continue
-        fin = fin_upload_to_dict(upload)
-        results.append(audit_company_financials(
-            fin,
-            company_id=str(co.id),
-            company_name=co.company_name,
-            period=period,
-            month=month,
-            year=year,
-        ))
+            )
+        else:
+            fin = fin_upload_to_dict(upload)
+            fin_result = audit_company_financials(
+                fin,
+                company_id=str(co.id),
+                company_name=co.company_name,
+                period=period,
+                month=month,
+                year=year,
+            )
+        ops_rows = audit_company_rental_ops(
+            db, tenant_id, co, month=month, year=year, qb_by_company=qb_by_company,
+        )
+        if fin_result.period_label == "—" and ops_rows:
+            fin_result.period_label = datetime.strptime(
+                f"{year}-{month:02d}", "%Y-%m",
+            ).strftime("%b-%Y")
+        results.append(_merge_audit_rows(fin_result, ops_rows))
+
+    portfolio_ops_rows = audit_portfolio_rental_ops(
+        db, tenant_id, companies, month=month, year=year, qb_portfolio=qb_portfolio,
+    )
 
     total_mismatch = sum(r.mismatch_count for r in results)
     total_check = sum(r.check_logic_count for r in results)
@@ -558,6 +593,7 @@ def run_tenant_audit(
             "total_mismatches": total_mismatch,
             "total_check_logic": total_check,
         },
+        "portfolio_ops_rows": [asdict(row) for row in portfolio_ops_rows],
         "companies": [_company_to_dict(r) for r in results],
     }
 
@@ -609,6 +645,13 @@ def get_company_audit_from_db(
     if not co:
         raise ValueError("Company not found")
 
+    (
+        audit_company_rental_ops,
+        _audit_portfolio_rental_ops,
+        load_qb_aging_by_company,
+        _load_qb_portfolio_totals,
+    ) = _rental_ops_imports()
+
     upload = (
         db.query(RentalFinancialUpload)
         .filter(
@@ -635,6 +678,15 @@ def get_company_audit_from_db(
             month=month,
             year=year,
         )
+    qb_by_company = load_qb_aging_by_company(db, tenant_id)
+    ops_rows = audit_company_rental_ops(
+        db, tenant_id, co, month=month, year=year, qb_by_company=qb_by_company,
+    )
+    if result.period_label == "—" and ops_rows:
+        result.period_label = datetime.strptime(
+            f"{year}-{month:02d}", "%Y-%m",
+        ).strftime("%b-%Y")
+    result = _merge_audit_rows(result, ops_rows)
     return _company_to_dict(result)
 
 

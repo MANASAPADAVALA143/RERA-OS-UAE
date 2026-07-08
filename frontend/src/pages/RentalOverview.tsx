@@ -8,7 +8,13 @@ import { X } from 'lucide-react';
 import api from '../services/api';
 import { fmtUSD, fmtPct } from '../components/ProtectedRoute';
 import { useRentalNav } from '../contexts/RentalNavContext';
-import QbArAgingUploadPanel, { type QBAgingLatest, estimateDsoFromBuckets } from '../components/rental/QbArAgingUploadPanel';
+import QbArAgingUploadPanel, {
+  type QBAgingLatest,
+  creditBalanceFromBuckets,
+  estimateDsoFromBuckets,
+  formatDsoDisplay,
+  dsoSubtext,
+} from '../components/rental/QbArAgingUploadPanel';
 import { RENTAL_GREEN, RENTAL_TEAL, RENTAL_RED, RENTAL_CHART_GREEN } from '../utils/rentalPalette';
 
 // ── palette & style constants ─────────────────────────────────────────────────
@@ -37,23 +43,30 @@ const CARD: React.CSSProperties = {
   padding: '14px 16px',
 };
 
+const KPI_CARD: React.CSSProperties = {
+  background: C_CARD,
+  border: '1px solid #E8DEC8',
+  borderRadius: 10,
+  padding: '10px 12px',
+};
+
 const KPI_LBL: React.CSSProperties = {
-  fontSize: 12, fontWeight: 600, letterSpacing: '0.05em',
-  textTransform: 'uppercase', color: '#78716C', marginBottom: 3,
+  fontSize: 11, fontWeight: 600, letterSpacing: '0.05em',
+  textTransform: 'uppercase', color: '#78716C', marginBottom: 2,
 };
 
 const KPI_VAL_PRI: React.CSSProperties = {
-  fontSize: 28, fontWeight: 700, color: '#1C1917', lineHeight: 1.1,
-  fontVariantNumeric: 'tabular-nums lining-nums',
-};
-
-const KPI_VAL_SEC: React.CSSProperties = {
   fontSize: 24, fontWeight: 700, color: '#1C1917', lineHeight: 1.1,
   fontVariantNumeric: 'tabular-nums lining-nums',
 };
 
+const KPI_VAL_SEC: React.CSSProperties = {
+  fontSize: 20, fontWeight: 700, color: '#1C1917', lineHeight: 1.1,
+  fontVariantNumeric: 'tabular-nums lining-nums',
+};
+
 const KPI_HELP: React.CSSProperties = {
-  fontSize: 11, fontWeight: 400, color: '#A8A29E', marginTop: 3,
+  fontSize: 10, fontWeight: 400, color: '#A8A29E', marginTop: 2,
 };
 
 const TAB_NUM: React.CSSProperties = { fontVariantNumeric: 'tabular-nums lining-nums' };
@@ -228,9 +241,9 @@ function buildAttentionNow(
 
 function SkeletonKpi() {
   return (
-    <div className="rounded-xl p-5 animate-pulse" style={{ background: '#F7F5F0', border: '1px solid #DDD8CC' }}>
-      <div className="h-3 rounded w-2/3 mb-3" style={{ background: '#DDD8CC' }} />
-      <div className="h-7 rounded w-1/2" style={{ background: '#DDD8CC' }} />
+    <div className="rounded-lg p-3 animate-pulse" style={{ background: '#F7F5F0', border: '1px solid #DDD8CC' }}>
+      <div className="h-2.5 rounded w-2/3 mb-2" style={{ background: '#DDD8CC' }} />
+      <div className="h-6 rounded w-1/2" style={{ background: '#DDD8CC' }} />
     </div>
   );
 }
@@ -251,7 +264,7 @@ function MiniSparkline({ values, color }: { values: number[]; color: string }) {
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
-  const W = 80, H = 28;
+  const W = 68, H = 22;
   const coords = values.map((v, i) => ({
     x: (i / (values.length - 1)) * W,
     y: H - ((v - min) / range) * (H - 4) - 2,
@@ -273,9 +286,9 @@ function PriTile({
   const displayValue = na && (value === 'NA' || value === '—') ? 'NA' : value;
   return (
     <div style={{
-      ...CARD,
-      background: gold ? 'linear-gradient(135deg,#D4AF37,#B8860B)' : CARD.background,
-      border: gold ? '1px solid #B8860B' : CARD.border,
+      ...KPI_CARD,
+      background: gold ? 'linear-gradient(135deg,#D4AF37,#B8860B)' : KPI_CARD.background,
+      border: gold ? '1px solid #B8860B' : KPI_CARD.border,
     }} className="ov-tile">
       <div style={{ ...KPI_LBL, color: gold ? 'rgba(255,255,255,0.8)' : KPI_LBL.color }}>{label}</div>
       <div style={{ ...KPI_VAL_PRI, color: col, letterSpacing: na ? '0.08em' : undefined }}>{displayValue}</div>
@@ -290,7 +303,7 @@ function SecTile({
 }: { label: string; value: string; sub?: string; warn?: boolean; na?: boolean }) {
   const displayValue = na && (value === 'NA' || value === '—') ? 'NA' : value;
   return (
-    <div style={CARD} className="ov-tile">
+    <div style={KPI_CARD} className="ov-tile">
       <div style={KPI_LBL}>{label}</div>
       <div style={{
         ...KPI_VAL_SEC,
@@ -389,20 +402,41 @@ export default function RentalOverview() {
   const arCoName = arCompanyOptions.find(c => c.id === arCoId)?.name ?? '';
 
   const qbDsoByCompany = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, number | null>();
     if (!qbAging?.has_data) return map;
     for (const co of qbAging.by_company) {
-      const dso = estimateDsoFromBuckets(co);
-      if (dso != null) map.set(co.company_id, dso);
+      map.set(co.company_id, co.dso_estimate ?? estimateDsoFromBuckets(co));
     }
     return map;
   }, [qbAging]);
 
-  const displayDso = useMemo(() => {
-    if (!qbAging?.has_data) return null;
-    if (selectedCoId) return qbDsoByCompany.get(selectedCoId) ?? null;
-    return qbAging.dso_estimate ?? null;
-  }, [qbAging, selectedCoId, qbDsoByCompany]);
+  const qbCreditByCompany = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!qbAging?.has_data) return map;
+    for (const co of qbAging.by_company) {
+      const credit = co.credit_balance ?? creditBalanceFromBuckets(co);
+      if (credit > 0) map.set(co.company_id, credit);
+    }
+    return map;
+  }, [qbAging]);
+
+  const displayDsoInfo = useMemo(() => {
+    if (!qbAging?.has_data) {
+      return { dso: null as number | null, creditBalance: 0, hasQbData: false };
+    }
+    if (selectedCoId) {
+      const co = qbAging.by_company.find(c => c.company_id === selectedCoId);
+      if (!co) return { dso: null, creditBalance: 0, hasQbData: true };
+      const credit = co.credit_balance ?? creditBalanceFromBuckets(co);
+      const dso = co.dso_estimate ?? estimateDsoFromBuckets(co);
+      return { dso, creditBalance: credit, hasQbData: true };
+    }
+    const credit = qbAging.portfolio_totals?.credit_balance
+      ?? creditBalanceFromBuckets(qbAging.portfolio_totals);
+    const dso = qbAging.dso_estimate
+      ?? estimateDsoFromBuckets(qbAging.portfolio_totals);
+    return { dso, creditBalance: credit, hasQbData: true };
+  }, [qbAging, selectedCoId]);
 
   // ── data fetching ──────────────────────────────────────────────────────────
 
@@ -746,11 +780,11 @@ export default function RentalOverview() {
 
       {/* ── PRIMARY KPI row ─────────────────────────────────────────────────── */}
       {fetching ? (
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2">
           {Array.from({ length: 6 }).map((_, i) => <SkeletonKpi key={i} />)}
         </div>
       ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2">
           <PriTile gold
             label="Occupancy Rate"
             value={fmtPct(kpis.occupancy_pct)}
@@ -800,7 +834,7 @@ export default function RentalOverview() {
 
       {/* ── SECONDARY KPI row ────────────────────────────────────────────────── */}
       {!fetching && sec && (
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2">
           <SecTile
             label="Collection Rate"
             value={sec.collRate !== null ? `${sec.collRate.toFixed(1)}%` : '—'}
@@ -815,18 +849,30 @@ export default function RentalOverview() {
           />
           <SecTile
             label="Arrears Days Outstanding"
-            value={displayDso != null ? `${displayDso} days` : 'NA'}
-            sub={
-              displayDso != null
-                ? selectedCoName
-                  ? `Weighted estimate · QB aging · ${selectedCoName}`
-                  : 'Weighted estimate · QB aging buckets'
-                : selectedCoName
-                  ? `No QB aging for ${selectedCoName}`
-                  : 'Upload AR Aging below'
+            value={
+              !displayDsoInfo.hasQbData
+                ? 'NA'
+                : formatDsoDisplay(displayDsoInfo.dso, displayDsoInfo.creditBalance > 0)
             }
-            na={displayDso == null}
+            sub={
+              !displayDsoInfo.hasQbData
+                ? (selectedCoName ? `No QB aging for ${selectedCoName}` : 'Upload AR Aging below')
+                : displayDsoInfo.dso == null && displayDsoInfo.creditBalance > 0
+                  ? `No outstanding AR · ${fmtUSD(displayDsoInfo.creditBalance)} credit excluded from DSO`
+                  : dsoSubtext(
+                      displayDsoInfo.creditBalance,
+                      selectedCoName || undefined,
+                    )
+            }
+            na={!displayDsoInfo.hasQbData || (displayDsoInfo.dso == null && displayDsoInfo.creditBalance > 0)}
           />
+          {displayDsoInfo.creditBalance > 0 && (
+            <SecTile
+              label="Credit Balance"
+              value={fmtUSD(displayDsoInfo.creditBalance)}
+              sub="Overpayments · excluded from DSO"
+            />
+          )}
           <SecTile
             label="Vacant > 30 Days"
             value="NA"
@@ -989,9 +1035,13 @@ export default function RentalOverview() {
                             </span>
                           </td>
                           <td className="py-2 px-2" style={{ color: '#6B6B6B', fontSize: 11, ...TAB_NUM }}>
-                            {qbDsoByCompany.has(c.company_id)
-                              ? `~${qbDsoByCompany.get(c.company_id)}d`
-                              : 'NA'}
+                            {(() => {
+                              const dso = qbDsoByCompany.get(c.company_id);
+                              const credit = qbCreditByCompany.get(c.company_id) ?? 0;
+                              if (dso != null) return `~${dso}d`;
+                              if (credit > 0) return 'N/A';
+                              return 'NA';
+                            })()}
                           </td>
                           <td className="py-2 px-2">
                             <span style={{

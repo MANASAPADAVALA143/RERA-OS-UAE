@@ -6,6 +6,12 @@ import {
 } from 'recharts';
 import api from '../services/api';
 import { ParchmentKpiTile } from '../components/ui/ParchmentKpiTile';
+import {
+  creditBalanceFromBuckets,
+  estimateDsoFromBuckets,
+  formatDsoDisplay,
+  dsoSubtext,
+} from '../components/rental/QbArAgingUploadPanel';
 
 type ArViewTab = 'overview' | 'collection';
 
@@ -14,8 +20,13 @@ type ArViewTab = 'overview' | 'collection';
 interface QBAgingTotals {
   current: number; days_1_30: number; days_31_60: number;
   days_61_90: number; days_91_plus: number; total: number; overdue: number;
+  credit_balance?: number;
+  positive_ar_total?: number;
 }
-interface QBAgingCompany extends QBAgingTotals { company_id: string; company_name: string; }
+interface QBAgingCompany extends QBAgingTotals {
+  company_id: string; company_name: string;
+  dso_estimate?: number | null;
+}
 interface QBAgingTrendPoint extends QBAgingTotals { month: string; as_of_date: string; }
 interface QBAgingLatest {
   has_data: boolean;
@@ -180,6 +191,31 @@ export default function RentalArDashboard() {
   };
 
   useEffect(() => { fetchQbAging(); }, []);
+
+  const qbDisplayMetrics = useMemo(() => {
+    if (!qbAging?.has_data) {
+      return { dso: null as number | null, creditBalance: 0, dsoSub: '' };
+    }
+    if (selCoId) {
+      const co = qbAging.by_company.find(c => c.company_id === selCoId);
+      if (!co) return { dso: null, creditBalance: 0, dsoSub: '' };
+      const credit = co.credit_balance ?? creditBalanceFromBuckets(co);
+      const dso = co.dso_estimate ?? estimateDsoFromBuckets(co);
+      return {
+        dso,
+        creditBalance: credit,
+        dsoSub: dsoSubtext(credit, co.company_name),
+      };
+    }
+    const credit = qbAging.portfolio_totals?.credit_balance
+      ?? creditBalanceFromBuckets(qbAging.portfolio_totals);
+    const dso = qbAging.dso_estimate ?? estimateDsoFromBuckets(qbAging.portfolio_totals);
+    return {
+      dso,
+      creditBalance: credit,
+      dsoSub: dsoSubtext(credit),
+    };
+  }, [qbAging, selCoId]);
 
   const handleQbPreview = async () => {
     if (!qbFile || !qbAsOfDate) { setQbError('Select a file and set the as-of date.'); return; }
@@ -1421,13 +1457,26 @@ export default function RentalArDashboard() {
         {/* QB KPIs */}
         {qbAging?.has_data && qbAging.portfolio_totals && (
           <div style={{ padding: 16 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10, marginBottom: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, marginBottom: 14 }}>
               {[
                 { label: 'Overdue AR (30+)', value: fmt$(qbAging.portfolio_totals.overdue), border: '#B91C1C', sub: 'Excludes current bucket' },
                 { label: '30+ Days Overdue', value: fmt$(qbAging.portfolio_totals.days_1_30 + qbAging.portfolio_totals.days_31_60 + qbAging.portfolio_totals.days_61_90 + qbAging.portfolio_totals.days_91_plus), border: '#F5A623', sub: '1-30 + 31-60 + 61-90 + 91+' },
                 { label: '60+ Days Overdue', value: fmt$(qbAging.portfolio_totals.days_61_90 + qbAging.portfolio_totals.days_91_plus), border: '#E97316', sub: '61-90 + 91+ days' },
                 { label: '90+ Days Overdue', value: fmt$(qbAging.portfolio_totals.days_91_plus), border: '#991B1B', sub: 'Critical — 91+ days' },
-                { label: 'Est. Days to Collect', value: qbAging.dso_estimate != null ? `${Math.round(qbAging.dso_estimate)} days` : '—', border: '#2F80ED', sub: qbAging.trend_ready ? `${qbAging.snapshot_count} snapshots` : `${qbAging.snapshot_count} of 3 needed for trend` },
+                {
+                  label: 'Est. Days to Collect',
+                  value: formatDsoDisplay(qbDisplayMetrics.dso, qbDisplayMetrics.creditBalance > 0),
+                  border: '#2F80ED',
+                  sub: qbDisplayMetrics.dso == null && qbDisplayMetrics.creditBalance > 0
+                    ? `No outstanding AR · ${fmt$(qbDisplayMetrics.creditBalance)} credit excluded`
+                    : qbDisplayMetrics.dsoSub || (qbAging.trend_ready ? `${qbAging.snapshot_count} snapshots` : `${qbAging.snapshot_count} of 3 needed for trend`),
+                },
+                ...(qbDisplayMetrics.creditBalance > 0 ? [{
+                  label: 'Credit Balance',
+                  value: fmt$(qbDisplayMetrics.creditBalance),
+                  border: '#7C3AED',
+                  sub: 'Overpayments · excluded from DSO',
+                }] : []),
               ].map((t, i) => (
                 <div key={i} style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, padding: '12px 14px', borderLeft: `3px solid ${t.border}` }}>
                   <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#6B6B6B', marginBottom: 4, lineHeight: 1.2 }}>{t.label}</div>
@@ -1475,18 +1524,31 @@ export default function RentalArDashboard() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
                   {[...qbAging.by_company]
                     .sort((a, b) => b.overdue - a.overdue)
-                    .map((co, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, background: '#F5F0E8', borderRadius: 5, padding: '6px 10px' }}>
+                    .map((co, i) => {
+                      const credit = co.credit_balance ?? creditBalanceFromBuckets(co);
+                      const dso = co.dso_estimate ?? estimateDsoFromBuckets(co);
+                      return (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, background: '#F5F0E8', borderRadius: 5, padding: '6px 10px', flexWrap: 'wrap', gap: 4 }}>
                         <span style={{ fontWeight: 600, color: '#1C1917', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{co.company_name}</span>
                         <span style={{ color: '#166534', marginLeft: 8, minWidth: 60, textAlign: 'right' }}>{fmt$(co.current)}</span>
                         <span style={{ color: co.overdue > 0 ? '#B91C1C' : '#9CA3AF', marginLeft: 6, minWidth: 60, textAlign: 'right', fontWeight: co.overdue > 0 ? 700 : 400 }}>{co.overdue > 0 ? fmt$(co.overdue) : '—'}</span>
+                        <span style={{ color: '#2F80ED', minWidth: 48, textAlign: 'right' }}>
+                          {dso != null ? `~${dso}d` : credit > 0 ? 'N/A' : '—'}
+                        </span>
+                        {credit > 0 && (
+                          <span style={{ color: '#7C3AED', minWidth: 56, textAlign: 'right', fontSize: 10 }}>
+                            {fmt$(credit)} cr
+                          </span>
+                        )}
                       </div>
-                    ))
+                    );})
                   }
                 </div>
-                <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 10, color: '#9CA3AF' }}>
+                <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 10, color: '#9CA3AF', flexWrap: 'wrap' }}>
                   <span style={{ color: '#166534' }}>■ Current</span>
                   <span style={{ color: '#B91C1C' }}>■ Overdue (30+)</span>
+                  <span style={{ color: '#2F80ED' }}>■ Est. days</span>
+                  <span style={{ color: '#7C3AED' }}>■ Credit (excl. DSO)</span>
                 </div>
               </div>
             </div>

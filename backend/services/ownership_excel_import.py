@@ -11,8 +11,12 @@ from sqlalchemy.orm import Session
 
 from models.rentals.models import RentalCompany, RentalOwnership, RentalPartnerRole, RentalProp
 
+_COMPANY_HEADERS = frozenset({"entity name", "company name", "company"})
+_ENTITY_LINE_HEADERS = frozenset({
+    "entity", "business line", "line of business", "entity line", "business unit",
+})
+
 _COL_ALIASES: dict[str, tuple[str, ...]] = {
-    "entity": ("entity name", "company name", "company", "entity"),
     "partner": ("owned by", "partner name", "partner", "owner"),
     "address": ("property address", "address"),
     "property": ("property name", "property", "building", "suite"),
@@ -24,8 +28,12 @@ _COL_ALIASES: dict[str, tuple[str, ...]] = {
 }
 
 _SKIP_ROW = frozenset({
-    "entity name", "company name", "owned by", "partner name", "total", "grand total",
+    "entity name", "company name", "owned by", "partner name", "total", "grand total", "entity",
 })
+
+_NON_RENTAL_ENTITY_TOKENS = (
+    "construction", "development", "holding", "reit", "prop dev", "property dev",
+)
 
 _STRUCTURE_TO_ROLE: dict[str, str] = {
     "gp": "general_partner",
@@ -54,12 +62,36 @@ class ParsedOwnershipRow:
     cost_basis: float | None
     book_value: float | None
     existing_debt: float | None
+    entity_line: str | None
     sheet: str
     row_num: int
 
 
+@dataclass
+class ParseOwnershipResult:
+    rows: list[ParsedOwnershipRow]
+    skipped_non_rental: int
+    has_entity_line_column: bool
+
+
 def _norm_header(cell: Any) -> str:
     return re.sub(r"\s+", " ", str(cell or "").strip().lower())
+
+
+def is_rental_entity_line(val: Any) -> bool:
+    """True when Entity / business-line column indicates Rentals (or is blank)."""
+    if val is None or not str(val).strip():
+        return True
+    key = _norm_header(val)
+    if not key:
+        return True
+    if any(token in key for token in _NON_RENTAL_ENTITY_TOKENS):
+        return False
+    if "rental" in key:
+        return True
+    if key in ("rentals", "property management", "real estate rental", "rental portfolio"):
+        return True
+    return False
 
 
 def _parse_num(v: Any) -> float | None:
@@ -87,10 +119,23 @@ def _parse_pct(v: Any) -> float:
 
 
 def _map_headers(header_row: tuple) -> dict[str, int]:
+    labels = [_norm_header(c) for c in header_row]
+    has_entity_name_col = any(h in _COMPANY_HEADERS for h in labels if h)
+
     mapping: dict[str, int] = {}
     for idx, cell in enumerate(header_row):
         h = _norm_header(cell)
         if not h:
+            continue
+        if h in _COMPANY_HEADERS:
+            mapping["company"] = idx
+            continue
+        if h in _ENTITY_LINE_HEADERS:
+            # Legacy sheets: lone "Entity" column = company name (no Entity Name col)
+            if h == "entity" and not has_entity_name_col:
+                mapping["company"] = idx
+            else:
+                mapping["entity_line"] = idx
             continue
         for field, aliases in _COL_ALIASES.items():
             if field in mapping:
@@ -108,12 +153,14 @@ def _find_header_row(rows: list[tuple]) -> tuple[int, dict[str, int]] | None:
         labels = [_norm_header(c) for c in row if c is not None and str(c).strip()]
         if not labels:
             continue
-        has_entity = any("entity" in x or x == "company" for x in labels)
+        has_entity_name = any(x in _COMPANY_HEADERS for x in labels)
+        has_legacy_entity = "entity" in labels and not has_entity_name
+        has_company = has_entity_name or has_legacy_entity or any(x == "company" for x in labels)
         has_partner = any("owned by" in x or "partner" in x or "owner" in x for x in labels)
         has_property = any("property" in x for x in labels)
-        if has_entity and (has_partner or has_property):
+        if has_company and (has_partner or has_property):
             col_map = _map_headers(row)
-            if "entity" in col_map and "partner" in col_map:
+            if "company" in col_map and "partner" in col_map:
                 return i, col_map
     return None
 
@@ -124,16 +171,28 @@ def _cell(row: tuple, col_map: dict[str, int], field: str) -> Any:
     return None
 
 
-def _parse_row_mapped(row: tuple, col_map: dict[str, int], sheet: str, row_num: int) -> ParsedOwnershipRow | None:
-    entity = str(_cell(row, col_map, "entity") or "").strip()
+def _parse_row_mapped(
+    row: tuple,
+    col_map: dict[str, int],
+    sheet: str,
+    row_num: int,
+    *,
+    filter_entity_line: bool,
+) -> ParsedOwnershipRow | None:
+    company = str(_cell(row, col_map, "company") or "").strip()
     partner = str(_cell(row, col_map, "partner") or "").strip()
-    if not entity or not partner:
+    entity_line_raw = _cell(row, col_map, "entity_line") if "entity_line" in col_map else None
+    entity_line = str(entity_line_raw).strip() if entity_line_raw is not None else None
+
+    if filter_entity_line and not is_rental_entity_line(entity_line_raw):
         return None
-    if _norm_header(entity) in _SKIP_ROW or _norm_header(partner) in _SKIP_ROW:
+    if not company or not partner:
         return None
-    prop = str(_cell(row, col_map, "property") or "").strip() or entity
+    if _norm_header(company) in _SKIP_ROW or _norm_header(partner) in _SKIP_ROW:
+        return None
+    prop = str(_cell(row, col_map, "property") or "").strip() or company
     return ParsedOwnershipRow(
-        entity_name=entity,
+        entity_name=company,
         partner_name=partner,
         property_address=str(_cell(row, col_map, "address") or "").strip() or None,
         property_name=prop,
@@ -142,16 +201,20 @@ def _parse_row_mapped(row: tuple, col_map: dict[str, int], sheet: str, row_num: 
         cost_basis=_parse_num(_cell(row, col_map, "cost_basis")),
         book_value=_parse_num(_cell(row, col_map, "book_value")),
         existing_debt=_parse_num(_cell(row, col_map, "debt")),
+        entity_line=entity_line or None,
         sheet=sheet,
         row_num=row_num,
     )
 
 
-def parse_ownership_workbook(content: bytes) -> list[ParsedOwnershipRow]:
+def parse_ownership_workbook(content: bytes, *, rental_only: bool = True) -> ParseOwnershipResult:
     import openpyxl
 
     wb = openpyxl.load_workbook(BytesIO(content), data_only=True)
     out: list[ParsedOwnershipRow] = []
+    skipped_non_rental = 0
+    has_entity_line_column = False
+
     for ws in wb.worksheets:
         rows = list(ws.iter_rows(values_only=True))
         if not rows:
@@ -160,11 +223,26 @@ def parse_ownership_workbook(content: bytes) -> list[ParsedOwnershipRow]:
         if not header:
             continue
         hdr_idx, col_map = header
+        if "entity_line" in col_map:
+            has_entity_line_column = True
         for row_num, row in enumerate(rows[hdr_idx + 1:], start=hdr_idx + 2):
-            parsed = _parse_row_mapped(row, col_map, ws.title, row_num)
+            if rental_only and "entity_line" in col_map:
+                raw_line = _cell(row, col_map, "entity_line")
+                if raw_line is not None and str(raw_line).strip() and not is_rental_entity_line(raw_line):
+                    skipped_non_rental += 1
+                    continue
+            parsed = _parse_row_mapped(
+                row, col_map, ws.title, row_num,
+                filter_entity_line=rental_only,
+            )
             if parsed and parsed.ownership_pct > 0:
                 out.append(parsed)
-    return out
+
+    return ParseOwnershipResult(
+        rows=out,
+        skipped_non_rental=skipped_non_rental,
+        has_entity_line_column=has_entity_line_column,
+    )
 
 
 def _role_from_structure(structure: str | None) -> RentalPartnerRole:
@@ -208,12 +286,20 @@ def _match_property(db: Session, company_id, name: str) -> RentalProp | None:
 
 
 def import_ownership_from_excel(db: Session, tid, content: bytes) -> dict:
-    parsed = parse_ownership_workbook(content)
+    parsed_result = parse_ownership_workbook(content, rental_only=True)
+    parsed = parsed_result.rows
     if not parsed:
+        hint = (
+            "No rental ownership rows found. When the file has an Entity column, "
+            "only rows with Entity = Rental are imported."
+            if parsed_result.has_entity_line_column
+            else "No ownership rows found."
+        )
         return {
             "imported_count": 0,
+            "skipped_non_rental": parsed_result.skipped_non_rental,
             "errors": [
-                "No ownership rows found. Expected columns: Entity Name, Owned By, "
+                f"{hint} Expected columns: Entity (Rental), Entity Name, Owned By, "
                 "Property Address, Property Name, Ownership %, Entity Structure, "
                 "Cost Basis, Book Value, Existing Debt.",
             ],
@@ -248,6 +334,7 @@ def import_ownership_from_excel(db: Session, tid, content: bytes) -> dict:
     if not to_insert:
         return {
             "imported_count": 0,
+            "skipped_non_rental": parsed_result.skipped_non_rental,
             "errors": errors or ["No rows could be matched to companies in Company Registry."],
             "error": "no_rows",
         }
@@ -262,11 +349,15 @@ def import_ownership_from_excel(db: Session, tid, content: bytes) -> dict:
     db.commit()
 
     companies = sorted({r.company.company_name for r in to_insert if r.company})
+    msg = f"Imported {len(to_insert)} rental ownership position(s)."
+    if parsed_result.skipped_non_rental:
+        msg += f" Skipped {parsed_result.skipped_non_rental} non-rental row(s)."
     return {
         "imported_count": len(to_insert),
+        "skipped_non_rental": parsed_result.skipped_non_rental,
         "errors": errors,
         "companies_updated": companies,
-        "message": f"Imported {len(to_insert)} ownership position(s).",
+        "message": msg,
     }
 
 
@@ -278,7 +369,7 @@ def build_import_template_bytes() -> bytes:
     ws = wb.active
     ws.title = "Ownership"
     headers = [
-        "Entity Name", "Owned By", "Property Address", "Property Name",
+        "Entity", "Entity Name", "Owned By", "Property Address", "Property Name",
         "Ownership %", "Entity Structure", "Cost Basis", "Book Value", "Existing Debt",
     ]
     fill = PatternFill("solid", fgColor="FFFF00")
@@ -288,7 +379,7 @@ def build_import_template_bytes() -> bytes:
         cell.fill = fill
         cell.font = bold
     ws.append([
-        "Example LLC", "Partner A", "123 Main St", "Building One",
+        "Rental", "Example LLC", "Partner A", "123 Main St", "Building One",
         0.25, "LLC", 500000, 480000, 300000,
     ])
     buf = BytesIO()

@@ -95,6 +95,8 @@ def test_safe_float_parses_currency_strings():
     assert safe_float("2,401.70") == 2401.70
     assert safe_float("($100.00)") == -100.0
     assert safe_float(None) == 0.0
+    assert safe_float("'$1,575.00") == 1575.0
+    assert safe_float("$875.00") == 875.0
 
 
 def test_expand_unit_match_names_splits_combined_labels():

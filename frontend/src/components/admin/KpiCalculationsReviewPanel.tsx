@@ -17,6 +17,7 @@ interface AuditPayload {
     total_mismatches: number;
     total_check_logic: number;
   };
+  portfolio_ops_rows?: CompanyKpiAuditResult['rows'];
   companies?: CompanyKpiAuditResult[];
   message?: string;
 }
@@ -120,7 +121,8 @@ export function KpiCalculationsReviewPanel({ embedded }: Props) {
           </div>
           <p className="text-sm text-gray-500 mt-1">
             Cross-check every KPI — formula, raw P&amp;L/BS inputs, step-by-step value, and live dashboard match status
-            across all client companies before delivery.
+            across all client companies before delivery. Includes <strong>Rental Portfolio Overview</strong> and{' '}
+            <strong>AR Dashboard</strong> operational KPIs (collections, DSO, credit balances).
           </p>
           {profile?.email && (
             <p className="text-xs text-gray-400 mt-0.5">CA firm reviewer: {profile.email}</p>
@@ -194,6 +196,60 @@ export function KpiCalculationsReviewPanel({ embedded }: Props) {
               <p className="text-lg font-semibold font-mono">{value}</p>
             </div>
           ))}
+        </div>
+      )}
+
+      {companyId === 'all' && payload?.portfolio_ops_rows && payload.portfolio_ops_rows.length > 0 && (
+        <div className="bg-white border rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b font-semibold text-base bg-slate-50">
+            Portfolio — Rental Overview &amp; AR Dashboard
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-base leading-relaxed">
+              <thead className="bg-gray-50 text-sm text-gray-600 uppercase tracking-wide">
+                <tr>
+                  <th className="px-4 py-3 text-left">KPI</th>
+                  <th className="px-4 py-3 text-left">Formula</th>
+                  <th className="px-4 py-3 text-left">Raw Inputs</th>
+                  <th className="px-4 py-3 text-left">Substitution</th>
+                  <th className="px-4 py-3 text-right">Calculated</th>
+                  <th className="px-4 py-3 text-right">Live Display</th>
+                  <th className="px-4 py-3 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {payload.portfolio_ops_rows.map(row => (
+                  <tr key={`${row.section}-${row.kpi}`}>
+                    <td className="px-4 py-3 font-medium whitespace-nowrap align-top">
+                      <div className="text-base">{row.kpi}</div>
+                      <div className="text-sm text-gray-500 mt-0.5">{row.section}</div>
+                    </td>
+                    <td className="px-4 py-3 text-gray-700 max-w-[220px] align-top text-[15px]">{row.formula}</td>
+                    <td className="px-4 py-3 text-gray-600 max-w-[200px] align-top text-[15px]">
+                      {Object.entries(row.inputs_detail || {}).map(([k, v]) => (
+                        <div key={k}>{k}: {v}</div>
+                      ))}
+                    </td>
+                    <td className="px-4 py-3 text-gray-700 max-w-[240px] whitespace-pre-wrap align-top font-mono text-sm">
+                      {row.substitution || '—'}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono font-semibold text-green-800 align-top text-base">
+                      {row.canonical_display}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono font-semibold align-top text-base">
+                      {row.displayed_display}
+                    </td>
+                    <td className="px-4 py-3 text-center align-top">
+                      <KpiStatusBadge status={row.status} />
+                      {row.notes && (
+                        <p className="text-sm text-amber-800 mt-2 max-w-[180px] mx-auto">{row.notes}</p>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

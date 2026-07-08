@@ -538,17 +538,24 @@ export default function RentalOwnership() {
       const response = await api.post('/api/rentals/ownership/import', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      const data = response.data as { imported_count?: number; errors?: string[]; message?: string };
+      const data = response.data as {
+        imported_count?: number;
+        skipped_non_rental?: number;
+        errors?: string[];
+        message?: string;
+      };
       const count = data.imported_count ?? 0;
+      const skipped = data.skipped_non_rental ?? 0;
       const warnings = (data.errors ?? []).filter(Boolean);
       if (count === 0) {
         setImportMessage({
           type: 'error',
-          text: warnings.join('; ') || 'No ownership rows imported. Check column headers and Company Registry names.',
+          text: warnings.join('; ') || 'No rental ownership rows imported. Use Entity = Rental and match Entity Name to Company Registry.',
         });
       } else {
+        const skipText = skipped > 0 ? ` Skipped ${skipped} non-rental row(s).` : '';
         const warnText = warnings.length ? ` (${warnings.length} row warning(s): ${warnings.slice(0, 3).join('; ')}${warnings.length > 3 ? '…' : ''})` : '';
-        setImportMessage({ type: 'success', text: `Imported ${count} ownership position(s).${warnText}` });
+        setImportMessage({ type: 'success', text: `Imported ${count} rental ownership position(s).${skipText}${warnText}` });
         loadData();
       }
     } catch (err: unknown) {
@@ -598,7 +605,7 @@ export default function RentalOwnership() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-charcoal">Ownership</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Partner registry · Capital tracking · Equity analytics</p>
+          <p className="text-sm text-gray-500 mt-0.5">Partner registry · Capital tracking · Equity analytics · Rental entity rows only</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* Company filter */}

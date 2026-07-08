@@ -44,7 +44,8 @@ Reference for KPI calculations across **Rental Overview**, **Financials KPI Dash
 | **Vacancy Loss** | Vacant units' rent or company `vacancy_loss` from Excel sync |
 | **Collection Rate** | `Collected This Month ÷ Billed This Month × 100` |
 | **Avg Rent / Unit** | `Gross Potential Rent ÷ Occupied Units` |
-| **Arrears Days Outstanding** | Weighted DSO from QB aging buckets: `(Current×0 + 1–30×15 + 31–60×45 + 61–90×75 + 90+×105) ÷ Total` |
+| **Arrears Days Outstanding** | Weighted DSO from QB aging: `(Current×0 + 1–30×15 + 31–60×45 + 61–90×75 + 91+×105) ÷ positive AR`; negative buckets zero-floored; credits excluded |
+| **Credit Balance** | Sum of \|negative bucket amounts\| from QB AR Aging — shown separately, excluded from DSO |
 | **Vacant > 30 Days** | `NA` (vacancy date not tracked yet) |
 | **NOI Margin** | `NOI This Month ÷ Collected This Month × 100` |
 | **Best / Worst (Occ.)** | Highest and lowest company occupancy % |
@@ -297,7 +298,8 @@ Where:
 | **Month-End Shortfall** | `Billed − Collected` for selected month |
 | **Occupied — Billing Gap** | Occupied units with vs without billing data |
 | **Top 5 by Outstanding AR** | Companies ranked by highest open AR |
-| **DSO (Arrears Days)** | Weighted bucket formula (same as Overview) |
+| **DSO (Arrears Days)** | Same weighted bucket formula as Overview — positive AR only; credits excluded; N/A when no outstanding AR |
+| **Credit Balance** | Sum of negative QB bucket amounts (per company / portfolio) — excluded from DSO |
 
 **Collection detail table (per company × month):**
 - **Billed** = registry occupied-unit rent
@@ -315,14 +317,32 @@ Occupancy %     = Occupied Units / Total Units
 Collection Rate = Collected / Billed
 NOI (Ops)       = Collected − Expenses
 NOI (Financial) = Revenue − Expenses + Interest
-Vacancy Loss    = Rent from vacant units only
-Arrears         = Sum of (Billed − Collected), minimum 0
-DSCR            = Annual NOI / Annual Debt Service (EMI × 12)
+DSO (Arrears)   = Σ(positive_bucket × weight) / Σ(positive_buckets); credits excluded
+Credit Balance  = Σ|negative bucket amounts| from QB AR Aging
 ```
 
 ---
 
-## J) Code locations
+## J) CA Firm — Calculations Review
+
+**Route:** Rentals → Calculations Review (`/rental/calculations-review`)  
+**Access:** CA firm reviewer accounts only  
+**API:** `POST /api/admin/kpi-sanity/run`
+
+Cross-checks every KPI with formula, raw inputs, substitution steps, and match status.
+
+| Section | KPIs audited |
+|---|---|
+| **Profitability / Balance Sheet / Financial Ratios** | P&L + BS KPIs from Financials dashboard (`rentalKpiEngine`) |
+| **Rental Portfolio Overview** | Collected This Month, Occupancy Rate, Collection Rate, Vacancy Loss, Arrears Days Outstanding, Credit Balance |
+| **AR Dashboard** | Outstanding AR, Est. Days to Collect, Overdue AR (30+), Credit Balance |
+| **Portfolio (all companies)** | Portfolio collected, occupancy, DSO, credit — shown at top when reviewing all companies |
+
+**Backend reference:** `backend/services/kpi_sanity_check.py`, `backend/services/rental_ops_kpi_audit.py`, `backend/services/qb_dso.py`
+
+---
+
+## K) Code locations
 
 | Area | Primary files |
 |---|---|
@@ -335,6 +355,9 @@ DSCR            = Annual NOI / Annual Debt Service (EMI × 12)
 | CFO data hook | `frontend/src/hooks/useRentalCfoData.ts` |
 | Financial Ratios | `frontend/src/pages/rental/RentalFinancialRatios.tsx` |
 | Executive Summary / PPT export | `frontend/src/utils/executiveSummaryPpt.ts`, `frontend/src/utils/gatherExecutiveExportData.ts` |
+| Calculations Review | `frontend/src/components/admin/KpiCalculationsReviewPanel.tsx`, `backend/services/rental_ops_kpi_audit.py` |
+| QB DSO / credit balance | `backend/services/qb_dso.py`, `frontend/src/components/rental/QbArAgingUploadPanel.tsx` |
+| AR Dashboard | `frontend/src/pages/RentalArDashboard.tsx` |
 
 ---
 
