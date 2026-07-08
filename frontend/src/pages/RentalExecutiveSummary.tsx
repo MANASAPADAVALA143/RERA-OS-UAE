@@ -3,13 +3,13 @@ import { Download } from 'lucide-react';
 import PeriodToggle from '../components/shared/PeriodToggle';
 import ExecSummaryExportModal from '../components/rental/ExecSummaryExportModal';
 import ExecutiveSummarySixBands from '../components/rental/ExecutiveSummarySixBands';
-import OwnershipAnalyticsPanel from '../components/rental/OwnershipAnalyticsPanel';
 import {
   IncomeStatementTab,
   BalanceSheetTab,
   CashFlowTab,
   ActionPlanTab,
 } from '../components/rental/ExecutiveSummaryDetailTabs';
+import RentalAnalytics from './rental/analytics/RentalAnalytics';
 import { type Period, periodChipText, getPeriodKeys } from '../utils/periodWindow';
 import { resolveRegistryMonthKey, registryKeyToMonthYm } from '../utils/executiveSummaryRegistry';
 import { useRentalCfoData } from '../hooks/useRentalCfoData';
@@ -26,7 +26,7 @@ const MNAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 
 const TABS = [
   { id: 'overview', label: 'Executive Overview' },
-  { id: 'analytics', label: 'Ownership Analytics' },
+  { id: 'analytics', label: 'Analytics' },
   { id: 'income', label: 'Income Statement' },
   { id: 'balance', label: 'Balance Sheet' },
   { id: 'cashflow', label: 'Cash Flow' },
@@ -251,7 +251,7 @@ export default function RentalExecutiveSummary() {
       )}
 
       {activeTab === 'analytics' && (
-        <OwnershipAnalyticsPanel entityCompanyId={entityId} scopeLabel={entityLabel} />
+        <RentalAnalytics embedded />
       )}
 
       {activeTab === 'income' && (

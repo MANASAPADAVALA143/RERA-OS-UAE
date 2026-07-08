@@ -12,20 +12,28 @@ import AnalyticsPropertyPerformance from './AnalyticsPropertyPerformance';
 import AnalyticsExceptionView from './AnalyticsExceptionView';
 
 const SUB_PAGES = [
-  { path: '/rental/analytics', label: 'Executive Overview' },
-  { path: '/rental/analytics/profitability', label: 'Profitability' },
-  { path: '/rental/analytics/cash-debt', label: 'Cash & Debt' },
-  { path: '/rental/analytics/property', label: 'Property' },
-  { path: '/rental/analytics/exceptions', label: 'Exceptions' },
+  { id: 'overview', path: '/rental/analytics', label: 'Executive Overview' },
+  { id: 'profitability', path: '/rental/analytics/profitability', label: 'Profitability' },
+  { id: 'cash-debt', path: '/rental/analytics/cash-debt', label: 'Cash & Debt' },
+  { id: 'property', path: '/rental/analytics/property', label: 'Property' },
+  { id: 'exceptions', path: '/rental/analytics/exceptions', label: 'Exceptions' },
 ] as const;
 
-export default function RentalAnalytics() {
+type SubId = typeof SUB_PAGES[number]['id'];
+
+interface Props {
+  /** When true, render without page chrome (for Executive Summary tab). */
+  embedded?: boolean;
+}
+
+export default function RentalAnalytics({ embedded = false }: Props) {
   const location = useLocation();
   const navigate = useNavigate();
   const now = new Date();
   const [period, setPeriod] = useState<Period | null>('MoM');
   const [pMonth, setPMonth] = useState(now.getMonth() + 1);
   const [pYear, setPYear] = useState(now.getFullYear());
+  const [embeddedSub, setEmbeddedSub] = useState<SubId>('overview');
 
   const {
     companies, selectedCompanyId, setSelectedCompanyId,
@@ -37,51 +45,89 @@ export default function RentalAnalytics() {
     return getAvailableKeys(selected.fin);
   }, [selected]);
 
-  const activeSub = SUB_PAGES.find(p => location.pathname === p.path)?.path ?? '/rental/analytics';
+  const activeSub: SubId = embedded
+    ? embeddedSub
+    : (SUB_PAGES.find(p => location.pathname === p.path)?.id ?? 'overview');
+
+  function selectSub(id: SubId, path: string) {
+    if (embedded) setEmbeddedSub(id);
+    else navigate(path);
+  }
 
   return (
     <div className="space-y-6">
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <BarChart3 size={28} color="#B8860B" />
-            <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1C1917', margin: 0 }}>Analytics</h1>
+      {!embedded && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <BarChart3 size={28} color="#B8860B" />
+              <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1C1917', margin: 0 }}>Analytics</h1>
+            </div>
+            <p style={{ fontSize: 13, color: '#78716C', marginTop: 6, marginBottom: 0 }}>
+              Power BI-style visual layer — same live KPI data as KPI Dashboard, new presentation only
+            </p>
           </div>
-          <p style={{ fontSize: 13, color: '#78716C', marginTop: 6, marginBottom: 0 }}>
-            Power BI-style visual layer — same live KPI data as KPI Dashboard, new presentation only
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+            <select
+              value={selectedCompanyId ?? ''}
+              onChange={e => setSelectedCompanyId(e.target.value || null)}
+              style={{
+                fontSize: 13, padding: '8px 12px', borderRadius: 8,
+                border: '1px solid #E8DEC8', background: '#FBF6EE', minWidth: 200,
+              }}
+            >
+              {companies.map(c => (
+                <option key={c.id} value={c.id}>{c.company_name}</option>
+              ))}
+            </select>
+            <PeriodToggle
+              period={period}
+              month={pMonth}
+              year={pYear}
+              availableKeys={availableKeys}
+              onChange={(p, m, y) => { setPeriod(p); setPMonth(m); setPYear(y); }}
+            />
+          </div>
+        </div>
+      )}
+
+      {embedded && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <p style={{ fontSize: 13, color: '#78716C', margin: 0 }}>
+            Power BI-style visual layer — same live KPI data as KPI Dashboard
           </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+            <select
+              value={selectedCompanyId ?? ''}
+              onChange={e => setSelectedCompanyId(e.target.value || null)}
+              style={{
+                fontSize: 13, padding: '8px 12px', borderRadius: 8,
+                border: '1px solid #E8DEC8', background: '#FBF6EE', minWidth: 200,
+              }}
+            >
+              {companies.map(c => (
+                <option key={c.id} value={c.id}>{c.company_name}</option>
+              ))}
+            </select>
+            <PeriodToggle
+              period={period}
+              month={pMonth}
+              year={pYear}
+              availableKeys={availableKeys}
+              onChange={(p, m, y) => { setPeriod(p); setPMonth(m); setPYear(y); }}
+            />
+          </div>
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
-          <select
-            value={selectedCompanyId ?? ''}
-            onChange={e => setSelectedCompanyId(e.target.value || null)}
-            style={{
-              fontSize: 13, padding: '8px 12px', borderRadius: 8,
-              border: '1px solid #E8DEC8', background: '#FBF6EE', minWidth: 200,
-            }}
-          >
-            {companies.map(c => (
-              <option key={c.id} value={c.id}>{c.company_name}</option>
-            ))}
-          </select>
-          <PeriodToggle
-            period={period}
-            month={pMonth}
-            year={pYear}
-            availableKeys={availableKeys}
-            onChange={(p, m, y) => { setPeriod(p); setPMonth(m); setPYear(y); }}
-          />
-        </div>
-      </div>
+      )}
 
       <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 6, borderBottom: '1px solid #E8DEC8', paddingBottom: 0 }}>
         {SUB_PAGES.map(sp => {
-          const active = activeSub === sp.path;
+          const active = activeSub === sp.id;
           return (
             <button
-              key={sp.path}
+              key={sp.id}
               type="button"
-              onClick={() => navigate(sp.path)}
+              onClick={() => selectSub(sp.id, sp.path)}
               style={{
                 fontSize: 13, fontWeight: active ? 600 : 500,
                 color: active ? '#92400E' : '#78716C',
@@ -109,19 +155,19 @@ export default function RentalAnalytics() {
         <p style={{ color: '#78716C', fontSize: 14 }}>No rental companies found. Add companies under Rentals → Companies first.</p>
       ) : (
         <>
-          {activeSub === '/rental/analytics' && (
+          {activeSub === 'overview' && (
             <AnalyticsExecutiveOverview selected={selected} ttmTrend={ttmTrend} alerts={alerts} />
           )}
-          {activeSub === '/rental/analytics/profitability' && (
+          {activeSub === 'profitability' && (
             <AnalyticsProfitability selected={selected} />
           )}
-          {activeSub === '/rental/analytics/cash-debt' && (
+          {activeSub === 'cash-debt' && (
             <AnalyticsCashDebt selected={selected} ttmTrend={ttmTrend} />
           )}
-          {activeSub === '/rental/analytics/property' && (
+          {activeSub === 'property' && (
             <AnalyticsPropertyPerformance propertySlices={propertySlices} />
           )}
-          {activeSub === '/rental/analytics/exceptions' && (
+          {activeSub === 'exceptions' && (
             <AnalyticsExceptionView rows={exceptionRows} />
           )}
         </>
