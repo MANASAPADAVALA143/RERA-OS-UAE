@@ -209,9 +209,7 @@ function buildAttentionNow(
   }
 
   const qbCo = qbAging?.by_company.find(c => c.company_id === company_id);
-  const aging31Plus = qbCo
-    ? qbCo.days_1_30 + qbCo.days_31_60 + qbCo.days_61_90 + qbCo.days_91_plus
-    : 0;
+  const aging31Plus = qbCo?.overdue ?? 0;
   if (aging31Plus > 0) {
     attention.push({
       type: 'arrears_aging',

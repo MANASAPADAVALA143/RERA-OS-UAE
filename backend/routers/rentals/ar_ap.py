@@ -916,7 +916,10 @@ def qb_aging_latest(
     for snap in reversed(snapshots):  # oldest first
         snap_rows = db.query(QBArAgingRow).filter(QBArAgingRow.snapshot_id == snap.id).all()
         s = _sum_rows(snap_rows)
-        s["overdue"] = round(s["days_1_30"] + s["days_31_60"] + s["days_61_90"] + s["days_91_plus"], 2)
+        s["overdue"] = round(
+            max(0, s["days_1_30"]) + max(0, s["days_31_60"]) +
+            max(0, s["days_61_90"]) + max(0, s["days_91_plus"]), 2
+        )
         s["month"] = snap.snapshot_month
         s["as_of_date"] = snap.as_of_date.isoformat()
         trend.append(s)

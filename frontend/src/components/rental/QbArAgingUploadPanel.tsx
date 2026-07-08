@@ -91,6 +91,56 @@ export function creditBalanceFromBuckets(
   ) / 100;
 }
 
+/** Zero-floor a single bucket — credits/overpayments excluded from overdue totals. */
+export function flooredBucketValue(v: number): number {
+  return Math.max(0, v);
+}
+
+/** Sum of 1-30 + 31-60 + 61-90 + 91+ buckets, each zero-floored. */
+export function overdue30PlusFromBuckets(
+  t: Pick<QBAgingTotals, typeof BUCKET_KEYS[number]> | undefined | null,
+): number {
+  if (!t) return 0;
+  return (
+    flooredBucketValue(t.days_1_30 ?? 0) +
+    flooredBucketValue(t.days_31_60 ?? 0) +
+    flooredBucketValue(t.days_61_90 ?? 0) +
+    flooredBucketValue(t.days_91_plus ?? 0)
+  );
+}
+
+/** Sum of 61-90 + 91+ buckets, zero-floored. */
+export function overdue60PlusFromBuckets(
+  t: Pick<QBAgingTotals, typeof BUCKET_KEYS[number]> | undefined | null,
+): number {
+  if (!t) return 0;
+  return flooredBucketValue(t.days_61_90 ?? 0) + flooredBucketValue(t.days_91_plus ?? 0);
+}
+
+/** 91+ bucket only, zero-floored. */
+export function overdue90PlusFromBuckets(
+  t: Pick<QBAgingTotals, typeof BUCKET_KEYS[number]> | undefined | null,
+): number {
+  if (!t) return 0;
+  return flooredBucketValue(t.days_91_plus ?? 0);
+}
+
+/** Bucket values for stacked charts — negatives shown as $0. */
+export function flooredBucketsForChart(
+  t: Pick<QBAgingTotals, typeof BUCKET_KEYS[number]> | undefined | null,
+) {
+  if (!t) {
+    return { Current: 0, '1-30': 0, '31-60': 0, '61-90': 0, '91+': 0 };
+  }
+  return {
+    Current: flooredBucketValue(t.current ?? 0),
+    '1-30': flooredBucketValue(t.days_1_30 ?? 0),
+    '31-60': flooredBucketValue(t.days_31_60 ?? 0),
+    '61-90': flooredBucketValue(t.days_61_90 ?? 0),
+    '91+': flooredBucketValue(t.days_91_plus ?? 0),
+  };
+}
+
 /** Weighted DSO from QB aging buckets — credits zero-floored, never negative. */
 export function estimateDsoFromBuckets(
   t: Pick<QBAgingTotals, typeof BUCKET_KEYS[number]> | undefined | null,

@@ -13,6 +13,10 @@ import {
   estimateDsoFromBuckets,
   formatDsoDisplay,
   dsoSubtext,
+  flooredBucketsForChart,
+  overdue30PlusFromBuckets,
+  overdue60PlusFromBuckets,
+  overdue90PlusFromBuckets,
 } from '../components/rental/QbArAgingUploadPanel';
 
 type ArViewTab = 'overview' | 'collection';
@@ -491,14 +495,25 @@ export default function RentalArDashboard() {
     [companies],
   );
 
+  const qbPortfolioOverdue = useMemo(() => {
+    const t = qbAging?.portfolio_totals;
+    if (!t) return null;
+    const credit = t.credit_balance ?? creditBalanceFromBuckets(t);
+    const overdue30 = overdue30PlusFromBuckets(t);
+    const overdue60 = overdue60PlusFromBuckets(t);
+    const overdue90 = overdue90PlusFromBuckets(t);
+    const raw91 = t.days_91_plus ?? 0;
+    return { overdue30, overdue60, overdue90, credit, raw91, chartBuckets: flooredBucketsForChart(t) };
+  }, [qbAging?.portfolio_totals]);
+
   // ── Overdue bucket trend (31-60 / 61-90 / 91+) from QB snapshots ──────────
   const bucketTrend = useMemo(() => {
     if (!qbAging?.trend || qbAging.trend.length < 3) return [];
     return qbAging.trend.map(pt => ({
       month:     pt.month,
-      '31–60':   pt.days_31_60,
-      '61–90':   pt.days_61_90,
-      '91+':     pt.days_91_plus,
+      '31–60':   Math.max(0, pt.days_31_60 ?? 0),
+      '61–90':   Math.max(0, pt.days_61_90 ?? 0),
+      '91+':     Math.max(0, pt.days_91_plus ?? 0),
     }));
   }, [qbAging]);
 
@@ -1308,14 +1323,32 @@ export default function RentalArDashboard() {
         )}
 
         {/* QB KPIs */}
-        {qbAging?.has_data && qbAging.portfolio_totals && (
+        {qbAging?.has_data && qbAging.portfolio_totals && qbPortfolioOverdue && (
           <div style={{ padding: 16 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, marginBottom: 14 }}>
               {[
-                { label: 'Overdue AR (30+)', value: fmt$(qbAging.portfolio_totals.overdue), border: '#B91C1C', sub: 'Excludes current bucket' },
-                { label: '30+ Days Overdue', value: fmt$(qbAging.portfolio_totals.days_1_30 + qbAging.portfolio_totals.days_31_60 + qbAging.portfolio_totals.days_61_90 + qbAging.portfolio_totals.days_91_plus), border: '#F5A623', sub: '1-30 + 31-60 + 61-90 + 91+' },
-                { label: '60+ Days Overdue', value: fmt$(qbAging.portfolio_totals.days_61_90 + qbAging.portfolio_totals.days_91_plus), border: '#E97316', sub: '61-90 + 91+ days' },
-                { label: '90+ Days Overdue', value: fmt$(qbAging.portfolio_totals.days_91_plus), border: '#991B1B', sub: 'Critical — 91+ days' },
+                {
+                  label: 'Overdue AR (30+)',
+                  value: fmt$(qbPortfolioOverdue.overdue30),
+                  border: '#B91C1C',
+                  sub: '1-30 + 31-60 + 61-90 + 91+ · credits zero-floored',
+                },
+                {
+                  label: '60+ Days Overdue',
+                  value: fmt$(qbPortfolioOverdue.overdue60),
+                  border: '#E97316',
+                  sub: '61-90 + 91+ days · credits zero-floored',
+                },
+                {
+                  label: '90+ Days Overdue',
+                  value: fmt$(qbPortfolioOverdue.overdue90),
+                  border: '#991B1B',
+                  sub: qbPortfolioOverdue.overdue90 === 0 && qbPortfolioOverdue.raw91 < 0
+                    ? `No outstanding 91+ AR · ${fmt$(Math.abs(qbPortfolioOverdue.raw91))} in credit`
+                    : qbPortfolioOverdue.overdue90 > 0
+                      ? 'Critical — 91+ days'
+                      : 'No outstanding 91+ AR',
+                },
                 {
                   label: 'Est. Days to Collect',
                   value: formatDsoDisplay(qbDisplayMetrics.dso, qbDisplayMetrics.creditBalance > 0),
@@ -1324,11 +1357,11 @@ export default function RentalArDashboard() {
                     ? `No outstanding AR · ${fmt$(qbDisplayMetrics.creditBalance)} credit excluded`
                     : qbDisplayMetrics.dsoSub || (qbAging.trend_ready ? `${qbAging.snapshot_count} snapshots` : `${qbAging.snapshot_count} of 3 needed for trend`),
                 },
-                ...(qbDisplayMetrics.creditBalance > 0 ? [{
+                ...(qbPortfolioOverdue.credit > 0 ? [{
                   label: 'Credit Balance',
-                  value: fmt$(qbDisplayMetrics.creditBalance),
+                  value: fmt$(qbPortfolioOverdue.credit),
                   border: '#7C3AED',
-                  sub: 'Overpayments · excluded from DSO',
+                  sub: 'Overpayments · excluded from overdue & DSO',
                 }] : []),
               ].map((t, i) => (
                 <div key={i} style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, padding: '12px 14px', borderLeft: `3px solid ${t.border}` }}>
@@ -1348,11 +1381,7 @@ export default function RentalArDashboard() {
                   <BarChart
                     data={[{
                       name: 'Portfolio',
-                      Current: qbAging.portfolio_totals.current,
-                      '1-30': qbAging.portfolio_totals.days_1_30,
-                      '31-60': qbAging.portfolio_totals.days_31_60,
-                      '61-90': qbAging.portfolio_totals.days_61_90,
-                      '91+': qbAging.portfolio_totals.days_91_plus,
+                      ...qbPortfolioOverdue.chartBuckets,
                     }]}
                     layout="vertical" margin={{ left: 10, right: 20, top: 5, bottom: 5 }}
                   >
@@ -1414,11 +1443,7 @@ export default function RentalArDashboard() {
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={qbAging.trend.map(t => ({
                     month: t.month.slice(0, 7),
-                    Current: t.current,
-                    '1-30': t.days_1_30,
-                    '31-60': t.days_31_60,
-                    '61-90': t.days_61_90,
-                    '91+': t.days_91_plus,
+                    ...flooredBucketsForChart(t),
                   }))} margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
                     <XAxis dataKey="month" tick={{ fontSize: 10 }} />
