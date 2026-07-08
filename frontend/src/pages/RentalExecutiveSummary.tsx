@@ -3,6 +3,7 @@ import { Download } from 'lucide-react';
 import PeriodToggle from '../components/shared/PeriodToggle';
 import ExecSummaryExportModal from '../components/rental/ExecSummaryExportModal';
 import ExecutiveSummarySixBands from '../components/rental/ExecutiveSummarySixBands';
+import OwnershipAnalyticsPanel from '../components/rental/OwnershipAnalyticsPanel';
 import {
   IncomeStatementTab,
   BalanceSheetTab,
@@ -25,6 +26,7 @@ const MNAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 
 const TABS = [
   { id: 'overview', label: 'Executive Overview' },
+  { id: 'analytics', label: 'Ownership Analytics' },
   { id: 'income', label: 'Income Statement' },
   { id: 'balance', label: 'Balance Sheet' },
   { id: 'cashflow', label: 'Cash Flow' },
@@ -218,7 +220,7 @@ export default function RentalExecutiveSummary() {
         <p style={{ fontSize: 13, color: P.muted, marginBottom: 16 }}>Loading portfolio, financials, and rent receivable data…</p>
       )}
 
-      {activeTab === 'overview' && (
+      {activeTab === 'overview' && !loading && (
         <ExecutiveSummarySixBands
           overview={overview}
           kpiView={kpiView ? { k: kpiView.k, label: kpiView.label } : null}
@@ -246,6 +248,10 @@ export default function RentalExecutiveSummary() {
           latestFinMonth={latestFinMonth}
           registryOps={registryOps}
         />
+      )}
+
+      {activeTab === 'analytics' && (
+        <OwnershipAnalyticsPanel entityCompanyId={entityId} scopeLabel={entityLabel} />
       )}
 
       {activeTab === 'income' && (
