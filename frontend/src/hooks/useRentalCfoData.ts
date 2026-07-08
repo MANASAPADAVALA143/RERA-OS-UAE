@@ -87,6 +87,8 @@ export interface PortfolioSummary {
   total_expense_this_month: number;
   vacancy_loss: number;
   arrears_total: number;
+  partner_share_payable?: number;
+  has_partner_data?: boolean;
   by_company: CompanyRow[];
 }
 

@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import {
   Building2, Home, Landmark, Banknote, TrendingUp, DollarSign,
-  Percent, Wallet, Receipt, type LucideIcon,
+  Percent, Wallet, Receipt, Users, AlertCircle, type LucideIcon,
 } from 'lucide-react';
 import type { Period } from '../../utils/periodWindow';
 import { getPeriodKeys, getTrailingMonthKeys } from '../../utils/periodWindow';
@@ -58,7 +58,7 @@ function BandShell({ title, subtitle, children, gap }: {
   title: string; subtitle?: string; children: React.ReactNode; gap?: string;
 }) {
   return (
-    <section style={{ display: 'flex', flexDirection: 'column', gap: gap ?? 20 }}>
+    <section style={{ display: 'flex', flexDirection: 'column', gap: gap ?? 20, width: '100%' }}>
       <div style={{ borderBottom: `1px solid ${P.border}`, paddingBottom: 10 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, color: P.text, margin: 0 }}>{title}</h2>
         {subtitle && <p style={{ fontSize: 13, color: P.muted, margin: '4px 0 0' }}>{subtitle}</p>}
@@ -115,9 +115,18 @@ function DataGap({ message }: { message: string }) {
   );
 }
 
-function KpiGrid({ children }: { children: React.ReactNode }) {
+function KpiGrid({ children, columns }: { children: React.ReactNode; columns?: number }) {
+  const n = columns ?? Math.max(1, Array.isArray(children) ? children.length : 1);
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
+    <div
+      className={`exec-kpi-grid exec-cols-${n}`}
+      style={{
+        display: 'grid',
+        gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))`,
+        gap: 14,
+        width: '100%',
+      }}
+    >
       {children}
     </div>
   );
@@ -268,10 +277,16 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
   );
   const debtComposition = useMemo(() => buildDebtComposition(loans), [loans]);
 
-  const ownedUnits = registryOps.occupiedUnits || portfolio?.occupied_units || 0;
-  const vacantUnits = registryOps.vacantUnits || portfolio?.vacant_units || 0;
-  const totalUnits = registryOps.totalUnits || portfolio?.total_units || 0;
-  const occupancyPct = overview.occupancyPct;
+  const useRegistryUnits = registryOps.totalUnits > 0;
+  const totalUnits = useRegistryUnits ? registryOps.totalUnits : (portfolio?.total_units ?? 0);
+  const ownedUnits = useRegistryUnits
+    ? registryOps.occupiedUnits
+    : (portfolio?.occupied_units ?? 0);
+  const vacantUnits = useRegistryUnits
+    ? registryOps.vacantUnits
+    : (portfolio?.vacant_units ?? Math.max(0, totalUnits - ownedUnits));
+  const occupancyPct = overview.occupancyPct
+    ?? (totalUnits > 0 ? (ownedUnits / totalUnits) * 100 : null);
   const unitDonut = [
     { name: 'Occupied', value: ownedUnits },
     { name: 'Vacant', value: vacantUnits },
@@ -355,20 +370,69 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
       : UPLOAD_HINTS.financials)
     : null;
 
+  const arrearsTotal = registryOps.arrears
+    ?? portfolio?.arrears_total
+    ?? overview.arOutstanding
+    ?? null;
+
+  const partnerSharePayable = portfolio?.partner_share_payable ?? null;
+  const hasPartnerData = portfolio?.has_partner_data !== false;
+
+  const ownershipSummary = useMemo(() => {
+    if (!ownership.length) return { partners: 0, equity: 0 };
+    const partners = ownership.length;
+    const equity = ownership.reduce((sum, p) => sum + p.holdings.reduce((hs, h) => {
+      const v = h.book_value ?? h.cost_basis ?? h.capital_contributed ?? 0;
+      return hs + (v ?? 0);
+    }, 0), 0);
+    return { partners, equity };
+  }, [ownership]);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 48 }}>
-      {/* BAND 1 */}
-      <BandShell title="Band 1 — Portfolio Snapshot" subtitle="Company Registry · Loan Tracker · Ownership">
-        <KpiGrid>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 40, width: '100%' }}>
+      <style>{`
+        .exec-kpi-grid { width: 100%; }
+        @media (max-width: 1200px) {
+          .exec-kpi-grid.exec-cols-6 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+          .exec-kpi-grid.exec-cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+        }
+        @media (max-width: 640px) {
+          .exec-kpi-grid.exec-cols-6,
+          .exec-kpi-grid.exec-cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+        }
+      `}</style>
+      {/* Portfolio Snapshot */}
+      <BandShell title="Portfolio Snapshot" subtitle="Company Registry · Loan Tracker · Ownership">
+        <KpiGrid columns={6}>
           <KpiTile icon={Building2} label="Total Units" value={totalUnits > 0 ? String(totalUnits) : 'Not available'}
             sub={totalUnits > 0 ? `${vacantUnits} vacant` : UPLOAD_HINTS.registry} />
-          <KpiTile icon={Home} label="Occupied Units" value={portfolio ? String(portfolio.occupied_units) : 'Not available'}
+          <KpiTile icon={Home} label="Occupied Units"
+            value={ownedUnits > 0 ? String(ownedUnits) : 'Not available'}
             sub={occupancyPct != null ? `${fmtPct(occupancyPct)} occupancy` : undefined} color={P.green} />
           <KpiTile icon={Landmark} label="Portfolio Market Value"
             value={marketValue > 0 ? fmtMoney(marketValue) : 'Not available'}
             sub={marketValue > 0 ? marketValueResult.label : UPLOAD_HINTS.loans} />
           <KpiTile icon={Banknote} label="Total Loan Outstanding" value={fmtMetricMoney(totalDebt)}
             sub={loans.length ? `${loans.length} loans` : UPLOAD_HINTS.loans} />
+          <KpiTile icon={AlertCircle} label="Total Arrears"
+            value={arrearsTotal != null ? fmtMoney(arrearsTotal) : 'Not available'}
+            sub={arrearsTotal != null && arrearsTotal > 5000 ? 'Above $5k threshold' : 'Rent Receivable · Registry'}
+            color={arrearsTotal != null && arrearsTotal > 5000 ? P.red : undefined} />
+          <KpiTile icon={Users} label={hasPartnerData && partnerSharePayable != null ? 'Partner Share Payable' : 'Active Partners'}
+            value={
+              hasPartnerData && partnerSharePayable != null
+                ? fmtMoney(partnerSharePayable)
+                : ownershipSummary.partners > 0
+                  ? String(ownershipSummary.partners)
+                  : 'Not available'
+            }
+            sub={
+              hasPartnerData && partnerSharePayable != null
+                ? 'Limited / silent partner NOI share'
+                : ownershipSummary.equity > 0
+                  ? `${fmtMoney(ownershipSummary.equity)} total equity`
+                  : hasOwnership ? 'From Ownership' : UPLOAD_HINTS.ownership
+            } />
         </KpiGrid>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
           {unitDonut.length ? (
@@ -401,8 +465,8 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
         )}
       </BandShell>
 
-      {/* BAND 2 */}
-      <BandShell title="Band 2 — Rental Performance" subtitle={
+      {/* Rental Performance */}
+      <BandShell title="Rental Performance" subtitle={
         overview.registryMonth
           ? `Company Registry · ${overview.registryMonth}`
           : 'Company Registry'
@@ -411,7 +475,7 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
           <DataGap message={`${UPLOAD_HINTS.registry} for ${periodLabel}.`} />
         ) : (
           <>
-            <KpiGrid>
+            <KpiGrid columns={6}>
               <KpiTile icon={Percent} label="Physical Occupancy" value={fmtMetricPct(overview.occupancyPct)} />
               <KpiTile icon={TrendingUp} label="GPR" value={fmtMetricMoney(overview.grossPotentialRent)} />
               <KpiTile icon={DollarSign} label="Collected" value={fmtMetricMoney(overview.totalCollected)} color={P.green} />
@@ -437,13 +501,13 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
         )}
       </BandShell>
 
-      {/* BAND 3 */}
-      <BandShell title="Band 3 — Finance & Profitability" subtitle="Financials P&L · Balance Sheet · AR/AP Aging">
+      {/* Finance & Profitability */}
+      <BandShell title="Finance & Profitability" subtitle="Financials P&L · Balance Sheet · AR/AP Aging">
         {finGap ? (
           <DataGap message={latestFinMonth ? `${finGap} Select ${latestFinMonth} in the period picker.` : finGap} />
         ) : (
           <>
-            <KpiGrid>
+            <KpiGrid columns={6}>
               <KpiTile icon={DollarSign} label="NOI" value={fmtMetricMoney(overview.noi)} color={P.green} />
               <KpiTile icon={Percent} label="NOI Margin"
                 value={k && k.totalRevenue > 0 ? fmtPct((k.noi / k.totalRevenue) * 100) : 'Not available'} />
@@ -516,13 +580,13 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
         )}
       </BandShell>
 
-      {/* BAND 4 */}
-      <BandShell title="Band 4 — Loan & Risk" subtitle="Loan Tracker · Financial Ratios">
+      {/* Loan & Risk */}
+      <BandShell title="Loan & Risk" subtitle="Loan Tracker · Financial Ratios">
         {loans.length === 0 ? (
           <DataGap message={UPLOAD_HINTS.loans} />
         ) : (
           <>
-            <KpiGrid>
+            <KpiGrid columns={4}>
               {loanSchedule.summary.slice(0, 4).map(item => (
                 <KpiTile key={item.label} label={item.label}
                   value={item.value === 'Data not available' ? 'Not available' : item.value}
@@ -566,8 +630,8 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
         )}
       </BandShell>
 
-      {/* BAND 5 */}
-      <BandShell title="Band 5 — Per-Ownership Profitability" subtitle="Ownership · Financials · Company Registry">
+      {/* Ownership & Profitability */}
+      <BandShell title="Ownership & Profitability" subtitle="Ownership · Financials · Company Registry">
         {!hasOwnership ? (
           <DataGap message={UPLOAD_HINTS.ownership} />
         ) : (

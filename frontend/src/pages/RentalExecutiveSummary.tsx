@@ -130,7 +130,7 @@ export default function RentalExecutiveSummary() {
   const loading = cfoLoading || finLoading || arLoading;
 
   return (
-    <div style={{ background: P.pageBg, minHeight: '100vh' }}>
+    <div style={{ background: P.pageBg, minHeight: '100vh', width: '100%', maxWidth: '100%' }}>
       <style>{`@media print { button { display: none !important; } }`}</style>
 
       {showExportModal && (
