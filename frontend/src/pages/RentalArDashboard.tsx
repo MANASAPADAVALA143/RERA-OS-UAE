@@ -6,6 +6,8 @@ import {
 } from 'recharts';
 import api from '../services/api';
 import { ParchmentKpiTile } from '../components/ui/ParchmentKpiTile';
+import PeriodToggle from '../components/shared/PeriodToggle';
+import { type Period, getPeriodKeys, periodChipText } from '../utils/periodWindow';
 import {
   creditBalanceFromBuckets,
   estimateDsoFromBuckets,
@@ -115,6 +117,21 @@ const fmtK  = (v: number) => `$${(Math.abs(v) / 1000).toFixed(0)}K`;
 const pct   = (v: number) => `${Math.min(v, 999).toFixed(1)}%`;
 const short = (m: string) => m.replace(/-\d{4}$/, '');
 
+const MNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+/** Rent Receivable API uses "Jan-2026"; PeriodToggle uses "Jan 2026". */
+function arMonthToKey(m: string): string {
+  return m.includes('-') ? m.replace('-', ' ') : m;
+}
+
+function monthPartsFromAr(m: string): { month: number; year: number } | null {
+  const [mon, yr] = m.split(/[\s-]/);
+  const mi = MNAMES.indexOf(mon);
+  const year = parseInt(yr, 10);
+  if (mi < 0 || !year) return null;
+  return { month: mi + 1, year };
+}
+
 const STATUS_COLORS = ['#166534','#F2C94C','#F5A623','#B91C1C','#2F80ED','#8B5CF6','#EC4899','#06B6D4','#D4AF37'];
 
 function getStatus(rate: number, collected: number): { label: string; bg: string; color: string } {
@@ -161,8 +178,11 @@ export default function RentalArDashboard() {
   const [rawData,  setRawData]  = useState<ArSummaryResponse | null>(null);
   const [loading,  setLoading]  = useState(true);
 
-  // filters — month triggers API refetch, company is client-side only
-  const [selMonth,  setSelMonth]  = useState('');   // '' = All Months
+  // filters — period is client-side; company is client-side only
+  const [period, setPeriod] = useState<Period | null>('MoM');
+  const [pMonth, setPMonth] = useState(() => new Date().getMonth() + 1);
+  const [pYear, setPYear] = useState(() => new Date().getFullYear());
+  const periodInit = useRef(false);
   const [selCoId,   setSelCoId]   = useState('');   // '' = All Companies
   const [statusFlt, setStatusFlt] = useState('All');
   const [showUnmatched, setShowUnmatched] = useState(false);
@@ -268,30 +288,93 @@ export default function RentalArDashboard() {
     } finally { setQbConfirming(false); }
   };
 
-  // Fetch when month changes (company filter is client-side)
+  // Fetch full AR summary once — period/company filters are client-side
   useEffect(() => {
     setLoading(true);
-    const params = selMonth ? `?month=${selMonth}` : '';
-    api.get<ArSummaryResponse>(`/api/rentals/ar-summary${params}`)
+    api.get<ArSummaryResponse>('/api/rentals/ar-summary')
       .then(r => setRawData(r.data))
       .catch(() => setRawData(null))
       .finally(() => setLoading(false));
-  }, [selMonth]);
+  }, []);
 
   // All companies always available for dropdown (from unfiltered response)
   const allCompanies = rawData?.companies ?? [];
   const availMonths  = rawData?.available_months ?? [];
 
+  const availableKeys = useMemo(
+    () => availMonths.map(arMonthToKey),
+    [availMonths],
+  );
+
+  useEffect(() => {
+    if (periodInit.current || availMonths.length === 0) return;
+    const last = availMonths[availMonths.length - 1];
+    const parts = monthPartsFromAr(last);
+    if (parts) {
+      setPMonth(parts.month);
+      setPYear(parts.year);
+      periodInit.current = true;
+    }
+  }, [availMonths]);
+
+  const periodArMonths = useMemo(() => {
+    if (!period) return availMonths;
+    const keys = new Set(getPeriodKeys(period, pMonth, pYear));
+    return availMonths.filter(m => keys.has(arMonthToKey(m)));
+  }, [availMonths, period, pMonth, pYear]);
+
+  const periodLabel = period
+    ? periodChipText(period, pMonth, pYear)
+    : 'Annual view · latest month per company';
+
+  const focusArMonth = periodArMonths.length
+    ? periodArMonths[periodArMonths.length - 1]
+    : (availMonths[availMonths.length - 1] ?? null);
+
   // ── Client-side company filter ────────────────────────────────────────────
-  const companies = useMemo(
+  const coFiltered = useMemo(
     () => selCoId ? allCompanies.filter(c => c.company_id === selCoId) : allCompanies,
     [allCompanies, selCoId],
   );
 
+  // ── Apply period window to company metrics ────────────────────────────────
+  const companies = useMemo(() => {
+    return coFiltered.map(co => {
+      if (!period || periodArMonths.length === 0) return co;
+
+      const rows = co.monthly.filter(m => periodArMonths.includes(m.month));
+      if (rows.length === 0) {
+        return {
+          ...co,
+          latest_collected: 0,
+          latest_outstanding: 0,
+          latest_rate: 0,
+          latest_month: focusArMonth,
+        };
+      }
+
+      const billed = rows.reduce((s, r) => s + r.billed, 0);
+      const collected = rows.reduce((s, r) => s + r.collected, 0);
+      const outstanding = Math.max(0, billed - collected);
+      const rate = billed > 0 ? (collected / billed) * 100 : 0;
+
+      return {
+        ...co,
+        monthly: rows,
+        latest_collected: collected,
+        latest_outstanding: outstanding,
+        latest_rate: rate,
+        latest_month: rows[rows.length - 1].month,
+      };
+    });
+  }, [coFiltered, period, periodArMonths, focusArMonth]);
+
   // ── KPI aggregates from filtered companies ────────────────────────────────
   const port = useMemo(() => {
     if (!companies.length) return null;
-    const totalBilled    = companies.reduce((s, c) => s + c.billed_per_month, 0);
+    const totalBilled = period && periodArMonths.length
+      ? companies.reduce((s, c) => s + c.monthly.reduce((ss, m) => ss + m.billed, 0), 0)
+      : companies.reduce((s, c) => s + c.billed_per_month, 0);
     const totalCollected = companies.reduce((s, c) => s + c.latest_collected, 0);
     const totalOutstanding = Math.max(0, totalBilled - totalCollected);
     const rate = totalBilled > 0 ? totalCollected / totalBilled * 100 : 0;
@@ -299,13 +382,15 @@ export default function RentalArDashboard() {
     const occupied = companies.reduce((s, c) => s + c.occupied_units, 0);
     const total    = companies.reduce((s, c) => s + c.total_units, 0);
     return { totalBilled, totalCollected, totalOutstanding, rate, vacLoss, occupied, total };
-  }, [companies]);
+  }, [companies, period, periodArMonths]);
 
   // ── Trend — month-wise aggregated from filtered companies ─────────────────
   const trendData = useMemo(() => {
     const map = new Map<string, { billed: number; collected: number; byCompany: { name: string; collected: number }[] }>();
+    const monthFilter = period && periodArMonths.length > 0 ? new Set(periodArMonths) : null;
     for (const co of companies) {
       for (const m of co.monthly) {
+        if (monthFilter && !monthFilter.has(m.month)) continue;
         const existing = map.get(m.month);
         if (!existing) {
           map.set(m.month, { billed: 0, collected: 0, byCompany: [] });
@@ -316,7 +401,6 @@ export default function RentalArDashboard() {
         if (m.collected > 0) e.byCompany.push({ name: co.company_name, collected: m.collected });
       }
     }
-    const MNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const sorted = [...map.entries()].sort(([a],[b]) => {
       const [am, ay] = a.split('-'); const [bm, by] = b.split('-');
       return (parseInt(ay)-parseInt(by)) || (MNAMES.indexOf(am)-MNAMES.indexOf(bm));
@@ -325,11 +409,10 @@ export default function RentalArDashboard() {
       month: short(m), full: m,
       billed: v.billed, collected: v.collected,
       byCompany: v.byCompany,
-      // stacked area series: transparent base up to collected, red fill for the gap
       collectedBase: v.collected,
       gapFill: Math.max(0, v.billed - v.collected),
     }));
-  }, [companies]);
+  }, [companies, period, periodArMonths]);
 
   // ── Outstanding AR by company ─────────────────────────────────────────────
   const outstandingData = useMemo(() =>
@@ -349,16 +432,20 @@ export default function RentalArDashboard() {
     }> = [];
 
     for (const co of companies) {
-      if (co.monthly.length === 0) {
+      const monthsToShow = period && periodArMonths.length > 0
+        ? co.monthly.filter(m => periodArMonths.includes(m.month))
+        : co.monthly;
+
+      if (monthsToShow.length === 0) {
         rows.push({
-          company_name: co.company_name, month: selMonth || '—',
+          company_name: co.company_name, month: focusArMonth || '—',
           occupied: co.occupied_units, total: co.total_units,
           billed: co.billed_per_month, collected: 0,
           outstanding: co.billed_per_month, rate: 0,
           data_source: 'none', has_data: false,
         });
       } else {
-        for (const m of co.monthly) {
+        for (const m of monthsToShow) {
           rows.push({
             company_name: co.company_name, month: m.month,
             occupied: co.occupied_units, total: co.total_units,
@@ -370,7 +457,7 @@ export default function RentalArDashboard() {
       }
     }
     return rows;
-  }, [companies, selMonth]);
+  }, [companies, periodArMonths, focusArMonth, period]);
 
   const filteredRows = useMemo(() => {
     return detailRows.filter(r => {
@@ -449,9 +536,13 @@ export default function RentalArDashboard() {
   }, [companies]);
 
   const heatmapData = useMemo(() => {
-    const MNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const monthSet = new Set<string>();
-    for (const co of companies) for (const m of co.monthly) monthSet.add(m.month);
+    const monthFilter = period && periodArMonths.length > 0 ? new Set(periodArMonths) : null;
+    for (const co of companies) {
+      for (const m of co.monthly) {
+        if (!monthFilter || monthFilter.has(m.month)) monthSet.add(m.month);
+      }
+    }
     const months = [...monthSet].sort((a, b) => {
       const [am, ay] = a.split('-'); const [bm, by] = b.split('-');
       return (parseInt(ay) - parseInt(by)) || (MNAMES.indexOf(am) - MNAMES.indexOf(bm));
@@ -464,7 +555,7 @@ export default function RentalArDashboard() {
       }),
     }));
     return { months, rows };
-  }, [companies]);
+  }, [companies, period, periodArMonths]);
 
   const payDistribution = useMemo(() => {
     if (!companies.length) return [];
@@ -507,7 +598,7 @@ export default function RentalArDashboard() {
       accent: false, warn: false,
     },
     {
-      label: selMonth ? `Collected · ${selMonth}` : 'Collected (Latest Mo)',
+      label: period ? `Collected · ${periodLabel}` : 'Collected (Latest Mo)',
       value: fmt$(port.totalCollected),
       sub: `${pct(port.rate)} collection rate`,
       accent: true, warn: false,
@@ -627,13 +718,7 @@ export default function RentalArDashboard() {
       <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: '#5C5043' }}>Filter:</span>
 
-        {/* Month — triggers API refetch */}
-        <select value={selMonth} onChange={e => { setSelMonth(e.target.value); setSelCoId(''); }} style={SEL}>
-          <option value="">All Months</option>
-          {availMonths.map(m => <option key={m} value={m}>{m}</option>)}
-        </select>
-
-        {/* Company — client-side only, never triggers refetch */}
+        {/* Company — client-side only */}
         <select value={selCoId} onChange={e => setSelCoId(e.target.value)} style={SEL}>
           <option value="">All Companies</option>
           {allCompanies.map(c => (
@@ -641,13 +726,6 @@ export default function RentalArDashboard() {
           ))}
         </select>
 
-        {/* Active chips */}
-        {selMonth && (
-          <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 20, background: '#EFF6FF', color: '#1E40AF', border: '1px solid #BFDBFE', display: 'flex', alignItems: 'center', gap: 4 }}>
-            📅 {selMonth}
-            <button onClick={() => setSelMonth('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1E40AF', fontSize: 11, padding: 0, lineHeight: 1 }}>×</button>
-          </span>
-        )}
         {selCoId && (
           <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 20, background: '#EFF6FF', color: '#1E40AF', border: '1px solid #BFDBFE', display: 'flex', alignItems: 'center', gap: 4 }}>
             🏢 {selCoName}
@@ -655,7 +733,17 @@ export default function RentalArDashboard() {
           </span>
         )}
 
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#9CA3AF' }}>
+        <div style={{ marginLeft: 'auto' }}>
+          <PeriodToggle
+            period={period}
+            month={pMonth}
+            year={pYear}
+            availableKeys={availableKeys}
+            onChange={(p, m, y) => { setPeriod(p); setPMonth(m); setPYear(y); setChartMonth(''); }}
+          />
+        </div>
+
+        <span style={{ fontSize: 11, color: '#9CA3AF', width: '100%' }}>
           {companies.length} / {allCompanies.length} companies · {port?.total ?? 0} units · {port?.occupied ?? 0} occupied
           {selCoId && <span style={{ color: '#D4AF37', marginLeft: 6 }}>← Company filtered (client-side)</span>}
         </span>
@@ -806,12 +894,11 @@ export default function RentalArDashboard() {
           <div style={CARD}>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>Collection rate by company</div>
             <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 14 }}>
-              {selMonth || 'Latest available month'} · collected vs billed from registry
+              {periodLabel} · collected vs billed from registry
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', maxHeight: 240 }}>
               {allCompanies.map((co, idx) => {
-                // Use filtered company data when company is selected, else original
-                const src = selCoId ? companies.find(c => c.company_id === co.company_id) : co;
+                const src = companies.find(c => c.company_id === co.company_id) ?? co;
                 const rate = src?.latest_rate ?? 0;
                 const coll = src?.latest_collected ?? 0;
                 const bill = src?.billed_per_month ?? 0;
@@ -892,7 +979,7 @@ export default function RentalArDashboard() {
         <div style={CARD}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>Outstanding AR by company</div>
           <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 12 }}>
-            Billed (registry) − Collected · {selMonth || 'latest month'}
+            Billed (registry) − Collected · {period ? periodLabel : 'latest month'}
           </div>
           <ResponsiveContainer width="100%" height={Math.max(120, outstandingData.length * 34)}>
             <BarChart data={outstandingData} layout="vertical" margin={{ top: 0, right: 90, bottom: 0, left: 120 }}>
@@ -996,7 +1083,7 @@ export default function RentalArDashboard() {
             <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>Pay Distribution — Current Period</div>
               <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 14 }}>
-                {selMonth || 'Latest month'} · {companies.filter(c => c.billed_per_month > 0).length} companies with billing data
+                {periodLabel} · {companies.filter(c => c.billed_per_month > 0).length} companies with billing data
               </div>
               <ResponsiveContainer width="100%" height={180}>
                 <BarChart data={payDistribution} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
@@ -1522,7 +1609,7 @@ export default function RentalArDashboard() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
             <div>
               <div style={{ fontSize: 16, fontWeight: 600, color: '#1C1917' }}>
-                Collection detail — {selCoName || 'All Companies'} · {chartMonth || selMonth || 'All Months'}
+                Collection detail — {selCoName || 'All Companies'} · {chartMonth || (period ? periodLabel : 'All Months')}
               </div>
               <div style={{ fontSize: 13, color: '#A8A29E', marginTop: 2 }}>
                 Every company × every month · billed from registry · collected from Rent Receivable or P&L

@@ -10,12 +10,12 @@ import { ParchmentKpiTile } from '../components/ui/ParchmentKpiTile';
 import { LoadingSkeleton } from '../components/ui/Table';
 import { fmtUSD } from '../components/ProtectedRoute';
 import PeriodToggle from '../components/shared/PeriodToggle';
-import { type Period, getPeriodKeys, trailingMonthsWithData, monthKeyFromParts } from '../utils/periodWindow';
+import { type Period, getPeriodKeys, getPeriodFilterKeys, trailingMonthsWithData, monthKeyFromParts, periodChipText } from '../utils/periodWindow';
 import {
   type FinItem,
   ONE_TIME_CAT, ONE_TIME_RE, EXPENSE_CATS,
   SKIP_RE, REVENUE_LINE_RE, REVENUE_SKIP_RE,
-  classifyLabel, flattenItems,
+  classifyLabel, flattenItems, buildMonthlyExpense, normalizeMonthKey,
   MNAMES, monthSortKey, allMonthKeys,
   EXP_PALETTE, catColor,
   prevMonthKey, safeMomPct, safeRatioPct, parseMonthKey,
@@ -81,13 +81,13 @@ function buildExpRows(companyName: string, pl: FinItem[]): ExpRow[] {
   const rows: ExpRow[] = [];
   const dbg: Record<string,number> = {};
   for (const item of flattenItems(pl)) {
-    if (item.children?.length) continue;
+    if (item.children?.length || item.isSectionHeader || item.isTotal) continue;
     const cat = classifyLabel(item.label);
     if (!cat) continue;
     for (const [month, val] of Object.entries(item.monthlyValues ?? {})) {
       const amount = Math.abs(val);
       if (amount > 0) {
-        rows.push({ company: companyName, category: cat, month, amount });
+        rows.push({ company: companyName, category: cat, month: normalizeMonthKey(month), amount });
         if (DEBUG_EXPENSES) dbg[`${cat} | ${item.label}`] = (dbg[`${cat} | ${item.label}`] ?? 0) + amount;
       }
     }
@@ -243,7 +243,20 @@ export default function RentalExpenses() {
     [expenseMatrix, filterCompany, nameById],
   );
 
-  const useMatrixSource = matrixRows.length > 0;
+  const plTotalsByMonth = useMemo(() => {
+    const ids = filterCompany ? [filterCompany] : Object.keys(allPl);
+    const byMonth: Record<string, number> = {};
+    for (const id of ids) {
+      for (const [m, v] of Object.entries(buildMonthlyExpense(allPl[id] ?? []))) {
+        byMonth[m] = (byMonth[m] ?? 0) + v;
+      }
+    }
+    return byMonth;
+  }, [allPl, filterCompany]);
+
+  const hasPlTotals = Object.keys(plTotalsByMonth).length > 0;
+  // Prefer P&L "Total for Expenses" row (matches Financials); matrix is fallback only
+  const useMatrixSource = matrixRows.length > 0 && !hasPlTotals;
 
   const allRows = useMatrixSource ? matrixRows : plRows;
 
@@ -259,7 +272,7 @@ export default function RentalExpenses() {
 
   const filteredRows = useMemo<ExpRow[]>(() => {
     if (!period) return allRows;
-    const keys = new Set(getPeriodKeys(period, pMonth, pYear));
+    const keys = new Set(getPeriodFilterKeys(period, pMonth, pYear));
     return allRows.filter(r => keys.has(r.month));
   }, [allRows, period, pMonth, pYear]);
 
@@ -268,7 +281,7 @@ export default function RentalExpenses() {
   const filteredOperatingRows = useMemo(() => filteredRows.filter(r => r.category !== ONE_TIME_CAT), [filteredRows]);
   const plFilteredOperatingRows = useMemo(() => {
     if (!period) return plOperatingRows;
-    const keys = new Set(getPeriodKeys(period, pMonth, pYear));
+    const keys = new Set(getPeriodFilterKeys(period, pMonth, pYear));
     return plOperatingRows.filter(r => keys.has(r.month));
   }, [plOperatingRows, period, pMonth, pYear]);
 
@@ -294,7 +307,7 @@ export default function RentalExpenses() {
 
   const filteredRevRows = useMemo(() => {
     if (!period) return allRevRows;
-    const keys = new Set(getPeriodKeys(period, pMonth, pYear));
+    const keys = new Set(getPeriodFilterKeys(period, pMonth, pYear));
     return allRevRows.filter(r => keys.has(r.month));
   }, [allRevRows, period, pMonth, pYear]);
 
@@ -308,7 +321,14 @@ export default function RentalExpenses() {
     // If the calendar month exists in data use it; otherwise fall back to latest available
     return months.includes(calendarKey) ? calendarKey : (months[months.length - 1] ?? calendarKey);
   }, [operatingRows]);
-  const periodLabel = period ?? (currentMonthKey === `${MNAMES[new Date().getMonth()]} ${new Date().getFullYear()}` ? 'This Month' : `Latest · ${currentMonthKey}`);
+  const periodLabel = useMemo(() => {
+    if (!period) {
+      const calendarKey = `${MNAMES[new Date().getMonth()]} ${new Date().getFullYear()}`;
+      return currentMonthKey === calendarKey ? 'This Month' : `Latest · ${currentMonthKey}`;
+    }
+    if (period === 'MoM') return monthKeyFromParts(pMonth, pYear);
+    return periodChipText(period, pMonth, pYear);
+  }, [period, pMonth, pYear, currentMonthKey]);
 
   // Trailing-6-month window anchored to selected period month (or latest data month)
   const trendEndAnchor = useMemo(() => {
@@ -331,14 +351,27 @@ export default function RentalExpenses() {
     return trailingMonthsWithData(trendEndAnchor.month, trendEndAnchor.year, 6, dataMonths);
   }, [plOperatingRows, trendEndAnchor]);
 
-  const periodTotal = useMemo(() =>
-    period
-      ? catFilteredRows.reduce((s, r) => s + r.amount, 0)
-      : operatingRows.filter(r => r.month === currentMonthKey && (!filterCat || r.category === filterCat)).reduce((s, r) => s + r.amount, 0),
-  [period, catFilteredRows, operatingRows, currentMonthKey, filterCat]);
+  const periodTotal = useMemo(() => {
+    if (hasPlTotals && !filterCat) {
+      if (period) {
+        const keys = getPeriodFilterKeys(period, pMonth, pYear);
+        return keys.reduce((s, k) => s + (plTotalsByMonth[k] ?? 0), 0);
+      }
+      return plTotalsByMonth[currentMonthKey] ?? 0;
+    }
+    if (period) return catFilteredRows.reduce((s, r) => s + r.amount, 0);
+    return operatingRows
+      .filter(r => r.month === currentMonthKey && (!filterCat || r.category === filterCat))
+      .reduce((s, r) => s + r.amount, 0);
+  }, [hasPlTotals, filterCat, period, pMonth, pYear, plTotalsByMonth, currentMonthKey, catFilteredRows, operatingRows]);
 
   // ── KPI 2: all time ──────────────────────────────────────────────────────────
-  const totalAllTime = useMemo(() => operatingRows.reduce((s, r) => s + r.amount, 0), [operatingRows]);
+  const totalAllTime = useMemo(() => {
+    if (hasPlTotals && !filterCat) {
+      return Object.values(plTotalsByMonth).reduce((s, v) => s + v, 0);
+    }
+    return operatingRows.reduce((s, r) => s + r.amount, 0);
+  }, [hasPlTotals, filterCat, plTotalsByMonth, operatingRows]);
 
   // ── KPI 3: top category ──────────────────────────────────────────────────────
   const topCategory = useMemo(() => {
@@ -358,21 +391,21 @@ export default function RentalExpenses() {
 
   // ── KPI 4: avg monthly spend ─────────────────────────────────────────────────
   const avgMonthlySpend = useMemo(() => {
+    if (hasPlTotals && !filterCat) {
+      const months = period
+        ? getPeriodFilterKeys(period, pMonth, pYear)
+        : Object.keys(plTotalsByMonth);
+      const vals = months.map(m => plTotalsByMonth[m] ?? 0).filter(v => v > 0);
+      return vals.length > 0 ? vals.reduce((s, v) => s + v, 0) / vals.length : 0;
+    }
     const byMonth: Record<string, number> = {};
     catFilteredRows.forEach(r => { byMonth[r.month] = (byMonth[r.month] ?? 0) + r.amount; });
     const months = Object.keys(byMonth);
     return months.length > 0 ? Object.values(byMonth).reduce((s, v) => s + v, 0) / months.length : 0;
-  }, [catFilteredRows]);
+  }, [hasPlTotals, filterCat, catFilteredRows, plTotalsByMonth, period, pMonth, pYear]);
 
-  // ── KPI 5: MoM change — same period window + company scope as other KPIs ─────
+  // ── KPI 5: MoM change — compare selected month vs prior
   const momChange = useMemo(() => {
-    const rows = filterCat
-      ? (period ? filteredOperatingRows : operatingRows).filter(r => r.category === filterCat)
-      : (period ? filteredOperatingRows : operatingRows);
-
-    const sumForMonth = (key: string) =>
-      rows.filter(r => r.month === key).reduce((s, r) => s + r.amount, 0);
-
     let currKey: string;
     let prevKey: string;
 
@@ -381,14 +414,26 @@ export default function RentalExpenses() {
       prevKey = keys[0];
       currKey = keys[1];
     } else if (period) {
-      const windowKeys = getPeriodKeys(period, pMonth, pYear);
-      if (windowKeys.length < 2) return null;
-      prevKey = windowKeys[windowKeys.length - 2];
+      const windowKeys = getPeriodFilterKeys(period, pMonth, pYear);
+      if (windowKeys.length < 1) return null;
       currKey = windowKeys[windowKeys.length - 1];
+      prevKey = prevMonthKey(currKey);
     } else {
       currKey = currentMonthKey;
       prevKey = prevMonthKey(currentMonthKey);
     }
+
+    if (hasPlTotals && !filterCat) {
+      const curr = plTotalsByMonth[currKey] ?? 0;
+      const prev = plTotalsByMonth[prevKey] ?? 0;
+      return safeMomPct(curr, prev);
+    }
+
+    const rows = filterCat
+      ? operatingRows.filter(r => r.category === filterCat)
+      : operatingRows;
+    const sumForMonth = (key: string) =>
+      rows.filter(r => r.month === key).reduce((s, r) => s + r.amount, 0);
 
     const curr = sumForMonth(currKey);
     const prev = sumForMonth(prevKey);
@@ -403,18 +448,28 @@ export default function RentalExpenses() {
     }
 
     return safeMomPct(curr, prev);
-  }, [operatingRows, filteredOperatingRows, filterCat, period, pMonth, pYear, currentMonthKey, filterCompany]);
+  }, [operatingRows, filterCat, period, pMonth, pYear, currentMonthKey, filterCompany, hasPlTotals, plTotalsByMonth]);
 
   // ── KPI 6: expense-to-revenue ratio — matched period + company scope ─────────
   const expToRevRatio = useMemo(() => {
-    const expenseRows = period
-      ? catFilteredRows
-      : operatingRows.filter(r => r.month === currentMonthKey && (!filterCat || r.category === filterCat));
+    let exp: number;
+    if (hasPlTotals && !filterCat) {
+      if (period) {
+        const keys = getPeriodFilterKeys(period, pMonth, pYear);
+        exp = keys.reduce((s, k) => s + (plTotalsByMonth[k] ?? 0), 0);
+      } else {
+        exp = plTotalsByMonth[currentMonthKey] ?? 0;
+      }
+    } else {
+      const expenseRows = period
+        ? catFilteredRows
+        : operatingRows.filter(r => r.month === currentMonthKey && (!filterCat || r.category === filterCat));
+      exp = expenseRows.reduce((s, r) => s + r.amount, 0);
+    }
+
     const revRows = period
       ? filteredRevRows
       : allRevRows.filter(r => r.month === currentMonthKey);
-
-    const exp = expenseRows.reduce((s, r) => s + r.amount, 0);
     const rev = revRows.reduce((s, r) => s + r.amount, 0);
 
     if (DEBUG_EXPENSES) {
@@ -427,7 +482,7 @@ export default function RentalExpenses() {
     }
 
     return safeRatioPct(exp, rev);
-  }, [period, catFilteredRows, operatingRows, currentMonthKey, filterCat, filteredRevRows, allRevRows, filterCompany]);
+  }, [period, catFilteredRows, operatingRows, currentMonthKey, filterCat, filteredRevRows, allRevRows, filterCompany, hasPlTotals, plTotalsByMonth, pMonth, pYear]);
 
   // One-time diagnostic: log old (misaligned) vs new inputs when data loads
   useEffect(() => {
@@ -543,7 +598,7 @@ export default function RentalExpenses() {
 
   // YoY comparison — this year vs last year for the same months
   const yoyMonths = useMemo(() => {
-    if (period) return getPeriodKeys(period, pMonth, pYear);
+    if (period) return getPeriodFilterKeys(period, pMonth, pYear);
     return trendMonthKeys;
   }, [period, pMonth, pYear, trendMonthKeys]);
 
@@ -612,9 +667,11 @@ export default function RentalExpenses() {
         <div>
           <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1C1917' }}>Expenses</h1>
           <p style={{ fontSize: 13, color: '#A8A29E', marginTop: 2 }}>
-            {useMatrixSource
-              ? 'Company monthly totals from expense matrix upload'
-              : 'Pulled from P&L financials — all categories, all companies'}
+            {hasPlTotals
+              ? 'KPI totals from P&L "Total for Expenses" (matches Financials) · category charts from detail lines'
+              : useMatrixSource
+                ? 'Company monthly totals from expense matrix upload'
+                : 'Pulled from P&L financials — all categories, all companies'}
             {useMatrixSource && plOperatingRows.length > 0 ? ' · category charts from P&L' : ''}
           </p>
         </div>
@@ -719,9 +776,13 @@ export default function RentalExpenses() {
           {/* ── KPI row 1 ─────────────────────────────────────────────────────── */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <ParchmentKpiTile label={typeof periodLabel === 'string' ? periodLabel : 'Period'} value={fmtUSD(periodTotal)} accent
-              tip={`Total operating expenses for the selected ${period ?? 'current month'} window`} />
+              tip={hasPlTotals && !filterCat
+                ? 'From P&L "Total for Expenses" row — same source as Financials page'
+                : `Total operating expenses for the selected ${period ?? 'current month'} window`} />
             <ParchmentKpiTile label="All Time (all years)" value={fmtUSD(totalAllTime)}
-              tip="Sum of all recurring operating expenses across every uploaded period. Excludes Sec 481(a) one-time adjustments." />
+              tip={hasPlTotals && !filterCat
+                ? 'Sum of P&L "Total for Expenses" across all uploaded months (matches Financials)'
+                : 'Sum of all recurring operating expenses across every uploaded period. Excludes Sec 481(a) one-time adjustments.'} />
             <ParchmentKpiTile label="Top Category" value={topCategory}
               tip={useMatrixSource
                 ? 'From P&L category breakdown when available; matrix upload provides company totals only'

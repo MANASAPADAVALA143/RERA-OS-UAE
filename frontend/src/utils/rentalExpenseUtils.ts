@@ -46,6 +46,28 @@ export const SKIP_RE = /^(total|subtotal|net\s|gross\s|\bincome\b|^revenue|renta
 export const REVENUE_LINE_RE  = /rental\s+income|rent\s+income|other\s+income|parking\s+income|rent\s*-/i;
 export const REVENUE_SKIP_RE  = /^(total\s|subtotal\s|net\s|gross\s)/i;
 
+const TOTAL_EXPENSE_RE = /^total\s+for\s+expenses?$/i;
+const TOTAL_EXPENSE_ALT_RE = /^total\s+expenses?$/i;
+
+/** Normalise month keys to "Mon YYYY" (space-separated). */
+export function normalizeMonthKey(month: string): string {
+  return month.replace(/-/g, ' ');
+}
+
+/** Official P&L expense total per month from "Total for Expenses" / "Total Expenses" rows. */
+export function getOfficialMonthlyExpenses(pl: FinItem[]): Record<string, number> {
+  const map: Record<string, number> = {};
+  for (const item of flattenItems(pl)) {
+    const t = item.label.trim();
+    if (!TOTAL_EXPENSE_RE.test(t) && !TOTAL_EXPENSE_ALT_RE.test(t)) continue;
+    for (const [month, val] of Object.entries(item.monthlyValues ?? {})) {
+      const norm = normalizeMonthKey(month);
+      map[norm] = Math.abs(val as number);
+    }
+  }
+  return map;
+}
+
 /** Returns the expense category for a P&L line label, or null to skip. */
 export function classifyLabel(label: string): string | null {
   const t = label.trim();
@@ -111,17 +133,20 @@ export function buildCategoryTotals(pl: FinItem[]): Record<string, number> {
 }
 
 /**
- * From a flat P&L item list, build {normalised-month → total expense} map.
- * Month keys are normalised to "Mon YYYY" (space-separated).
+ * P&L expense total per month — uses "Total for Expenses" row when present
+ * (matches Financials page). Falls back to summing classified detail lines.
  */
 export function buildMonthlyExpense(pl: FinItem[]): Record<string, number> {
+  const official = getOfficialMonthlyExpenses(pl);
+  if (Object.keys(official).length > 0) return official;
+
   const map: Record<string, number> = {};
   for (const item of flattenItems(pl)) {
     if (item.children?.length || item.isSectionHeader || item.isTotal) continue;
     const cat = classifyLabel(item.label);
     if (!cat || cat === ONE_TIME_CAT) continue;
     for (const [month, val] of Object.entries(item.monthlyValues ?? {})) {
-      const norm = month.replace(/-/g, ' ');
+      const norm = normalizeMonthKey(month);
       map[norm] = (map[norm] ?? 0) + Math.abs(val as number);
     }
   }

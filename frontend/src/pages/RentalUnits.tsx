@@ -116,6 +116,36 @@ interface UnitLtm {
   action: string;
   maxConsecVacant: number;
   lastStatus: 'occupied' | 'vacant';
+  trailingVacantDays: number;
+}
+
+function daysInMonthKey(key: string): number {
+  const [mon, yr] = key.split('-');
+  const mi = MNAME.indexOf(mon);
+  if (mi < 0) return 30;
+  return new Date(parseInt(yr, 10), mi + 1, 0).getDate();
+}
+
+/** Estimate how long a unit has been vacant using rent receivable month columns. */
+function estimateVacantDays(
+  ltm: Pick<UnitLtm, 'monthData' | 'lastStatus' | 'totalMonths'>,
+  unitDaysVacant: number | null,
+): number | null {
+  if (ltm.lastStatus !== 'vacant' || ltm.totalMonths === 0) return null;
+  if (unitDaysVacant != null && unitDaysVacant >= 0) return unitDaysVacant;
+  let days = 0;
+  for (let i = ltm.monthData.length - 1; i >= 0; i--) {
+    if (ltm.monthData[i].status !== 'vacant') break;
+    days += daysInMonthKey(ltm.monthData[i].month);
+  }
+  return days > 0 ? days : null;
+}
+
+function bucketVacancyDays(days: number): string {
+  if (days <= 30) return '0–30 days';
+  if (days <= 60) return '31–60 days';
+  if (days <= 90) return '61–90 days';
+  return '90+ days';
 }
 
 function computeUnitLtm(unit: UnitRow, months: string[]): UnitLtm {
@@ -155,12 +185,18 @@ function computeUnitLtm(unit: UnitRow, months: string[]): UnitLtm {
 
   const lastStatus = monthData.length > 0 ? monthData[monthData.length - 1].status : 'vacant';
 
+  let trailingVacantDays = 0;
+  for (let i = monthData.length - 1; i >= 0; i--) {
+    if (monthData[i].status !== 'vacant') break;
+    trailingVacantDays += daysInMonthKey(monthData[i].month);
+  }
+
   let action = 'Monitor';
   if (lastStatus === 'vacant' && maxConsecVacant >= 2) action = 'Offer discount';
   else if (avgRent > 0 && marketRent > 0 && avgRent < marketRent * 0.9) action = 'Review rent';
   else if (occPct === 100) action = 'Retain tenant';
 
-  return { marketRent, monthData, occMonths, vacMonths, totalMonths, collected, expected, lost, occPct, avgRent, trend, action, maxConsecVacant, lastStatus };
+  return { marketRent, monthData, occMonths, vacMonths, totalMonths, collected, expected, lost, occPct, avgRent, trend, action, maxConsecVacant, lastStatus, trailingVacantDays };
 }
 
 // Dark-theme tooltip style shared across charts
@@ -520,6 +556,25 @@ function LTMPerformanceTab() {
     return Object.entries(map).map(([name, v]) => ({ name, ...v })).sort((a, b) => b.expected - a.expected);
   }, [allLtm]);
 
+  // ── Vacancy duration buckets (from rent receivable $0 months) ────────────────
+  const vacancyDurationBuckets = useMemo(() => {
+    const defs = [
+      { range: '0–30 days', fill: LTM_C.green },
+      { range: '31–60 days', fill: LTM_C.amber },
+      { range: '61–90 days', fill: '#C2410C' },
+      { range: '90+ days', fill: LTM_C.warn },
+    ];
+    const counts = Object.fromEntries(defs.map(d => [d.range, 0])) as Record<string, number>;
+    for (const { unit, ltm } of allLtm) {
+      const days = estimateVacantDays(ltm, unit.days_vacant);
+      if (days == null) continue;
+      counts[bucketVacancyDays(days)] += 1;
+    }
+    return defs.map(d => ({ ...d, count: counts[d.range] }));
+  }, [allLtm]);
+
+  const vacantUnitCount = vacancyDurationBuckets.reduce((s, b) => s + b.count, 0);
+
   // ── Action distribution ───────────────────────────────────────────────────────
   const actionDist = useMemo(() => {
     const map: Record<string, number> = {};
@@ -717,14 +772,30 @@ function LTMPerformanceTab() {
               )}
             </LtmChart>
 
-            <LtmChart title="Vacancy Duration Breakdown" sub="Days vacant per unit group">
-              <div className="flex flex-col items-center justify-center py-6 gap-3">
-                <span style={{ fontSize: 30, opacity: 0.3 }}>📊</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#B0B0B0' }}>Vacancy duration data pending</span>
-                <span style={{ fontSize: 11, color: '#C8C8C8', maxWidth: 200, textAlign: 'center', lineHeight: 1.5 }}>
-                  Buckets 0–30 / 31–60 / 61–90 / 90+ days require vacancy start-date tracking not yet captured.
-                </span>
-              </div>
+            <LtmChart title="Vacancy Duration Breakdown" sub="Currently vacant units · from rent receivable $0 months">
+              {vacantUnitCount > 0 ? (
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={vacancyDurationBuckets} margin={{ left: 0, right: 8, top: 4, bottom: 36 }}>
+                    <XAxis dataKey="range" tick={{ ...LTM_TICK, fontSize: 11 }} angle={-15} textAnchor="end" height={52} interval={0} />
+                    <YAxis tick={LTM_TICK} allowDecimals={false} />
+                    <Tooltip
+                      contentStyle={LTM_TT.contentStyle}
+                      labelStyle={LTM_TT.labelStyle}
+                      formatter={(v: number) => [`${v} unit${v !== 1 ? 's' : ''}`, 'Count']}
+                    />
+                    <Bar dataKey="count" name="Units" radius={[4, 4, 0, 0]}>
+                      {vacancyDurationBuckets.map((d, i) => <Cell key={i} fill={d.fill} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-6 gap-3">
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#B0B0B0' }}>No vacant units in period</span>
+                  <span style={{ fontSize: 11, color: '#C8C8C8', maxWidth: 220, textAlign: 'center', lineHeight: 1.5 }}>
+                    Duration is estimated from consecutive $0 months in the rent receivable sheet.
+                  </span>
+                </div>
+              )}
             </LtmChart>
 
             <LtmChart title="Recommended Actions" sub="Unit count by action type">

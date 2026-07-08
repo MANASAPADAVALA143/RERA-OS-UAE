@@ -57,6 +57,12 @@ export function getPeriodKeys(period: Period, month: number, year: number): stri
   });
 }
 
+/** Months shown in KPIs/tables/charts — MoM is the selected month only (not prior month). */
+export function getPeriodFilterKeys(period: Period, month: number, year: number): string[] {
+  if (period === 'MoM') return [monthKeyFromParts(month, year)];
+  return getPeriodKeys(period, month, year);
+}
+
 export function periodChipText(period: Period, month: number, year: number): string {
   if (period === 'MoM') {
     const prevMonth = month === 1 ? 12 : month - 1;
