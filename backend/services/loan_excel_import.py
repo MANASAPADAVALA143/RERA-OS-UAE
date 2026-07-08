@@ -130,6 +130,19 @@ def _valid_company_name(name: str) -> bool:
     return True
 
 
+def _date_period_from_balance_header(header: str) -> str | None:
+    """Extract YYYY-MM from headers like 'Loan Balance as on 04/30/2026'."""
+    m = re.search(r"(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})", str(header or ""))
+    if not m:
+        return None
+    mo, _day, yr = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if yr < 100:
+        yr += 2000
+    if 1 <= mo <= 12:
+        return f"{yr:04d}-{mo:02d}"
+    return None
+
+
 def _parse_num(v: Any) -> float | None:
     if v is None:
         return None
@@ -277,6 +290,7 @@ def _parse_row_mapped(
     row: tuple,
     col_map: dict[str, int],
     monthly_cols: dict[str, int],
+    header_row: tuple,
     sheet: str,
     row_num: int,
     *,
@@ -309,8 +323,13 @@ def _parse_row_mapped(
                 balance_by_month[period] = val
 
     static_balance = _parse_num(_cell(row, col_map, "balance"))
-    if static_balance is not None and not balance_by_month:
-        balance_by_month = {}
+    if static_balance is not None:
+        balance_hdr = ""
+        if "balance" in col_map and col_map["balance"] < len(header_row):
+            balance_hdr = str(header_row[col_map["balance"]] or "")
+        period_key = _date_period_from_balance_header(balance_hdr)
+        if period_key:
+            balance_by_month[period_key] = static_balance
 
     return ParsedLoanRow(
         company=company,
@@ -377,6 +396,7 @@ def parse_loan_workbook(content: bytes) -> ParseLoanWorkbookResult:
         if not header:
             continue
         hdr_idx, col_map, monthly_cols = header
+        header_row = rows[hdr_idx]
         filter_entity_line = "entity_line" in col_map
         if filter_entity_line:
             has_entity_line = True
@@ -393,7 +413,7 @@ def parse_loan_workbook(content: bytes) -> ParseLoanWorkbookResult:
                         skipped_non_rental += 1
                     continue
             parsed = _parse_row_mapped(
-                row, col_map, monthly_cols, ws.title, row_num,
+                row, col_map, monthly_cols, header_row, ws.title, row_num,
                 filter_entity_line=False,
                 sheet_company=sheet_company,
             )
@@ -471,8 +491,10 @@ def import_rental_loans_from_excel(
         }
 
     period = balance_period
-    if not period and parsed_result.balance_periods:
-        period = parsed_result.balance_periods[-1]
+    file_periods = _collect_balance_periods(parsed)
+    if file_periods:
+        if not period or period not in file_periods:
+            period = file_periods[-1]
 
     errors: list[str] = []
     matched: list[ParsedLoanRow] = []

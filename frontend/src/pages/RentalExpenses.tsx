@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, useMemo, useRef } from 'react';
+import { Upload } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -9,7 +10,7 @@ import { ParchmentKpiTile } from '../components/ui/ParchmentKpiTile';
 import { LoadingSkeleton } from '../components/ui/Table';
 import { fmtUSD } from '../components/ProtectedRoute';
 import PeriodToggle from '../components/shared/PeriodToggle';
-import { type Period, getPeriodKeys } from '../utils/periodWindow';
+import { type Period, getPeriodKeys, trailingMonthsWithData, monthKeyFromParts } from '../utils/periodWindow';
 import {
   type FinItem,
   ONE_TIME_CAT, ONE_TIME_RE, EXPENSE_CATS,
@@ -17,10 +18,60 @@ import {
   classifyLabel, flattenItems,
   MNAMES, monthSortKey, allMonthKeys,
   EXP_PALETTE, catColor,
-  prevMonthKey, safeMomPct, safeRatioPct,
+  prevMonthKey, safeMomPct, safeRatioPct, parseMonthKey,
 } from '../utils/rentalExpenseUtils';
 interface CompanyOption { id: string; company_name: string }
 interface ExpRow { company: string; category: string; month: string; amount: number }
+interface ExpenseMatrixCompany {
+  id: string;
+  company_name: string;
+  monthly_expense_data: Record<string, number>;
+}
+interface ExpenseMatrixResponse {
+  companies: ExpenseMatrixCompany[];
+  portfolio_monthly_totals: Record<string, number>;
+  has_matrix: boolean;
+}
+interface ExpenseUploadPreview {
+  companies: { company: string; monthly_totals: Record<string, number>; months_with_data: number }[];
+  month_columns: string[];
+  portfolio_monthly_totals: Record<string, number>;
+  skipped_empty_rows: string[];
+  companies_parsed: number;
+  temp_file_id: string;
+}
+
+const MATRIX_CAT = 'Company Total';
+
+function normMonthKey(k: string): string {
+  return k.replace(/-/g, ' ');
+}
+
+function buildMatrixRows(
+  matrixCompanies: ExpenseMatrixCompany[],
+  filterCompanyId: string,
+  nameById: Record<string, string>,
+): ExpRow[] {
+  const rows: ExpRow[] = [];
+  const ids = filterCompanyId ? [filterCompanyId] : matrixCompanies.map(c => c.id);
+  const idSet = new Set(ids);
+  for (const co of matrixCompanies) {
+    if (!idSet.has(co.id)) continue;
+    const companyName = nameById[co.id] ?? co.company_name;
+    for (const [month, val] of Object.entries(co.monthly_expense_data ?? {})) {
+      const amount = Math.abs(Number(val) || 0);
+      if (amount > 0) {
+        rows.push({
+          company: companyName,
+          category: MATRIX_CAT,
+          month: normMonthKey(month),
+          amount,
+        });
+      }
+    }
+  }
+  return rows;
+}
 
 // ── dev debug ─────────────────────────────────────────────────────────────────
 const DEBUG_EXPENSES = false;
@@ -69,6 +120,7 @@ const TT = { contentStyle: { background: '#FBF6EE', border: '1px solid #E8DEC8',
 // ── component ─────────────────────────────────────────────────────────────────
 export default function RentalExpenses() {
   const [companies, setCompanies]         = useState<CompanyOption[]>([]);
+  const [expenseMatrix, setExpenseMatrix] = useState<ExpenseMatrixCompany[]>([]);
   const [allPl, setAllPl]                 = useState<Record<string, FinItem[]>>({});
   const [allNames, setAllNames]           = useState<Record<string, string>>({});
   const [loading, setLoading]             = useState(true);
@@ -79,12 +131,28 @@ export default function RentalExpenses() {
   const [pYear, setPYear]                 = useState(new Date().getFullYear());
   const [showOneTime, setShowOneTime]     = useState(false);
   const oneTimePanelRef                   = useRef<HTMLDivElement>(null);
+  const uploadRef                         = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading]         = useState(false);
+  const [uploadPreview, setUploadPreview] = useState<ExpenseUploadPreview | null>(null);
+  const [confirmingUpload, setConfirmingUpload] = useState(false);
+  const [uploadToast, setUploadToast]     = useState('');
 
   useEffect(() => {
     api.get<CompanyOption[]>('/api/rentals/companies')
       .then(r => setCompanies(Array.isArray(r.data) ? r.data : []))
       .catch(() => {});
   }, []);
+
+  const loadExpenseMatrix = useCallback(async () => {
+    try {
+      const r = await api.get<ExpenseMatrixResponse>('/api/rentals/company-expenses');
+      setExpenseMatrix(r.data.companies ?? []);
+    } catch {
+      setExpenseMatrix([]);
+    }
+  }, []);
+
+  useEffect(() => { loadExpenseMatrix(); }, [loadExpenseMatrix]);
 
   const loadFinancials = useCallback(async (list: CompanyOption[]) => {
     setLoading(true);
@@ -103,6 +171,60 @@ export default function RentalExpenses() {
 
   useEffect(() => { if (companies.length) loadFinancials(companies); }, [companies, loadFinancials]);
 
+  async function handleMatrixUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const res = await api.post<ExpenseUploadPreview>(
+        '/api/rentals/upload-company-expenses/preview',
+        formData,
+      );
+      setUploadPreview(res.data);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+        ?? 'Upload failed — check file format';
+      setUploadToast(msg);
+      setTimeout(() => setUploadToast(''), 5000);
+    } finally {
+      setUploading(false);
+      if (uploadRef.current) uploadRef.current.value = '';
+    }
+  }
+
+  async function confirmMatrixUpload() {
+    if (!uploadPreview) return;
+    setConfirmingUpload(true);
+    try {
+      const res = await api.post<{ message: string; unmatched_companies: string[] }>(
+        '/api/rentals/upload-company-expenses/confirm',
+        { temp_file_id: uploadPreview.temp_file_id },
+      );
+      const unmatched = res.data.unmatched_companies?.length
+        ? ` (${res.data.unmatched_companies.length} unmatched)`
+        : '';
+      setUploadToast(`${res.data.message}${unmatched}`);
+      setUploadPreview(null);
+      await loadExpenseMatrix();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+        ?? 'Save failed';
+      setUploadToast(msg);
+    } finally {
+      setConfirmingUpload(false);
+      setTimeout(() => setUploadToast(''), 5000);
+    }
+  }
+
+  const nameById = useMemo(() => {
+    const m: Record<string, string> = {};
+    companies.forEach(c => { m[c.id] = c.company_name; });
+    Object.entries(allNames).forEach(([id, name]) => { m[id] = name; });
+    return m;
+  }, [companies, allNames]);
+
   // company name → id (for bar chart drill-down)
   const nameToId = useMemo(() => {
     const m: Record<string, string> = {};
@@ -111,16 +233,29 @@ export default function RentalExpenses() {
   }, [companies]);
 
   // ── core rows ───────────────────────────────────────────────────────────────
-  const allRows = useMemo<ExpRow[]>(() => {
+  const plRows = useMemo<ExpRow[]>(() => {
     const ids = filterCompany ? [filterCompany] : Object.keys(allPl);
     return ids.flatMap(id => buildExpRows(allNames[id] ?? id, allPl[id] ?? []));
   }, [allPl, allNames, filterCompany]);
 
+  const matrixRows = useMemo(
+    () => buildMatrixRows(expenseMatrix, filterCompany, nameById),
+    [expenseMatrix, filterCompany, nameById],
+  );
+
+  const useMatrixSource = matrixRows.length > 0;
+
+  const allRows = useMatrixSource ? matrixRows : plRows;
+
   const availableKeys = useMemo(() => {
     const keys = new Set<string>();
-    Object.values(allPl).forEach(pl => allMonthKeys(pl).forEach(k => keys.add(k)));
+    if (useMatrixSource) {
+      matrixRows.forEach(r => keys.add(r.month));
+    } else {
+      Object.values(allPl).forEach(pl => allMonthKeys(pl).forEach(k => keys.add(k)));
+    }
     return Array.from(keys).sort((a, b) => monthSortKey(a) - monthSortKey(b));
-  }, [allPl]);
+  }, [allPl, matrixRows, useMatrixSource]);
 
   const filteredRows = useMemo<ExpRow[]>(() => {
     if (!period) return allRows;
@@ -129,14 +264,22 @@ export default function RentalExpenses() {
   }, [allRows, period, pMonth, pYear]);
 
   const operatingRows         = useMemo(() => allRows.filter(r => r.category !== ONE_TIME_CAT), [allRows]);
+  const plOperatingRows       = useMemo(() => plRows.filter(r => r.category !== ONE_TIME_CAT), [plRows]);
   const filteredOperatingRows = useMemo(() => filteredRows.filter(r => r.category !== ONE_TIME_CAT), [filteredRows]);
+  const plFilteredOperatingRows = useMemo(() => {
+    if (!period) return plOperatingRows;
+    const keys = new Set(getPeriodKeys(period, pMonth, pYear));
+    return plOperatingRows.filter(r => keys.has(r.month));
+  }, [plOperatingRows, period, pMonth, pYear]);
 
   // applies the active category chip on top of the period window —
-  // this is the source-of-truth for every KPI and chart that should
-  // respect both filters simultaneously
+  // category filter applies to P&L rows only; matrix totals ignore category
   const catFilteredRows = useMemo(
-    () => filterCat ? filteredOperatingRows.filter(r => r.category === filterCat) : filteredOperatingRows,
-    [filteredOperatingRows, filterCat],
+    () => {
+      if (useMatrixSource) return filteredOperatingRows;
+      return filterCat ? filteredOperatingRows.filter(r => r.category === filterCat) : filteredOperatingRows;
+    },
+    [filteredOperatingRows, filterCat, useMatrixSource],
   );
 
   // one-time
@@ -166,6 +309,28 @@ export default function RentalExpenses() {
     return months.includes(calendarKey) ? calendarKey : (months[months.length - 1] ?? calendarKey);
   }, [operatingRows]);
   const periodLabel = period ?? (currentMonthKey === `${MNAMES[new Date().getMonth()]} ${new Date().getFullYear()}` ? 'This Month' : `Latest · ${currentMonthKey}`);
+
+  // Trailing-6-month window anchored to selected period month (or latest data month)
+  const trendEndAnchor = useMemo(() => {
+    if (period) return { month: pMonth, year: pYear };
+    return parseMonthKey(currentMonthKey);
+  }, [period, pMonth, pYear, currentMonthKey]);
+
+  const trendEndLabel = useMemo(
+    () => monthKeyFromParts(trendEndAnchor.month, trendEndAnchor.year),
+    [trendEndAnchor],
+  );
+
+  const trendMonthKeys = useMemo(() => {
+    const dataMonths = new Set(operatingRows.map(r => r.month));
+    return trailingMonthsWithData(trendEndAnchor.month, trendEndAnchor.year, 6, dataMonths);
+  }, [operatingRows, trendEndAnchor]);
+
+  const plTrendMonthKeys = useMemo(() => {
+    const dataMonths = new Set(plOperatingRows.map(r => r.month));
+    return trailingMonthsWithData(trendEndAnchor.month, trendEndAnchor.year, 6, dataMonths);
+  }, [plOperatingRows, trendEndAnchor]);
+
   const periodTotal = useMemo(() =>
     period
       ? catFilteredRows.reduce((s, r) => s + r.amount, 0)
@@ -177,10 +342,19 @@ export default function RentalExpenses() {
 
   // ── KPI 3: top category ──────────────────────────────────────────────────────
   const topCategory = useMemo(() => {
+    if (useMatrixSource) {
+      if (plFilteredOperatingRows.length === 0) return '—';
+      const byCat: Record<string, number> = {};
+      const src = filterCat
+        ? plFilteredOperatingRows.filter(r => r.category === filterCat)
+        : plFilteredOperatingRows;
+      src.forEach(r => { byCat[r.category] = (byCat[r.category] ?? 0) + r.amount; });
+      return Object.entries(byCat).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—';
+    }
     const byCat: Record<string, number> = {};
     catFilteredRows.forEach(r => { byCat[r.category] = (byCat[r.category] ?? 0) + r.amount; });
     return Object.entries(byCat).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—';
-  }, [catFilteredRows]);
+  }, [catFilteredRows, useMatrixSource, plFilteredOperatingRows, filterCat]);
 
   // ── KPI 4: avg monthly spend ─────────────────────────────────────────────────
   const avgMonthlySpend = useMemo(() => {
@@ -291,13 +465,22 @@ export default function RentalExpenses() {
   }, [catFilteredRows]);
 
   // ── chart data ───────────────────────────────────────────────────────────────
-  const allCats = useMemo(() => [...new Set(filteredOperatingRows.map(r => r.category))].sort(), [filteredOperatingRows]);
+  const allCats = useMemo(() => {
+    const src = useMatrixSource ? plFilteredOperatingRows : filteredOperatingRows;
+    return [...new Set(src.map(r => r.category))].sort();
+  }, [filteredOperatingRows, plFilteredOperatingRows, useMatrixSource]);
 
   const byCategory = useMemo(() => {
+    const src = useMatrixSource ? plFilteredOperatingRows : filteredOperatingRows;
     const byCat: Record<string, number> = {};
-    filteredOperatingRows.forEach(r => { byCat[r.category] = (byCat[r.category] ?? 0) + r.amount; });
+    const rows = filterCat && !useMatrixSource
+      ? src.filter(r => r.category === filterCat)
+      : filterCat && useMatrixSource
+        ? src.filter(r => r.category === filterCat)
+        : src;
+    rows.forEach(r => { byCat[r.category] = (byCat[r.category] ?? 0) + r.amount; });
     return Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([category, amount]) => ({ category, amount }));
-  }, [filteredOperatingRows]);
+  }, [filteredOperatingRows, plFilteredOperatingRows, useMatrixSource, filterCat]);
 
   const byCompany = useMemo(() => {
     const byCo: Record<string, number> = {};
@@ -305,67 +488,64 @@ export default function RentalExpenses() {
     return Object.entries(byCo).sort((a, b) => b[1] - a[1]).map(([name, amount]) => ({ name, amount }));
   }, [catFilteredRows]);
 
-  // trend — all-time last 6 months, operating only
+  // trend — 6 months trailing the selected reference month
   const trendData = useMemo(() => {
     const byMonth: Record<string, number> = {};
     operatingRows.forEach(r => { byMonth[r.month] = (byMonth[r.month] ?? 0) + r.amount; });
-    const months = Object.keys(byMonth).sort((a, b) => monthSortKey(a) - monthSortKey(b));
-    const prev6 = months.slice(-7); // include 7 so we can compute MoM in tooltip
-    return prev6.slice(-6).map(month => {
+    return trendMonthKeys.map(month => {
       const prevKey = prevMonthKey(month);
       const momVal = safeMomPct(byMonth[month] ?? 0, byMonth[prevKey] ?? 0);
       return { month, amount: parseFloat((byMonth[month] ?? 0).toFixed(2)), mom: momVal };
     });
-  }, [operatingRows]);
+  }, [operatingRows, trendMonthKeys]);
 
   // top-5 categories for stacked trend chart
   const top5cats = useMemo(() => byCategory.slice(0, 5).map(c => c.category), [byCategory]);
 
-  // stacked column chart: top-5 cats × last-6 months of all-time data
+  // stacked column chart: top-5 cats × trailing 6 months ending at reference month
   const stackedTrendData = useMemo(() => {
+    const src = useMatrixSource ? plOperatingRows : operatingRows;
+    const monthKeys = useMatrixSource ? plTrendMonthKeys : trendMonthKeys;
     const byMonth: Record<string, Record<string, number>> = {};
-    operatingRows.forEach(r => {
+    src.forEach(r => {
       if (!top5cats.includes(r.category)) return;
       if (!byMonth[r.month]) byMonth[r.month] = {};
       byMonth[r.month][r.category] = (byMonth[r.month][r.category] ?? 0) + r.amount;
     });
-    const months6 = Object.keys(byMonth).sort((a, b) => monthSortKey(a) - monthSortKey(b)).slice(-6);
-    return months6.map(m => ({ month: m.split(' ')[0], ...byMonth[m] }));
-  }, [top5cats, operatingRows]);
+    return monthKeys.map(m => ({ month: m.split(' ')[0], ...byMonth[m] }));
+  }, [top5cats, operatingRows, plOperatingRows, useMatrixSource, trendMonthKeys, plTrendMonthKeys]);
 
   // single-category trend when a filter is active
   const singleCatTrend = useMemo(() => {
     if (!filterCat) return [];
+    const src = useMatrixSource ? plOperatingRows : operatingRows;
+    const monthKeys = useMatrixSource ? plTrendMonthKeys : trendMonthKeys;
     const byMonth: Record<string, number> = {};
-    operatingRows.forEach(r => { if (r.category === filterCat) byMonth[r.month] = (byMonth[r.month] ?? 0) + r.amount; });
-    const months6 = Object.keys(byMonth).sort((a, b) => monthSortKey(a) - monthSortKey(b)).slice(-6);
-    return months6.map(m => ({ month: m.split(' ')[0], amount: byMonth[m] ?? 0 }));
-  }, [filterCat, operatingRows]);
+    src.forEach(r => { if (r.category === filterCat) byMonth[r.month] = (byMonth[r.month] ?? 0) + r.amount; });
+    return monthKeys.map(m => ({ month: m.split(' ')[0], amount: byMonth[m] ?? 0 }));
+  }, [filterCat, operatingRows, plOperatingRows, useMatrixSource, trendMonthKeys, plTrendMonthKeys]);
 
-  // category sparklines — top 4 by filtered spend, last 6 months all-time trend
+  // category sparklines — top 4 by filtered spend, trailing 6 months
   const sparklineData = useMemo(() => {
+    const srcRows = useMatrixSource ? plFilteredOperatingRows : filteredOperatingRows;
     const top4 = byCategory.slice(0, 4).map(c => c.category);
-    const byMonth: Record<string, number> = {};
-    operatingRows.forEach(r => { byMonth[r.month] = (byMonth[r.month] ?? 0) + r.amount; });
-    const months6 = Object.keys(byMonth).sort((a, b) => monthSortKey(a) - monthSortKey(b)).slice(-6);
+    const monthKeys = useMatrixSource ? plTrendMonthKeys : trendMonthKeys;
     return top4.map(cat => {
       const catByMonth: Record<string, number> = {};
-      operatingRows.filter(r => r.category === cat).forEach(r => {
+      (useMatrixSource ? plOperatingRows : operatingRows).filter(r => r.category === cat).forEach(r => {
         catByMonth[r.month] = (catByMonth[r.month] ?? 0) + r.amount;
       });
-      const data = months6.map(m => ({ month: m.split(' ')[0], amount: catByMonth[m] ?? 0 }));
-      const total = filteredOperatingRows.filter(r => r.category === cat).reduce((s, r) => s + r.amount, 0);
+      const data = monthKeys.map(m => ({ month: m.split(' ')[0], amount: catByMonth[m] ?? 0 }));
+      const total = srcRows.filter(r => r.category === cat).reduce((s, r) => s + r.amount, 0);
       return { cat, data, total };
     });
-  }, [byCategory, operatingRows, filteredOperatingRows]);
+  }, [byCategory, operatingRows, plOperatingRows, plFilteredOperatingRows, filteredOperatingRows, useMatrixSource, trendMonthKeys, plTrendMonthKeys]);
 
   // YoY comparison — this year vs last year for the same months
   const yoyMonths = useMemo(() => {
     if (period) return getPeriodKeys(period, pMonth, pYear);
-    const byMonth: Record<string, number> = {};
-    operatingRows.forEach(r => { byMonth[r.month] = 1; });
-    return Object.keys(byMonth).sort((a, b) => monthSortKey(a) - monthSortKey(b)).slice(-6);
-  }, [period, pMonth, pYear, operatingRows]);
+    return trendMonthKeys;
+  }, [period, pMonth, pYear, trendMonthKeys]);
 
   const yoyData = useMemo(() => {
     const byMonth: Record<string, number> = {};
@@ -388,7 +568,11 @@ export default function RentalExpenses() {
     const max = Math.max(...Object.values(map), 1);
     return { map, max };
   }, [filteredOperatingRows]);
-  const heatmapMonths = useMemo(() => yoyMonths.slice(-6), [yoyMonths]);
+  const heatmapMonths = useMemo(() => {
+    if (period === 'TTM') return yoyMonths.slice(-6);
+    if (period) return yoyMonths;
+    return trendMonthKeys;
+  }, [yoyMonths, period, trendMonthKeys]);
 
   // table rows (company × category × month, with category drill-down filter)
   const tableRows = useMemo(() => {
@@ -407,7 +591,7 @@ export default function RentalExpenses() {
     );
   }, [filteredOperatingRows, filterCat]);
 
-  const noData = !loading && operatingRows.length === 0;
+  const noData = !loading && operatingRows.length === 0 && plOperatingRows.length === 0;
 
   // ── render ───────────────────────────────────────────────────────────────────
   return (
@@ -424,12 +608,76 @@ export default function RentalExpenses() {
       `}</style>
 
       {/* Header */}
-      <div>
-        <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1C1917' }}>Expenses</h1>
-        <p style={{ fontSize: 13, color: '#A8A29E', marginTop: 2 }}>
-          Pulled from P&amp;L financials — all categories, all companies
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1C1917' }}>Expenses</h1>
+          <p style={{ fontSize: 13, color: '#A8A29E', marginTop: 2 }}>
+            {useMatrixSource
+              ? 'Company monthly totals from expense matrix upload'
+              : 'Pulled from P&L financials — all categories, all companies'}
+            {useMatrixSource && plOperatingRows.length > 0 ? ' · category charts from P&L' : ''}
+          </p>
+        </div>
+        <div className="flex flex-col items-end gap-2">
+          <input ref={uploadRef} type="file" accept=".xlsx,.xls" className="hidden"
+            onChange={handleMatrixUpload} />
+          <button
+            type="button"
+            className="exp-interactive flex items-center gap-2 px-4 py-2 rounded-lg"
+            style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', color: '#57534E', fontSize: 13, fontWeight: 600 }}
+            onClick={() => uploadRef.current?.click()}
+            disabled={uploading}
+          >
+            <Upload size={16} />
+            {uploading ? 'Parsing…' : 'Import Company Expenses'}
+          </button>
+          {uploadToast && (
+            <span style={{ fontSize: 12, color: '#78716C', maxWidth: 280, textAlign: 'right' }}>{uploadToast}</span>
+          )}
+        </div>
       </div>
+
+      {uploadPreview && (
+        <div className="rounded-xl p-4 space-y-3" style={{ background: '#FFFBEB', border: '1px solid #FDE68A' }}>
+          <p style={{ fontSize: 15, fontWeight: 600, color: '#92400E' }}>
+            Preview — {uploadPreview.companies_parsed} companies, {uploadPreview.month_columns.length} months
+          </p>
+          <div className="overflow-x-auto max-h-48">
+            <table className="w-full" style={{ fontSize: 13 }}>
+              <thead>
+                <tr>
+                  <th className="text-left py-1 pr-3" style={{ color: '#B45309' }}>Company</th>
+                  <th className="text-left py-1 pr-3" style={{ color: '#B45309' }}>Months</th>
+                  <th className="text-right py-1" style={{ color: '#B45309' }}>Sample total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {uploadPreview.companies.slice(0, 12).map((c, i) => (
+                  <tr key={i} style={{ borderTop: '1px solid #FEF3C7' }}>
+                    <td className="py-1 pr-3" style={{ color: '#92400E' }}>{c.company}</td>
+                    <td className="py-1 pr-3" style={{ color: '#78716C' }}>{c.months_with_data}</td>
+                    <td className="py-1 text-right" style={{ color: '#92400E' }}>
+                      {fmtUSD(Object.values(c.monthly_totals).reduce((s, v) => s + v, 0))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex gap-2">
+            <button type="button" className="exp-interactive px-4 py-2 rounded-lg"
+              style={{ background: '#D4AF37', color: '#fff', fontWeight: 600, fontSize: 13 }}
+              onClick={confirmMatrixUpload} disabled={confirmingUpload}>
+              {confirmingUpload ? 'Saving…' : 'Confirm import'}
+            </button>
+            <button type="button" className="exp-interactive px-4 py-2 rounded-lg"
+              style={{ background: 'transparent', border: '1px solid #E8DEC8', color: '#78716C', fontSize: 13 }}
+              onClick={() => setUploadPreview(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Filters + PeriodToggle */}
       <div className="flex flex-wrap items-center gap-4 px-4 py-3 rounded-xl"
@@ -458,9 +706,13 @@ export default function RentalExpenses() {
       </div>
 
       {loading ? <LoadingSkeleton rows={8} /> : noData ? (
-        <div className="p-6 rounded-xl text-center"
+        <div className="p-6 rounded-xl text-center space-y-3"
           style={{ background: '#F0EDE5', border: '1px solid #E8DEC8', color: '#A8A29E', fontSize: 15 }}>
-          No P&amp;L data uploaded yet. Upload financial statements in the Financials tab to see expenses here.
+          <p>No expense data yet.</p>
+          <p style={{ fontSize: 13 }}>
+            Upload a company × month matrix (rows = companies, columns = Dec 2021, Jan 2022, …)
+            or upload P&amp;L financials in the Financials tab for category breakdown.
+          </p>
         </div>
       ) : (
         <>
@@ -471,7 +723,9 @@ export default function RentalExpenses() {
             <ParchmentKpiTile label="All Time (all years)" value={fmtUSD(totalAllTime)}
               tip="Sum of all recurring operating expenses across every uploaded period. Excludes Sec 481(a) one-time adjustments." />
             <ParchmentKpiTile label="Top Category" value={topCategory}
-              tip={`Category with highest spend in the selected period. Matches the largest slice in the Expense by Category donut below.`} />
+              tip={useMatrixSource
+                ? 'From P&L category breakdown when available; matrix upload provides company totals only'
+                : 'Category with highest spend in the selected period. Matches the largest slice in the Expense by Category donut below.'} />
           </div>
 
           {/* ── KPI row 2 ─────────────────────────────────────────────────────── */}
@@ -600,7 +854,11 @@ export default function RentalExpenses() {
                   <p style={{ fontSize: 12, color: '#A8A29E', marginTop: 8 }}>Click bar to filter table below</p>
                 </>
               ) : (
-                <div className="h-60 flex items-center justify-center" style={{ color: '#A8A29E', fontSize: 14 }}>No data</div>
+                <div className="h-60 flex items-center justify-center text-center px-4" style={{ color: '#A8A29E', fontSize: 13 }}>
+                  {useMatrixSource
+                    ? 'Category breakdown requires P&L upload in Financials. Matrix import provides company monthly totals.'
+                    : 'No data'}
+                </div>
               )}
             </div>
 
@@ -609,7 +867,7 @@ export default function RentalExpenses() {
               <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Expense by Company</p>
               <p style={{ fontSize: 12, color: '#A8A29E', marginBottom: 2 }}>Click a bar to filter to that company</p>
               <p style={{ fontSize: 11, color: '#B8A99A', marginBottom: 8 }}>
-                Formula: sum of leaf-level expense lines per company ·{' '}
+                Formula: {useMatrixSource ? 'monthly company total from expense matrix' : 'sum of leaf-level expense lines per company'} ·{' '}
                 <span style={{ fontWeight: 600, color: filterCat ? '#78716C' : '#B8A99A' }}>
                   {filterCat ? `category: ${filterCat}` : 'all categories'}
                 </span>
@@ -648,7 +906,9 @@ export default function RentalExpenses() {
 
             {/* Trend 6 months */}
             <div className="rounded-xl p-4" style={{ background: '#FBF6EE', border: '1px solid #E8DEC8' }}>
-              <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>Expense Trend — 6 Months</p>
+              <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>
+                Expense Trend — 6 Months to {trendEndLabel}
+              </p>
               {trendData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={260}>
                   <LineChart data={trendData}>
@@ -676,7 +936,9 @@ export default function RentalExpenses() {
           {/* ── Top Category Trends — stacked column (default) / single line (filter active) ── */}
           {(stackedTrendData.length > 0 || singleCatTrend.length > 0) && (
             <div className="rounded-xl p-4" style={{ background: '#FBF6EE', border: '1px solid #E8DEC8' }}>
-              <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Top Category Trends — 6 Months</p>
+              <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>
+                Top Category Trends — 6 Months to {trendEndLabel}
+              </p>
               {filterCat ? (
                 <>
                   <p style={{ fontSize: 12, color: '#A8A29E', marginBottom: 10 }}>

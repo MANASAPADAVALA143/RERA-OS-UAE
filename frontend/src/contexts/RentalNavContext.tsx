@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import {
   LayoutDashboard, Building2, Home, FileText,
   CreditCard, TrendingDown, DollarSign, Users, BarChart2,
-  Wrench, AlertTriangle, Receipt,
+  Wrench, AlertTriangle,
   TrendingUp, ArrowDownUp, Table2, CalendarCheck, Activity,
   Landmark, Store, BookOpen,
   CircleDollarSign, CalendarRange, Tag, Percent, ClipboardList, Calculator,
@@ -18,7 +18,7 @@ export type RentalTab =
   | "ap-dashboard" | "vendor-management"
   | "ownership" | "reports" | "financials"
   | "portfolio-upload" | "cfo-dashboard" | "income-bridge" | "entity-rollup" | "compliance"
-  | "building-expenses" | "loan-tracker" | "cfo-portfolio" | "13-week-cf"
+  | "loan-tracker" | "cfo-portfolio" | "13-week-cf"
   | "discounts" | "financial-ratios"
   | "calculations-review"
   | "analytics";
@@ -55,8 +55,7 @@ export const RENTAL_TABS: RentalNavItem[] = [
   { id: "analytics",         label: "Analytics",         Icon: BarChart3,       groupLabel: "ANALYTICS" },
   { id: "calculations-review", label: "Calculations Review", Icon: Calculator, groupLabel: "CA FIRM QA" },
   // ── OPERATIONS ────────────────────────────────────────────────────────────
-  { id: "building-expenses", label: "Building Expenses", Icon: Receipt,         groupLabel: "OPERATIONS" },
-  { id: "loan-tracker",      label: "Loan Tracker",      Icon: CircleDollarSign },
+  { id: "loan-tracker",      label: "Loan Tracker",      Icon: CircleDollarSign, groupLabel: "OPERATIONS" },
   { id: "vendor-management", label: "Vendor Mgmt",       Icon: Store            },
   { id: "ownership",         label: "Ownership",         Icon: Users            },
   { id: "reports",           label: "Reports",           Icon: BarChart2        },
@@ -69,7 +68,6 @@ export const RENTAL_TABS: RentalNavItem[] = [
 ];
 
 const TAB_PATHS: Partial<Record<RentalTab, string>> = {
-  "building-expenses": "/rental/building-expenses",
   "loan-tracker":      "/rental/loan-tracker",
   "cfo-portfolio":     "/rental/cfo-portfolio",
   "13-week-cf":        "/rental/13-week-cf",
@@ -79,7 +77,6 @@ const TAB_PATHS: Partial<Record<RentalTab, string>> = {
 };
 
 const PATH_TO_TAB: Record<string, RentalTab> = {
-  "/rental/building-expenses": "building-expenses",
   "/rental/loan-tracker":      "loan-tracker",
   "/rental/cfo-portfolio":     "cfo-portfolio",
   "/rental/13-week-cf":        "13-week-cf",

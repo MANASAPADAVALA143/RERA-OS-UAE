@@ -466,7 +466,8 @@ export function formatSolvencyDscr(dscr: number | null): string {
 const NA = 'Data not available';
 
 export function fmtKpiCurrency(n: number): string {
-  if (!Number.isFinite(n) || n === 0) return NA;
+  if (!Number.isFinite(n)) return NA;
+  if (n === 0) return '$0';
   const abs = Math.abs(n);
   const s = abs >= 1_000_000 ? `$${(abs / 1_000_000).toFixed(2)}M`
     : abs >= 1_000 ? `$${(abs / 1_000).toFixed(1)}K`

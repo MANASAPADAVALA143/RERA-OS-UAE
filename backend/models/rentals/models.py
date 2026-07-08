@@ -54,6 +54,7 @@ class RentalCompany(Base):
     collected_this_month: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     vacancy_loss: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     monthly_rent_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    monthly_expense_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     gross_potential_rent: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     last_sync_month: Mapped[str | None] = mapped_column(String(20), nullable=True)
     last_sync_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

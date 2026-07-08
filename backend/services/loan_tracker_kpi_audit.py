@@ -49,7 +49,7 @@ def _balance(loan: dict[str, Any]) -> float:
     bal = loan.get("loan_balance_as_of")
     if bal is not None:
         return float(bal)
-    return float(loan["loan_amount"])
+    return 0.0
 
 
 def load_registry_rental_loan_dicts(
@@ -210,7 +210,7 @@ def _kpi_rows_from_bundle(
     rows.append(_loan_row(
         kpi=f"Total Loan Portfolio ({scope_label})",
         section=section,
-        formula="Σ (loan_balance_as_of ?? loan_amount) per loan in scope",
+        formula="Σ loan_balance_as_of for selected balance period (matches Excel balance column)",
         value=bundle["portfolio"],
         display_fn=_fmt_currency,
         inputs={**base_inputs, "Σ balance": _fmt_currency(bundle["portfolio"])},

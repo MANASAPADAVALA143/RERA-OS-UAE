@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, useEffect } from 'react';
 import { Download, Zap, CheckCircle2, TrendingDown, Plus, X, FileSpreadsheet, DollarSign, Briefcase, AlertCircle, TrendingUp, Calendar } from 'lucide-react';
 import { useRentalCfoData, dscrStatus } from '../../hooks/useRentalCfoData';
 import { LoadingSkeleton } from '../../components/ui/Table';
@@ -11,6 +11,16 @@ import type { BulletDef, BulletCard } from '../../components/shared/BulletChartS
 const MARKET_RATE = 0.065;
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const NOW = new Date();
+
+/** Outstanding balance for selected period — matches Excel balance column (not original loan amount). */
+function loanBal(l: { loan_balance_as_of: number | null }): number {
+  return l.loan_balance_as_of ?? 0;
+}
+
+/** Balance with principal fallback — used for charts when balance not yet imported. */
+function loanBalOrPrincipal(l: { loan_balance_as_of: number | null; loan_amount: number }): number {
+  return l.loan_balance_as_of ?? l.loan_amount ?? 0;
+}
 
 const DSCR_STYLE = { green: 'bg-green-100 text-green-800', amber: 'bg-amber-100 text-amber-800', red: 'bg-red-100 text-red-800', grey: 'bg-gray-100 text-gray-600' };
 
@@ -186,6 +196,17 @@ export default function RentalLoanTracker() {
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
+  const [balancePeriodInit, setBalancePeriodInit] = useState(false);
+
+  useEffect(() => {
+    if (balancePeriodInit || loading || loans.length === 0) return;
+    const periods = loans.flatMap(l => l.balance_periods ?? Object.keys(l.balance_by_month ?? {}));
+    if (!periods.length) return;
+    const latest = [...periods].sort().at(-1)!;
+    setSelectedYear(parseInt(latest.slice(0, 4), 10));
+    setSelectedMonth(parseInt(latest.slice(5, 7), 10));
+    setBalancePeriodInit(true);
+  }, [loans, loading, balancePeriodInit]);
 
   const availableYears = useMemo(() => {
     const fromLoans = new Set<number>();
@@ -287,12 +308,12 @@ export default function RentalLoanTracker() {
   }, [registryLoans, companyFilter, buildingFilter]);
 
   const kpis = useMemo(() => {
-    const portfolio = filtered.reduce((s, l) => s + (l.loan_balance_as_of ?? l.loan_amount), 0);
+    const portfolio = filtered.reduce((s, l) => s + loanBal(l), 0);
     const emi = filtered.reduce((s, l) => s + (l.loan_emi ?? 0), 0);
-    const rates = filtered.filter(l => l.loan_interest_rate != null);
+    const rates = filtered.filter(l => l.loan_interest_rate != null && loanBal(l) > 0);
     const wAvg = rates.length > 0
-      ? rates.reduce((s, l) => s + (l.loan_interest_rate ?? 0) * (l.loan_balance_as_of ?? l.loan_amount), 0) /
-        rates.reduce((s, l) => s + (l.loan_balance_as_of ?? l.loan_amount), 0)
+      ? rates.reduce((s, l) => s + (l.loan_interest_rate ?? 0) * loanBal(l), 0) /
+        rates.reduce((s, l) => s + loanBal(l), 0)
       : 0;
     const nextMat = filtered
       .filter(l => l.loan_maturity_date)
@@ -302,7 +323,7 @@ export default function RentalLoanTracker() {
 
   const highRateLoans = filtered.filter(l => (l.loan_interest_rate ?? 0) > MARKET_RATE);
   const monthlySavings = highRateLoans.reduce((s, l) => {
-    const bal = l.loan_balance_as_of ?? l.loan_amount;
+    const bal = loanBalOrPrincipal(l);
     return s + bal * ((l.loan_interest_rate ?? 0) - MARKET_RATE) / 12;
   }, 0);
 
@@ -329,7 +350,7 @@ export default function RentalLoanTracker() {
   const debtByBuildingData = useMemo(() => {
     const map: Record<string, number> = {};
     filtered.forEach(l => {
-      map[l.property_name] = (map[l.property_name] || 0) + (l.loan_balance_as_of ?? l.loan_amount);
+      map[l.property_name] = (map[l.property_name] || 0) + loanBalOrPrincipal(l);
     });
     return Object.entries(map).map(([name, value]) => ({ name, value }));
   }, [filtered]);
@@ -370,17 +391,17 @@ export default function RentalLoanTracker() {
   // ── New KPIs ────────────────────────────────────────────────────────────────
   const extKpis = useMemo(() => {
     const now = new Date();
-    const totalOutstanding = filtered.reduce((s, l) => s + (l.loan_balance_as_of ?? l.loan_amount), 0);
+    const totalOutstanding = filtered.reduce((s, l) => s + loanBal(l), 0);
 
     // Weighted avg remaining term (months), weighted by outstanding balance
     const loansWithMaturity = filtered.filter(l => l.loan_maturity_date);
     const weightedTermNum = loansWithMaturity.reduce((s, l) => {
-      const bal = l.loan_balance_as_of ?? l.loan_amount;
+      const bal = loanBalOrPrincipal(l);
       const mat = new Date(l.loan_maturity_date!);
       const months = Math.max(0, (mat.getFullYear() - now.getFullYear()) * 12 + mat.getMonth() - now.getMonth());
       return s + months * bal;
     }, 0);
-    const weightedTermDen = loansWithMaturity.reduce((s, l) => s + (l.loan_balance_as_of ?? l.loan_amount), 0);
+    const weightedTermDen = loansWithMaturity.reduce((s, l) => s + loanBalOrPrincipal(l), 0);
     const weightedAvgTerm = weightedTermDen > 0 ? weightedTermNum / weightedTermDen : null;
 
     // Maturing in next 12 months
@@ -391,13 +412,13 @@ export default function RentalLoanTracker() {
       return months >= 0 && months <= 12;
     });
     const maturingCount = in12.length;
-    const maturingAmt   = in12.reduce((s, l) => s + (l.loan_balance_as_of ?? l.loan_amount), 0);
+    const maturingAmt   = in12.reduce((s, l) => s + loanBalOrPrincipal(l), 0);
 
     // Average LTV (only where current_property_value is populated)
     const ltvLoans = filtered.filter(l => l.current_property_value && l.current_property_value > 0);
     const avgLtv = ltvLoans.length > 0
       ? ltvLoans.reduce((s, l) => {
-          const bal = l.loan_balance_as_of ?? l.loan_amount;
+          const bal = loanBalOrPrincipal(l);
           return s + (bal / l.current_property_value!) * 100;
         }, 0) / ltvLoans.length
       : null;
@@ -413,7 +434,7 @@ export default function RentalLoanTracker() {
     const byBuilding: Record<string, number> = {};
     const byLender:   Record<string, number> = {};
     filtered.forEach(l => {
-      const bal = l.loan_balance_as_of ?? l.loan_amount;
+      const bal = loanBal(l);
       byBuilding[l.property_name]  = (byBuilding[l.property_name]  || 0) + bal;
       byLender[l.loan_bank_name]   = (byLender[l.loan_bank_name]   || 0) + bal;
     });
@@ -436,7 +457,7 @@ export default function RentalLoanTracker() {
     filtered.forEach(l => {
       if (!l.loan_maturity_date) return;
       const yr = new Date(l.loan_maturity_date).getFullYear();
-      byYear[yr] = (byYear[yr] || 0) + (l.loan_balance_as_of ?? l.loan_amount);
+      byYear[yr] = (byYear[yr] || 0) + loanBalOrPrincipal(l);
     });
     return Object.entries(byYear)
       .sort(([a], [b]) => parseInt(a) - parseInt(b))
@@ -450,7 +471,7 @@ export default function RentalLoanTracker() {
       .map(l => ({
         name: l.property_name,
         bps: Math.round(((l.loan_interest_rate ?? 0) - MARKET_RATE) * 10000),
-        bal: l.loan_balance_as_of ?? l.loan_amount,
+        bal: loanBalOrPrincipal(l),
       }))
       .sort((a, b) => b.bps - a.bps);
   }, [filtered]);
@@ -554,7 +575,7 @@ export default function RentalLoanTracker() {
 
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
         {[
-          { label: 'Total Loan Portfolio', value: fmtUSD(kpis.portfolio ?? 0), hero: true },
+          { label: 'Total Loan Portfolio', value: fmtUSD(kpis.portfolio ?? 0), hero: true, sub: `Balance as of ${MONTH_LABELS[selectedMonth - 1]} ${selectedYear}` },
           { label: 'Total Monthly EMI', value: fmtUSD(kpis.emi ?? 0) },
           { label: 'Weighted Avg Rate', value: `${((kpis.wAvg ?? 0) * 100).toFixed(2)}%` },
           {
@@ -565,7 +586,7 @@ export default function RentalLoanTracker() {
               : `${companyOptions.length} companies`,
           },
           { label: 'Next Maturity', value: kpis.nextMat?.loan_maturity_date ?? '—', sub: kpis.nextMat?.property_name },
-          { label: 'Total Outstanding', value: fmtUSD(filtered.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0) ?? 0) },
+          { label: 'Total Outstanding', value: fmtUSD(kpis.portfolio ?? 0), sub: 'Sum of loan balances for period' },
         ].map(k => (
           <div key={k.label} style={{
             background: k.hero ? 'linear-gradient(135deg,#D4AF37,#B8860B)' : PT.cardBg,

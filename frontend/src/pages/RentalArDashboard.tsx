@@ -1028,243 +1028,9 @@ export default function RentalArDashboard() {
         </div>
       )}
 
-      {/* ══ NEW SECTION 2 — AR BY PROPERTY (ranked bar, color = collection rate) ═ */}
-      {!!port && propertyBarData.length > 0 && (() => {
-        const rateColor = (rate: number) =>
-          rate >= 95 ? '#166534' : rate >= 75 ? '#F5A623' : '#B91C1C';
-        const maxOutstanding = Math.max(...propertyBarData.map(d => d.outstanding), 1);
-        return (
-          <div style={CARD}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>AR by Property — Outstanding ranked</div>
-            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 14 }}>
-              Bar size = Outstanding AR · Color = Collection Rate · Click to filter dashboard
-              <span style={{ marginLeft: 12 }}>
-                <span style={{ color: '#166534', fontWeight: 600 }}>■</span> ≥95%
-                <span style={{ color: '#F5A623', fontWeight: 600, marginLeft: 8 }}>■</span> 75–94%
-                <span style={{ color: '#B91C1C', fontWeight: 600, marginLeft: 8 }}>■</span> &lt;75%
-              </span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {propertyBarData.map(d => {
-                const isSelected = selCoId === d.company_id;
-                const pct100 = maxOutstanding > 0 ? (d.outstanding / maxOutstanding) * 100 : 0;
-                return (
-                  <div key={d.company_id}
-                    style={{ opacity: selCoId && !isSelected ? 0.45 : 1, cursor: 'pointer' }}
-                    onClick={() => setSelCoId(isSelected ? '' : d.company_id)}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                      <span style={{ fontSize: 12, color: isSelected ? '#1C1917' : '#374151', fontWeight: isSelected ? 700 : 500 }}>
-                        {d.company}
-                      </span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 11, color: '#6B6B6B', fontVariantNumeric: 'tabular-nums lining-nums' }}>
-                          {d.outstanding > 0 ? fmt$(d.outstanding) : '—'} outstanding
-                        </span>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: rateColor(d.rate) }}>
-                          {d.rate > 0 ? `${d.rate.toFixed(1)}%` : 'No data'}
-                        </span>
-                      </div>
-                    </div>
-                    <div style={{ height: 10, background: '#E8DEC8', borderRadius: 6, overflow: 'hidden' }}>
-                      <div style={{
-                        height: '100%', borderRadius: 6, transition: 'width 0.4s',
-                        width: `${Math.max(pct100, d.outstanding > 0 ? 1.5 : 0)}%`,
-                        background: rateColor(d.rate),
-                      }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ══ NEW SECTION 3 — OVERDUE TREND BY BUCKET (gated: 3+ snapshots) ════ */}
-      {!!port && (
-        bucketTrend.length >= 3 ? (
-          <div style={CARD}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>Overdue Trend by Aging Bucket</div>
-            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 14 }}>
-              Three distinct overdue buckets over time — shows whether the worst-aged AR is growing or resolving
-            </div>
-            <ResponsiveContainer width="100%" height={220}>
-              <ComposedChart data={bucketTrend} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-                <CartesianGrid vertical={false} stroke="#E5E7EB" strokeDasharray="3 3" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6B7280' }} axisLine={false} tickLine={false} />
-                <YAxis
-                  tick={{ fontSize: 11, fill: '#6B7280' }}
-                  tickFormatter={(v: number) => v === 0 ? '$0' : v >= 1_000_000 ? `$${(v/1_000_000).toFixed(1)}M` : `$${(v/1000).toFixed(0)}k`}
-                  axisLine={false} tickLine={false} width={44}
-                />
-                <Tooltip
-                  contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #E8DEC8', background: '#FBF6EE' }}
-                  formatter={(v: number, name: string) => [fmt$(v), name]}
-                />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Line type="monotone" dataKey="31–60" name="31–60 days" stroke="#F5A623" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-                <Line type="monotone" dataKey="61–90" name="61–90 days" stroke="#C0392B" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-                <Line type="monotone" dataKey="91+"   name="91+ days"   stroke="#991B1B" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <div style={CARD}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1917' }}>Overdue Trend by Bucket</div>
-          </div>
-        )
-      )}
-
-      {/* ── RECON FLAGS (below Overdue Trend) ─────────────────────────────── */}
-      {reconFlags.length > 0 && (
-        <div style={{ background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 10, padding: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#92400E', marginBottom: 10 }}>
-            ⚠️ {reconFlags.length} Reconciliation Flag{reconFlags.length > 1 ? 's' : ''} — Rent Receivable vs P&L differ &gt; 2%
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 8 }}>
-            {reconFlags.map((f, i) => (
-              <div key={i} style={{ background: '#fff', border: '1px solid #FCD34D', borderRadius: 6, padding: '10px 12px', fontSize: 11 }}>
-                <div style={{ fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>{f.company} · {f.month}</div>
-                <div style={{ color: '#2F80ED' }}>Rent Receivable: {fmt$(f.rent_receivable)}</div>
-                <div style={{ color: '#92400E' }}>P&L: {fmt$(f.pl)}</div>
-                <div style={{ color: '#B91C1C', fontWeight: 600, marginTop: 2 }}>Δ {f.diff_pct}% difference</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── QB snapshot collecting history (below Overdue Trend) ──────────── */}
-      {!!port && bucketTrend.length < 3 && (
-        <div style={{ ...CARD, textAlign: 'center', padding: '20px 16px' }}>
-          <div style={{ fontSize: 12, color: '#9CA3AF' }}>
-            Collecting history — chart appears after 3 monthly QB AR Aging snapshots.
-            Currently {qbAging?.snapshot_count ?? 0} of 3 required.
-            {!qbAging?.has_data && ' Upload QB AR Aging below to start.'}
-          </div>
-        </div>
-      )}
-
-      </>
-      )}
-
-      {/* ── COLLECTION DETAILS TAB ─────────────────────────────────────── */}
-      {!!port && arView === 'collection' && (
-        <div style={{ background: '#fff', border: '1px solid #E8DEC8', borderRadius: 10, padding: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-            <div>
-              <div style={{ fontSize: 16, fontWeight: 600, color: '#1C1917' }}>
-                Collection detail — {selCoName || 'All Companies'} · {chartMonth || selMonth || 'All Months'}
-              </div>
-              <div style={{ fontSize: 13, color: '#A8A29E', marginTop: 2 }}>
-                Every company × every month · billed from registry · collected from Rent Receivable or P&L
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {['All','Zero-Pay','Partial','Paid','Low'].map(f => (
-                <button key={f} onClick={() => setStatusFlt(f)} style={{
-                  fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid',
-                  borderColor: statusFlt === f ? '#1C1917' : '#E8DEC8',
-                  background:  statusFlt === f ? '#1C1917' : 'transparent',
-                  color:       statusFlt === f ? '#fff'    : '#6B6B6B',
-                  cursor: 'pointer',
-                }}>{f}</button>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr style={{ background: '#F7F1E6' }}>
-                  {['Company','Month','Occ/Total','Billed/Mo','Collected','Outstanding','Rate','Source','Status'].map(h => (
-                    <th key={h} style={{
-                      textAlign: ['Company','Source','Status'].includes(h) ? 'left' : 'right',
-                      padding: '8px 10px', fontSize: 10, fontWeight: 600,
-                      color: '#5C5043', textTransform: 'uppercase', whiteSpace: 'nowrap',
-                    }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} style={{ padding: 28, textAlign: 'center', color: '#9CA3AF', fontSize: 12 }}>
-                      No data for this filter.
-                      {srcSummary.none > 0 && ` Upload Rent Receivable Excel to populate ${srcSummary.none} companies.`}
-                    </td>
-                  </tr>
-                ) : filteredRows.map((row, i) => {
-                  const pill = getStatus(row.rate, row.collected);
-                  return (
-                    <tr key={i} style={{ borderTop: '1px solid #F0EBE3', background: i % 2 === 0 ? '#FDFAF6' : '#fff' }}>
-                      <td style={{ padding: '8px 10px', fontWeight: 500, color: '#1C1917', whiteSpace: 'nowrap' }}>{row.company_name}</td>
-                      <td style={{ padding: '8px 10px', textAlign: 'right', color: '#6B6B6B', fontFamily: 'monospace', fontSize: 11 }}>{row.month}</td>
-                      <td style={{ padding: '8px 10px', textAlign: 'right', color: '#6B6B6B' }}>{row.occupied}/{row.total}</td>
-                      <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#374151' }}>{fmt$(row.billed)}</td>
-                      <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#166534', fontWeight: 500 }}>{fmt$(row.collected)}</td>
-                      <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: row.outstanding > 0 ? '#991B1B' : '#166534' }}>
-                        {row.outstanding > 0 ? fmt$(row.outstanding) : '—'}
-                      </td>
-                      <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace',
-                        color: row.rate >= 95 ? '#166534' : row.rate >= 85 ? '#92400E' : '#991B1B' }}>
-                        {row.has_data ? pct(row.rate) : '—'}
-                      </td>
-                      <td style={{ padding: '8px 10px' }}>
-                        {row.has_data ? (
-                          <span style={{
-                            fontSize: 9, padding: '2px 6px', borderRadius: 20,
-                            background: row.data_source === 'rent_receivable' ? '#EFF6FF' : '#FEFCE8',
-                            color:      row.data_source === 'rent_receivable' ? '#1E40AF' : '#92400E',
-                          }}>
-                            {row.data_source === 'rent_receivable' ? 'Rent Rcv' : 'P&L'}
-                          </span>
-                        ) : (
-                          <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 20, background: '#F3F4F6', color: '#6B7280' }}>No data</span>
-                        )}
-                      </td>
-                      <td style={{ padding: '8px 10px' }}>
-                        <span style={{ fontSize: 9, fontWeight: 600, padding: '3px 8px', borderRadius: 20, background: pill.bg, color: pill.color }}>
-                          {pill.label}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              {filteredRows.length > 0 && (
-                <tfoot>
-                  <tr style={{ background: '#F7F1E6', borderTop: '2px solid #E8DEC8' }}>
-                    <td colSpan={3} style={{ padding: '8px 10px', fontWeight: 700, fontSize: 11, color: '#1C1917' }}>TOTAL ({filteredRows.length} rows)</td>
-                    <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700 }}>
-                      {fmt$(filteredRows.reduce((s, r) => s + r.billed, 0))}
-                    </td>
-                    <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#166534' }}>
-                      {fmt$(filteredRows.reduce((s, r) => s + r.collected, 0))}
-                    </td>
-                    <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#991B1B' }}>
-                      {fmt$(filteredRows.reduce((s, r) => s + r.outstanding, 0))}
-                    </td>
-                    <td colSpan={3} style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700 }}>
-                      {(() => {
-                        const tb = filteredRows.reduce((s,r)=>s+r.billed,0);
-                        const tc = filteredRows.reduce((s,r)=>s+r.collected,0);
-                        return tb > 0 ? pct(tc/tb*100) : '—';
-                      })()}
-                    </td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
-        </div>
-      )}
-
       {/* ══════════════════════════════════════════════════════════════════
            QB AR AGING SECTION (Overview only)
          ══════════════════════════════════════════════════════════════════ */}
-      {arView === 'overview' && (
       <div style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
 
         {/* ── Header bar ─────────────────────────────────────────────────── */}
@@ -1628,6 +1394,238 @@ export default function RentalArDashboard() {
           </div>
         )}
       </div>
+
+      {/* ══ NEW SECTION 2 — AR BY PROPERTY (ranked bar, color = collection rate) ═ */}
+      {!!port && propertyBarData.length > 0 && (() => {
+        const rateColor = (rate: number) =>
+          rate >= 95 ? '#166534' : rate >= 75 ? '#F5A623' : '#B91C1C';
+        const maxOutstanding = Math.max(...propertyBarData.map(d => d.outstanding), 1);
+        return (
+          <div style={CARD}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>AR by Property — Outstanding ranked</div>
+            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 14 }}>
+              Bar size = Outstanding AR · Color = Collection Rate · Click to filter dashboard
+              <span style={{ marginLeft: 12 }}>
+                <span style={{ color: '#166534', fontWeight: 600 }}>■</span> ≥95%
+                <span style={{ color: '#F5A623', fontWeight: 600, marginLeft: 8 }}>■</span> 75–94%
+                <span style={{ color: '#B91C1C', fontWeight: 600, marginLeft: 8 }}>■</span> &lt;75%
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {propertyBarData.map(d => {
+                const isSelected = selCoId === d.company_id;
+                const pct100 = maxOutstanding > 0 ? (d.outstanding / maxOutstanding) * 100 : 0;
+                return (
+                  <div key={d.company_id}
+                    style={{ opacity: selCoId && !isSelected ? 0.45 : 1, cursor: 'pointer' }}
+                    onClick={() => setSelCoId(isSelected ? '' : d.company_id)}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontSize: 12, color: isSelected ? '#1C1917' : '#374151', fontWeight: isSelected ? 700 : 500 }}>
+                        {d.company}
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 11, color: '#6B6B6B', fontVariantNumeric: 'tabular-nums lining-nums' }}>
+                          {d.outstanding > 0 ? fmt$(d.outstanding) : '—'} outstanding
+                        </span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: rateColor(d.rate) }}>
+                          {d.rate > 0 ? `${d.rate.toFixed(1)}%` : 'No data'}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ height: 10, background: '#E8DEC8', borderRadius: 6, overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%', borderRadius: 6, transition: 'width 0.4s',
+                        width: `${Math.max(pct100, d.outstanding > 0 ? 1.5 : 0)}%`,
+                        background: rateColor(d.rate),
+                      }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ══ NEW SECTION 3 — OVERDUE TREND BY BUCKET (gated: 3+ snapshots) ════ */}
+      {!!port && (
+        bucketTrend.length >= 3 ? (
+          <div style={CARD}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>Overdue Trend by Aging Bucket</div>
+            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 14 }}>
+              Three distinct overdue buckets over time — shows whether the worst-aged AR is growing or resolving
+            </div>
+            <ResponsiveContainer width="100%" height={220}>
+              <ComposedChart data={bucketTrend} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+                <CartesianGrid vertical={false} stroke="#E5E7EB" strokeDasharray="3 3" />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6B7280' }} axisLine={false} tickLine={false} />
+                <YAxis
+                  tick={{ fontSize: 11, fill: '#6B7280' }}
+                  tickFormatter={(v: number) => v === 0 ? '$0' : v >= 1_000_000 ? `$${(v/1_000_000).toFixed(1)}M` : `$${(v/1000).toFixed(0)}k`}
+                  axisLine={false} tickLine={false} width={44}
+                />
+                <Tooltip
+                  contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #E8DEC8', background: '#FBF6EE' }}
+                  formatter={(v: number, name: string) => [fmt$(v), name]}
+                />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Line type="monotone" dataKey="31–60" name="31–60 days" stroke="#F5A623" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="61–90" name="61–90 days" stroke="#C0392B" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="91+"   name="91+ days"   stroke="#991B1B" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div style={CARD}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1917' }}>Overdue Trend by Bucket</div>
+          </div>
+        )
+      )}
+
+      {/* ── RECON FLAGS (below Overdue Trend) ─────────────────────────────── */}
+      {reconFlags.length > 0 && (
+        <div style={{ background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 10, padding: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#92400E', marginBottom: 10 }}>
+            ⚠️ {reconFlags.length} Reconciliation Flag{reconFlags.length > 1 ? 's' : ''} — Rent Receivable vs P&L differ &gt; 2%
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 8 }}>
+            {reconFlags.map((f, i) => (
+              <div key={i} style={{ background: '#fff', border: '1px solid #FCD34D', borderRadius: 6, padding: '10px 12px', fontSize: 11 }}>
+                <div style={{ fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>{f.company} · {f.month}</div>
+                <div style={{ color: '#2F80ED' }}>Rent Receivable: {fmt$(f.rent_receivable)}</div>
+                <div style={{ color: '#92400E' }}>P&L: {fmt$(f.pl)}</div>
+                <div style={{ color: '#B91C1C', fontWeight: 600, marginTop: 2 }}>Δ {f.diff_pct}% difference</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── QB snapshot collecting history (below Overdue Trend) ──────────── */}
+      {!!port && bucketTrend.length < 3 && (
+        <div style={{ ...CARD, textAlign: 'center', padding: '20px 16px' }}>
+          <div style={{ fontSize: 12, color: '#9CA3AF' }}>
+            Collecting history — chart appears after 3 monthly QB AR Aging snapshots.
+            Currently {qbAging?.snapshot_count ?? 0} of 3 required.
+            {!qbAging?.has_data && ' Upload QB AR Aging below to start.'}
+          </div>
+        </div>
+      )}
+
+      </>
+      )}
+
+      {/* ── COLLECTION DETAILS TAB ─────────────────────────────────────── */}
+      {!!port && arView === 'collection' && (
+        <div style={{ background: '#fff', border: '1px solid #E8DEC8', borderRadius: 10, padding: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 600, color: '#1C1917' }}>
+                Collection detail — {selCoName || 'All Companies'} · {chartMonth || selMonth || 'All Months'}
+              </div>
+              <div style={{ fontSize: 13, color: '#A8A29E', marginTop: 2 }}>
+                Every company × every month · billed from registry · collected from Rent Receivable or P&L
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {['All','Zero-Pay','Partial','Paid','Low'].map(f => (
+                <button key={f} onClick={() => setStatusFlt(f)} style={{
+                  fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid',
+                  borderColor: statusFlt === f ? '#1C1917' : '#E8DEC8',
+                  background:  statusFlt === f ? '#1C1917' : 'transparent',
+                  color:       statusFlt === f ? '#fff'    : '#6B6B6B',
+                  cursor: 'pointer',
+                }}>{f}</button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: '#F7F1E6' }}>
+                  {['Company','Month','Occ/Total','Billed/Mo','Collected','Outstanding','Rate','Source','Status'].map(h => (
+                    <th key={h} style={{
+                      textAlign: ['Company','Source','Status'].includes(h) ? 'left' : 'right',
+                      padding: '8px 10px', fontSize: 10, fontWeight: 600,
+                      color: '#5C5043', textTransform: 'uppercase', whiteSpace: 'nowrap',
+                    }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} style={{ padding: 28, textAlign: 'center', color: '#9CA3AF', fontSize: 12 }}>
+                      No data for this filter.
+                      {srcSummary.none > 0 && ` Upload Rent Receivable Excel to populate ${srcSummary.none} companies.`}
+                    </td>
+                  </tr>
+                ) : filteredRows.map((row, i) => {
+                  const pill = getStatus(row.rate, row.collected);
+                  return (
+                    <tr key={i} style={{ borderTop: '1px solid #F0EBE3', background: i % 2 === 0 ? '#FDFAF6' : '#fff' }}>
+                      <td style={{ padding: '8px 10px', fontWeight: 500, color: '#1C1917', whiteSpace: 'nowrap' }}>{row.company_name}</td>
+                      <td style={{ padding: '8px 10px', textAlign: 'right', color: '#6B6B6B', fontFamily: 'monospace', fontSize: 11 }}>{row.month}</td>
+                      <td style={{ padding: '8px 10px', textAlign: 'right', color: '#6B6B6B' }}>{row.occupied}/{row.total}</td>
+                      <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#374151' }}>{fmt$(row.billed)}</td>
+                      <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#166534', fontWeight: 500 }}>{fmt$(row.collected)}</td>
+                      <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: row.outstanding > 0 ? '#991B1B' : '#166534' }}>
+                        {row.outstanding > 0 ? fmt$(row.outstanding) : '—'}
+                      </td>
+                      <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace',
+                        color: row.rate >= 95 ? '#166534' : row.rate >= 85 ? '#92400E' : '#991B1B' }}>
+                        {row.has_data ? pct(row.rate) : '—'}
+                      </td>
+                      <td style={{ padding: '8px 10px' }}>
+                        {row.has_data ? (
+                          <span style={{
+                            fontSize: 9, padding: '2px 6px', borderRadius: 20,
+                            background: row.data_source === 'rent_receivable' ? '#EFF6FF' : '#FEFCE8',
+                            color:      row.data_source === 'rent_receivable' ? '#1E40AF' : '#92400E',
+                          }}>
+                            {row.data_source === 'rent_receivable' ? 'Rent Rcv' : 'P&L'}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 20, background: '#F3F4F6', color: '#6B7280' }}>No data</span>
+                        )}
+                      </td>
+                      <td style={{ padding: '8px 10px' }}>
+                        <span style={{ fontSize: 9, fontWeight: 600, padding: '3px 8px', borderRadius: 20, background: pill.bg, color: pill.color }}>
+                          {pill.label}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              {filteredRows.length > 0 && (
+                <tfoot>
+                  <tr style={{ background: '#F7F1E6', borderTop: '2px solid #E8DEC8' }}>
+                    <td colSpan={3} style={{ padding: '8px 10px', fontWeight: 700, fontSize: 11, color: '#1C1917' }}>TOTAL ({filteredRows.length} rows)</td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700 }}>
+                      {fmt$(filteredRows.reduce((s, r) => s + r.billed, 0))}
+                    </td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#166534' }}>
+                      {fmt$(filteredRows.reduce((s, r) => s + r.collected, 0))}
+                    </td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#991B1B' }}>
+                      {fmt$(filteredRows.reduce((s, r) => s + r.outstanding, 0))}
+                    </td>
+                    <td colSpan={3} style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700 }}>
+                      {(() => {
+                        const tb = filteredRows.reduce((s,r)=>s+r.billed,0);
+                        const tc = filteredRows.reduce((s,r)=>s+r.collected,0);
+                        return tb > 0 ? pct(tc/tb*100) : '—';
+                      })()}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </div>
       )}
 
       {/* ── UNMATCHED P&L LINES ──────────────────────────────────────────── */}

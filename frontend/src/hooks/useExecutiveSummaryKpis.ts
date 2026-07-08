@@ -171,18 +171,20 @@ export function useExecutiveSummaryKpis(
   const overview = useMemo((): ExecutiveOverviewMetrics => {
     const k = kpiView?.k ?? null;
     const p = scopedPortfolio;
-    const hasFinancials = Boolean(k && (k.totalRevenue !== 0 || k.netIncome !== 0 || k.noi !== 0));
+    const hasFinancials = Boolean(k && activeFins.length > 0);
+
+    const debtTotal = scopedLoans.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0);
 
     return {
       grossPotentialRent: p?.gross_potential_rent ?? (hasFinancials ? k!.totalRevenue : null),
-      totalCollected: p?.collected_this_month ?? (hasFinancials ? k!.totalRevenue : null),
+      totalCollected: p?.collected_this_month ?? (hasFinancials ? k!.rentalIncome : null),
       noi: hasFinancials ? k!.noi : (p?.noi_this_month ?? null),
       occupancyPct: p?.occupancy_pct != null ? p.occupancy_pct * 100 : null,
       vacancyLoss: p?.vacancy_loss ?? null,
       totalExpenses: hasFinancials ? k!.totalExpenses : (p?.total_expense_this_month ?? null),
       arOutstanding: p?.arrears_total ?? null,
       collectionRate: ops.collectionRate ?? null,
-      totalDebt: scopedLoans.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0) || null,
+      totalDebt: scopedLoans.length > 0 ? debtTotal : null,
       hasFinancials,
       periodLabel: kpiView?.label ?? '',
     };

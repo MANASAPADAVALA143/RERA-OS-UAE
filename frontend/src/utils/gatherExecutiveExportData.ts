@@ -21,7 +21,8 @@ interface FinRow {
 }
 
 function fmtUsd(n: number): string {
-  if (!Number.isFinite(n) || n === 0) return 'Data not available';
+  if (!Number.isFinite(n)) return 'Data not available';
+  if (n === 0) return '$0';
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 }
 

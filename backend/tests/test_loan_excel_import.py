@@ -76,6 +76,24 @@ def test_wwbg_style_typo_headers():
     assert parsed.rows[0].loan_emi == 8500
 
 
+def test_date_balance_header_maps_to_month():
+    rows = [
+        ["Entity", "Entity Name", "Property Name", "Loan Bank Name", "Loan Amount",
+         "Loan Interest Rate", "Loan EMI", "Loan Balance as on 04/30/2026"],
+        ["Rental", "Alpha LLC", "Suite 100", "First Bank", 400000, 5.5, 2800, 390000],
+    ]
+    parsed = parse_loan_workbook(_workbook_bytes({"Bank Loan Information": rows}))
+    assert len(parsed.rows) == 1
+    assert parsed.rows[0].balance_by_month["2026-04"] == 390000
+    assert parsed.balance_periods == ["2026-04"]
+
+
+def test_indian_grouped_currency_string():
+    from services.loan_excel_import import _parse_num
+    assert _parse_num("$12,02,175.22") == 1202175.22
+    assert _parse_num("$24,73,308.48") == 2473308.48
+
+
 def test_sheet_title_used_when_company_column_empty():
     rows = [
         ["Sl No.", "Company Name", "Property Name", "Loan Bank Name", "Loan Date",

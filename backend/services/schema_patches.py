@@ -85,6 +85,7 @@ RENTAL_COMPANY_COLUMNS = {
     "collected_this_month":  "NUMERIC(14, 2)",
     "vacancy_loss":          "NUMERIC(14, 2)",
     "monthly_rent_data":     "JSONB",
+    "monthly_expense_data":  "JSONB",
     "gross_potential_rent":  "NUMERIC(14, 2) DEFAULT 0",
     "last_sync_month":       "VARCHAR(20)",
     "last_sync_date":        "TIMESTAMP",

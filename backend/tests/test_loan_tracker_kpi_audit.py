@@ -31,10 +31,10 @@ def test_portfolio_emi_and_weighted_rate():
     assert abs(k["w_avg"] - 0.0533333333) < 1e-6
 
 
-def test_balance_falls_back_to_loan_amount():
+def test_balance_falls_back_to_zero_without_imported_balance():
     loans = [_loan(loan_amount=250_000)]
     k = compute_loan_tracker_kpis(loans)
-    assert k["portfolio"] == 250_000
+    assert k["portfolio"] == 0
 
 
 def test_portfolio_dscr():

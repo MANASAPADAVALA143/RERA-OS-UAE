@@ -1999,6 +1999,114 @@ async def confirm_rent_receivable(
             os.unlink(tmp_path)
 
 
+# ── company monthly expense matrix upload ───────────────────────────────────────
+
+@router.get("/company-expenses")
+def list_company_expenses(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return per-company monthly expense totals from uploaded matrix."""
+    tid = current_user.tenant_id
+    companies = db.query(RentalCompany).filter(RentalCompany.tenant_id == tid).all()
+    rows = []
+    portfolio: dict[str, float] = {}
+    for co in companies:
+        med = co.monthly_expense_data or {}
+        if not med:
+            continue
+        rows.append({
+            "id": str(co.id),
+            "company_name": co.company_name,
+            "monthly_expense_data": med,
+        })
+        for m, v in med.items():
+            portfolio[m] = round(portfolio.get(m, 0) + float(v or 0), 2)
+    return {
+        "companies": rows,
+        "portfolio_monthly_totals": portfolio,
+        "has_matrix": bool(rows),
+    }
+
+
+@router.post("/upload-company-expenses/preview")
+async def preview_company_expenses(
+    file: UploadFile = File(...),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Parse company × month expense matrix without saving."""
+    import tempfile
+    from services.company_expense_excel_import import parse_company_expense_workbook
+
+    contents = await file.read()
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+        tmp.write(contents)
+        tmp_path = tmp.name
+
+    try:
+        parsed = parse_company_expense_workbook(contents)
+        portfolio: dict[str, float] = {}
+        companies_out = []
+        for row in parsed.companies:
+            companies_out.append({
+                "company": row.company,
+                "monthly_totals": row.monthly_totals,
+                "months_with_data": len(row.monthly_totals),
+            })
+            for m, v in row.monthly_totals.items():
+                portfolio[m] = round(portfolio.get(m, 0) + v, 2)
+
+        return {
+            "companies": companies_out,
+            "month_columns": parsed.month_columns,
+            "portfolio_monthly_totals": portfolio,
+            "skipped_empty_rows": parsed.skipped_rows,
+            "companies_parsed": len(parsed.companies),
+            "temp_file_id": tmp_path,
+        }
+    except Exception as e:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise HTTPException(status_code=400, detail=f"Parse error: {str(e)}") from e
+
+
+@router.post("/upload-company-expenses/confirm")
+async def confirm_company_expenses(
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_write_access()),
+):
+    """Save parsed company expense matrix to r_companies.monthly_expense_data."""
+    tmp_path = payload.get("temp_file_id")
+    replace = bool(payload.get("replace", False))
+
+    if not tmp_path or not os.path.exists(tmp_path):
+        raise HTTPException(status_code=400, detail="Session expired — please upload again")
+
+    try:
+        with open(tmp_path, "rb") as f:
+            content = f.read()
+        from services.company_expense_excel_import import import_company_expenses_from_excel
+
+        result = import_company_expenses_from_excel(
+            db, current_user.tenant_id, content, replace=replace,
+        )
+        if result.get("error") == "no_rows":
+            raise HTTPException(status_code=400, detail=result["message"])
+        return {
+            "status": "success",
+            "updated_companies": result["updated_companies"],
+            "unmatched_companies": result["unmatched_companies"],
+            "skipped_empty_rows": result["skipped_empty_rows"],
+            "month_columns": result["month_columns"],
+            "portfolio_monthly_totals": result["portfolio_monthly_totals"],
+            "message": f"Updated {len(result['updated_companies'])} companies",
+        }
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
 # ── portfolio import from Excel template ──────────────────────────────────────
 
 @router.post("/import-portfolio")
