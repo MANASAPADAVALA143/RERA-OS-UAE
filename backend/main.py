@@ -82,14 +82,26 @@ async def _global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": "An internal error occurred"})
 
 
+_cors_extra_origins = [
+    o.strip()
+    for o in (
+        __import__("os").environ.get("CORS_ALLOW_ORIGINS", "")
+        + ","
+        + __import__("os").environ.get("FRONTEND_URL", "")
+    ).split(",")
+    if o.strip()
+]
 _cors_kwargs = {
     "allow_credentials": True,
     "allow_methods": ["*"],
     "allow_headers": ["*"],
+    "max_age": 600,
 }
-# Always allow local dev + any *.onrender.com origin (production frontend on Render)
+# Explicit origins (Render frontend) + any *.onrender.com + local dev
+if _cors_extra_origins:
+    _cors_kwargs["allow_origins"] = list(dict.fromkeys(_cors_extra_origins))
 _cors_kwargs["allow_origin_regex"] = (
-    r"http://(localhost|127\.0\.0\.1):\d+|https://[a-zA-Z0-9-]+\.onrender\.com"
+    r"https?://(localhost|127\.0\.0\.1)(:\d+)?|https://[a-zA-Z0-9][a-zA-Z0-9-]*\.onrender\.com"
 )
 
 app.add_middleware(CORSMiddleware, **_cors_kwargs)
@@ -177,6 +189,11 @@ if not settings.s3_bucket:
 def startup():
     apply_schema_patches(engine)
     Base.metadata.create_all(bind=engine)
+    try:
+        from routers.rentals.router import _ensure_fin_uploads_table
+        _ensure_fin_uploads_table(engine)
+    except Exception:
+        pass
     db = SessionLocal()
     try:
         ensure_local_demo(db)

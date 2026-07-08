@@ -50,7 +50,7 @@ export default function RentalExecutiveSummary() {
 
   const monthYm = `${year}-${String(month).padStart(2, '0')}`;
   const [registryMonthYm, setRegistryMonthYm] = useState(monthYm);
-  const { companies, loans, portfolio, units, loading: cfoLoading } = useRentalCfoData(registryMonthYm);
+  const { companies, loans, portfolio, units, loading: cfoLoading, error: cfoError } = useRentalCfoData(registryMonthYm);
 
   useEffect(() => {
     const key = resolveRegistryMonthKey(month, year, companies);
@@ -129,7 +129,7 @@ export default function RentalExecutiveSummary() {
 
   const handlePrint = useCallback(() => { window.print(); }, []);
 
-  const loading = cfoLoading || finLoading || arLoading;
+  const overviewLoading = cfoLoading || arLoading;
 
   return (
     <div style={{ background: P.pageBg, minHeight: '100vh', width: '100%', maxWidth: '100%' }}>
@@ -216,11 +216,21 @@ export default function RentalExecutiveSummary() {
         ))}
       </div>
 
-      {loading && activeTab === 'overview' && (
+      {cfoError && (
+        <div style={{ marginBottom: 16, padding: '12px 16px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, fontSize: 13, color: '#B91C1C' }}>
+          {cfoError} Refresh the page — the API may be waking up after idle (~30s).
+        </div>
+      )}
+
+      {overviewLoading && activeTab === 'overview' && (
         <p style={{ fontSize: 13, color: P.muted, marginBottom: 16 }}>Loading portfolio, financials, and rent receivable data…</p>
       )}
 
-      {activeTab === 'overview' && !loading && (
+      {finLoading && activeTab === 'overview' && !overviewLoading && (
+        <p style={{ fontSize: 12, color: P.muted, marginBottom: 12 }}>Loading P&amp;L financials in background…</p>
+      )}
+
+      {activeTab === 'overview' && !overviewLoading && (
         <ExecutiveSummarySixBands
           overview={overview}
           kpiView={kpiView ? { k: kpiView.k, label: kpiView.label } : null}

@@ -2820,8 +2820,6 @@ def list_financials(
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    from database import engine as _engine
-    _ensure_fin_uploads_table(_engine)
     from models.rentals.models import RentalFinancialUpload
     rows = db.query(RentalFinancialUpload).filter(
         RentalFinancialUpload.tenant_id == current_user.tenant_id
@@ -2844,8 +2842,6 @@ def get_financials(
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    from database import engine as _engine
-    _ensure_fin_uploads_table(_engine)
     from models.rentals.models import RentalFinancialUpload
     row = db.query(RentalFinancialUpload).filter(
         RentalFinancialUpload.tenant_id == current_user.tenant_id,

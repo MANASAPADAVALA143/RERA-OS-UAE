@@ -19,6 +19,10 @@ services:
         value: us-west-1
       - key: PYTHON_VERSION
         value: "3.11.0"
+      - key: FRONTEND_URL
+        value: https://allinone-mis.onrender.com
+      - key: CORS_ALLOW_ORIGINS
+        value: https://allinone-mis.onrender.com
 
   # ── Frontend (Vite/React static site) ──────────────────────────────────────
   - type: web
