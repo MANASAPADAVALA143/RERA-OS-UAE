@@ -3,6 +3,7 @@
  * and Executive Summary PPT export. Keep in sync with KPI card / benchmark logic.
  */
 import { type Period, getPeriodKeys } from './periodWindow';
+import { normalizeMonthKey } from './executiveSummaryFormatters';
 
 export interface FinItem {
   label: string;
@@ -47,6 +48,15 @@ export interface ExportKpiItem {
 
 const _MNAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+function normalizeFinItem(item: FinItem): FinItem {
+  if (!item.monthlyValues) return item;
+  const monthlyValues: Record<string, number> = {};
+  for (const [k, v] of Object.entries(item.monthlyValues)) {
+    monthlyValues[normalizeMonthKey(k)] = v;
+  }
+  return { ...item, monthlyValues };
+}
+
 export function apiResponseToParsedFinancials(data: {
   company_name?: string; date_range?: string; filename?: string; uploaded_at?: string;
   years?: number[]; periods?: string[]; pl?: FinItem[]; bs?: FinItem[]; cf?: FinItem[];
@@ -57,10 +67,10 @@ export function apiResponseToParsedFinancials(data: {
     fileName: data.filename ?? '',
     uploadedAt: data.uploaded_at ?? '',
     years: data.years ?? [],
-    periods: data.periods ?? [],
-    pl: data.pl ?? [],
-    bs: data.bs ?? [],
-    cf: data.cf ?? [],
+    periods: (data.periods ?? []).map(normalizeMonthKey),
+    pl: (data.pl ?? []).map(normalizeFinItem),
+    bs: (data.bs ?? []).map(normalizeFinItem),
+    cf: (data.cf ?? []).map(normalizeFinItem),
   };
 }
 
@@ -74,14 +84,23 @@ function sortPeriodKeys(keys: string[]): string[] {
 function getItemKeys(items: FinItem[]): string[] {
   const keySet = new Set<string>();
   for (const item of items) {
-    if (item.monthlyValues) Object.keys(item.monthlyValues).forEach(k => keySet.add(k));
+    if (item.monthlyValues) {
+      Object.keys(item.monthlyValues).forEach(k => keySet.add(normalizeMonthKey(k)));
+    }
   }
   return sortPeriodKeys([...keySet]);
 }
 
 export function getAvailableKeys(fin: ParsedFinancials): string[] {
-  if (fin.periods?.length) return fin.periods;
+  if (fin.periods?.length) {
+    return sortPeriodKeys([...new Set(fin.periods.map(normalizeMonthKey))]);
+  }
   return getItemKeys(fin.pl);
+}
+
+function latestAvailableKey(fin: ParsedFinancials): string | null {
+  const keys = getAvailableKeys(fin);
+  return keys.length ? keys[keys.length - 1] : null;
 }
 
 function getYV(items: FinItem[], pattern: RegExp, year: number): number {
@@ -94,12 +113,16 @@ function sumI(items: FinItem[], pattern: RegExp, year: number): number {
 }
 
 function getMV(pl: FinItem[], pattern: RegExp, key: string): number {
-  return pl.find(i => pattern.test(i.label))?.monthlyValues?.[key] ?? 0;
+  const norm = normalizeMonthKey(key);
+  const item = pl.find(i => pattern.test(i.label));
+  if (!item?.monthlyValues) return 0;
+  return item.monthlyValues[norm] ?? item.monthlyValues[key] ?? 0;
 }
 
 function sumMV(pl: FinItem[], pattern: RegExp, key: string): number {
+  const norm = normalizeMonthKey(key);
   return pl.filter(i => !i.isSectionHeader && !i.isTotal && pattern.test(i.label))
-    .reduce((s, i) => s + (i.monthlyValues?.[key] ?? 0), 0);
+    .reduce((s, i) => s + (i.monthlyValues?.[norm] ?? i.monthlyValues?.[key] ?? 0), 0);
 }
 
 interface MonthlyKpis {
@@ -327,22 +350,21 @@ export function resolveKpiView(
 
   if (kpiMonth && availableKeys.length > 0) {
     const key = `${_MNAMES[kpiMonth - 1]} ${kpiYear}`;
-    if (availableKeys.includes(key)) {
-      const k = calcKpisFromMonthlyKey(fin, key);
-      const prevMonthKey = kpiMonth === 1 ? `${_MNAMES[11]} ${kpiYear - 1}` : `${_MNAMES[kpiMonth - 2]} ${kpiYear}`;
-      const prevYearKey = `${_MNAMES[kpiMonth - 1]} ${kpiYear - 1}`;
-      const kPrev = availableKeys.includes(prevYearKey)
-        ? calcKpisFromMonthlyKey(fin, prevYearKey)
-        : availableKeys.includes(prevMonthKey)
-          ? calcKpisFromMonthlyKey(fin, prevMonthKey)
-          : fin.years.includes(kpiYear - 1)
-            ? calcKpis(fin, kpiYear - 1)
-            : null;
-      const compareLabel = availableKeys.includes(prevYearKey)
-        ? `${_MNAMES[kpiMonth - 1]} ${kpiYear - 1}`
-        : kPrev ? 'Prior period' : '';
-      return { k, kPrev, label: key, compareLabel };
-    }
+    const resolvedKey = availableKeys.includes(key) ? key : availableKeys[availableKeys.length - 1];
+    const k = calcKpisFromMonthlyKey(fin, resolvedKey);
+    const prevMonthKey = kpiMonth === 1 ? `${_MNAMES[11]} ${kpiYear - 1}` : `${_MNAMES[kpiMonth - 2]} ${kpiYear}`;
+    const prevYearKey = `${_MNAMES[kpiMonth - 1]} ${kpiYear - 1}`;
+    const kPrev = availableKeys.includes(prevYearKey)
+      ? calcKpisFromMonthlyKey(fin, prevYearKey)
+      : availableKeys.includes(prevMonthKey)
+        ? calcKpisFromMonthlyKey(fin, prevMonthKey)
+        : fin.years.includes(kpiYear - 1)
+          ? calcKpis(fin, kpiYear - 1)
+          : null;
+    const compareLabel = availableKeys.includes(prevYearKey)
+      ? `${_MNAMES[kpiMonth - 1]} ${kpiYear - 1}`
+      : kPrev ? 'Prior period' : '';
+    return { k, kPrev, label: resolvedKey, compareLabel };
   }
 
   const k = calcKpis(fin, year);
@@ -363,7 +385,17 @@ export function resolveKpiViewForPeriod(
   const keys = getPeriodKeys(period, pMonth, pYear);
   const available = getAvailableKeys(fin);
   const filtered = keys.filter(k => available.includes(k));
-  if (!filtered.length) return resolveKpiView(fin, pYear, pMonth);
+  if (!filtered.length) {
+    const latest = latestAvailableKey(fin);
+    if (latest) {
+      const k = calcKpisFromMonthlyKey(fin, latest);
+      const idx = available.indexOf(latest);
+      const priorKey = idx > 0 ? available[idx - 1] : null;
+      const kPrev = priorKey ? calcKpisFromMonthlyKey(fin, priorKey) : null;
+      return { k, kPrev, label: latest, compareLabel: priorKey ?? '' };
+    }
+    return resolveKpiView(fin, pYear, pMonth);
+  }
 
   // MoM: current month only — prior month is kPrev for comparison, not summed into k.
   if (period === 'MoM') {

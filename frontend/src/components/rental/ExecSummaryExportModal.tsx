@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Download, X } from 'lucide-react';
 import type { Period } from '../../utils/periodWindow';
-import type { CompanyRow, PortfolioSummary, LoanRow } from '../../hooks/useRentalCfoData';
-import { gatherExecutiveExportPayload } from '../../utils/gatherExecutiveExportData';
-import { generateExecutiveSummaryPpt } from '../../utils/executiveSummaryPpt';
+import type { CompanyRow, PortfolioSummary, LoanRow, UnitRow } from '../../hooks/useRentalCfoData';
+import { gatherCeoBoardExportPayload } from '../../utils/gatherExecutiveExportData';
+import { generateCeoBoardReviewPpt } from '../../utils/executiveSummaryPpt';
 
 const P = {
   pageBg: '#F7F1E6', cardBg: '#FBF6EE', border: '#E8DEC8',
@@ -17,6 +17,7 @@ interface Props {
   companies: CompanyRow[];
   portfolio: PortfolioSummary | null;
   loans: LoanRow[];
+  units: UnitRow[];
   arData: ArMonth[];
   finRows: FinRow[];
   period: Period | null;
@@ -26,7 +27,7 @@ interface Props {
 }
 
 export default function ExecSummaryExportModal({
-  companies, portfolio, loans, arData, finRows,
+  companies, portfolio, loans, units, arData, finRows,
   period, month, year, onClose,
 }: Props) {
   const [entityId, setEntityId] = useState<string>('portfolio');
@@ -41,7 +42,7 @@ export default function ExecSummaryExportModal({
         ? 'Portfolio_Total'
         : (companies.find(c => c.id === entityId)?.company_name ?? 'Entity');
 
-      const payload = await gatherExecutiveExportPayload({
+      const payload = await gatherCeoBoardExportPayload({
         entityId,
         entityLabel,
         period,
@@ -50,11 +51,12 @@ export default function ExecSummaryExportModal({
         companies,
         portfolio,
         loans,
+        units,
         arData,
         finRows,
       });
 
-      await generateExecutiveSummaryPpt(payload);
+      await generateCeoBoardReviewPpt(payload);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Export failed');
@@ -87,9 +89,9 @@ export default function ExecSummaryExportModal({
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
           <div>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: P.text, margin: 0 }}>Download PPT</h2>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: P.text, margin: 0 }}>CEO Board Review PPT</h2>
             <p style={{ fontSize: 12, color: P.muted, marginTop: 4 }}>
-              11 slides · period: <strong style={{ color: P.text }}>{periodDesc}</strong>
+              12 slides · period: <strong style={{ color: P.text }}>{periodDesc}</strong>
             </p>
           </div>
           <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: P.muted }}>
@@ -138,8 +140,8 @@ export default function ExecSummaryExportModal({
         </div>
 
         <p style={{ fontSize: 11, color: P.muted, marginBottom: 16, lineHeight: 1.5 }}>
-          Slides: Executive Overview → Profitability → Balance Sheet → Occupancy →
-          Pricing → Returns → Loans → Income Statement → Balance Sheet → Cash Flow → Action Plan
+          Full board deck: Executive narrative → Portfolio → Rentals → Financials → Cash →
+          Loans & EMI → Debt risk → Ownership → Property P&L → Action items → Strategy
         </p>
 
         {error && (

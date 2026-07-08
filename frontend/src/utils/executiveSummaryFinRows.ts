@@ -1,4 +1,5 @@
 import type { ParsedFinancials, FinItem } from './rentalKpiEngine';
+import { normalizeMonthKey } from './executiveSummaryFormatters';
 
 export interface FinRow {
   month: string;
@@ -23,7 +24,7 @@ export function parsedFinancialsToFinRows(fin: ParsedFinancials): FinRow[] {
     if (item.monthlyValues && Object.keys(item.monthlyValues).length > 0) {
       for (const [month, amount] of Object.entries(item.monthlyValues)) {
         rows.push({
-          month,
+          month: normalizeMonthKey(month),
           account: item.label,
           amount,
           category: guessCategory(item),

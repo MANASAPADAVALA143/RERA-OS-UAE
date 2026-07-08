@@ -1,44 +1,64 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import {
   Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line,
-  Pie, PieChart, ResponsiveContainer, Scatter, ScatterChart,
+  LineChart, Pie, PieChart, ResponsiveContainer, Scatter, ScatterChart,
   Tooltip, XAxis, YAxis, ZAxis,
 } from 'recharts';
+import {
+  Building2, Home, Landmark, Banknote, TrendingUp, DollarSign,
+  Percent, Wallet, Receipt, type LucideIcon,
+} from 'lucide-react';
 import type { Period } from '../../utils/periodWindow';
 import { getPeriodKeys, getTrailingMonthKeys } from '../../utils/periodWindow';
 import type { CompanyRow, LoanRow, PortfolioSummary } from '../../hooks/useRentalCfoData';
 import type { ExecutiveOverviewMetrics } from '../../hooks/useExecutiveSummaryKpis';
-import type { ExportKpiItem, KpiData } from '../../utils/rentalKpiEngine';
-import type { ArMonth, ArSummaryResponse, OwnerRow } from '../../hooks/useExecutiveSummaryData';
+import type { ExportKpiItem, KpiData, ParsedFinancials } from '../../utils/rentalKpiEngine';
+import type { ArMonth, ArSummaryResponse, OwnerRow, QbApAgingLatest } from '../../hooks/useExecutiveSummaryData';
+import type { QBAgingLatest } from './QbArAgingUploadPanel';
 import {
   fmtMetricMoney, fmtMetricPct, fmtMoney, fmtPct, UPLOAD_HINTS, periodGapMessage,
 } from '../../utils/executiveSummaryFormatters';
+import {
+  buildDebtComposition, buildMarketValueComposition, resolvePortfolioMarketValue,
+} from '../../utils/executiveSummaryPortfolio';
+import {
+  buildCashCycleTrend, buildMarginTrend, hasCashCycleData, hasMarginTrendData,
+} from '../../utils/executiveSummaryCharts';
 import type { FinRow } from '../../utils/executiveSummaryFinRows';
 
 const P = {
   pageBg: '#F7F1E6', cardBg: '#FBF6EE', border: '#E8DEC8',
   gold: '#D4AF37', text: '#1C1917', muted: '#78716C',
   green: '#15803D', amber: '#F2C14E', red: '#C0392B', teal: '#0F766E',
+  blue: '#2563EB', purple: '#7C3AED',
 } as const;
 
+const DONUT_COLORS = [P.gold, P.teal, P.green, P.blue, P.purple, P.amber, P.red, '#64748B'];
+
 const CARD: React.CSSProperties = {
-  background: P.cardBg, border: `1px solid ${P.border}`,
-  borderRadius: 12, padding: '20px 24px',
+  background: P.cardBg,
+  border: `1px solid ${P.border}`,
+  borderRadius: 12,
+  padding: '20px 24px',
+  boxShadow: '0 1px 3px rgba(28,25,23,0.06)',
+};
+
+const KPI_CARD: React.CSSProperties = {
+  ...CARD,
+  minHeight: 108,
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'space-between',
 };
 
 const MNAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-function monthSortKey(m: string): number {
-  const [mon, yr] = m.split(/[\s-]/);
-  return (Number(yr) || 0) * 100 + (MNAMES.indexOf(mon) + 1);
-}
 
 function BandShell({ title, subtitle, children, gap }: {
   title: string; subtitle?: string; children: React.ReactNode; gap?: string;
 }) {
   return (
-    <section style={{ display: 'flex', flexDirection: 'column', gap: gap ?? 16 }}>
-      <div>
+    <section style={{ display: 'flex', flexDirection: 'column', gap: gap ?? 20 }}>
+      <div style={{ borderBottom: `1px solid ${P.border}`, paddingBottom: 10 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, color: P.text, margin: 0 }}>{title}</h2>
         {subtitle && <p style={{ fontSize: 13, color: P.muted, margin: '4px 0 0' }}>{subtitle}</p>}
       </div>
@@ -47,19 +67,41 @@ function BandShell({ title, subtitle, children, gap }: {
   );
 }
 
-function KpiTile({ label, value, sub, color }: {
-  label: string; value: string; sub?: string; color?: string;
+function KpiTile({ label, value, sub, color, icon: Icon }: {
+  label: string; value: string; sub?: string; color?: string; icon?: LucideIcon;
 }) {
   const na = value === 'Not available';
   return (
-    <div style={{ ...CARD, minWidth: 0 }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: P.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-        {label}
+    <div style={KPI_CARD}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: P.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          {label}
+        </div>
+        {Icon && (
+          <Icon size={18} strokeWidth={1.75} color={na ? P.muted : P.gold} style={{ flexShrink: 0, opacity: 0.85 }} />
+        )}
       </div>
-      <div style={{ fontSize: 24, fontWeight: 700, color: na ? P.muted : (color ?? P.text) }}>
-        {value}
+      <div>
+        <div style={{ fontSize: 24, fontWeight: 700, color: na ? P.muted : (color ?? P.text), lineHeight: 1.15 }}>
+          {value}
+        </div>
+        {sub && <div style={{ fontSize: 12, color: P.muted, marginTop: 4 }}>{sub}</div>}
       </div>
-      {sub && <div style={{ fontSize: 12, color: P.muted, marginTop: 4 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function ChartCard({ title, subtitle, children, height = 220 }: {
+  title: string; subtitle?: string; children: ReactNode; height?: number;
+}) {
+  return (
+    <div style={CARD}>
+      <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 4px', color: P.text }}>{title}</p>
+      {subtitle && <p style={{ fontSize: 11, color: P.muted, margin: '0 0 12px' }}>{subtitle}</p>}
+      {!subtitle && <div style={{ marginBottom: 12 }} />}
+      <ResponsiveContainer width="100%" height={height}>
+        {children}
+      </ResponsiveContainer>
     </div>
   );
 }
@@ -74,9 +116,29 @@ function DataGap({ message }: { message: string }) {
 
 function KpiGrid({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
       {children}
     </div>
+  );
+}
+
+function CompositionDonut({ data, title, subtitle, emptyMessage }: {
+  data: { name: string; value: number }[];
+  title: string;
+  subtitle?: string;
+  emptyMessage: string;
+}) {
+  if (!data.length) return <DataGap message={emptyMessage} />;
+  return (
+    <ChartCard title={title} subtitle={subtitle} height={200}>
+      <PieChart>
+        <Pie data={data} dataKey="value" nameKey="name" innerRadius={48} outerRadius={72} paddingAngle={2}>
+          {data.map((_, i) => <Cell key={i} fill={DONUT_COLORS[i % DONUT_COLORS.length]} />)}
+        </Pie>
+        <Tooltip formatter={(v: number) => fmtMoney(v)} />
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+      </PieChart>
+    </ChartCard>
   );
 }
 
@@ -98,6 +160,10 @@ export interface SixBandsProps {
   arMonths: ArMonth[];
   ownership: OwnerRow[];
   finRows: FinRow[];
+  activeFins: ParsedFinancials[];
+  qbArAging: QBAgingLatest | null;
+  qbApAging: QbApAgingLatest | null;
+  hasApAging: boolean;
   period: Period | null;
   month: number;
   year: number;
@@ -109,20 +175,12 @@ export interface SixBandsProps {
   latestFinMonth: string | null;
 }
 
-function filterByPeriod<T extends { month: string }>(rows: T[], period: Period | null, month: number, year: number): T[] {
-  if (!period) return rows;
-  const keys = new Set(getPeriodKeys(period, month, year));
-  return rows.filter(r => keys.has(r.month));
-}
-
-function trailingFinMonths(endMonth: number, endYear: number, count: number): string[] {
-  return getTrailingMonthKeys(endMonth, endYear, count);
-}
-
 export default function ExecutiveSummarySixBands(props: SixBandsProps) {
   const {
     overview, kpiView, loanSchedule, portfolio, companies, loans,
-    arSummary, arMonths, ownership, finRows, period, month, year, periodLabel,
+    arSummary, arMonths, ownership, finRows, activeFins,
+    qbArAging, qbApAging, hasApAging,
+    period, month, year, periodLabel,
     entityId, hasFinancials, hasOwnership, hasAr, latestFinMonth,
   } = props;
 
@@ -131,13 +189,8 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
     ? companies
     : companies.filter(c => c.id === entityId);
 
-  const periodAr = useMemo(
-    () => filterByPeriod(arMonths, period, month, year),
-    [arMonths, period, month, year],
-  );
-
   const trendMonths = useMemo(() => {
-    const keys = trailingFinMonths(month, year, 12);
+    const keys = getTrailingMonthKeys(month, year, 12);
     const byMonth: Record<string, { gpr: number; collected: number; expense: number; noi: number }> = {};
     for (const r of finRows) {
       if (!keys.includes(r.month)) continue;
@@ -157,16 +210,24 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
     }
     return keys.map(m => {
       const row = byMonth[m] ?? { gpr: 0, collected: 0, expense: 0, noi: 0 };
-      const noi = row.gpr - row.expense;
-      return { month: m.split(' ')[0], full: m, ...row, noi };
+      return { month: m.split(' ')[0], full: m, ...row, noi: row.gpr - row.expense };
     });
   }, [finRows, arMonths, month, year]);
+
+  const marginTrend = useMemo(
+    () => buildMarginTrend(activeFins, month, year, 12),
+    [activeFins, month, year],
+  );
+
+  const cashCycleTrend = useMemo(
+    () => buildCashCycleTrend(qbArAging?.trend ?? [], qbApAging?.trend ?? []),
+    [qbArAging, qbApAging],
+  );
 
   const rentalTrend = useMemo(() => {
     const keys = getTrailingMonthKeys(month, year, 6);
     return keys.map(m => {
       const ar = arMonths.find(a => a.month === m);
-      const co = scopedCompanies[0];
       const occ = portfolio?.occupancy_pct != null ? portfolio.occupancy_pct * 100 : null;
       return {
         month: m.split(' ')[0],
@@ -175,12 +236,30 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
         occupancy: occ ?? 0,
       };
     });
-  }, [arMonths, month, year, portfolio, scopedCompanies]);
+  }, [arMonths, month, year, portfolio]);
 
   const totalDebt = overview.totalDebt ?? loans.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0);
-  const marketValue = loans.reduce((s, l) => s + (l.current_property_value ?? 0), 0);
+  const buildingsFromFin = k?.buildings ?? 0;
+  const portfolioGpr = portfolio?.gross_potential_rent
+    ?? scopedCompanies.reduce((s, c) => s + (c.gross_potential_rent ?? 0), 0);
+  const marketValueResult = useMemo(
+    () => resolvePortfolioMarketValue({
+      loans, buildingsFromFinancials: buildingsFromFin,
+      companies: scopedCompanies, ownership, portfolioGpr,
+    }),
+    [loans, buildingsFromFin, scopedCompanies, ownership, portfolioGpr],
+  );
+  const marketValue = marketValueResult.value;
+  const assetComposition = useMemo(
+    () => buildMarketValueComposition({ companies: scopedCompanies, loans, ownership }),
+    [scopedCompanies, loans, ownership],
+  );
+  const debtComposition = useMemo(() => buildDebtComposition(loans), [loans]);
+
   const ownedUnits = portfolio?.occupied_units ?? 0;
   const vacantUnits = portfolio?.vacant_units ?? 0;
+  const totalUnits = portfolio?.total_units ?? 0;
+  const occupancyPct = portfolio?.occupancy_pct != null ? portfolio.occupancy_pct * 100 : null;
   const unitDonut = [
     { name: 'Occupied', value: ownedUnits },
     { name: 'Vacant', value: vacantUnits },
@@ -196,11 +275,11 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
     name: (l.property_name || l.company_name).slice(0, 14),
     dscr: l.dscr ?? (l.noi_annual && l.loan_emi ? (l.noi_annual / 12) / l.loan_emi : 0),
     balance: l.loan_balance_as_of ?? 0,
-  })).filter(r => r.dscr > 0 || r.balance > 0);
+  })).filter(r => r.balance > 0);
 
   const ltvByLoan = loans.map(l => {
     const bal = l.loan_balance_as_of ?? 0;
-    const val = l.current_property_value ?? 0;
+    const val = l.current_property_value ?? l.loan_amount ?? 0;
     return {
       name: (l.property_name || l.company_name).slice(0, 14),
       ltv: val > 0 ? (bal / val) * 100 : 0,
@@ -214,11 +293,10 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
     for (const l of loans) {
       if (!l.loan_maturity_date) continue;
       const d = new Date(l.loan_maturity_date);
-      const yr = d.getFullYear();
       const monthsOut = (d.getFullYear() - now.getFullYear()) * 12 + (d.getMonth() - now.getMonth());
       if (monthsOut <= 12) buckets['≤12 mo'] = (buckets['≤12 mo'] ?? 0) + (l.loan_balance_as_of ?? 0);
       else if (monthsOut <= 24) buckets['12–24 mo'] = (buckets['12–24 mo'] ?? 0) + (l.loan_balance_as_of ?? 0);
-      else buckets[String(yr)] = (buckets[String(yr)] ?? 0) + (l.loan_balance_as_of ?? 0);
+      else buckets[String(d.getFullYear())] = (buckets[String(d.getFullYear())] ?? 0) + (l.loan_balance_as_of ?? 0);
     }
     return Object.entries(buckets).map(([label, amount]) => ({ label, amount }));
   }, [loans, month, year]);
@@ -260,48 +338,55 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
     }));
 
   const finGap = !hasFinancials
-    ? periodGapMessage('P&L financials', periodLabel, latestFinMonth)
+    ? (latestFinMonth
+      ? periodGapMessage('P&L financials', periodLabel, latestFinMonth)
+      : UPLOAD_HINTS.financials)
     : null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 48 }}>
       {/* BAND 1 */}
       <BandShell title="Band 1 — Portfolio Snapshot" subtitle="Company Registry · Loan Tracker · Ownership">
         <KpiGrid>
-          <KpiTile label="Total Units" value={portfolio ? String(portfolio.total_units) : 'Not available'} sub={UPLOAD_HINTS.registry} />
-          <KpiTile label="Occupied Units" value={portfolio ? String(portfolio.occupied_units) : 'Not available'} />
-          <KpiTile label="Portfolio Market Value" value={marketValue > 0 ? fmtMoney(marketValue) : 'Not available'} sub={loans.length ? 'From loan tracker property values' : UPLOAD_HINTS.loans} />
-          <KpiTile label="Total Loan Outstanding" value={fmtMetricMoney(totalDebt)} sub={loans.length ? `${loans.length} loans` : UPLOAD_HINTS.loans} />
+          <KpiTile icon={Building2} label="Total Units" value={totalUnits > 0 ? String(totalUnits) : 'Not available'}
+            sub={totalUnits > 0 ? `${vacantUnits} vacant` : UPLOAD_HINTS.registry} />
+          <KpiTile icon={Home} label="Occupied Units" value={portfolio ? String(portfolio.occupied_units) : 'Not available'}
+            sub={occupancyPct != null ? `${fmtPct(occupancyPct)} occupancy` : undefined} color={P.green} />
+          <KpiTile icon={Landmark} label="Portfolio Market Value"
+            value={marketValue > 0 ? fmtMoney(marketValue) : 'Not available'}
+            sub={marketValue > 0 ? marketValueResult.label : UPLOAD_HINTS.loans} />
+          <KpiTile icon={Banknote} label="Total Loan Outstanding" value={fmtMetricMoney(totalDebt)}
+            sub={loans.length ? `${loans.length} loans` : UPLOAD_HINTS.loans} />
         </KpiGrid>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <div style={CARD}>
-            <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Occupied vs Vacant Units</p>
-            {unitDonut.length ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie data={unitDonut} dataKey="value" nameKey="name" innerRadius={50} outerRadius={75}>
-                    {unitDonut.map((_, i) => <Cell key={i} fill={i === 0 ? P.green : P.amber} />)}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : <DataGap message={UPLOAD_HINTS.registry} />}
-          </div>
-          <div style={CARD}>
-            <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Units by Company</p>
-            {companyBars.length ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={companyBars}>
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Bar dataKey="units" fill={P.gold} radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : <DataGap message={UPLOAD_HINTS.registry} />}
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
+          {unitDonut.length ? (
+            <CompositionDonut data={unitDonut} title="Unit Mix" subtitle="Occupied vs vacant"
+              emptyMessage={UPLOAD_HINTS.registry} />
+          ) : <DataGap message={UPLOAD_HINTS.registry} />}
+          <CompositionDonut
+            data={assetComposition}
+            title="Asset Composition"
+            subtitle={assetComposition.length ? 'By company / property' : 'Partial data from registry & ownership'}
+            emptyMessage="Upload loan property values, financials, or ownership to see composition."
+          />
+          <CompositionDonut
+            data={debtComposition}
+            title="Debt by Property"
+            subtitle={loans.length ? 'Outstanding balances' : undefined}
+            emptyMessage={UPLOAD_HINTS.loans}
+          />
         </div>
+        {companyBars.length > 0 && (
+          <ChartCard title="Units by Company" subtitle="Company Registry" height={200}>
+            <BarChart data={companyBars}>
+              <CartesianGrid strokeDasharray="3 3" stroke={P.border} vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} />
+              <Tooltip />
+              <Bar dataKey="units" fill={P.gold} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ChartCard>
+        )}
       </BandShell>
 
       {/* BAND 2 */}
@@ -311,62 +396,106 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
         ) : (
           <>
             <KpiGrid>
-              <KpiTile label="Physical Occupancy" value={fmtMetricPct(overview.occupancyPct)} />
-              <KpiTile label="GPR" value={fmtMetricMoney(overview.grossPotentialRent)} />
-              <KpiTile label="Collected" value={fmtMetricMoney(overview.totalCollected)} color={P.green} />
-              <KpiTile label="Vacancy Loss" value={fmtMetricMoney(overview.vacancyLoss)} color={P.red} />
-              <KpiTile label="Collection Rate" value={fmtMetricPct(overview.collectionRate)} />
-              <KpiTile label="AR Outstanding" value={fmtMetricMoney(overview.arOutstanding ?? arSummary?.portfolio?.total_outstanding)} />
+              <KpiTile icon={Percent} label="Physical Occupancy" value={fmtMetricPct(overview.occupancyPct)} />
+              <KpiTile icon={TrendingUp} label="GPR" value={fmtMetricMoney(overview.grossPotentialRent)} />
+              <KpiTile icon={DollarSign} label="Collected" value={fmtMetricMoney(overview.totalCollected)} color={P.green} />
+              <KpiTile icon={Receipt} label="Vacancy Loss" value={fmtMetricMoney(overview.vacancyLoss)} color={P.red} />
+              <KpiTile icon={Percent} label="Collection Rate" value={fmtMetricPct(overview.collectionRate)} />
+              <KpiTile icon={Wallet} label="AR Outstanding"
+                value={fmtMetricMoney(overview.arOutstanding ?? arSummary?.portfolio?.total_outstanding)} />
             </KpiGrid>
-            <div style={CARD}>
-              <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>GPR vs Collected + Occupancy (6 mo to {MNAMES[month - 1]} {year})</p>
-              <ResponsiveContainer width="100%" height={240}>
-                <ComposedChart data={rentalTrend}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={P.border} />
-                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                  <YAxis yAxisId="l" tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10 }} />
-                  <YAxis yAxisId="r" orientation="right" tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar yAxisId="l" dataKey="gpr" name="GPR" fill={P.gold} radius={[3, 3, 0, 0]} />
-                  <Bar yAxisId="l" dataKey="collected" name="Collected" fill={P.green} radius={[3, 3, 0, 0]} />
-                  <Line yAxisId="r" type="monotone" dataKey="occupancy" name="Occupancy %" stroke={P.teal} strokeWidth={2} dot={false} />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
+            <ChartCard title={`GPR vs Collected + Occupancy`} subtitle={`6 mo trailing · ${MNAMES[month - 1]} ${year}`} height={240}>
+              <ComposedChart data={rentalTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke={P.border} />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis yAxisId="l" tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10 }} />
+                <YAxis yAxisId="r" orientation="right" tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} />
+                <Tooltip />
+                <Legend />
+                <Bar yAxisId="l" dataKey="gpr" name="GPR" fill={P.gold} radius={[3, 3, 0, 0]} />
+                <Bar yAxisId="l" dataKey="collected" name="Collected" fill={P.green} radius={[3, 3, 0, 0]} />
+                <Line yAxisId="r" type="monotone" dataKey="occupancy" name="Occupancy %" stroke={P.teal} strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ChartCard>
           </>
         )}
       </BandShell>
 
       {/* BAND 3 */}
-      <BandShell title="Band 3 — Finance & Profitability" subtitle="Financials P&L · Balance Sheet · Cash Flow">
+      <BandShell title="Band 3 — Finance & Profitability" subtitle="Financials P&L · Balance Sheet · AR/AP Aging">
         {finGap ? (
-          <DataGap message={`${UPLOAD_HINTS.financials} for ${periodLabel}. ${finGap}`} />
+          <DataGap message={latestFinMonth ? `${finGap} Select ${latestFinMonth} in the period picker.` : finGap} />
         ) : (
           <>
             <KpiGrid>
-              <KpiTile label="NOI" value={fmtMetricMoney(overview.noi)} color={P.green} />
-              <KpiTile label="NOI Margin" value={k && k.totalRevenue > 0 ? fmtPct((k.noi / k.totalRevenue) * 100) : 'Not available'} />
-              <KpiTile label="Net Income Margin" value={k && k.totalRevenue > 0 ? fmtPct((k.netIncome / k.totalRevenue) * 100) : 'Not available'} />
-              <KpiTile label="Expense Ratio (OER)" value={k && k.totalRevenue > 0 ? fmtPct((k.totalExpenses / k.totalRevenue) * 100) : 'Not available'} />
-              <KpiTile label="Cash Balance" value={k ? fmtMoney(k.cash) : 'Not available'} sub="Point-in-time from balance sheet" />
-              <KpiTile label="Total Expenses" value={fmtMetricMoney(overview.totalExpenses)} />
+              <KpiTile icon={DollarSign} label="NOI" value={fmtMetricMoney(overview.noi)} color={P.green} />
+              <KpiTile icon={Percent} label="NOI Margin"
+                value={k && k.totalRevenue > 0 ? fmtPct((k.noi / k.totalRevenue) * 100) : 'Not available'} />
+              <KpiTile icon={Percent} label="Net Income Margin"
+                value={k && k.totalRevenue > 0 ? fmtPct((k.netIncome / k.totalRevenue) * 100) : 'Not available'} />
+              <KpiTile icon={Percent} label="Expense Ratio (OER)"
+                value={k && k.totalRevenue > 0 ? fmtPct((k.totalExpenses / k.totalRevenue) * 100) : 'Not available'} />
+              <KpiTile icon={Wallet} label="Cash Balance" value={k ? fmtMoney(k.cash) : 'Not available'}
+                sub="Point-in-time from balance sheet" />
+              <KpiTile icon={Receipt} label="Total Expenses" value={fmtMetricMoney(overview.totalExpenses)} />
             </KpiGrid>
-            <div style={CARD}>
-              <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Revenue · Expenses · NOI (12 mo)</p>
-              <ResponsiveContainer width="100%" height={240}>
-                <ComposedChart data={trendMonths}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={P.border} />
-                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                  <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10 }} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="gpr" name="Revenue" fill={P.gold} radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="expense" name="Expenses" fill={P.red} radius={[3, 3, 0, 0]} />
-                  <Line type="monotone" dataKey="noi" name="NOI" stroke={P.green} strokeWidth={2} />
-                </ComposedChart>
-              </ResponsiveContainer>
+            <ChartCard title="Revenue · Expenses · NOI" subtitle="12-month trailing" height={240}>
+              <ComposedChart data={trendMonths}>
+                <CartesianGrid strokeDasharray="3 3" stroke={P.border} />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10 }} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="gpr" name="Revenue" fill={P.gold} radius={[3, 3, 0, 0]} />
+                <Bar dataKey="expense" name="Expenses" fill={P.red} radius={[3, 3, 0, 0]} />
+                <Line type="monotone" dataKey="noi" name="NOI" stroke={P.green} strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ChartCard>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
+              {hasMarginTrendData(marginTrend) ? (
+                <ChartCard title="Margin Trends" subtitle="NOI · Net Income · Expense ratio (%)" height={240}>
+                  <LineChart data={marginTrend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={P.border} />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                    <YAxis tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} />
+                    <Tooltip formatter={(v: number) => `${v?.toFixed(1)}%`} />
+                    <Legend />
+                    <Line type="monotone" dataKey="noiMargin" name="NOI Margin" stroke={P.green} strokeWidth={2} dot={false} connectNulls />
+                    <Line type="monotone" dataKey="netMargin" name="Net Income Margin" stroke={P.teal} strokeWidth={2} dot={false} connectNulls />
+                    <Line type="monotone" dataKey="expenseRatio" name="Expense Ratio" stroke={P.amber} strokeWidth={2} dot={false} connectNulls />
+                  </LineChart>
+                </ChartCard>
+              ) : (
+                <DataGap message="Upload Financials P&L with monthly columns for margin trends." />
+              )}
+              {hasCashCycleData(cashCycleTrend) ? (
+                <ChartCard
+                  title="Cash Conversion Cycle"
+                  subtitle={hasApAging ? 'DSO · DPO · CCC (DSO − DPO)' : 'DSO only — upload QB AP Aging for DPO'}
+                  height={240}
+                >
+                  <LineChart data={cashCycleTrend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={P.border} />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                    <YAxis tickFormatter={v => `${v}d`} tick={{ fontSize: 10 }} />
+                    <Tooltip formatter={(v: number) => `${v} days`} />
+                    <Legend />
+                    <Line type="monotone" dataKey="dso" name="DSO" stroke={P.blue} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                    {hasApAging && (
+                      <>
+                        <Line type="monotone" dataKey="dpo" name="DPO" stroke={P.purple} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                        <Line type="monotone" dataKey="ccc" name="CCC" stroke={P.gold} strokeWidth={2} strokeDasharray="6 3" dot={false} connectNulls />
+                      </>
+                    )}
+                  </LineChart>
+                </ChartCard>
+              ) : (
+                <DataGap message="Upload QB AR Aging snapshots (Rent Receivable → AR Dashboard) for DSO trend. AP Aging adds DPO." />
+              )}
             </div>
+            <p style={{ fontSize: 12, color: P.muted, margin: 0, fontStyle: 'italic' }}>
+              Actual vs Budget: not available — EstateCFO Rentals has no budget/forecast upload yet (PropDev construction budgets only).
+            </p>
           </>
         )}
       </BandShell>
@@ -379,54 +508,50 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
           <>
             <KpiGrid>
               {loanSchedule.summary.slice(0, 4).map(item => (
-                <KpiTile key={item.label} label={item.label} value={item.value === 'Data not available' ? 'Not available' : item.value} sub={`Target ${item.benchmark}`} />
+                <KpiTile key={item.label} label={item.label}
+                  value={item.value === 'Data not available' ? 'Not available' : item.value}
+                  sub={`Target ${item.benchmark}`} />
               ))}
             </KpiGrid>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              <div style={CARD}>
-                <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>DSCR by Property (1.2x covenant)</p>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={dscrByLoan}>
-                    <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip />
-                    <Bar dataKey="dscr" fill={P.teal} radius={[3, 3, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              <div style={CARD}>
-                <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>LTV by Property</p>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={ltvByLoan}>
-                    <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                    <YAxis tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} />
-                    <Tooltip />
-                    <Bar dataKey="ltv" radius={[3, 3, 0, 0]}>
-                      {ltvByLoan.map((e, i) => <Cell key={i} fill={e.high ? P.red : P.gold} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+              <ChartCard title="DSCR by Property" subtitle="1.2× covenant reference" height={220}>
+                <BarChart data={dscrByLoan}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={P.border} vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} />
+                  <Tooltip />
+                  <Bar dataKey="dscr" fill={P.teal} radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ChartCard>
+              <ChartCard title="LTV by Property" height={220}>
+                <BarChart data={ltvByLoan}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={P.border} vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                  <YAxis tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} />
+                  <Tooltip />
+                  <Bar dataKey="ltv" radius={[3, 3, 0, 0]}>
+                    {ltvByLoan.map((e, i) => <Cell key={i} fill={e.high ? P.red : P.gold} />)}
+                  </Bar>
+                </BarChart>
+              </ChartCard>
             </div>
             {maturityBuckets.length > 0 && (
-              <div style={CARD}>
-                <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Loan Maturities</p>
-                <ResponsiveContainer width="100%" height={180}>
-                  <BarChart data={maturityBuckets}>
-                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                    <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip formatter={(v: number) => fmtMoney(v)} />
-                    <Bar dataKey="amount" fill={P.amber} radius={[3, 3, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              <ChartCard title="Loan Maturities" height={180}>
+                <BarChart data={maturityBuckets}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={P.border} vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                  <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip formatter={(v: number) => fmtMoney(v)} />
+                  <Bar dataKey="amount" fill={P.amber} radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ChartCard>
             )}
           </>
         )}
       </BandShell>
 
       {/* BAND 5 */}
-      <BandShell title="Band 5 — Per-Ownership Profitability" subtitle="Ownership · Financials">
+      <BandShell title="Band 5 — Per-Ownership Profitability" subtitle="Ownership · Financials · Company Registry">
         {!hasOwnership ? (
           <DataGap message={UPLOAD_HINTS.ownership} />
         ) : (
@@ -456,18 +581,16 @@ export default function ExecutiveSummarySixBands(props: SixBandsProps) {
               </table>
             </div>
             {scatterData.length > 0 && (
-              <div style={CARD}>
-                <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Occupancy vs NOI Margin</p>
-                <ResponsiveContainer width="100%" height={220}>
-                  <ScatterChart>
-                    <XAxis type="number" dataKey="occupancy" name="Occupancy %" unit="%" tick={{ fontSize: 10 }} />
-                    <YAxis type="number" dataKey="noiMargin" name="NOI Margin" unit="%" tick={{ fontSize: 10 }} />
-                    <ZAxis type="number" dataKey="units" range={[40, 400]} />
-                    <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-                    <Scatter data={scatterData} fill={P.gold} />
-                  </ScatterChart>
-                </ResponsiveContainer>
-              </div>
+              <ChartCard title="Occupancy vs NOI Margin" height={220}>
+                <ScatterChart>
+                  <CartesianGrid strokeDasharray="3 3" stroke={P.border} />
+                  <XAxis type="number" dataKey="occupancy" name="Occupancy %" unit="%" tick={{ fontSize: 10 }} />
+                  <YAxis type="number" dataKey="noiMargin" name="NOI Margin" unit="%" tick={{ fontSize: 10 }} />
+                  <ZAxis type="number" dataKey="units" range={[40, 400]} />
+                  <Tooltip cursor={{ strokeDasharray: '3 3' }} />
+                  <Scatter data={scatterData} fill={P.gold} />
+                </ScatterChart>
+              </ChartCard>
             )}
           </>
         )}

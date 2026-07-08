@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download } from 'lucide-react';
 import PeriodToggle from '../components/shared/PeriodToggle';
 import ExecSummaryExportModal from '../components/rental/ExecSummaryExportModal';
@@ -47,7 +47,7 @@ export default function RentalExecutiveSummary() {
 
   const monthYm = `${year}-${String(month).padStart(2, '0')}`;
   const { companies, loans, portfolio, units, loading: cfoLoading } = useRentalCfoData(monthYm);
-  const { arSummary, arMonths, ownership, loading: arLoading, hasOwnership, hasAr, availableArMonths } =
+  const { arSummary, arMonths, ownership, qbArAging, qbApAging, hasApAging, loading: arLoading, hasOwnership, hasAr, availableArMonths } =
     useExecutiveSummaryData(monthYm);
 
   const arCollectionRate = useMemo(() => {
@@ -90,10 +90,24 @@ export default function RentalExecutiveSummary() {
   }, [finRows, period, month, year]);
 
   const latestFinMonth = useMemo(() => {
-    const keys = finAvailableKeys.length ? finAvailableKeys : availableKeys;
-    if (!keys.length) return null;
-    return [...keys].sort((a, b) => monthSortKey(a) - monthSortKey(b)).pop() ?? null;
-  }, [finAvailableKeys, availableKeys]);
+    if (!finAvailableKeys.length) return null;
+    return [...finAvailableKeys].sort((a, b) => monthSortKey(a) - monthSortKey(b)).pop() ?? null;
+  }, [finAvailableKeys]);
+
+  const periodInit = useRef(false);
+  useEffect(() => {
+    if (periodInit.current || !finAvailableKeys.length) return;
+    const latest = latestFinMonth;
+    if (!latest) return;
+    const [mon, yr] = latest.split(' ');
+    const m = MNAMES.indexOf(mon) + 1;
+    const y = parseInt(yr, 10);
+    if (m > 0 && !isNaN(y)) {
+      setMonth(m);
+      setYear(y);
+      periodInit.current = true;
+    }
+  }, [finAvailableKeys, latestFinMonth]);
 
   const entityLabel = entityId === 'portfolio'
     ? 'All companies (portfolio)'
@@ -116,6 +130,7 @@ export default function RentalExecutiveSummary() {
           companies={companies}
           portfolio={portfolio}
           loans={loans}
+          units={units}
           arData={filteredAr}
           finRows={filteredFin}
           period={period}
@@ -208,6 +223,10 @@ export default function RentalExecutiveSummary() {
           arMonths={arMonths}
           ownership={ownership}
           finRows={finRows}
+          activeFins={activeFins}
+          qbArAging={qbArAging}
+          qbApAging={qbApAging}
+          hasApAging={hasApAging}
           period={period}
           month={month}
           year={year}

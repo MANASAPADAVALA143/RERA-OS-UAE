@@ -86,19 +86,28 @@ export function useExecutiveSummaryKpis(
   );
 
   useEffect(() => {
-    if (!companies.length) return;
     let cancelled = false;
     (async () => {
       setFinLoading(true);
+      const listRes = await api.get<{ company_id: string }[]>('/api/rentals/financials').catch(() => ({ data: [] }));
+      const uploadIds = (listRes.data ?? []).map(r => r.company_id);
+      const idsToFetch = [...new Set([...companies.map(c => c.id), ...uploadIds])];
+      if (!idsToFetch.length) {
+        if (!cancelled) {
+          setParsedByCompany({});
+          setFinLoading(false);
+        }
+        return;
+      }
       const results = await Promise.all(
-        companies.map(async co => {
+        idsToFetch.map(async id => {
           try {
             const res = await api.get<Parameters<typeof apiResponseToParsedFinancials>[0]>(
-              `/api/rentals/financials/${co.id}`,
+              `/api/rentals/financials/${id}`,
             );
-            return { id: co.id, fin: apiResponseToParsedFinancials(res.data) };
+            return { id, fin: apiResponseToParsedFinancials(res.data) };
           } catch {
-            return { id: co.id, fin: null };
+            return { id, fin: null };
           }
         }),
       );
@@ -171,7 +180,7 @@ export function useExecutiveSummaryKpis(
   const overview = useMemo((): ExecutiveOverviewMetrics => {
     const k = kpiView?.k ?? null;
     const p = scopedPortfolio;
-    const hasFinancials = Boolean(k && activeFins.length > 0);
+    const hasFinancials = activeFins.length > 0;
 
     const debtTotal = scopedLoans.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0);
 
@@ -188,7 +197,7 @@ export function useExecutiveSummaryKpis(
       hasFinancials,
       periodLabel: kpiView?.label ?? '',
     };
-  }, [kpiView, scopedPortfolio, scopedLoans, ops.collectionRate]);
+  }, [kpiView, scopedPortfolio, scopedLoans, ops.collectionRate, activeFins.length]);
 
   return {
     kpiView,
