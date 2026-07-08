@@ -5,6 +5,7 @@ import PptxGenJS from 'pptxgenjs';
 import type { ExportKpiItem } from './rentalKpiEngine';
 import type { EmiStatusRow } from './executiveSummaryEmi';
 import type { RiskActionRow } from './executiveSummaryActionRules';
+import type { SlideNarratives } from './executiveSummaryNarrative';
 
 const C = {
   pageBg: 'F7F1E6', cardBg: 'FBF6EE', border: 'E8DEC8',
@@ -67,6 +68,7 @@ export interface CeoBoardExportPayload {
     }[];
   };
   riskActionTable: RiskActionRow[];
+  slideNarratives: SlideNarratives;
   strategicRecommendations: string[];
 }
 
@@ -157,6 +159,26 @@ function chartOpts(x: number, y: number, w: number, h: number): PptxGenJS.IChart
   };
 }
 
+/** CFO commentary block — below title bar, above charts/KPIs (slides 3–11). */
+const NARR_Y = 0.92;
+const NARR_H = 0.58;
+const KPI_Y = 1.58;
+const CHART_Y = 2.78;
+const CHART_Y_TALL = 2.95;
+const TABLE_Y = 3.55;
+
+function slideCommentary(slide: PptxGenJS.Slide, text: string) {
+  if (!text?.trim()) return;
+  slide.addShape('roundRect', {
+    x: 0.4, y: NARR_Y, w: 9.2, h: NARR_H,
+    fill: { color: C.cardBg }, line: { color: C.border, width: 0.5 }, rectRadius: 0.06,
+  });
+  slide.addText(text, {
+    x: 0.52, y: NARR_Y + 0.05, w: 8.95, h: NARR_H - 0.08,
+    fontSize: 9.5, color: C.text, fontFace: 'Segoe UI', valign: 'top', lineSpacingMultiple: 1.15,
+  });
+}
+
 export function buildCeoBoardReviewFilename(entityLabel: string, periodLabel: string): string {
   const safe = (s: string) => s.replace(/[^\w\-]+/g, '_').replace(/_+/g, '_');
   return `EstateCFO_CEOBoardReview_${safe(entityLabel)}_${safe(periodLabel)}.pptx`;
@@ -197,12 +219,13 @@ export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Pr
     const ps = data.portfolioSnapshot;
     const s = pptx.addSlide();
     header(s, 'Portfolio Snapshot', 'Company Registry · Loan Tracker · Ownership');
+    slideCommentary(s, data.slideNarratives.portfolioSnapshot);
     kpiCards(s, [
       { label: 'Total Units', value: ps.totalUnits },
       { label: 'Occupied Units', value: ps.occupiedUnits, sub: ps.vacantUnits > 0 ? `${ps.vacantUnits} vacant` : undefined },
       { label: 'Portfolio Market Value', value: ps.marketValue, sub: ps.marketValueSource },
       { label: 'Total Loan Outstanding', value: ps.totalDebt, sub: `${ps.loanCount} loans` },
-    ]);
+    ], KPI_Y);
     const occupied = Number(ps.occupiedUnits) || 0;
     const total = Number(ps.totalUnits) || 0;
     const vacant = Math.max(0, total - occupied);
@@ -211,14 +234,14 @@ export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Pr
         pptx.ChartType.doughnut,
         [{ name: 'Units', labels: ['Occupied', 'Vacant'], values: [occupied, vacant] }],
         {
-          ...chartOpts(0.5, 2.0, 3.8, 2.5),
+          ...chartOpts(0.5, CHART_Y, 3.8, 2.35),
           chartColors: [C.green, C.amber],
           holeSize: 55,
           showPercent: true,
         },
       );
     } else {
-      na(s, 'Data not available — Unit composition chart', 2.5);
+      na(s, 'Data not available — Unit composition chart', CHART_Y + 0.5);
     }
     const unitData = ps.unitsByCompany.slice(0, 8);
     if (unitData.length) {
@@ -226,13 +249,13 @@ export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Pr
         pptx.ChartType.bar,
         [{ name: 'Units', labels: unitData.map(u => u.name), values: unitData.map(u => u.units) }],
         {
-          ...chartOpts(4.8, 2.0, 4.7, 2.5),
+          ...chartOpts(4.8, CHART_Y, 4.7, 2.35),
           barDir: 'col',
           chartColors: [C.gold],
         },
       );
     } else {
-      na(s, 'Data not available — Units by company chart', 2.5);
+      na(s, 'Data not available — Units by company chart', CHART_Y + 0.5);
     }
     footer(s, data.entityLabel, data.periodLabel);
   }
@@ -241,7 +264,8 @@ export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Pr
   {
     const rp = data.rentalPerformance;
     const s = pptx.addSlide();
-    header(s, 'Rental Performance', 'Rent Receivable · Rental Portfolio Overview');
+    header(s, 'Rental Performance', 'Company Registry · Rent Receivable');
+    slideCommentary(s, data.slideNarratives.rentalPerformance);
     kpiCards(s, [
       { label: 'Physical Occupancy', value: rp.occupancy },
       { label: 'GPR', value: rp.gpr },
@@ -249,7 +273,7 @@ export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Pr
       { label: 'Vacancy Loss', value: rp.vacancyLoss },
       { label: 'Collection Rate', value: rp.collectionRate },
       { label: 'AR Outstanding', value: rp.arOutstanding },
-    ], 1.05, 3);
+    ], KPI_Y, 3);
     if (rp.gprTrend.length > 0) {
       const labels = rp.gprTrend.map(t => t.month);
       const occSeries = rp.gprTrend.map(t => t.occupancy ?? (valPct(rp.occupancy) ?? 0));
@@ -278,17 +302,17 @@ export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Pr
             },
           ],
           {
-            ...chartOpts(0.5, 2.2, 9.0, 2.6),
+            ...chartOpts(0.5, CHART_Y_TALL, 9.0, 2.45),
             showValAxisTitle: true,
             valAxisTitle: 'Amount ($)',
             secondaryValAxis: true,
           },
         );
       } else {
-        na(s, 'Data not available — GPR vs Collected trend chart', 2.5);
+        na(s, 'Data not available — GPR vs Collected trend chart', CHART_Y + 0.5);
       }
     } else {
-      na(s, 'Data not available — GPR vs Collected trend chart', 2.5);
+      na(s, 'Data not available — GPR vs Collected trend chart', CHART_Y + 0.5);
     }
     footer(s, data.entityLabel, data.periodLabel);
   }
@@ -298,8 +322,9 @@ export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Pr
     const fp = data.financialPerformance;
     const s = pptx.addSlide();
     header(s, 'Financial Performance', fp.sourceNote);
+    slideCommentary(s, data.slideNarratives.financialPerformance);
     if (fp.available) {
-      kpiCards(s, fp.profitability.slice(0, 6).map(p => ({ label: p.label, value: p.value, sub: `Target ${p.benchmark}` })), 1.0, 3);
+      kpiCards(s, fp.profitability.slice(0, 6).map(p => ({ label: p.label, value: p.value, sub: `Target ${p.benchmark}` })), KPI_Y - 0.05, 3);
       // Waterfall approximation: GPR → Vacancy → Effective Rent → Opex → NOI → Interest → Net Income
       // Floating/stacked bar: invisible base + visible delta.
       const parseMoney = (v: string): number => {
@@ -348,7 +373,7 @@ export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Pr
             { name: 'Amount', labels: wf.map(p => p.label), values: delta },
           ],
           {
-            ...chartOpts(0.5, 2.2, 4.4, 2.6),
+            ...chartOpts(0.5, CHART_Y_TALL, 4.4, 2.45),
             barDir: 'col',
             barGrouping: 'stacked',
             chartColors: ['FBF6EE', C.gold],
@@ -378,7 +403,7 @@ export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Pr
             },
           ],
           {
-            ...chartOpts(5.1, 2.2, 4.4, 2.6),
+            ...chartOpts(5.1, CHART_Y_TALL, 4.4, 2.45),
             showTitle: true,
             title: 'Revenue · Expenses · NOI',
             titleFontSize: 10,
@@ -397,15 +422,16 @@ export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Pr
     const cp = data.cashPosition;
     const s = pptx.addSlide();
     header(s, 'Cash Position', 'Balance Sheet · point-in-time for selected period');
-    kpiCards(s, [{ label: 'Cash Balance', value: cp.balance, sub: cp.runwayNote }], 1.05, 2);
+    slideCommentary(s, data.slideNarratives.cashPosition);
+    kpiCards(s, [{ label: 'Cash Balance', value: cp.balance, sub: cp.runwayNote }], KPI_Y, 2);
     if (cp.trend.length > 0) {
       s.addChart(
         pptx.ChartType.line,
         [{ name: 'Cash Balance', labels: cp.trend.map(t => t.month), values: cp.trend.map(t => t.cash) }],
-        { ...chartOpts(0.6, 2.1, 8.9, 2.8), chartColors: [C.blue], lineSize: 3 },
+        { ...chartOpts(0.6, CHART_Y, 8.9, 2.65), chartColors: [C.blue], lineSize: 3 },
       );
     } else {
-      na(s, 'Cash trend not available — upload Balance Sheet with monthly columns', 2.2);
+      na(s, 'Cash trend not available — upload Balance Sheet with monthly columns', CHART_Y + 0.3);
     }
     footer(s, data.entityLabel, data.periodLabel);
   }
@@ -415,20 +441,21 @@ export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Pr
     const lp = data.loanPortfolio;
     const s = pptx.addSlide();
     header(s, 'Loan Portfolio & EMI Status', 'Loan Tracker');
+    slideCommentary(s, data.slideNarratives.loanPortfolio);
     if (lp.available) {
       kpiCards(s, [
         { label: 'Total Debt', value: lp.totalDebt },
         { label: 'Loans', value: lp.loanCount },
         { label: 'Portfolio DSCR', value: lp.portfolioDscr },
         { label: 'Interest Coverage', value: lp.interestCoverage },
-      ], 1.0, 4);
+      ], KPI_Y - 0.05, 4);
       const emiTable = lp.emiRows.slice(0, 7).map(e => [
         e.loanName.slice(0, 14), e.lender.slice(0, 10), e.outstanding, e.emiAmount,
         e.emiDueDate, e.paymentStatus, e.interestRate, e.maturityDate,
       ]);
       table(s,
         ['Loan', 'Lender', 'Balance', 'EMI', 'Due', 'Status', 'Rate', 'Maturity'],
-        emiTable, 2.05,
+        emiTable, 2.55,
         [1.1, 0.9, 0.9, 0.7, 0.8, 0.7, 0.6, 0.8],
       );
       s.addText(lp.emiDisclaimer, { x: 0.4, y: 4.85, w: 9, h: 0.35, fontSize: 7, color: C.muted, fontFace: 'Segoe UI' });
@@ -443,6 +470,7 @@ export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Pr
     const dr = data.debtRisk;
     const s = pptx.addSlide();
     header(s, 'Debt Risk & Maturities', 'Loan Tracker · Financial Ratios');
+    slideCommentary(s, data.slideNarratives.debtRisk);
     if (dr.available) {
       const dscr = dr.dscrByProperty.slice(0, 8);
       const ltv = dr.ltvByProperty.slice(0, 8);
@@ -460,11 +488,10 @@ export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Pr
               options: { lineSize: 2, chartColors: [C.red] },
             },
           ],
-          { ...chartOpts(0.5, 1.15, 4.4, 2.2), valAxisTitle: 'DSCR' },
+          { ...chartOpts(0.5, KPI_Y + 0.1, 4.4, 2.15), valAxisTitle: 'DSCR' },
         );
       }
       if (ltv.length) {
-        // Single series with conditional colors via two aligned series (0 placeholders)
         const labels = ltv.map(l => l.name);
         const healthyVals = ltv.map(l => (l.ltv <= 75 ? l.ltv : 0));
         const riskVals = ltv.map(l => (l.ltv > 75 ? l.ltv : 0));
@@ -475,7 +502,7 @@ export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Pr
             { name: 'At Risk >75%', labels, values: riskVals },
           ],
           {
-            ...chartOpts(5.1, 1.15, 4.4, 2.2),
+            ...chartOpts(5.1, KPI_Y + 0.1, 4.4, 2.15),
             barDir: 'col',
             barGrouping: 'clustered',
             chartColors: [C.gold, C.red],
@@ -485,7 +512,7 @@ export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Pr
         );
       }
       const matRows = dr.maturityBuckets.map(b => [b.label, `$${(b.amount / 1000).toFixed(0)}k`, String(b.count)]);
-      table(s, ['Maturity Window', 'Balance', 'Loans'], matRows, 3.5, [2.5, 2, 1.5]);
+      table(s, ['Maturity Window', 'Balance', 'Loans'], matRows, TABLE_Y, [2.5, 2, 1.5]);
     } else {
       na(s, 'Data not available — see Loan Tracker');
     }
@@ -497,18 +524,19 @@ export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Pr
     const ow = data.ownership;
     const s = pptx.addSlide();
     header(s, 'Ownership Overview', 'Rentals → Ownership');
+    slideCommentary(s, data.slideNarratives.ownership);
     if (ow.available) {
       kpiCards(s, [
         { label: 'Total Partners', value: ow.totalPartners },
         { label: 'Total Capital Raised', value: ow.totalCapital },
         { label: 'Total Equity', value: ow.totalEquity },
         { label: 'Avg Partner ROI', value: ow.avgRoi },
-      ]);
+      ], KPI_Y);
       if (ow.partnerSlices.length > 0) {
         s.addChart(
           pptx.ChartType.doughnut,
           [{ name: 'Ownership', labels: ow.partnerSlices.map(p => p.name), values: ow.partnerSlices.map(p => p.value) }],
-          { ...chartOpts(0.5, 2.1, 4.4, 2.5), chartColors: [C.gold, '1F6FEB', C.green, C.amber, C.red], holeSize: 55 },
+          { ...chartOpts(0.5, CHART_Y, 4.4, 2.45), chartColors: [C.gold, '1F6FEB', C.green, C.amber, C.red], holeSize: 55 },
         );
       }
       if (ow.roiByPartner.length > 0) {
@@ -527,7 +555,7 @@ export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Pr
               options: { lineSize: 2, chartColors: [C.red] },
             },
           ],
-          { ...chartOpts(5.1, 2.1, 4.4, 2.5), valAxisTitle: 'ROI %' },
+          { ...chartOpts(5.1, CHART_Y, 4.4, 2.45), valAxisTitle: 'ROI %' },
         );
       }
     } else {
@@ -541,6 +569,7 @@ export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Pr
     const pp = data.propertyProfitability;
     const s = pptx.addSlide();
     header(s, 'Per-Property Profitability', 'Ownership · Financials · Company Registry');
+    slideCommentary(s, data.slideNarratives.propertyProfitability);
     if (pp.available) {
       // Treemap substitute: sorted horizontal bar of NOI $ (or margin % fallback)
       const sortedNoi = [...pp.rows]
@@ -562,7 +591,7 @@ export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Pr
             values: sortedNoi.map(r => r.noi),
           }],
           {
-            ...chartOpts(0.5, 1.1, 4.4, 2.35),
+            ...chartOpts(0.5, KPI_Y + 0.05, 4.4, 2.25),
             barDir: 'bar',
             chartColors: [C.gold],
             showValAxisTitle: true,
@@ -590,7 +619,7 @@ export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Pr
             },
           ],
           {
-            ...chartOpts(5.1, 1.1, 4.4, 2.35),
+            ...chartOpts(5.1, KPI_Y + 0.05, 4.4, 2.25),
             chartColors: [C.teal],
             lineDataSymbol: 'circle',
             lineDataSymbolSize: 10,
@@ -608,7 +637,7 @@ export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Pr
         );
       }
       const rows = pp.rows.slice(0, 6).map(r => [r.property.slice(0, 18), r.occupancy, r.noiMargin, r.dscr, r.arrears]);
-      table(s, ['Property', 'Occupancy', 'NOI Margin', 'DSCR', 'Arrears'], rows, 3.6, [2.2, 1.2, 1.2, 1, 1.2]);
+      table(s, ['Property', 'Occupancy', 'NOI Margin', 'DSCR', 'Arrears'], rows, TABLE_Y + 0.15, [2.2, 1.2, 1.2, 1, 1.2]);
       const flagged = pp.rows.filter(r => r.flagged).length;
       if (flagged > 0) {
         s.addText(`${flagged} propert${flagged === 1 ? 'y' : 'ies'} flagged (NOI margin <15%, DSCR <1.1×, or arrears >2 mo GPR)`, {
@@ -625,11 +654,12 @@ export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Pr
   {
     const s = pptx.addSlide();
     header(s, 'Risk & Action Items', 'Auto-generated from portfolio rules');
+    slideCommentary(s, data.slideNarratives.riskActionItems);
     if (data.riskActionTable.length > 0) {
       const rows = data.riskActionTable.slice(0, 9).map(r => [
         r.property.slice(0, 14), r.issue, r.kpi, r.impact.slice(0, 28), r.owner.slice(0, 14), r.dueDate,
       ]);
-      table(s, ['Property', 'Issue', 'KPI', 'Impact', 'Owner', 'Due'], rows, 1.05,
+      table(s, ['Property', 'Issue', 'KPI', 'Impact', 'Owner', 'Due'], rows, KPI_Y + 0.05,
         [1.2, 1.3, 1, 1.8, 1.2, 0.9]);
     } else {
       na(s, 'No critical flags — portfolio within normal parameters');

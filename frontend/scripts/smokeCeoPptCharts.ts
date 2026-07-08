@@ -5,8 +5,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { generateCeoBoardReviewPpt, type CeoBoardExportPayload } from '../src/utils/executiveSummaryPpt';
+import { generateSlideNarratives } from '../src/utils/executiveSummaryNarrative';
 
-const sample: CeoBoardExportPayload = {
+const sampleBase: Omit<CeoBoardExportPayload, 'slideNarratives'> = {
   entityLabel: 'Portfolio_Total',
   periodLabel: 'MoM · Aug 2026',
   generatedAt: new Date().toLocaleString(),
@@ -116,6 +117,25 @@ const sample: CeoBoardExportPayload = {
   },
   riskActionTable: [],
   strategicRecommendations: ['Prioritize refinancing on properties with DSCR below covenant.'],
+};
+
+const mockK = {
+  totalRevenue: 180000, totalExpenses: 100000, netIncome: 37000, noi: 55000,
+  rentalIncome: 155000, otherIncome: 25000, interestExpense: 18000,
+  propertyTax: 0, managementFee: 0, hoaFees: 0, legalFees: 0, utilities: 0, repairs: 0,
+  totalAssets: 0, totalLiabilities: 0, equity: 0, cash: 220000, buildings: 0,
+  accumDep: 0, longTermLoans: 0, securityDeposits: 0,
+};
+const mockKPrev = { ...mockK, noi: 50000, totalRevenue: 170000 };
+
+const sample: CeoBoardExportPayload = {
+  ...sampleBase,
+  slideNarratives: generateSlideNarratives({
+    payload: sampleBase,
+    k: mockK,
+    kPrev: mockKPrev,
+    loans: [],
+  }),
 };
 
 async function main() {

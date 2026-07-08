@@ -20,7 +20,7 @@ import {
 } from './executiveSummaryPortfolio';
 import { buildEmiStatusRows, EMI_STATUS_DISCLAIMER } from './executiveSummaryEmi';
 import { buildRiskActionRows } from './executiveSummaryActionRules';
-import { generateExecutiveNarrative, generateStrategicRecommendations } from './executiveSummaryNarrative';
+import { generateExecutiveNarrative, generateStrategicRecommendations, generateSlideNarratives } from './executiveSummaryNarrative';
 import { aggregateRegistryOps, buildRegistryTrend } from './executiveSummaryRegistry';
 
 const CAP_RATE = 0.055;
@@ -405,6 +405,89 @@ export async function gatherCeoBoardExportPayload(opts: GatherExportOptions): Pr
 
   const ownershipKpis = buildOwnershipKpis(ownership, scopedCompanies, totalDebt, mvResult.value);
 
+  const propertyRows = buildPropertyRows(scopedCompanies, scopedLoans, ownership);
+
+  const portfolioSnapshot = {
+    totalUnits: registryOps.totalUnits > 0 ? String(registryOps.totalUnits) : 'Data not available — see Company Registry',
+    occupiedUnits: registryOps.occupiedUnits > 0 ? String(registryOps.occupiedUnits) : 'Data not available',
+    vacantUnits: registryOps.vacantUnits,
+    marketValue: mvResult.value > 0 ? fmtUsd(mvResult.value) : 'Data not available — see Loan Tracker / Financials',
+    marketValueSource: mvResult.label,
+    totalDebt: fmtUsd(totalDebt),
+    loanCount: scopedLoans.length,
+    unitsByCompany: scopedCompanies.map(c => ({ name: c.company_name.split(' ')[0], units: c.total_units })),
+    assetComposition: buildMarketValueComposition({ companies: scopedCompanies, loans: scopedLoans, ownership }),
+    debtComposition: buildDebtComposition(scopedLoans),
+  };
+
+  const rentalPerformance = {
+    occupancy: occPct != null ? pct(occPct) : 'Data not available',
+    gpr: fmtUsd(registryOps.grossPotentialRent ?? k?.totalRevenue ?? 0),
+    collected: fmtUsd(registryOps.collected ?? 0),
+    vacancyLoss: fmtUsd(registryOps.vacancyLoss ?? 0),
+    collectionRate: collectionRate > 0 ? pct(collectionRate) : 'Data not available',
+    arOutstanding: fmtUsd(registryOps.arrears ?? scopedPortfolio?.arrears_total ?? qbAr?.portfolio_totals?.total ?? 0),
+    gprTrend,
+  };
+
+  const financialPerformance = {
+    available: Boolean(k),
+    profitability: kpiSets.profitability,
+    waterfall: k ? buildWaterfall(k, scopedPortfolio) : [],
+    trend: buildFinancialTrend(fins, month, year),
+    noi: k ? fmtKpiCurrency(k.noi) : 'Data not available',
+    sourceNote: k ? 'From Financials P&L (interest add-back applied)' : 'Upload P&L on Rentals → Financials',
+  };
+
+  const cashPosition = {
+    balance: k ? fmtKpiCurrency(k.cash) : 'Data not available — see Financials Balance Sheet',
+    trend: buildCashTrend(fins, month, year),
+    runwayNote: runwayMonths
+      ? `Cash covers ~${runwayMonths} months of loan EMI at current balance.`
+      : monthlyEmi > 0 ? 'Cash runway not calculable — upload balance sheet cash.' : 'No EMI data on Loan Tracker.',
+  };
+
+  const loanPortfolio = {
+    available: scopedLoans.length > 0,
+    summary: loanSummary,
+    totalDebt: fmtUsd(totalDebt),
+    loanCount: String(scopedLoans.length),
+    portfolioDscr: k && k.interestExpense > 0 ? `${(k.noi / (k.interestExpense * 1.2)).toFixed(2)}x` : 'Data not available',
+    interestCoverage: k && k.interestExpense > 0 ? `${(k.noi / k.interestExpense).toFixed(2)}x` : 'Data not available',
+    emiRows,
+    emiDisclaimer: EMI_STATUS_DISCLAIMER,
+    worstDscr: [...dscrByProperty].sort((a, b) => a.dscr - b.dscr).slice(0, 5),
+  };
+
+  const debtRisk = {
+    available: scopedLoans.length > 0,
+    dscrByProperty,
+    ltvByProperty,
+    maturityBuckets: maturityBuckets.filter(b => b.count > 0),
+  };
+
+  const propertyProfitability = {
+    available: propertyRows.length > 0,
+    rows: propertyRows,
+  };
+
+  const slideNarratives = generateSlideNarratives({
+    payload: {
+      portfolioSnapshot,
+      rentalPerformance,
+      financialPerformance,
+      cashPosition,
+      loanPortfolio,
+      debtRisk,
+      ownership: ownershipKpis,
+      propertyProfitability,
+      riskActionTable: riskRows,
+    },
+    k,
+    kPrev,
+    loans: scopedLoans,
+  });
+
   return {
     entityLabel,
     periodLabel,
@@ -415,73 +498,25 @@ export async function gatherCeoBoardExportPayload(opts: GatherExportOptions): Pr
       marketValue: mvResult.value, totalDebt, cash, flaggedPropertyCount: flaggedCount, arOverdue90,
     }),
 
-    portfolioSnapshot: {
-      totalUnits: registryOps.totalUnits > 0 ? String(registryOps.totalUnits) : 'Data not available — see Company Registry',
-      occupiedUnits: registryOps.occupiedUnits > 0 ? String(registryOps.occupiedUnits) : 'Data not available',
-      vacantUnits: registryOps.vacantUnits,
-      marketValue: mvResult.value > 0 ? fmtUsd(mvResult.value) : 'Data not available — see Loan Tracker / Financials',
-      marketValueSource: mvResult.label,
-      totalDebt: fmtUsd(totalDebt),
-      loanCount: scopedLoans.length,
-      unitsByCompany: scopedCompanies.map(c => ({ name: c.company_name.split(' ')[0], units: c.total_units })),
-      assetComposition: buildMarketValueComposition({ companies: scopedCompanies, loans: scopedLoans, ownership }),
-      debtComposition: buildDebtComposition(scopedLoans),
-    },
+    portfolioSnapshot,
 
-    rentalPerformance: {
-      occupancy: occPct != null ? pct(occPct) : 'Data not available',
-      gpr: fmtUsd(registryOps.grossPotentialRent ?? k?.totalRevenue ?? 0),
-      collected: fmtUsd(registryOps.collected ?? 0),
-      vacancyLoss: fmtUsd(registryOps.vacancyLoss ?? 0),
-      collectionRate: collectionRate > 0 ? pct(collectionRate) : 'Data not available',
-      arOutstanding: fmtUsd(registryOps.arrears ?? scopedPortfolio?.arrears_total ?? qbAr?.portfolio_totals?.total ?? 0),
-      gprTrend,
-    },
+    rentalPerformance,
 
-    financialPerformance: {
-      available: Boolean(k),
-      profitability: kpiSets.profitability,
-      waterfall: k ? buildWaterfall(k, scopedPortfolio) : [],
-      trend: buildFinancialTrend(fins, month, year),
-      noi: k ? fmtKpiCurrency(k.noi) : 'Data not available',
-      sourceNote: k ? 'From Financials P&L (interest add-back applied)' : 'Upload P&L on Rentals → Financials',
-    },
+    financialPerformance,
 
-    cashPosition: {
-      balance: k ? fmtKpiCurrency(k.cash) : 'Data not available — see Financials Balance Sheet',
-      trend: buildCashTrend(fins, month, year),
-      runwayNote: runwayMonths
-        ? `Cash covers ~${runwayMonths} months of loan EMI at current balance.`
-        : monthlyEmi > 0 ? 'Cash runway not calculable — upload balance sheet cash.' : 'No EMI data on Loan Tracker.',
-    },
+    cashPosition,
 
-    loanPortfolio: {
-      available: scopedLoans.length > 0,
-      summary: loanSummary,
-      totalDebt: fmtUsd(totalDebt),
-      loanCount: String(scopedLoans.length),
-      portfolioDscr: k && k.interestExpense > 0 ? `${(k.noi / (k.interestExpense * 1.2)).toFixed(2)}x` : 'Data not available',
-      interestCoverage: k && k.interestExpense > 0 ? `${(k.noi / k.interestExpense).toFixed(2)}x` : 'Data not available',
-      emiRows,
-      emiDisclaimer: EMI_STATUS_DISCLAIMER,
-      worstDscr: [...dscrByProperty].sort((a, b) => a.dscr - b.dscr).slice(0, 5),
-    },
+    loanPortfolio,
 
-    debtRisk: {
-      available: scopedLoans.length > 0,
-      dscrByProperty,
-      ltvByProperty,
-      maturityBuckets: maturityBuckets.filter(b => b.count > 0),
-    },
+    debtRisk,
 
     ownership: ownershipKpis,
 
-    propertyProfitability: {
-      available: buildPropertyRows(scopedCompanies, scopedLoans, ownership).length > 0,
-      rows: buildPropertyRows(scopedCompanies, scopedLoans, ownership),
-    },
+    propertyProfitability,
 
     riskActionTable: riskRows,
+
+    slideNarratives,
 
     strategicRecommendations: generateStrategicRecommendations({
       riskRows, loans: scopedLoans, portfolio: scopedPortfolio, collectionRate, arOverdue90, k,
