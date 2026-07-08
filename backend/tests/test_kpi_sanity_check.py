@@ -203,3 +203,49 @@ def test_calc_monthly_kpis_noi_uses_pl_income_minus_expenses_plus_interest():
   assert k["interest"] == 500
   assert k["noi"] == 4_500
   assert k["noi"] / k["total_revenue"] * 100 == 45.0
+
+
+def test_cfo_dashboard_audit_includes_chart_metrics():
+    from services.cfo_dashboard_kpi_audit import audit_company_cfo_dashboard
+
+    fin = _sample_fin()
+    rows = audit_company_cfo_dashboard(fin, selected_year=2026)
+    kpis = {r.kpi for r in rows}
+    assert "Net Income Trajectory" in kpis
+    assert "Expense Ratio Trend" in kpis
+    assert "Revenue vs Expenses" in kpis
+    assert "Cash Balance Trend (Bank Accounts)" in kpis
+    assert "Revenue Breakdown — Rental Income" in kpis
+    assert "Latest Net Income (2026)" in kpis
+    assert "Avg Profit Margin" in kpis
+    assert "Latest Cash Position (2026)" in kpis
+
+    ni_row = next(r for r in rows if r.kpi == "Latest Net Income (2026)")
+    assert ni_row.canonical_value == 500_000
+    assert ni_row.status == "MATCH"
+
+    cash_row = next(r for r in rows if r.kpi == "Latest Cash Position (2026)")
+    assert cash_row.canonical_value == 120_000
+
+    margin_row = next(r for r in rows if r.kpi == "Avg Profit Margin")
+    assert margin_row.canonical_value == 12.5  # 2025 has no P&L values (0%) + 2026 at 25%
+
+    exp_rows = [r for r in rows if r.section.startswith("CFO Dashboard — Expense Breakdown")]
+    assert any(r.kpi == "Expense Breakdown — Mgmt Fee" for r in exp_rows)
+
+
+def test_cfo_dashboard_merged_into_financial_audit():
+    from services.cfo_dashboard_kpi_audit import audit_company_cfo_dashboard
+    from services.kpi_sanity_check import _merge_audit_rows
+
+    fin_result = audit_company_financials(
+        _sample_fin(),
+        company_id="test-co",
+        company_name="Test Co",
+        month=6,
+        year=2026,
+    )
+    cfo_rows = audit_company_cfo_dashboard(_sample_fin(), selected_year=2026)
+    merged = _merge_audit_rows(fin_result, cfo_rows)
+    assert any(r.kpi == "Net Income Trajectory" for r in merged.rows)
+    assert merged.has_data

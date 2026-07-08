@@ -181,9 +181,11 @@ export function KpiCalculationsReviewPanel({ embedded }: Props) {
           </div>
           <p className="text-sm text-gray-500 mt-1">
             Cross-check every KPI — formula, raw inputs, step-by-step value, and live dashboard match status
-            across all client companies before delivery. Includes <strong>Rental Portfolio Overview</strong>,{' '}
-            <strong>AR Dashboard</strong> operational KPIs, and <strong>Loan Tracker</strong> debt metrics
-            (portfolio balance, EMI, weighted rate, DSCR, maturity, LTV, concentration).
+            across all client companies before delivery. Includes <strong>CFO Dashboard</strong> chart metrics
+            (Net Income Trajectory, Expense Ratio Trend, Revenue vs Expenses, Cash Balance Trend, revenue/expense
+            breakdowns, summary tiles), <strong>Rental Portfolio Overview</strong>, <strong>AR Dashboard</strong>{' '}
+            operational KPIs, and <strong>Loan Tracker</strong> debt metrics (portfolio balance, EMI, weighted rate,
+            DSCR, maturity, LTV, concentration).
           </p>
           {profile?.email && (
             <p className="text-xs text-gray-400 mt-0.5">CA firm reviewer: {profile.email}</p>

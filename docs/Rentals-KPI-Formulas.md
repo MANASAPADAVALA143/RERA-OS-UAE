@@ -142,11 +142,16 @@ Reference for KPI calculations across **Rental Overview**, **Financials KPI Dash
 | **Expenses** | Sum of expense lines |
 | **Net Income** | `Net Income` row |
 | **Net Margin** | `Net Income ÷ Revenue × 100` |
-| **Expense Ratio Trend** | `Expenses ÷ Revenue × 100` by year |
-| **Cash (Bank)** | `Total Bank Accounts` from balance sheet |
-| **Net Income Trajectory** | Net Income by year |
+| **Expense Ratio Trend** | `Total Expenses ÷ Total Revenue × 100` per FY year (0% if revenue = 0) |
+| **Revenue vs Expenses** | Grouped bars: `Total for Income` vs `Total for Expenses` per FY year |
+| **Cash Balance Trend (Bank Accounts)** | BS `Total for Bank Accounts` (or sum bank/checking/savings lines) — **FY year-end point-in-time**, not summed across months |
+| **Net Income Trajectory** | P&L `Net Income` row per FY year |
+| **Revenue Breakdown by Year** | Stacked: Rental Income, Other Income, Services = `max(0, Revenue − Rental − Other)` |
+| **Expense Breakdown (selected year)** | Pie: Interest, Property Tax, HOA, Legal, Mgmt Fee, Utilities, Repairs, Other (residual) |
+| **Latest Net Income** | Net Income for latest FY year in upload |
 | **Latest Net Income change** | `(Latest NI − Prior NI) ÷ \|Prior NI\| × 100` |
-| **Avg Profit Margin** | Average of yearly `(Net Income ÷ Revenue × 100)` |
+| **Avg Profit Margin** | Mean of `(Net Income ÷ Revenue × 100)` across all uploaded FY years |
+| **Latest Cash Position** | Bank balance for latest FY year (same as Cash Balance Trend year-end) |
 
 ---
 
@@ -334,11 +339,14 @@ Cross-checks every KPI with formula, raw inputs, substitution steps, and match s
 | Section | KPIs audited |
 |---|---|
 | **Profitability / Balance Sheet / Financial Ratios** | P&L + BS KPIs from Financials dashboard (`rentalKpiEngine`) |
-| **Rental Portfolio Overview** | Collected This Month, Occupancy Rate, Collection Rate, Vacancy Loss, Arrears Days Outstanding, Credit Balance |
+| **CFO Dashboard — Multi-Year Trends** | Net Income Trajectory, Expense Ratio Trend, Revenue vs Expenses, Cash Balance Trend |
+| **CFO Dashboard — Revenue / Expense Breakdown** | Revenue Breakdown by Year (Rental, Other, Services); Expense pie for selected FY year |
+| **CFO Dashboard — Summary Tiles** | Latest Net Income, Avg Profit Margin, Latest Cash Position |
+| **Rental Portfolio Overview** | Monthly Rent, Occupancy Rate, Collection Rate, Vacancy Loss, Arrears Days Outstanding, Credit Balance |
 | **AR Dashboard** | Outstanding AR, Est. Days to Collect, Overdue AR (30+), Credit Balance |
 | **Portfolio (all companies)** | Portfolio collected, occupancy, DSO, credit — shown at top when reviewing all companies |
 
-**Backend reference:** `backend/services/kpi_sanity_check.py`, `backend/services/rental_ops_kpi_audit.py`, `backend/services/qb_dso.py`
+**Backend reference:** `backend/services/kpi_sanity_check.py`, `backend/services/cfo_dashboard_kpi_audit.py`, `backend/services/rental_ops_kpi_audit.py`, `backend/services/qb_dso.py`
 
 ---
 
@@ -355,7 +363,7 @@ Cross-checks every KPI with formula, raw inputs, substitution steps, and match s
 | CFO data hook | `frontend/src/hooks/useRentalCfoData.ts` |
 | Financial Ratios | `frontend/src/pages/rental/RentalFinancialRatios.tsx` |
 | Executive Summary / PPT export | `frontend/src/utils/executiveSummaryPpt.ts`, `frontend/src/utils/gatherExecutiveExportData.ts` |
-| Calculations Review | `frontend/src/components/admin/KpiCalculationsReviewPanel.tsx`, `backend/services/rental_ops_kpi_audit.py` |
+| Calculations Review | `frontend/src/components/admin/KpiCalculationsReviewPanel.tsx`, `backend/services/cfo_dashboard_kpi_audit.py`, `backend/services/rental_ops_kpi_audit.py` |
 | QB DSO / credit balance | `backend/services/qb_dso.py`, `frontend/src/components/rental/QbArAgingUploadPanel.tsx` |
 | AR Dashboard | `frontend/src/pages/RentalArDashboard.tsx` |
 

@@ -1295,18 +1295,142 @@ function KPITab({
   );
 }
 
+// ── CFO Dashboard helpers ─────────────────────────────────────────────────────
+
+const CFO_TT = {
+  contentStyle: { background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13, color: '#1C1917' },
+  labelStyle: { color: '#57534E', fontWeight: 600, fontSize: 13 },
+  itemStyle: { color: '#1C1917', fontSize: 13 },
+};
+
+const OPEX_LINE_PATTERNS: Record<string, RegExp> = {
+  'Management Fee': /management\s+fee/i,
+  'Interest': /interest\s+on\s+loan|interest\s+paid|^interest$/i,
+  'Property Tax': /property\s+tax|rates\s+&\s+taxes/i,
+  'Repairs': /repair|maintenance|cleaning/i,
+  'Utilities': /utilities|electricity|internet|water/i,
+  'HOA Fees': /^hoa/i,
+  'Legal Fees': /legal|accounting\s+fee/i,
+  'Insurance': /insurance/i,
+  'Depreciation': /depreciation|amortization/i,
+};
+
+const PIE_TO_OPEX_KEY: Record<string, string> = {
+  'Interest Paid': 'Interest',
+  'Property Tax': 'Property Tax',
+  'HOA Fees': 'HOA Fees',
+  'Legal Fees': 'Legal Fees',
+  'Mgmt Fee': 'Management Fee',
+  'Utilities': 'Utilities',
+  'Repairs': 'Repairs',
+  'Other': 'Other',
+};
+
+const REVENUE_LINE_PATTERNS: Record<string, RegExp> = {
+  'Rent Income': /rent|rental\s+income|services/i,
+  'Other Income': /other\s+income/i,
+};
+
+function plLinesForDrill(
+  pl: FinItem[],
+  keys: string[],
+  pattern: RegExp,
+  useAnnualYear?: number,
+): { label: string; amount: number }[] {
+  const sumItem = (item: FinItem) => {
+    if (keys.length) {
+      return keys.reduce((s, k) => s + Math.abs(item.monthlyValues?.[k] ?? 0), 0);
+    }
+    if (useAnnualYear != null) return Math.abs(item.values[useAnnualYear] ?? 0);
+    return 0;
+  };
+  return pl
+    .filter(i => !i.isSectionHeader && !i.isTotal && !i.isNetIncome && pattern.test(i.label))
+    .map(i => ({ label: i.label, amount: sumItem(i) }))
+    .filter(r => r.amount > 0)
+    .sort((a, b) => b.amount - a.amount);
+}
+
+function CfoDrillPanel({
+  title, subtitle, rows, onClear,
+}: {
+  title: string;
+  subtitle?: string;
+  rows: { label: string; amount: number }[];
+  onClear: () => void;
+}) {
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+  return (
+    <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '14px 16px', marginTop: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+        <div>
+          <p style={{ fontSize: 14, fontWeight: 700, color: '#92400E', margin: 0 }}>{title}</p>
+          {subtitle && <p style={{ fontSize: 12, color: '#78716C', marginTop: 4 }}>{subtitle}</p>}
+        </div>
+        <button
+          type="button"
+          onClick={onClear}
+          style={{ fontSize: 12, color: '#D4AF37', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline', padding: 0 }}
+        >
+          × clear drill-down
+        </button>
+      </div>
+      {rows.length === 0 ? (
+        <p style={{ fontSize: 13, color: '#A8A29E' }}>No matching P&amp;L line items for this selection.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full" style={{ fontSize: 13, borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #FDE68A' }}>
+                <th style={{ textAlign: 'left', padding: '6px 10px', color: '#78716C', fontWeight: 600, fontSize: 11, textTransform: 'uppercase' }}>P&amp;L Line Item</th>
+                <th style={{ textAlign: 'right', padding: '6px 10px', color: '#78716C', fontWeight: 600, fontSize: 11, textTransform: 'uppercase' }}>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid rgba(253,230,138,0.4)', background: i % 2 === 0 ? '#FFFBEB' : '#FEF9E7' }}>
+                  <td style={{ padding: '8px 10px', color: '#57534E' }}>{r.label}</td>
+                  <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600, color: '#1C1917', fontFamily: 'monospace' }}>{fmtFull(r.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ borderTop: '2px solid #FDE68A' }}>
+                <td style={{ padding: '8px 10px', fontWeight: 700, color: '#92400E' }}>Total</td>
+                <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: '#92400E', fontFamily: 'monospace' }}>{fmtFull(total)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── CFO Dashboard Tab ─────────────────────────────────────────────────────────
 
 function CFOTab({
-  fin, period, pMonth, pYear, selectedYear,
+  fin, period, pMonth, pYear, selectedYear, onYearSelect,
 }: {
   fin: ParsedFinancials;
   period: Period | null;
   pMonth: number;
   pYear: number;
   selectedYear: number;
+  onYearSelect?: (y: number) => void;
 }) {
   const lastY = fin.years[fin.years.length - 1];
+  const [drillOpexCat, setDrillOpexCat] = useState<string | null>(null);
+  const [drillRevenueType, setDrillRevenueType] = useState<string | null>(null);
+  const [drillMonth, setDrillMonth] = useState<string | null>(null);
+  const [drillAnnualCat, setDrillAnnualCat] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDrillOpexCat(null);
+    setDrillRevenueType(null);
+    setDrillMonth(null);
+    setDrillAnnualCat(null);
+  }, [period, pMonth, pYear, selectedYear]);
 
   const snapshotRows = fin.years.map(y => {
     const kk = calcKpis(fin, y);
@@ -1414,8 +1538,53 @@ function CFOTab({
 
   const OPEX_PALETTE = ['#D4AF37','#F2994A','#2F80ED','#166534','#B91C1C','#9B59B6','#F2C94C','#E8DEC8'];
 
+  const drillKeys = periodKeys.length ? periodKeys : [];
+  const drillRows = useMemo(() => {
+    if (drillOpexCat) {
+      const key = drillOpexCat === 'Other' ? null : drillOpexCat;
+      const pat = key ? (OPEX_LINE_PATTERNS[key] ?? /./) : /fee|expense|charge|cost|repair|utility|tax|interest|insurance|depreciation|legal|hoa|management/i;
+      return plLinesForDrill(fin.pl, drillKeys, pat, drillKeys.length ? undefined : selectedYear);
+    }
+    if (drillRevenueType) {
+      const pat = REVENUE_LINE_PATTERNS[drillRevenueType] ?? /income|revenue/i;
+      const keys = drillMonth ? [drillMonth] : drillKeys;
+      return plLinesForDrill(fin.pl, keys, pat, keys.length ? undefined : selectedYear);
+    }
+    if (drillMonth) {
+      return plLinesForDrill(fin.pl, [drillMonth], /income|revenue|rent/i);
+    }
+    if (drillAnnualCat) {
+      const key = PIE_TO_OPEX_KEY[drillAnnualCat] ?? drillAnnualCat;
+      const pat = OPEX_LINE_PATTERNS[key] ?? /expense|fee|cost|repair|utility|tax|interest|insurance|depreciation/i;
+      return plLinesForDrill(fin.pl, [], pat, selectedYear);
+    }
+    return [];
+  }, [drillOpexCat, drillRevenueType, drillMonth, drillAnnualCat, fin.pl, drillKeys, selectedYear]);
+
+  const clearDrill = () => {
+    setDrillOpexCat(null);
+    setDrillRevenueType(null);
+    setDrillMonth(null);
+    setDrillAnnualCat(null);
+  };
+
+  const drillTitle = drillOpexCat
+    ? `Opex drill-down · ${drillOpexCat}`
+    : drillRevenueType
+      ? `Revenue drill-down · ${drillRevenueType}`
+      : drillMonth
+        ? `Month drill-down · ${drillMonth}`
+        : drillAnnualCat
+          ? `Expense drill-down · ${drillAnnualCat} (${selectedYear})`
+          : '';
+
   return (
     <div className="space-y-6">
+      <style>{`
+        .cfo-bar-clickable:hover { cursor: pointer; filter: brightness(1.08); }
+        .cfo-cat-row:hover { background: #F7F1E6; border-radius: 6px; cursor: pointer; }
+        .cfo-chart-hint { font-size: 12px; color: #A8A29E; margin-bottom: 8px; }
+      `}</style>
 
       {/* Period Panels — shown when a period is active */}
       {period && periodAgg && (
@@ -1427,19 +1596,25 @@ function CFOTab({
 
             {/* Panel 1 — Revenue Mix Donut */}
             <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
-              <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>Revenue Mix</p>
+              <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Revenue Mix</p>
+              <p className="cfo-chart-hint">Click a segment to drill into P&amp;L revenue lines</p>
               {periodAgg.totalRevenue > 0 ? (
                 <>
                   <ResponsiveContainer width="100%" height={180}>
                     <PieChart>
-                      <Pie data={[
-                        { name: 'Rent Income',  value: periodAgg.rentIncome  },
-                        { name: 'Other Income', value: periodAgg.otherIncome },
-                      ].filter(d => d.value > 0)} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value">
+                      <Pie
+                        data={[
+                          { name: 'Rent Income',  value: periodAgg.rentIncome  },
+                          { name: 'Other Income', value: periodAgg.otherIncome },
+                        ].filter(d => d.value > 0)}
+                        cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value"
+                        onClick={(d) => setDrillRevenueType(prev => prev === d.name ? null : String(d.name))}
+                        style={{ cursor: 'pointer' }}
+                      >
                         <Cell fill="#D4AF37" />
                         <Cell fill="#2F80ED" />
                       </Pie>
-                      <Tooltip formatter={(v: number) => fmtFull(v)} />
+                      <Tooltip formatter={(v: number) => fmtFull(v)} {...CFO_TT} />
                     </PieChart>
                   </ResponsiveContainer>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
@@ -1447,10 +1622,15 @@ function CFOTab({
                       { name: 'Rent Income',  val: periodAgg.rentIncome,  color: '#D4AF37' },
                       { name: 'Other Income', val: periodAgg.otherIncome, color: '#2F80ED' },
                     ].map(s => (
-                      <div key={s.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div
+                        key={s.name}
+                        className="cfo-cat-row"
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 4px', opacity: drillRevenueType && drillRevenueType !== s.name ? 0.45 : 1 }}
+                        onClick={() => setDrillRevenueType(prev => prev === s.name ? null : s.name)}
+                      >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ width: 10, height: 10, borderRadius: 2, background: s.color, display: 'inline-block' }} />
-                          <span style={{ fontSize: 13, color: '#1C1917' }}>{s.name}</span>
+                          <span style={{ fontSize: 13, color: '#57534E', fontWeight: drillRevenueType === s.name ? 700 : 400 }}>{s.name}</span>
                         </div>
                         <div style={{ textAlign: 'right' }}>
                           <span style={{ fontSize: 13, fontWeight: 600, color: '#1C1917', fontFamily: 'monospace' }}>{fmtFull(s.val)}</span>
@@ -1473,7 +1653,14 @@ function CFOTab({
 
             {/* Panel 2 — Opex Breakdown */}
             <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
-              <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>Opex Breakdown</p>
+              <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Opex Breakdown</p>
+              <p className="cfo-chart-hint">Click a bar to drill into P&amp;L expense lines</p>
+              {drillOpexCat && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 10px', borderRadius: 20, background: '#D4AF37', color: '#fff' }}>{drillOpexCat}</span>
+                  <button type="button" onClick={() => setDrillOpexCat(null)} style={{ fontSize: 12, color: '#A8A29E', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>× clear</button>
+                </div>
+              )}
               {(() => {
                 const cats = [
                   { name: 'Management Fee', val: periodAgg.management },
@@ -1492,26 +1679,51 @@ function CFOTab({
                 return (
                   <>
                     <ResponsiveContainer width="100%" height={Math.max(160, cats.length * 28)}>
-                      <BarChart data={cats} layout="vertical" margin={{ left: 0, right: 60, top: 0, bottom: 0 }}>
+                      <BarChart
+                        data={cats}
+                        layout="vertical"
+                        margin={{ left: 0, right: 60, top: 0, bottom: 0 }}
+                        onClick={(d: { activePayload?: { payload: { name: string } }[] }) => {
+                          const name = d?.activePayload?.[0]?.payload?.name;
+                          if (name) setDrillOpexCat(prev => prev === name ? null : name);
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      >
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E8DEC8" />
-                        <XAxis type="number" tick={{ fontSize: 9 }} tickFormatter={v => fmt(v as number)} axisLine={false} tickLine={false} />
-                        <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fill: '#374151' }} axisLine={false} tickLine={false} width={90} />
-                        <Tooltip formatter={(v: number) => fmtFull(v)} />
-                        <Bar dataKey="val" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 9, fill: '#6b7280', formatter: (v: number) => fmt(v) }}>
-                          {cats.map((_, i) => <Cell key={i} fill={OPEX_PALETTE[i % OPEX_PALETTE.length]} />)}
+                        <XAxis type="number" tick={{ fontSize: 11, fill: '#78716C' }} tickFormatter={v => fmt(v as number)} axisLine={false} tickLine={false} />
+                        <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: '#57534E' }} axisLine={false} tickLine={false} width={96} />
+                        <Tooltip
+                          formatter={(v: number) => [fmtFull(v), 'Amount']}
+                          labelFormatter={(label) => String(label)}
+                          {...CFO_TT}
+                        />
+                        <Bar dataKey="val" name="Amount" radius={[0, 4, 4, 0]} className="cfo-bar-clickable"
+                          label={{ position: 'right', fontSize: 11, fill: '#57534E', formatter: (v: number) => fmt(v) }}>
+                          {cats.map((c, i) => (
+                            <Cell key={i} fill={OPEX_PALETTE[i % OPEX_PALETTE.length]} opacity={drillOpexCat && drillOpexCat !== c.name ? 0.35 : 1} />
+                          ))}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                     <div style={{ marginTop: 8 }}>
                       {cats.map((c, i) => (
-                        <div key={c.name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0', borderBottom: '1px solid #EEE8DF' }}>
+                        <div
+                          key={c.name}
+                          className="cfo-cat-row"
+                          style={{
+                            display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 6px',
+                            borderBottom: '1px solid #EEE8DF',
+                            opacity: drillOpexCat && drillOpexCat !== c.name ? 0.45 : 1,
+                          }}
+                          onClick={() => setDrillOpexCat(prev => prev === c.name ? null : c.name)}
+                        >
                           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                             <span style={{ width: 8, height: 8, borderRadius: 2, background: OPEX_PALETTE[i % OPEX_PALETTE.length], display: 'inline-block', flexShrink: 0 }} />
-                            <span style={{ color: '#374151' }}>{c.name}</span>
+                            <span style={{ color: '#57534E', fontWeight: drillOpexCat === c.name ? 700 : 400 }}>{c.name}</span>
                           </div>
                           <div style={{ display: 'flex', gap: 10, fontFamily: 'monospace' }}>
-                            <span style={{ color: '#262626' }}>{fmt(c.val)}</span>
-                            <span style={{ color: '#9CA3AF', minWidth: 36, textAlign: 'right' }}>{totalOpex > 0 ? `${(c.val / totalOpex * 100).toFixed(0)}%` : '—'}</span>
+                            <span style={{ color: '#1C1917', fontWeight: 600 }}>{fmt(c.val)}</span>
+                            <span style={{ color: '#A8A29E', minWidth: 36, textAlign: 'right' }}>{totalOpex > 0 ? `${(c.val / totalOpex * 100).toFixed(0)}%` : '—'}</span>
                           </div>
                         </div>
                       ))}
@@ -1530,8 +1742,8 @@ function CFOTab({
                     <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
                     <XAxis dataKey="month" tick={{ fontSize: 9 }} />
                     <YAxis tick={{ fontSize: 9 }} tickFormatter={v => `${(v as number).toFixed(0)}%`} />
-                    <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} />
-                    <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
+                    <Tooltip formatter={(v: number, name: string) => [`${v.toFixed(1)}%`, name]} {...CFO_TT} />
+                    <Legend iconSize={8} wrapperStyle={{ fontSize: 12, color: '#57534E' }} />
                     <Line type="monotone" dataKey="grossMargin"     stroke="#166534" strokeWidth={2} dot={false} name="Gross Margin"     />
                     <Line type="monotone" dataKey="operatingMargin" stroke="#F2994A" strokeWidth={2} dot={false} name="Operating Margin" />
                     <Line type="monotone" dataKey="netMargin"       stroke="#B91C1C" strokeWidth={2} dot={false} name="Net Margin"       />
@@ -1544,18 +1756,27 @@ function CFOTab({
 
             {/* Panel 4 — Revenue by Month */}
             <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
-              <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>Revenue by Month</p>
+              <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Revenue by Month</p>
+              <p className="cfo-chart-hint">Click a month bar to drill into that month&apos;s P&amp;L lines</p>
               {periodRevByMonth.some(d => d.rentIncome > 0 || d.otherIncome > 0) ? (
                 <>
                   <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={periodRevByMonth} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
+                    <BarChart
+                      data={periodRevByMonth}
+                      margin={{ left: 0, right: 10, top: 5, bottom: 5 }}
+                      onClick={(d: { activePayload?: { payload: { month: string } }[] }) => {
+                        const month = d?.activePayload?.[0]?.payload?.month;
+                        if (month) setDrillMonth(prev => prev === month ? null : month);
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    >
                       <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
-                      <XAxis dataKey="month" tick={{ fontSize: 9 }} />
-                      <YAxis tick={{ fontSize: 9 }} tickFormatter={v => fmt(v as number)} />
-                      <Tooltip formatter={(v: number) => fmtFull(v)} />
-                      <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-                      <Bar dataKey="rentIncome"  stackId="rev" fill="#D4AF37" name="Rent Income"  radius={[0,0,0,0]} />
-                      <Bar dataKey="otherIncome" stackId="rev" fill="#2F80ED" name="Other Income" radius={[4,4,0,0]} />
+                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#78716C' }} />
+                      <YAxis tick={{ fontSize: 11, fill: '#78716C' }} tickFormatter={v => fmt(v as number)} />
+                      <Tooltip formatter={(v: number, name: string) => [fmtFull(v), name]} {...CFO_TT} />
+                      <Legend iconSize={8} wrapperStyle={{ fontSize: 12, color: '#57534E' }} />
+                      <Bar dataKey="rentIncome"  stackId="rev" fill="#D4AF37" name="Rent Income"  radius={[0,0,0,0]} className="cfo-bar-clickable" />
+                      <Bar dataKey="otherIncome" stackId="rev" fill="#2F80ED" name="Other Income" radius={[4,4,0,0]} className="cfo-bar-clickable" />
                     </BarChart>
                   </ResponsiveContainer>
                 </>
@@ -1565,6 +1786,15 @@ function CFOTab({
             </div>
 
           </div>
+
+          {drillTitle && (
+            <CfoDrillPanel
+              title={drillTitle}
+              subtitle="P&amp;L line items for the selected chart segment"
+              rows={drillRows}
+              onClear={clearDrill}
+            />
+          )}
         </div>
       )}
 
@@ -1626,13 +1856,22 @@ function CFOTab({
       {/* Charts Grid 2×2 */}
       <div className="grid grid-cols-2 gap-4">
         <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
-          <p style={{ fontSize:15, fontWeight:600, color:'#1C1917', marginBottom:12 }}>Net Income Trajectory</p>
+          <p style={{ fontSize:15, fontWeight:600, color:'#1C1917', marginBottom:4 }}>Net Income Trajectory</p>
+          <p className="cfo-chart-hint">Click a point to jump to that year</p>
           <ResponsiveContainer width="100%" height={210}>
-            <LineChart data={niTrajectory} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
+            <LineChart
+              data={niTrajectory}
+              margin={{ left: 0, right: 10, top: 5, bottom: 5 }}
+              onClick={(d: { activeLabel?: string }) => {
+                const y = parseInt(String(d?.activeLabel ?? ''), 10);
+                if (!isNaN(y)) onYearSelect?.(y);
+              }}
+              style={{ cursor: 'pointer' }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
-              <XAxis dataKey="year" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 9 }} tickFormatter={v => fmt(v as number)} />
-              <Tooltip formatter={(v: number) => fmtFull(v)} />
+              <XAxis dataKey="year" tick={{ fontSize: 11, fill: '#78716C' }} />
+              <YAxis tick={{ fontSize: 11, fill: '#78716C' }} tickFormatter={v => fmt(v as number)} />
+              <Tooltip formatter={(v: number) => [fmtFull(v), 'Net Income']} {...CFO_TT} />
               <Line type="monotone" dataKey="netIncome" stroke="#22C55E" strokeWidth={2} dot={{ fill: '#22C55E', r: 4 }} activeDot={{ r: 6, fill: '#22C55E' }} name="Net Income" />
             </LineChart>
           </ResponsiveContainer>
@@ -1696,15 +1935,45 @@ function CFOTab({
         </div>
         <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, padding:16 }}>
           <p style={{ fontSize:15, fontWeight:600, color:'#1C1917', marginBottom:12 }}>Expense Breakdown ({selectedYear})</p>
+          <p className="cfo-chart-hint">Click a segment to drill into P&amp;L expense lines</p>
+          {drillAnnualCat && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 10px', borderRadius: 20, background: '#D4AF37', color: '#fff' }}>{drillAnnualCat}</span>
+              <button type="button" onClick={() => setDrillAnnualCat(null)} style={{ fontSize: 12, color: '#A8A29E', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>× clear</button>
+            </div>
+          )}
           <ResponsiveContainer width="100%" height={210}>
             <PieChart>
-              <Pie data={expPie} cx="50%" cy="50%" outerRadius={75} dataKey="value">
-                {expPie.map((_, i) => <Cell key={i} fill={['#D4AF37','#C0392B','#166534','#F2994A','#8B6914','#A8A29E','#C08B40','#78716C'][i % 8]} />)}
+              <Pie
+                data={expPie}
+                cx="50%"
+                cy="50%"
+                outerRadius={75}
+                dataKey="value"
+                onClick={(d) => setDrillAnnualCat(prev => prev === d.name ? null : String(d.name))}
+                style={{ cursor: 'pointer' }}
+              >
+                {expPie.map((e, i) => (
+                  <Cell key={i} fill={['#D4AF37','#C0392B','#166534','#F2994A','#8B6914','#A8A29E','#C08B40','#78716C'][i % 8]}
+                    opacity={drillAnnualCat && drillAnnualCat !== e.name ? 0.35 : 1} />
+                ))}
               </Pie>
-              <Tooltip formatter={(v: number) => fmtFull(v)} contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 }} />
-              <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
+              <Tooltip formatter={(v: number, name: string) => [fmtFull(v), name]} {...CFO_TT} />
+              <Legend iconSize={10} wrapperStyle={{ fontSize: 12, color: '#57534E' }} />
             </PieChart>
           </ResponsiveContainer>
+          {drillAnnualCat && (
+            <CfoDrillPanel
+              title={`Expense drill-down · ${drillAnnualCat} (${selectedYear})`}
+              rows={plLinesForDrill(
+                fin.pl,
+                [],
+                OPEX_LINE_PATTERNS[PIE_TO_OPEX_KEY[drillAnnualCat] ?? drillAnnualCat] ?? /expense|fee|cost|repair|utility|tax|interest|insurance|depreciation/i,
+                selectedYear,
+              )}
+              onClear={() => setDrillAnnualCat(null)}
+            />
+          )}
         </div>
       </div>
 
@@ -1927,7 +2196,6 @@ export default function RentalFinancials() {
   const [pYear, setPYear] = useState(new Date().getFullYear());
   const [kpiYear, setKpiYear] = useState(new Date().getFullYear());
   const [kpiMonth, setKpiMonth] = useState<number | null>(null);
-  const [cfoYear, setCfoYear] = useState(new Date().getFullYear());
 
   const auditMonth = activeTab === ADMIN_TAB ? pMonth : (kpiMonth ?? pMonth);
   const auditYear = activeTab === ADMIN_TAB ? pYear : kpiYear;
@@ -1969,12 +2237,10 @@ export default function RentalFinancials() {
       if (!isNaN(y)) setPYear(y);
       if (m > 0) setKpiMonth(m);
       if (!isNaN(y)) setKpiYear(y);
-      if (!isNaN(y)) setCfoYear(y);
     } else {
       const latestYear = currentFin.years[currentFin.years.length - 1] ?? new Date().getFullYear();
       setKpiYear(latestYear);
       setKpiMonth(null);
-      setCfoYear(latestYear);
     }
   }, [selectedCompanyId, currentFin?.uploadedAt, currentFin?.fileName]);
 
@@ -2196,38 +2462,19 @@ export default function RentalFinancials() {
             <div className="flex items-center gap-1.5 flex-wrap" style={{ justifyContent: 'flex-end' }}>
               {activeTab === 'CFO Dashboard' && currentFin ? (
                 <div style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8,
+                  display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6,
                   background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: '10px 12px',
                 }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Income Analysis Period
-                    </div>
-                    <PeriodToggle
-                      period={period}
-                      month={pMonth}
-                      year={pYear}
-                      onChange={(p, m, y) => { setPeriod(p); setPMonth(m); setPYear(y); }}
-                      availableKeys={getAvailableKeys(currentFin)}
-                    />
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Income Analysis Period
                   </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
-                    <span style={{ fontSize: 11, color: '#92400E', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>YEAR:</span>
-                    {currentFin.years.map(y => (
-                      <button
-                        key={y}
-                        onClick={() => setCfoYear(y)}
-                        style={{
-                          background: cfoYear === y ? '#D4AF37' : '#F7F5F0',
-                          color: cfoYear === y ? '#FFFFFF' : '#92400E',
-                          border: '1px solid ' + (cfoYear === y ? '#D4AF37' : '#C8C0B0'),
-                          padding: '3px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                        }}
-                      >
-                        {y}
-                      </button>
-                    ))}
-                  </div>
+                  <PeriodToggle
+                    period={period}
+                    month={pMonth}
+                    year={pYear}
+                    onChange={(p, m, y) => { setPeriod(p); setPMonth(m); setPYear(y); }}
+                    availableKeys={getAvailableKeys(currentFin)}
+                  />
                 </div>
               ) : activeTab === 'KPI Dashboard' && currentFin ? (
                 <>
@@ -2398,7 +2645,8 @@ export default function RentalFinancials() {
                 period={period}
                 pMonth={pMonth}
                 pYear={pYear}
-                selectedYear={currentFin.years.includes(cfoYear) ? cfoYear : (currentFin.years[currentFin.years.length - 1] ?? cfoYear)}
+                selectedYear={currentFin.years.includes(pYear) ? pYear : (currentFin.years[currentFin.years.length - 1] ?? pYear)}
+                onYearSelect={(y) => setPYear(y)}
               />
             )}
             {activeTab === 'Financial Metrics' && <FinancialMetricsTab companyName={currentFin.companyName} />}

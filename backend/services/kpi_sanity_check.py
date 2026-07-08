@@ -520,6 +520,11 @@ def _rental_ops_imports():
     )
 
 
+def _cfo_dashboard_imports():
+    from services.cfo_dashboard_kpi_audit import audit_company_cfo_dashboard
+    return audit_company_cfo_dashboard
+
+
 def run_tenant_audit(
     db: Session,
     tenant_id,
@@ -537,6 +542,7 @@ def run_tenant_audit(
         load_qb_portfolio_totals,
     ) = _rental_ops_imports()
     audit_company_loan_tracker, audit_portfolio_loan_tracker = _loan_tracker_imports()
+    audit_company_cfo_dashboard = _cfo_dashboard_imports()
 
     companies = db.query(RentalCompany).filter(RentalCompany.tenant_id == tenant_id).all()
     if company_id:
@@ -577,12 +583,18 @@ def run_tenant_audit(
         loan_rows = audit_company_loan_tracker(
             db, tenant_id, co, month=month, year=year,
         )
-        if fin_result.period_label == "—" and (ops_rows or loan_rows):
+        cfo_rows = (
+            audit_company_cfo_dashboard(fin, selected_year=year)
+            if upload and upload.pl_data
+            else []
+        )
+        if fin_result.period_label == "—" and (ops_rows or loan_rows or cfo_rows):
             fin_result.period_label = datetime.strptime(
                 f"{year}-{month:02d}", "%Y-%m",
             ).strftime("%b-%Y")
         merged = _merge_audit_rows(fin_result, ops_rows)
-        results.append(_merge_audit_rows(merged, loan_rows))
+        merged = _merge_audit_rows(merged, loan_rows)
+        results.append(_merge_audit_rows(merged, cfo_rows))
 
     portfolio_ops_rows = audit_portfolio_rental_ops(
         db, tenant_id, companies, month=month, year=year, qb_portfolio=qb_portfolio,
@@ -669,6 +681,7 @@ def get_company_audit_from_db(
         _load_qb_portfolio_totals,
     ) = _rental_ops_imports()
     audit_company_loan_tracker, _audit_portfolio_loan_tracker = _loan_tracker_imports()
+    audit_company_cfo_dashboard = _cfo_dashboard_imports()
 
     upload = (
         db.query(RentalFinancialUpload)
@@ -703,11 +716,17 @@ def get_company_audit_from_db(
     loan_rows = audit_company_loan_tracker(
         db, tenant_id, co, month=month, year=year,
     )
-    if result.period_label == "—" and (ops_rows or loan_rows):
+    cfo_rows = (
+        audit_company_cfo_dashboard(fin, selected_year=year)
+        if upload and upload.pl_data
+        else []
+    )
+    if result.period_label == "—" and (ops_rows or loan_rows or cfo_rows):
         result.period_label = datetime.strptime(
             f"{year}-{month:02d}", "%Y-%m",
         ).strftime("%b-%Y")
     result = _merge_audit_rows(_merge_audit_rows(result, ops_rows), loan_rows)
+    result = _merge_audit_rows(result, cfo_rows)
     return _company_to_dict(result)
 
 
