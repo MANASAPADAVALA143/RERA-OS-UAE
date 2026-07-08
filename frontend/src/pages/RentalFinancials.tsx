@@ -18,6 +18,7 @@ import { CompanyKpiAuditTab } from '../components/admin/CompanyKpiAuditTab';
 import type { KpiAuditRow } from '../types/kpiAudit';
 import CfoMultiYearTrendCharts from '../components/rental/CfoMultiYearTrendCharts';
 import type { ParsedFinancials as EngineParsedFinancials } from '../utils/rentalKpiEngine';
+import { fetchRentalFinancialsPool } from '../utils/fetchRentalFinancialsPool';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -2140,44 +2141,42 @@ export default function RentalFinancials() {
       .finally(() => setLoadingFin(false));
   }, [selectedCompanyId]);
 
-  // Load ALL companies' financials on mount (and when company list first arrives)
-  // Skip companies already cached in allFinancials to avoid redundant fetches
+  // Load ALL companies' financials when company list arrives (staggered — avoids API overload)
   useEffect(() => {
     if (!companies.length) return;
     const missing = companies.filter(co => !allFinancials[co.id]);
-    if (!missing.length) return; // everything already cached
+    if (!missing.length) return;
 
+    let cancelled = false;
     setLoadingFin(true);
-    Promise.all(
-      missing.map(co =>
-        api.get<{
-          company_name: string; filename: string; date_range: string;
-          years: number[]; periods?: string[]; pl: FinItem[]; bs: FinItem[]; cf: FinItem[]; uploaded_at: string;
-        }>(`/api/rentals/financials/${co.id}`)
-          .then(res => {
-            const d = res.data;
-            return {
-              [co.id]: {
-                companyName: d.company_name,
-                fileName: d.filename,
-                dateRange: d.date_range,
-                uploadedAt: d.uploaded_at,
-                years: d.years ?? [],
-                periods: d.periods ?? [],
-                pl: d.pl ?? [],
-                bs: d.bs ?? [],
-                cf: d.cf ?? [],
-              } as ParsedFinancials,
-            };
-          })
-          .catch(() => ({}))
-      )
+    fetchRentalFinancialsPool(
+      missing.map(co => co.id),
+      (_id, d) => ({
+        companyName: d.company_name,
+        fileName: d.filename,
+        dateRange: d.date_range,
+        uploadedAt: d.uploaded_at,
+        years: d.years ?? [],
+        periods: d.periods ?? [],
+        pl: d.pl as FinItem[],
+        bs: d.bs as FinItem[],
+        cf: (d.cf ?? []) as FinItem[],
+      }),
+      {
+        onItem: (id, item) => {
+          if (cancelled) return;
+          setAllFinancials(prev => ({ ...prev, [id]: item }));
+        },
+      },
     )
-    .then(results => {
-      const merged = Object.assign({}, ...results) as Record<string, ParsedFinancials>;
-      setAllFinancials(prev => ({ ...prev, ...merged }));
-    })
-    .finally(() => setLoadingFin(false));
+      .then(merged => {
+        if (!cancelled) setAllFinancials(prev => ({ ...prev, ...merged }));
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingFin(false);
+      });
+
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companies]);
 

@@ -26,6 +26,23 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+/** One retry on network failure (Render cold start) for GET requests. */
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const config = error.config as (typeof error.config & { _retry?: boolean }) | undefined;
+    if (!config || config._retry) return Promise.reject(error);
+    const method = (config.method ?? 'get').toLowerCase();
+    const isNetwork = !error.response && (error.code === 'ERR_NETWORK' || error.message === 'Network Error');
+    if (method === 'get' && isNetwork) {
+      config._retry = true;
+      await new Promise((r) => setTimeout(r, 2500));
+      return api(config);
+    }
+    return Promise.reject(error);
+  },
+);
+
 export default api;
 
 export interface AuthConfig {

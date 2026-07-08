@@ -14,30 +14,15 @@ import {
 } from '../utils/rentalKpiEngine';
 import { buildLoanScheduleKpis } from '../utils/executiveSummaryLoans';
 import { aggregateRegistryOps } from '../utils/executiveSummaryRegistry';
+import { fetchRentalFinancialsPool } from '../utils/fetchRentalFinancialsPool';
 import type { UnitRow } from './useRentalCfoData';
 
-const FIN_FETCH_CONCURRENCY = 3;
-
-async function fetchFinancialsPool(ids: string[]): Promise<{ id: string; fin: ParsedFinancials | null }[]> {
-  const results: { id: string; fin: ParsedFinancials | null }[] = new Array(ids.length);
-  let next = 0;
-  async function worker() {
-    while (next < ids.length) {
-      const i = next++;
-      const id = ids[i];
-      try {
-        const res = await api.get<Parameters<typeof apiResponseToParsedFinancials>[0]>(
-          `/api/rentals/financials/${id}`,
-        );
-        results[i] = { id, fin: apiResponseToParsedFinancials(res.data) };
-      } catch {
-        results[i] = { id, fin: null };
-      }
-    }
-  }
-  const workers = Math.min(FIN_FETCH_CONCURRENCY, ids.length);
-  await Promise.all(Array.from({ length: workers }, () => worker()));
-  return results;
+function mapFinancialsResponse(
+  _id: string,
+  data: Parameters<typeof apiResponseToParsedFinancials>[0],
+): ParsedFinancials | null {
+  const fin = apiResponseToParsedFinancials(data);
+  return fin.pl?.length ? fin : null;
 }
 
 function resolvePortfolioKpi(
@@ -127,12 +112,8 @@ export function useExecutiveSummaryKpis(
         }
         return;
       }
-      const results = await fetchFinancialsPool(idsToFetch);
+      const map = await fetchRentalFinancialsPool(idsToFetch, mapFinancialsResponse);
       if (cancelled) return;
-      const map: Record<string, ParsedFinancials> = {};
-      for (const r of results) {
-        if (r.fin?.pl?.length) map[r.id] = r.fin;
-      }
       setParsedByCompany(map);
       setFinLoading(false);
     })();
