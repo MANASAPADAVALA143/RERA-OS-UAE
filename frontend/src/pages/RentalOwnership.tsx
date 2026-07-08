@@ -19,14 +19,14 @@ import {
   formatSolvencyLtv,
   solvencyMetricsFromKpi,
   type KpiData,
-} from '../../utils/rentalKpiEngine';
+} from '../utils/rentalKpiEngine';
 import {
   effectiveCapRate,
   partnerReturnMetrics,
   portfolioEquityMultiple,
   portfolioIrr,
   type PartnerReturnMetrics,
-} from '../../utils/ownershipMetrics';
+} from '../utils/ownershipMetrics';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const CAP_RATE    = 0.055;
