@@ -307,6 +307,13 @@ export default function RentalLoanTracker() {
     return rows;
   }, [registryLoans, companyFilter, buildingFilter]);
 
+  const scopeLabel = useMemo(() => {
+    if (companyFilter !== 'all' && buildingFilter !== 'all') return `${companyFilter} · ${buildingFilter}`;
+    if (companyFilter !== 'all') return companyFilter;
+    if (buildingFilter !== 'all') return buildingFilter;
+    return 'All Companies';
+  }, [companyFilter, buildingFilter]);
+
   const kpis = useMemo(() => {
     const portfolio = filtered.reduce((s, l) => s + loanBal(l), 0);
     const emi = filtered.reduce((s, l) => s + (l.loan_emi ?? 0), 0);
@@ -331,21 +338,34 @@ export default function RentalLoanTracker() {
   const dayOfMonth = today.getDate();
   const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
 
-  const dscrHealth = useMemo(() => buildings.map(b => {
-    const bLoans = registryLoans.filter(l => l.company_name === b.companyName && l.property_name === b.buildingName);
-    const debtService = bLoans.reduce((s, l) => s + (l.loan_emi ?? 0) * 12, 0);
-    const noiAnnual = b.noi * 12;
-    const dscr = debtService > 0 ? noiAnnual / debtService : null;
-    const st = dscrStatus(dscr);
-    return {
-      building: b.buildingName,
-      noi: noiAnnual,
-      debtService,
-      dscr,
-      status: st,
-      recommendation: st === 'red' ? 'Reduce debt or boost NOI' : st === 'amber' ? 'Monitor closely' : 'Healthy coverage',
-    };
-  }), [buildings, registryLoans]);
+  const dscrHealth = useMemo(() => {
+    const byBuilding = new Map<string, typeof filtered>();
+    filtered.forEach(l => {
+      const key = `${l.company_name}|${l.property_name}`;
+      const group = byBuilding.get(key);
+      if (group) group.push(l);
+      else byBuilding.set(key, [l]);
+    });
+
+    return [...byBuilding.values()].map(bLoans => {
+      const company = bLoans[0].company_name;
+      const building = bLoans[0].property_name;
+      const debtService = bLoans.reduce((s, l) => s + (l.loan_emi ?? 0) * 12, 0);
+      const buildingRow = buildings.find(b => b.companyName === company && b.buildingName === building);
+      const noiFromLoans = bLoans.reduce((s, l) => s + (l.noi_annual ?? 0), 0);
+      const noiAnnual = buildingRow?.noi != null ? buildingRow.noi * 12 : noiFromLoans;
+      const dscr = debtService > 0 && noiAnnual > 0 ? noiAnnual / debtService : null;
+      const st = dscrStatus(dscr);
+      return {
+        building: companyFilter === 'all' ? `${building} (${company})` : building,
+        noi: noiAnnual,
+        debtService,
+        dscr,
+        status: st,
+        recommendation: st === 'red' ? 'Reduce debt or boost NOI' : st === 'amber' ? 'Monitor closely' : 'Healthy coverage',
+      };
+    });
+  }, [filtered, buildings, companyFilter]);
 
   const debtByBuildingData = useMemo(() => {
     const map: Record<string, number> = {};
@@ -519,7 +539,7 @@ export default function RentalLoanTracker() {
         <div>
           <h1 style={{ fontSize: 26, fontWeight: 600, color: '#1C1917', lineHeight: 1.25 }}>Loan Tracker</h1>
           <p style={{ fontSize: 13, fontWeight: 400, color: '#6B6B6B', marginTop: 2 }}>
-            Rental debt for {companyOptions.length || '—'} Company Registry entities · DSCR, refinancing &amp; amortization
+            {scopeLabel} · Rental debt, DSCR, refinancing &amp; amortization
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -575,9 +595,9 @@ export default function RentalLoanTracker() {
 
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
         {[
-          { label: 'Total Loan Portfolio', value: fmtUSD(kpis.portfolio ?? 0), hero: true, sub: `Balance as of ${MONTH_LABELS[selectedMonth - 1]} ${selectedYear}` },
-          { label: 'Total Monthly EMI', value: fmtUSD(kpis.emi ?? 0) },
-          { label: 'Weighted Avg Rate', value: `${((kpis.wAvg ?? 0) * 100).toFixed(2)}%` },
+          { label: companyFilter !== 'all' ? 'Company Loan Portfolio' : 'Total Loan Portfolio', value: fmtUSD(kpis.portfolio ?? 0), hero: true, sub: `${scopeLabel} · ${MONTH_LABELS[selectedMonth - 1]} ${selectedYear}` },
+          { label: 'Total Monthly EMI', value: fmtUSD(kpis.emi ?? 0), sub: scopeLabel },
+          { label: 'Weighted Avg Rate', value: `${((kpis.wAvg ?? 0) * 100).toFixed(2)}%`, sub: scopeLabel },
           {
             label: companyFilter !== 'all' ? 'Company Loans' : 'Total Loans',
             value: String(kpis.loanCount ?? 0),
@@ -586,7 +606,7 @@ export default function RentalLoanTracker() {
               : `${companyOptions.length} companies`,
           },
           { label: 'Next Maturity', value: kpis.nextMat?.loan_maturity_date ?? '—', sub: kpis.nextMat?.property_name },
-          { label: 'Total Outstanding', value: fmtUSD(kpis.portfolio ?? 0), sub: 'Sum of loan balances for period' },
+          { label: companyFilter !== 'all' ? 'Company Outstanding' : 'Total Outstanding', value: fmtUSD(kpis.portfolio ?? 0), sub: `${scopeLabel} · sum of balances` },
         ].map(k => (
           <div key={k.label} style={{
             background: k.hero ? 'linear-gradient(135deg,#D4AF37,#B8860B)' : PT.cardBg,
@@ -703,7 +723,7 @@ export default function RentalLoanTracker() {
       <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, overflow: 'hidden' }}>
         <div style={{ padding: '12px 16px', borderBottom: `1px solid ${PT.border}` }}>
           <h3 style={{ fontSize: 16, fontWeight: 600, color: PT.text }}>
-            Loan Register — {MONTH_LABELS[selectedMonth - 1]} {selectedYear}
+            Loan Register — {scopeLabel} · {MONTH_LABELS[selectedMonth - 1]} {selectedYear}
           </h3>
           <p style={{ fontSize: 12, color: PT.muted, marginTop: 2 }}>
             Outstanding balances for selected month · import uses columns from your Bank Loan Information sheet
@@ -756,12 +776,18 @@ export default function RentalLoanTracker() {
               })}
             </tbody>
           </table>
-          {filtered.length === 0 && <p className="text-center py-8 text-sm" style={{ color: PT.muted }}>No loans found for rental portfolio</p>}
+          {filtered.length === 0 && (
+            <p className="text-center py-8 text-sm" style={{ color: PT.muted }}>
+              No loans found for {scopeLabel}
+            </p>
+          )}
         </div>
       </div>
 
       <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, padding: 16 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 600, color: PT.text, marginBottom: 12 }}>EMI Calendar — {today.toLocaleString('default', { month: 'long', year: 'numeric' })}</h3>
+        <h3 style={{ fontSize: 15, fontWeight: 600, color: PT.text, marginBottom: 12 }}>
+          EMI Calendar — {scopeLabel} · {today.toLocaleString('default', { month: 'long', year: 'numeric' })}
+        </h3>
         <div className="flex flex-wrap gap-1">
           {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
             const dueLoans = filtered.filter(l => l.loan_emi_day === d);
@@ -906,14 +932,14 @@ export default function RentalLoanTracker() {
         <BulletChartStrip
           cards={dscrBulletCards}
           defs={dscrBulletDefs}
-          title="DSCR by Building"
+          title={`DSCR by Building — ${scopeLabel}`}
           subtitle="Debt Service Coverage Ratio vs 1.25x benchmark — bar colour reflects coverage health · ▎ marker = 1.25x target"
         />
       )}
 
       <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, overflow: 'hidden' }}>
         <div style={{ padding: '12px 20px', borderBottom: `1px solid ${PT.border}` }}>
-          <h3 style={{ fontSize: 16, fontWeight: 600, color: PT.text }}>Building DSCR Health</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: PT.text }}>Building DSCR Health — {scopeLabel}</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full" style={{ borderCollapse: 'collapse' }}>
