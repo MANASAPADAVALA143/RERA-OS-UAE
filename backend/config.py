@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     s3_bucket: str = ""
 
     class Config:
-        env_file = ".env"
+        env_file = str(Path(__file__).resolve().parent / ".env")
         extra = "ignore"
 
     @property

@@ -37,7 +37,7 @@ const NAV = [
 ];
 
 // ── Sub-nav shared styles ──────────────────────────────────────────────────
-const subActive   = { background: 'rgba(99,102,241,0.18)', color: '#6366F1' } as const;
+const subActive   = { background: 'rgba(91,95,239,0.15)', color: '#A5B4FC' } as const;
 const subInactive = { color: '#9C9893' } as const;
 const subBase     = 'w-full flex items-center gap-2 pl-7 pr-3 py-1.5 rounded-lg text-base transition-colors text-left hover:bg-white/5';
 
@@ -62,7 +62,7 @@ function SidebarInner() {
   const currentPage = NAV.find(n => location.pathname.startsWith(n.to))?.label ?? 'All in one MIS';
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: '#EEF2FF' }}>
+    <div className="flex h-screen overflow-hidden" style={{ background: '#F7F8FA' }}>
 
       {/* ── Mobile backdrop ───────────────────────────────────────────── */}
       {sidebarOpen && (
@@ -83,7 +83,7 @@ function SidebarInner() {
           md:relative md:translate-x-0 md:shrink-0
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
-        style={{ background: '#1E1B4B', borderRight: '1px solid rgba(99,102,241,0.2)' }}
+        style={{ background: '#0B1437', borderRight: '1px solid rgba(255,255,255,0.08)' }}
       >
         {/* Brand + mobile close button */}
         <div className="flex items-center justify-between p-5"
@@ -110,7 +110,7 @@ function SidebarInner() {
                 className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-base transition-colors hover:bg-white/5"
                 style={({ isActive }) =>
                   isActive
-                    ? { background: '#6366F1', color: '#fff', fontWeight: 600 }
+                    ? { background: '#5B5FEF', color: '#fff', fontWeight: 600 }
                     : { color: '#9C9893' }
                 }
               >
@@ -239,7 +239,7 @@ function SidebarInner() {
         {/* Mobile top bar (hidden on md+) */}
         <header
           className="md:hidden flex items-center gap-3 px-4 shrink-0"
-          style={{ height: 48, background: '#1E1B4B', borderBottom: '1px solid rgba(99,102,241,0.15)' }}
+          style={{ height: 48, background: '#0B1437', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
         >
           <button
             onClick={() => setSidebarOpen(true)}
@@ -255,7 +255,7 @@ function SidebarInner() {
         </header>
 
         {/* Main content — full width when sidebar is hidden on mobile */}
-        <main className="dark-app flex-1 overflow-y-auto p-4 lg:p-6" style={{ background: '#EEF2FF' }}>
+        <main className="dark-app flex-1 overflow-y-auto p-4 lg:p-6" style={{ background: '#F7F8FA' }}>
           <Outlet />
         </main>
       </div>

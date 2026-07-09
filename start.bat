@@ -21,7 +21,7 @@ echo ============================================
 echo  RERA OS Demo is ready!
 echo ============================================
 echo  Open:  http://localhost:5173
-echo  Login: demo@reraos.demo / DemoRera2026!
+echo  Login: demo@estatecfo.com / demo1234
 echo ============================================
 
 start "" "http://localhost:5173"

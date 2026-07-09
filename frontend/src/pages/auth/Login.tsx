@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -57,7 +57,7 @@ export default function Login() {
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder="your@email.com"
+              placeholder="demo@estatecfo.com"
               required
               autoComplete="email"
               className="w-full text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2"
@@ -116,7 +116,13 @@ export default function Login() {
         </form>
 
         <p className="text-center text-xs mt-6" style={{ color: '#78716C' }}>
-          Contact your administrator to get access
+          First time?{' '}
+          <Link to="/register" className="font-medium hover:underline" style={{ color: '#A5B4FC' }}>
+            Create a demo account
+          </Link>
+        </p>
+        <p className="text-center text-[11px] mt-2" style={{ color: '#57534E' }}>
+          Demo login: <span style={{ color: '#A5B4FC' }}>demo@estatecfo.com</span> / <span style={{ color: '#A5B4FC' }}>demo1234</span>
         </p>
       </div>
     </div>

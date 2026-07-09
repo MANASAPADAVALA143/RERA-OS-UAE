@@ -7,7 +7,11 @@ const API_BASE = import.meta.env.VITE_API_URL
   : '';
 const TOKEN_KEY = 'estatecfo_access_token';
 
-export const api = axios.create({ baseURL: API_BASE });
+export const api = axios.create({
+  baseURL: API_BASE,
+  // Remote Supabase (India → AWS) can take 30–45s on first rental queries.
+  timeout: 120_000,
+});
 
 export function getStoredToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);

@@ -35,7 +35,9 @@ export default function Register() {
     <div className="min-h-screen flex items-center justify-center bg-primary">
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
         <h1 className="text-2xl font-bold text-primary mb-1">Register your company</h1>
-        <p className="text-gray-500 text-sm mb-6">Creates a local account (SQLite — no Supabase)</p>
+        <p className="text-gray-500 text-sm mb-6">
+          Creates your company tenant and Supabase login for this demo project.
+        </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           {(['company_name', 'full_name', 'email', 'password'] as const).map((field) => (
             <div key={field}>

@@ -1,11 +1,11 @@
 /**
- * EstateCFO Rental & Lease — semantic colors (darker green/teal/red for parchment backgrounds).
+ * RERA OS — chart semantic colors (Finance Command Center palette).
  */
-export const RENTAL_GREEN = '#15803D';
-export const RENTAL_TEAL = '#0F766E';
-export const RENTAL_RED = '#C0392B';
-export const RENTAL_CHART_GREEN = '#166534';
-export const RENTAL_CHART_RED = '#B91C1C';
+export const RENTAL_GREEN = '#22C55E';
+export const RENTAL_TEAL = '#14B8A6';
+export const RENTAL_RED = '#EF4444';
+export const RENTAL_CHART_GREEN = '#22C55E';
+export const RENTAL_CHART_RED = '#EF4444';
 
 /** Legacy hex → darker rental palette (for bulk migration). */
 export const RENTAL_COLOR_MAP: Record<string, string> = {

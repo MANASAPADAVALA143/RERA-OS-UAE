@@ -530,18 +530,18 @@ export default function RentalOverview() {
     setFetching(true);
     setError('');
     try {
-      const res = await api.get<PortfolioSummary>(`/api/rentals/portfolio-summary?month=${month}`);
-      setData(res.data);
+      const [summaryRes, coRes] = await Promise.all([
+        api.get<PortfolioSummary>(`/api/rentals/portfolio-summary?month=${month}`),
+        api.get<SyncCompany[]>('/api/rentals/companies'),
+      ]);
+      setData(summaryRes.data);
+      setSyncCompanies(Array.isArray(coRes.data) ? coRes.data : []);
     } catch {
-      setError('Failed to load portfolio summary.');
+      setError('Failed to load portfolio summary. Remote database can take up to 60s — try Retry.');
     } finally {
       setLoading(false);
       setFetching(false);
     }
-    try {
-      const coRes = await api.get<SyncCompany[]>('/api/rentals/companies');
-      setSyncCompanies(Array.isArray(coRes.data) ? coRes.data : []);
-    } catch { /* non-critical */ }
   }, []);
 
   useEffect(() => {
@@ -747,6 +747,9 @@ export default function RentalOverview() {
   if (loading) {
     return (
       <div className="space-y-6">
+        <p className="text-sm" style={{ color: '#6366F1' }}>
+          Loading rental portfolio from Supabase… first load may take 30–45 seconds.
+        </p>
         <div className="h-8 rounded w-64 animate-pulse" style={{ background: '#F8FAFC' }} />
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => <SkeletonKpi key={i} />)}

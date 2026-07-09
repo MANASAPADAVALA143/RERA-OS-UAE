@@ -6,20 +6,31 @@ body {
   margin: 0;
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
-  background: #EEF2FF;
+  background: #F7F8FA;
   min-height: 100vh;
-  color: #1C1917;
+  color: #1A1D29;
 }
 
-/* ── Indigo + purple app theme (cool slate content, indigo sidebar) ──────── */
+/* ── Finance Command Center tokens (main content — .dark-app) ───────────── */
+.dark-app {
+  --page-bg: #F7F8FA;
+  --card-bg: #FFFFFF;
+  --card-border: #E8E9ED;
+  --text-primary: #1A1D29;
+  --text-secondary: #8B8D98;
+  --accent: #5B5FEF;
+  --accent-soft: #EEF0FF;
+  --success: #22C55E;
+  --warning: #F59E0B;
+}
 
 /* Card / surface backgrounds */
-.dark-app .bg-white        { background-color: #F8FAFC !important; }
-.dark-app .bg-gray-50      { background-color: #E0E7FF !important; }
-.dark-app .bg-gray-100     { background-color: #E2E8F0 !important; }
-.dark-app .bg-gray-200     { background-color: #CBD5E1 !important; }
-.dark-app .bg-gray-900     { background-color: #1E1B4B !important; }
-.dark-app .bg-gray-800     { background-color: #312E81 !important; }
+.dark-app .bg-white        { background-color: #FFFFFF !important; }
+.dark-app .bg-gray-50      { background-color: #F7F8FA !important; }
+.dark-app .bg-gray-100     { background-color: #F0F1F4 !important; }
+.dark-app .bg-gray-200     { background-color: #E8E9ED !important; }
+.dark-app .bg-gray-900     { background-color: #1A1D29 !important; }
+.dark-app .bg-gray-800     { background-color: #0B1437 !important; }
 
 /* Borders */
 .dark-app .border-gray-100 { border-color: #CBD5E1 !important; }
@@ -41,17 +52,16 @@ body {
 .dark-app .text-gray-500  { color: #78716C !important; }
 .dark-app .text-gray-400  { color: #A8A29E !important; }
 .dark-app .text-charcoal  { color: #1C1917 !important; }
-.dark-app .text-primary   { color: #6366F1 !important; } /* amber accent for links/values */
+.dark-app .text-primary   { color: #5B5FEF !important; }
 
 /* Hover table rows */
-.dark-app .hover\:bg-gray-50:hover          { background-color: #E0E7FF !important; }
-.dark-app .hover\:bg-gray-50\/60:hover      { background-color: rgba(224,231,255,0.6) !important; }
-.dark-app .hover\:bg-gray-50\/50:hover      { background-color: rgba(224,231,255,0.5) !important; }
-.dark-app .hover\:bg-blue-50\/30:hover      { background-color: rgba(99,102,241,0.06) !important; }
-.dark-app .hover\:bg-indigo-50\/20:hover    { background-color: rgba(99,102,241,0.04) !important; }
-.dark-app .hover\:bg-blue-50:hover          { background-color: #E0E7FF !important; }
-.dark-app .hover\:bg-red-50:hover           { background-color: #FEE2E2 !important; }
-.dark-app .hover\:bg-gray-100:hover         { background-color: #E2E8F0 !important; }
+.dark-app .hover\:bg-gray-50:hover          { background-color: #F0F1F4 !important; }
+.dark-app .hover\:bg-gray-50\/60:hover      { background-color: rgba(240,241,244,0.6) !important; }
+.dark-app .hover\:bg-gray-50\/50:hover      { background-color: rgba(240,241,244,0.5) !important; }
+.dark-app .hover\:bg-blue-50\/30:hover      { background-color: rgba(91,95,239,0.06) !important; }
+.dark-app .hover\:bg-indigo-50\/20:hover    { background-color: rgba(91,95,239,0.04) !important; }
+.dark-app .hover\:bg-blue-50:hover          { background-color: #EEF0FF !important; }
+.dark-app .hover\:bg-gray-100:hover         { background-color: #F0F1F4 !important; }
 
 /* Form inputs — light cream */
 .dark-app input:not([type='range']):not([type='checkbox']):not([type='radio']):not([type='file']),
@@ -110,20 +120,19 @@ body {
 .dark-app .text-indigo-600 { color: #6366F1 !important; } /* → amber accent */
 
 /* Accent/primary buttons */
-.dark-app .bg-accent       { background-color: #6366F1 !important; }
-.dark-app .bg-primary      { background-color: #1E1B4B !important; }
-.dark-app .bg-blue-600     { background-color: #6366F1 !important; }
-.dark-app .hover\:bg-blue-600:hover { background-color: #6366F1 !important; }
+.dark-app .bg-accent       { background-color: #5B5FEF !important; }
+.dark-app .bg-blue-600     { background-color: #5B5FEF !important; }
+.dark-app .hover\:bg-blue-600:hover { background-color: #5B5FEF !important; }
 .dark-app .hover\:bg-blue-700:hover { background-color: #4F46E5 !important; }
-.dark-app .bg-indigo-600   { background-color: #6366F1 !important; }
+.dark-app .bg-indigo-600   { background-color: #5B5FEF !important; }
 .dark-app .hover\:bg-indigo-700:hover { background-color: #4F46E5 !important; }
-.dark-app .border-blue-600 { border-color: #6366F1 !important; }
-.dark-app .border-blue-300 { border-color: #C8C2B7 !important; }
-.dark-app .hover\:bg-blue-100:hover { background-color: rgba(99,102,241,0.12) !important; }
-.dark-app .bg-green-700    { background-color: #059669 !important; }
-.dark-app .hover\:bg-green-800:hover { background-color: #047857 !important; }
-.dark-app .text-accent     { color: #6366F1 !important; }
-.dark-app .text-white      { color: #F5F5F4 !important; } /* keep white as near-white */
+.dark-app .border-blue-600 { border-color: #5B5FEF !important; }
+.dark-app .text-accent     { color: #5B5FEF !important; }
+.dark-app .text-blue-800  { color: #5B5FEF !important; }
+.dark-app .text-blue-700  { color: #5B5FEF !important; }
+.dark-app .text-blue-600  { color: #5B5FEF !important; }
+.dark-app .text-blue-500  { color: #5B5FEF !important; }
+.dark-app .text-indigo-600 { color: #5B5FEF !important; }
 
 /* Badge backgrounds (semantic — keep distinct from brand gold) */
 .dark-app .bg-green-100    { background-color: rgba(34,197,94,0.12)  !important; }

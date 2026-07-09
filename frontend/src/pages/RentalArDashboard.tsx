@@ -5,6 +5,7 @@ import {
   ResponsiveContainer, Cell, Legend, AreaChart,
 } from 'recharts';
 import api from '../services/api';
+import { FCC, FCC_CARD } from '../theme/demoPalette';
 import { ParchmentKpiTile } from '../components/ui/ParchmentKpiTile';
 import PeriodToggle from '../components/shared/PeriodToggle';
 import { type Period, getPeriodKeys, periodChipText } from '../utils/periodWindow';
@@ -136,17 +137,17 @@ function monthPartsFromAr(m: string): { month: number; year: number } | null {
   return { month: mi + 1, year };
 }
 
-const STATUS_COLORS = ['#166534','#818CF8','#F5A623','#B91C1C','#2F80ED','#8B5CF6','#EC4899','#06B6D4','#6366F1'];
+const STATUS_COLORS = [...FCC.chart, '#C4C6D0'];
 
 function getStatus(rate: number, collected: number): { label: string; bg: string; color: string } {
-  if (collected === 0) return { label: 'Zero-Pay', bg: '#FEE2E2', color: '#991B1B' };
-  if (rate >= 95)      return { label: 'Paid',     bg: '#DCFCE7', color: '#166534' };
-  if (rate >= 85)      return { label: 'Partial',  bg: '#FEF3C7', color: '#92400E' };
-  return                      { label: 'Low',      bg: '#FEE2E2', color: '#991B1B' };
+  if (collected === 0) return { label: 'Zero-Pay', bg: FCC.cardBg, color: FCC.danger };
+  if (rate >= 95)      return { label: 'Paid',     bg: FCC.cardBg, color: FCC.success };
+  if (rate >= 85)      return { label: 'Partial',  bg: FCC.cardBg, color: FCC.warning };
+  return                      { label: 'Low',      bg: FCC.cardBg, color: FCC.danger };
 }
 
-const SEL = { fontSize: 12, border: '1px solid #E2E8F0', borderRadius: 6, padding: '5px 10px', background: '#F1F5F9', color: '#374151', cursor: 'pointer' } as const;
-const CARD = { background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, padding: 16 } as const;
+const SEL = { fontSize: 12, border: `1px solid ${FCC.cardBorder}`, borderRadius: 6, padding: '5px 10px', background: FCC.cardBg, color: FCC.textPrimary, cursor: 'pointer' } as const;
+const CARD = { ...FCC_CARD };
 
 // ── Billed-vs-Collected custom tooltip ───────────────────────────────────────
 function BvcTooltip({ active, payload }: { active?: boolean; payload?: any[] }) {
@@ -158,14 +159,14 @@ function BvcTooltip({ active, payload }: { active?: boolean; payload?: any[] }) 
   const realPct   = billed > 0 ? (collected / billed * 100).toFixed(1) : null;
   const byCompany: { name: string; collected: number }[] = row.byCompany ?? [];
   return (
-    <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, padding: '10px 14px', fontSize: 12, maxWidth: 260, fontVariantNumeric: 'tabular-nums lining-nums' }}>
-      <p style={{ fontWeight: 700, color: '#1C1917', marginBottom: 8 }}>{row.full ?? row.month}</p>
-      <p style={{ color: '#4E79A7' }}>Billed: {fmt$(billed)}</p>
-      <p style={{ color: '#166534' }}>Collected: {fmt$(collected)}</p>
-      <p style={{ color: '#B91C1C' }}>Gap: {fmt$(gap)}</p>
-      {realPct !== null && <p style={{ color: '#78716C', marginTop: 3 }}>Realization: {realPct}%</p>}
+    <div style={{ background: FCC.cardBg, border: `1px solid ${FCC.cardBorder}`, borderRadius: 8, padding: '10px 14px', fontSize: 12, maxWidth: 260, boxShadow: FCC.cardShadow, fontVariantNumeric: 'tabular-nums lining-nums' }}>
+      <p style={{ fontWeight: 600, color: FCC.textPrimary, marginBottom: 8 }}>{row.full ?? row.month}</p>
+      <p style={{ color: FCC.accent }}>Billed: {fmt$(billed)}</p>
+      <p style={{ color: FCC.success }}>Collected: {fmt$(collected)}</p>
+      <p style={{ color: FCC.danger }}>Gap: {fmt$(gap)}</p>
+      {realPct !== null && <p style={{ color: FCC.textSecondary, marginTop: 3 }}>Realization: {realPct}%</p>}
       {byCompany.length > 1 && (
-        <div style={{ marginTop: 8, borderTop: '1px solid #E2E8F0', paddingTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <div style={{ marginTop: 8, borderTop: '1px solid #E8E9ED', paddingTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
           {[...byCompany].sort((a, b) => b.collected - a.collected).map(c => (
             <p key={c.name} style={{ fontSize: 11, color: '#6B6B6B' }}>{c.name}: {fmt$(c.collected)}</p>
           ))}
@@ -579,9 +580,9 @@ export default function RentalArDashboard() {
     const fullPay      = companies.filter(c => c.billed_per_month > 0 && c.latest_collected >= c.billed_per_month).length;
     const noBilledCnt  = companies.filter(c => c.billed_per_month === 0).length;
     return [
-      { name: 'Zero-Pay',         count: zeroPay,      fill: '#B91C1C' },
-      { name: 'Partial-Pay',      count: partial,       fill: '#F5A623' },
-      { name: 'Fully Paid',       count: fullPay,       fill: '#166534' },
+      { name: 'Zero-Pay',         count: zeroPay,      fill: '#EF4444' },
+      { name: 'Partial-Pay',      count: partial,       fill: '#F59E0B' },
+      { name: 'Fully Paid',       count: fullPay,       fill: '#22C55E' },
       ...(noBilledCnt > 0 ? [{ name: 'No Billing Data', count: noBilledCnt, fill: '#D1D5DB' }] : []),
     ].filter(d => d.count > 0);
   }, [companies]);
@@ -616,7 +617,7 @@ export default function RentalArDashboard() {
       label: period ? `Collected · ${periodLabel}` : 'Collected (Latest Mo)',
       value: fmt$(port.totalCollected),
       sub: `${pct(port.rate)} collection rate`,
-      accent: true, warn: false,
+      accent: false, warn: false,
     },
     {
       label: 'Outstanding AR',
@@ -627,8 +628,8 @@ export default function RentalArDashboard() {
     {
       label: 'Collection Rate',
       value: pct(port.rate),
-      sub: port.rate >= 95 ? '✅ On Target' : '⚠️ Below 95% target',
-      accent: port.rate >= 95, warn: port.rate < 95,
+      sub: port.rate >= 95 ? 'On target' : 'Below 95% target',
+      accent: true, warn: port.rate < 95,
     },
     {
       label: 'Vacancy Loss / Month',
@@ -655,7 +656,7 @@ export default function RentalArDashboard() {
         const b = [...companies].filter(c => c.latest_collected > 0).sort((a, b) => b.latest_rate - a.latest_rate)[0];
         return b ? `${pct(b.latest_rate)} · ${fmt$(b.latest_collected)}` : 'No data yet';
       })(),
-      accent: true, warn: false,
+      accent: false, warn: false,
     },
     {
       label: `Month-End Shortfall${currentMonthShortfall ? ' · ' + short(currentMonthShortfall.month) : ''}`,
@@ -693,45 +694,45 @@ export default function RentalArDashboard() {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: 20, background: '#F7F1E6', minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <style>{`
-        .ar-kpi-tile { transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
-        .ar-kpi-tile:hover { transform: scale(1.02); box-shadow: 0 6px 12px rgba(0,0,0,0.08); }
+        .ar-kpi-tile { transition: box-shadow 0.2s ease; }
+        .ar-kpi-tile:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
       `}</style>
 
       <div>
-        <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1C1917' }}>AR Dashboard</h1>
-        <p style={{ fontSize: 13, color: '#A8A29E', marginTop: 2 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 600, color: FCC.textPrimary }}>AR Dashboard</h1>
+        <p style={{ fontSize: 14, color: FCC.textSecondary, marginTop: 4 }}>
           Collections, billing gaps, and AR aging — billed from registry · collected from Rent Receivable
         </p>
       </div>
 
       {/* Spinner */}
       {loading && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8 }}>
-          <div style={{ width: 16, height: 16, border: '2px solid #E2E8F0', borderTopColor: '#6366F1', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-          <span style={{ fontSize: 12, color: '#78716C' }}>Loading AR data…</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: FCC.cardBg, border: `1px solid ${FCC.cardBorder}`, borderRadius: 8, boxShadow: FCC.cardShadow }}>
+          <div style={{ width: 16, height: 16, border: `2px solid ${FCC.cardBorder}`, borderTopColor: FCC.accent, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          <span style={{ fontSize: 12, color: FCC.textSecondary }}>Loading AR data…</span>
           <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
         </div>
       )}
 
       {/* Source banner */}
       {!loading && !!rawData && (
-        <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8, padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: '#14532D' }}>
-            ✅ Live data from registry · Billed = occupied units monthly rent
+        <div style={{ background: FCC.cardBg, border: `1px solid ${FCC.cardBorder}`, borderRadius: 8, padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, boxShadow: FCC.cardShadow }}>
+          <span style={{ fontSize: 12, fontWeight: 500, color: FCC.textPrimary }}>
+            Live data from registry · Billed = occupied units monthly rent
           </span>
-          <div style={{ display: 'flex', gap: 14, fontSize: 11 }}>
-            {srcSummary.rr   > 0 && <span style={{ color: '#166534' }}>🔵 {srcSummary.rr} co. via Rent Receivable upload</span>}
-            {srcSummary.pl   > 0 && <span style={{ color: '#92400E' }}>🟡 {srcSummary.pl} co. via P&L fallback</span>}
-            {srcSummary.none > 0 && <span style={{ color: '#9CA3AF' }}>⚪ {srcSummary.none} co. no collection data yet</span>}
+          <div style={{ display: 'flex', gap: 14, fontSize: 11, color: FCC.textSecondary }}>
+            {srcSummary.rr   > 0 && <span>{srcSummary.rr} co. via Rent Receivable</span>}
+            {srcSummary.pl   > 0 && <span style={{ color: FCC.warning }}>{srcSummary.pl} co. via P&L fallback</span>}
+            {srcSummary.none > 0 && <span>{srcSummary.none} co. no collection data yet</span>}
           </div>
         </div>
       )}
 
       {/* ── FILTER BAR ─────────────────────────────────────────────────── */}
-      <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, fontWeight: 600, color: '#5C5043' }}>Filter:</span>
+      <div style={{ background: FCC.cardBg, border: `1px solid ${FCC.cardBorder}`, borderRadius: 8, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', boxShadow: FCC.cardShadow }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: FCC.textSecondary }}>Filter:</span>
 
         {/* Company — client-side only */}
         <select value={selCoId} onChange={e => setSelCoId(e.target.value)} style={SEL}>
@@ -758,9 +759,9 @@ export default function RentalArDashboard() {
           />
         </div>
 
-        <span style={{ fontSize: 11, color: '#9CA3AF', width: '100%' }}>
+        <span style={{ fontSize: 11, color: '#8B8D98', width: '100%' }}>
           {companies.length} / {allCompanies.length} companies · {port?.total ?? 0} units · {port?.occupied ?? 0} occupied
-          {selCoId && <span style={{ color: '#6366F1', marginLeft: 6 }}>← Company filtered (client-side)</span>}
+          {selCoId && <span style={{ color: '#5B5FEF', marginLeft: 6 }}>← Company filtered (client-side)</span>}
         </span>
       </div>
 
@@ -777,10 +778,10 @@ export default function RentalArDashboard() {
               onClick={() => setArView(tab.id)}
               style={{
                 padding: '8px 18px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                border: `1px solid ${arView === tab.id ? '#6366F1' : '#E2E8F0'}`,
-                background: arView === tab.id ? 'linear-gradient(135deg,#F1F5F9,#F7F1E6)' : '#F1F5F9',
-                color: arView === tab.id ? '#1C1917' : '#78716C',
-                boxShadow: arView === tab.id ? '0 2px 8px rgba(99,102,241,0.2)' : 'none',
+                border: `1px solid ${arView === tab.id ? FCC.accent : FCC.cardBorder}`,
+                background: arView === tab.id ? FCC.accentSoft : FCC.cardBg,
+                color: arView === tab.id ? FCC.textPrimary : FCC.textSecondary,
+                boxShadow: arView === tab.id ? FCC.cardShadow : 'none',
               }}
             >
               {tab.label}
@@ -793,7 +794,7 @@ export default function RentalArDashboard() {
       {!loading && !rawData && (
         <div style={{ ...CARD, textAlign: 'center', padding: '40px 24px' }}>
           <p style={{ fontSize: 14, fontWeight: 600, color: '#5C5043', marginBottom: 8 }}>No AR data available yet</p>
-          <p style={{ fontSize: 12, color: '#9CA3AF' }}>Add units to companies in the Company Registry, then upload a Rent Receivable Excel.</p>
+          <p style={{ fontSize: 12, color: '#8B8D98' }}>Add units to companies in the Company Registry, then upload a Rent Receivable Excel.</p>
         </div>
       )}
 
@@ -823,7 +824,7 @@ export default function RentalArDashboard() {
           <div style={CARD}>
             {/* Header row */}
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 2, gap: 8, flexWrap: 'wrap' }}>
-              <div style={{ fontSize: 16, fontWeight: 600, color: '#262626' }}>
+              <div style={{ fontSize: 16, fontWeight: 600, color: '#1A1D29' }}>
                 Billed vs Collected — {selCoName || 'All Companies'}
               </div>
               {realizationPct !== null && (
@@ -836,7 +837,7 @@ export default function RentalArDashboard() {
                 </div>
               )}
             </div>
-            <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 14 }}>
+            <div style={{ fontSize: 12, color: '#8B8D98', marginBottom: 14 }}>
               {trendData.length > 0
                 ? `${trendData[0].full} → ${trendData[trendData.length - 1].full} · ${trendData.length} months`
                 : 'No collection data yet — upload Rent Receivable Excel'}
@@ -847,7 +848,7 @@ export default function RentalArDashboard() {
                 <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: '#EFF6FF', color: '#1E40AF', border: '1px solid #BFDBFE' }}>
                   Table filtered: {chartMonth}
                 </span>
-                <button onClick={() => setChartMonth('')} style={{ fontSize: 11, color: '#6B7280', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+                <button onClick={() => setChartMonth('')} style={{ fontSize: 11, color: '#8B8D98', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
                   Clear
                 </button>
               </div>
@@ -865,15 +866,15 @@ export default function RentalArDashboard() {
                     }}
                     style={{ cursor: 'pointer' }}
                   >
-                    <CartesianGrid vertical={false} stroke="#E5E7EB" strokeDasharray="3 3" />
+                    <CartesianGrid vertical={false} stroke="#E8E9ED" strokeDasharray="3 3" />
                     <XAxis
                       dataKey="month"
-                      tick={{ fontSize: 11, fill: '#6B7280' }}
+                      tick={{ fontSize: 11, fill: '#8B8D98' }}
                       axisLine={false} tickLine={false}
                       interval={Math.max(1, Math.floor(trendData.length / 10))}
                     />
                     <YAxis
-                      tick={{ fontSize: 11, fill: '#6B7280' }}
+                      tick={{ fontSize: 11, fill: '#8B8D98' }}
                       tickFormatter={(v: number) => v === 0 ? '$0' : v >= 1_000_000 ? `$${(v/1_000_000).toFixed(1)}M` : `$${(v/1000).toFixed(0)}k`}
                       axisLine={false} tickLine={false} width={44}
                       tickCount={6}
@@ -882,33 +883,33 @@ export default function RentalArDashboard() {
                     {/* Under-collection fill: stacked transparent base + red gap */}
                     <Area type="monotone" dataKey="collectedBase" stackId="gap" fill="transparent" stroke="none" legendType="none" />
                     <Area type="monotone" dataKey="gapFill"       stackId="gap" fill="rgba(235,87,87,0.12)" stroke="none" legendType="none" />
-                    <Line type="monotone" dataKey="billed"    name="Billed"    stroke="#4E79A7" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 1.5, stroke: '#4E79A7', fill: '#fff' }} />
-                    <Line type="monotone" dataKey="collected" name="Collected" stroke="#166534" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 1.5, stroke: '#166534', fill: '#fff' }} />
+                    <Line type="monotone" dataKey="billed"    name="Billed"    stroke={FCC.accent} strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 1.5, stroke: FCC.accent, fill: '#fff' }} />
+                    <Line type="monotone" dataKey="collected" name="Collected" stroke={FCC.success} strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 1.5, stroke: FCC.success, fill: '#fff' }} />
                   </ComposedChart>
                 </ResponsiveContainer>
                 <div style={{ display: 'flex', gap: 20, marginTop: 10, alignItems: 'center' }}>
-                  {[['#4E79A7','Billed'],['#166534','Collected']].map(([c,l]) => (
+                  {[['#5B5FEF','Billed'],['#22C55E','Collected']].map(([c,l]) => (
                     <span key={l} style={{ fontSize: 12, color: '#4B5563', display: 'flex', alignItems: 'center', gap: 5, fontWeight: 500 }}>
                       <span style={{ width: 20, height: 3, borderRadius: 2, background: c, display: 'inline-block' }} />{l}
                     </span>
                   ))}
-                  <span style={{ fontSize: 11, color: '#9CA3AF', marginLeft: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ fontSize: 11, color: '#8B8D98', marginLeft: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
                     <span style={{ width: 12, height: 10, background: 'rgba(235,87,87,0.25)', borderRadius: 2, display: 'inline-block' }} />Under-collection
                   </span>
-                  <span style={{ fontSize: 11, color: '#9CA3AF', marginLeft: 'auto' }}>Click month to filter table ↓</span>
+                  <span style={{ fontSize: 11, color: '#8B8D98', marginLeft: 'auto' }}>Click month to filter table ↓</span>
                 </div>
               </>
             ) : (
               <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <p style={{ fontSize: 12, color: '#9CA3AF' }}>Upload Rent Receivable data to see trend</p>
+                <p style={{ fontSize: 12, color: '#8B8D98' }}>Upload Rent Receivable data to see trend</p>
               </div>
             )}
           </div>
 
           {/* Collection rate by company */}
           <div style={CARD}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>Collection rate by company</div>
-            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#1A1D29', marginBottom: 2 }}>Collection rate by company</div>
+            <div style={{ fontSize: 11, color: '#8B8D98', marginBottom: 14 }}>
               {periodLabel} · collected vs billed from registry
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', maxHeight: 240 }}>
@@ -925,7 +926,7 @@ export default function RentalArDashboard() {
                     onClick={() => setSelCoId(isSelected ? '' : co.company_id)}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
-                      <span style={{ fontSize: 12, color: isSelected ? '#1C1917' : '#374151', fontWeight: isSelected ? 700 : 500 }}>
+                      <span style={{ fontSize: 12, color: isSelected ? '#1A1D29' : '#374151', fontWeight: isSelected ? 700 : 500 }}>
                         {co.company_name}
                       </span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -937,7 +938,7 @@ export default function RentalArDashboard() {
                         </span>
                       </div>
                     </div>
-                    <div style={{ height: 7, background: '#E2E8F0', borderRadius: 4, overflow: 'hidden' }}>
+                    <div style={{ height: 7, background: '#E8E9ED', borderRadius: 4, overflow: 'hidden' }}>
                       <div style={{
                         height: '100%', borderRadius: 4,
                         width: `${Math.min(100, rate)}%`,
@@ -949,38 +950,38 @@ export default function RentalArDashboard() {
                 );
               })}
             </div>
-            <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 10 }}>💡 Click a company to filter the whole dashboard</div>
+            <div style={{ fontSize: 10, color: '#8B8D98', marginTop: 10 }}>💡 Click a company to filter the whole dashboard</div>
           </div>
         </div>
 
       {/* ── VACANCY LOSS TREND ───────────────────────────────────────────── */}
       {!!port && trendData.length > 0 && port.vacLoss > 0 && (
         <div style={CARD}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>Revenue vs Vacancy Loss</div>
-          <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 14 }}>
-            Actual billed vs maximum potential · current vacancy loss: <strong style={{ color: '#B91C1C' }}>{fmt$(port.vacLoss)}/mo</strong> · based on registry occupancy snapshot
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#1A1D29', marginBottom: 2 }}>Revenue vs Vacancy Loss</div>
+          <div style={{ fontSize: 11, color: '#8B8D98', marginBottom: 14 }}>
+            Actual billed vs maximum potential · current vacancy loss: <strong style={{ color: '#EF4444' }}>{fmt$(port.vacLoss)}/mo</strong> · based on registry occupancy snapshot
           </div>
           <ResponsiveContainer width="100%" height={180}>
             <ComposedChart
               data={trendData.map(d => ({ ...d, vacancyLoss: port.vacLoss, potential: d.billed + port.vacLoss }))}
               margin={{ top: 8, right: 12, bottom: 0, left: 0 }}
             >
-              <CartesianGrid vertical={false} stroke="#E5E7EB" strokeDasharray="3 3" />
-              <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6B7280' }} axisLine={false} tickLine={false} interval={Math.max(1, Math.floor(trendData.length / 10))} />
-              <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} tickFormatter={(v: number) => v === 0 ? '$0' : v >= 1_000_000 ? `$${(v/1_000_000).toFixed(1)}M` : `$${(v/1000).toFixed(0)}k`} axisLine={false} tickLine={false} width={44} />
-              <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #E2E8F0', background: '#F1F5F9' }} formatter={(v: number, name: string) => [fmt$(v), name]} />
+              <CartesianGrid vertical={false} stroke="#E8E9ED" strokeDasharray="3 3" />
+              <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#8B8D98' }} axisLine={false} tickLine={false} interval={Math.max(1, Math.floor(trendData.length / 10))} />
+              <YAxis tick={{ fontSize: 11, fill: '#8B8D98' }} tickFormatter={(v: number) => v === 0 ? '$0' : v >= 1_000_000 ? `$${(v/1_000_000).toFixed(1)}M` : `$${(v/1000).toFixed(0)}k`} axisLine={false} tickLine={false} width={44} />
+              <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #E8E9ED', background: '#FFFFFF' }} formatter={(v: number, name: string) => [fmt$(v), name]} />
               <Area type="monotone" dataKey="billed"        stackId="vac" fill="transparent"            stroke="none" legendType="none" />
               <Area type="monotone" dataKey="vacancyLoss"   stackId="vac" fill="rgba(185,28,28,0.12)"  stroke="rgba(185,28,28,0.3)" strokeWidth={0.5} name="Vacancy Loss" />
-              <Line type="monotone" dataKey="potential"     name="Potential Revenue" stroke="#9CA3AF" strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
-              <Line type="monotone" dataKey="billed"        name="Actual Billed"    stroke="#4E79A7" strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 1.5, stroke: '#4E79A7', fill: '#fff' }} />
+              <Line type="monotone" dataKey="potential"     name="Potential Revenue" stroke="#8B8D98" strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
+              <Line type="monotone" dataKey="billed"        name="Actual Billed"    stroke="#5B5FEF" strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 1.5, stroke: '#5B5FEF', fill: '#fff' }} />
             </ComposedChart>
           </ResponsiveContainer>
           <div style={{ display: 'flex', gap: 20, marginTop: 8, fontSize: 12, color: '#4B5563', flexWrap: 'wrap' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ width: 20, height: 3, background: '#4E79A7', borderRadius: 2, display: 'inline-block' }} />Actual Billed
+              <span style={{ width: 20, height: 3, background: '#5B5FEF', borderRadius: 2, display: 'inline-block' }} />Actual Billed
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ width: 20, height: 2, background: '#9CA3AF', borderRadius: 2, display: 'inline-block', borderTop: '2px dashed #9CA3AF' }} />Potential Revenue
+              <span style={{ width: 20, height: 2, background: '#8B8D98', borderRadius: 2, display: 'inline-block', borderTop: '2px dashed #8B8D98' }} />Potential Revenue
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <span style={{ width: 12, height: 10, background: 'rgba(185,28,28,0.20)', borderRadius: 2, display: 'inline-block' }} />Vacancy Loss Gap
@@ -992,18 +993,18 @@ export default function RentalArDashboard() {
       {/* ── OUTSTANDING AR BY COMPANY ─────────────────────────────────────── */}
       {!!port && outstandingData.length > 0 && (
         <div style={CARD}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>Outstanding AR by company</div>
-          <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#1A1D29', marginBottom: 2 }}>Outstanding AR by company</div>
+          <div style={{ fontSize: 11, color: '#8B8D98', marginBottom: 12 }}>
             Billed (registry) − Collected · {period ? periodLabel : 'latest month'}
           </div>
           <ResponsiveContainer width="100%" height={Math.max(120, outstandingData.length * 34)}>
             <BarChart data={outstandingData} layout="vertical" margin={{ top: 0, right: 90, bottom: 0, left: 120 }}>
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E2E8F0" />
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E8E9ED" />
               <XAxis type="number" tick={{ fontSize: 9, fill: '#9ca3af' }} tickFormatter={fmtK} axisLine={false} tickLine={false} />
               <YAxis dataKey="company" type="category" tick={{ fontSize: 11, fill: '#374151' }} axisLine={false} tickLine={false} />
               <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} formatter={(v: number, _, p) => [fmt$(v), `${p.payload?.full} · Outstanding`]} />
               <Bar dataKey="ar" radius={[0,4,4,0]} label={{ position: 'right', fontSize: 10, fill: '#6b7280', formatter: (v: number) => fmt$(v) }}>
-                {outstandingData.map((_, i) => <Cell key={i} fill={['#B91C1C','#F5A623','#818CF8'][Math.min(i, 2)]} />)}
+                {outstandingData.map((_, i) => <Cell key={i} fill={['#EF4444','#F59E0B','#818CF8'][Math.min(i, 2)]} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -1011,7 +1012,7 @@ export default function RentalArDashboard() {
       )}
 
       {!!port && outstandingData.length === 0 && companies.some(c => c.latest_collected > 0) && (
-        <div style={{ ...CARD, textAlign: 'center', color: '#166534', fontSize: 13, fontWeight: 600 }}>
+        <div style={{ ...CARD, textAlign: 'center', color: '#22C55E', fontSize: 13, fontWeight: 600 }}>
           ✅ No outstanding AR — all companies current
         </div>
       )}
@@ -1024,23 +1025,23 @@ export default function RentalArDashboard() {
           {heatmapData.months.length > 0 && heatmapData.rows.length > 0 && (() => {
             const heatBg = (rate: number | null) => {
               if (rate === null) return '#F3F4F6';
-              if (rate >= 95)   return '#166534';
+              if (rate >= 95)   return '#22C55E';
               if (rate >= 80)   return '#16A34A';
               if (rate >= 60)   return '#FCD34D';
-              if (rate >= 30)   return '#F5A623';
-              return '#B91C1C';
+              if (rate >= 30)   return '#F59E0B';
+              return '#EF4444';
             };
             const heatFg = (rate: number | null) => {
-              if (rate === null) return '#9CA3AF';
+              if (rate === null) return '#8B8D98';
               if (rate >= 80)    return '#fff';
-              return '#1C1917';
+              return '#1A1D29';
             };
             const displayMonths = heatmapData.months.slice(-12);
             const startIdx = heatmapData.months.length - displayMonths.length;
             return (
-              <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, padding: 16, overflowX: 'auto' }}>
-                <div style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 2 }}>Collection Rate Heatmap</div>
-                <div style={{ fontSize: 12, color: '#A8A29E', marginBottom: 12 }}>
+              <div style={{ background: '#FFFFFF', border: '1px solid #E8E9ED', borderRadius: 8, padding: 16, overflowX: 'auto' }}>
+                <div style={{ fontSize: 16, fontWeight: 600, color: '#1A1D29', marginBottom: 2 }}>Collection Rate Heatmap</div>
+                <div style={{ fontSize: 12, color: '#8B8D98', marginBottom: 12 }}>
                   Company × Month · green = high collection rate · red = low · last {displayMonths.length} months
                 </div>
                 <table style={{ borderCollapse: 'separate', borderSpacing: 3, fontSize: 12, width: '100%', tableLayout: 'fixed' }}>
@@ -1052,9 +1053,9 @@ export default function RentalArDashboard() {
                   </colgroup>
                   <thead>
                     <tr>
-                      <th style={{ textAlign: 'left', padding: '4px 8px', fontSize: 12, color: '#78716C', fontWeight: 600, whiteSpace: 'nowrap' }}>Company</th>
+                      <th style={{ textAlign: 'left', padding: '4px 8px', fontSize: 12, color: '#8B8D98', fontWeight: 600, whiteSpace: 'nowrap' }}>Company</th>
                       {displayMonths.map(m => (
-                        <th key={m} style={{ padding: '4px 2px', fontSize: 11, color: '#78716C', fontWeight: 600, textAlign: 'center' }}>{short(m)}</th>
+                        <th key={m} style={{ padding: '4px 2px', fontSize: 11, color: '#8B8D98', fontWeight: 600, textAlign: 'center' }}>{short(m)}</th>
                       ))}
                     </tr>
                   </thead>
@@ -1062,7 +1063,7 @@ export default function RentalArDashboard() {
                     {heatmapData.rows.map((row, ri) => (
                       <tr key={ri}>
                         <td style={{
-                          padding: '4px 8px', fontSize: 12, color: '#1C1917', fontWeight: 500,
+                          padding: '4px 8px', fontSize: 12, color: '#1A1D29', fontWeight: 500,
                           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                         }}>
                           {row.company}
@@ -1081,8 +1082,8 @@ export default function RentalArDashboard() {
                     ))}
                   </tbody>
                 </table>
-                <div style={{ display: 'flex', gap: 10, marginTop: 12, alignItems: 'center', fontSize: 11, color: '#78716C', flexWrap: 'wrap' }}>
-                  {([['#166534','≥95%'],['#16A34A','80–94%'],['#FCD34D','60–79%'],['#F5A623','30–59%'],['#B91C1C','<30%'],['#F3F4F6','No data']] as [string,string][]).map(([c, l]) => (
+                <div style={{ display: 'flex', gap: 10, marginTop: 12, alignItems: 'center', fontSize: 11, color: '#8B8D98', flexWrap: 'wrap' }}>
+                  {([['#22C55E','≥95%'],['#16A34A','80–94%'],['#FCD34D','60–79%'],['#F59E0B','30–59%'],['#EF4444','<30%'],['#F3F4F6','No data']] as [string,string][]).map(([c, l]) => (
                     <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                       <span style={{ width: 10, height: 10, borderRadius: 2, background: c, display: 'inline-block', border: '1px solid rgba(0,0,0,0.1)' }} />
                       {l}
@@ -1095,18 +1096,18 @@ export default function RentalArDashboard() {
 
           {/* Zero-Pay / Partial-Pay / Fully Paid Distribution */}
           {payDistribution.length > 0 && (
-            <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, padding: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>Pay Distribution — Current Period</div>
-              <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 14 }}>
+            <div style={{ background: '#FFFFFF', border: '1px solid #E8E9ED', borderRadius: 8, padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#1A1D29', marginBottom: 2 }}>Pay Distribution — Current Period</div>
+              <div style={{ fontSize: 11, color: '#8B8D98', marginBottom: 14 }}>
                 {periodLabel} · {companies.filter(c => c.billed_per_month > 0).length} companies with billing data
               </div>
               <ResponsiveContainer width="100%" height={180}>
                 <BarChart data={payDistribution} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E8E9ED" vertical={false} />
                   <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#374151' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} allowDecimals={false} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: '#8B8D98' }} allowDecimals={false} axisLine={false} tickLine={false} />
                   <Tooltip
-                    contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #E2E8F0', background: '#F1F5F9' }}
+                    contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #E8E9ED', background: '#FFFFFF' }}
                     formatter={(v: number, _name: string, p: { payload?: { name: string } }) => [`${v} compan${v === 1 ? 'y' : 'ies'}`, p.payload?.name ?? '']}
                   />
                   <Bar dataKey="count" radius={[4, 4, 0, 0]} label={{ position: 'top', fontSize: 12, fontWeight: 700, fill: '#374151' }}>
@@ -1121,7 +1122,7 @@ export default function RentalArDashboard() {
                       <span style={{ width: 10, height: 10, borderRadius: 2, background: d.fill, display: 'inline-block' }} />
                       <span style={{ color: '#374151' }}>{d.name}</span>
                     </span>
-                    <span style={{ fontWeight: 700, color: '#1C1917' }}>{d.count} compan{d.count === 1 ? 'y' : 'ies'}</span>
+                    <span style={{ fontWeight: 700, color: '#1A1D29' }}>{d.count} compan{d.count === 1 ? 'y' : 'ies'}</span>
                   </div>
                 ))}
               </div>
@@ -1136,12 +1137,12 @@ export default function RentalArDashboard() {
       <div style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
 
         {/* ── Header bar ─────────────────────────────────────────────────── */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #E2E8F0', background: '#F5F0E8' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #E8E9ED', background: '#F5F0E8' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: '#262626' }}>📊 QB AR Aging Detail</span>
-            {qbLoading && <span style={{ fontSize: 11, color: '#9CA3AF' }}>Loading…</span>}
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#1A1D29' }}>📊 QB AR Aging Detail</span>
+            {qbLoading && <span style={{ fontSize: 11, color: '#8B8D98' }}>Loading…</span>}
             {!qbLoading && qbAging?.has_data && (
-              <span style={{ fontSize: 11, padding: '2px 10px', borderRadius: 20, background: '#DCFCE7', color: '#166534', border: '1px solid #BBF7D0', fontWeight: 600 }}>
+              <span style={{ fontSize: 11, padding: '2px 10px', borderRadius: 20, background: '#DCFCE7', color: '#22C55E', border: '1px solid #BBF7D0', fontWeight: 600 }}>
                 ✓ {qbAging.snapshot_count} upload{qbAging.snapshot_count !== 1 ? 's' : ''} · latest {qbAging.latest_snapshot?.snapshot_month}
               </span>
             )}
@@ -1155,14 +1156,14 @@ export default function RentalArDashboard() {
           {qbAging?.has_data && !showQbPanel ? (
             <button
               onClick={() => setShowQbPanel(true)}
-              style={{ fontSize: 12, padding: '5px 14px', borderRadius: 6, border: '1px solid #6366F1', background: 'linear-gradient(135deg,#6366F1,#7C3AED)', color: '#fff', cursor: 'pointer', fontWeight: 600, letterSpacing: '0.02em' }}
+              style={{ fontSize: 12, padding: '5px 14px', borderRadius: 6, border: '1px solid #5B5FEF', background: 'linear-gradient(135deg,#5B5FEF,#7C3AED)', color: '#fff', cursor: 'pointer', fontWeight: 600, letterSpacing: '0.02em' }}
             >
               + Upload Next Month
             </button>
           ) : (
             <button
               onClick={() => setShowQbPanel(v => !v)}
-              style={{ fontSize: 12, padding: '5px 14px', borderRadius: 6, border: '1px solid #6366F1', background: '#F1F5F9', color: '#5C5043', cursor: 'pointer', fontWeight: 600 }}
+              style={{ fontSize: 12, padding: '5px 14px', borderRadius: 6, border: '1px solid #5B5FEF', background: '#FFFFFF', color: '#5C5043', cursor: 'pointer', fontWeight: 600 }}
             >
               {showQbPanel ? '▲ Hide Upload' : '▲ Upload QB Aging'}
             </button>
@@ -1171,10 +1172,10 @@ export default function RentalArDashboard() {
 
         {/* ── Monthly upload history strip ────────────────────────────────── */}
         {!qbLoading && qbAging?.has_data && (qbAging.trend?.length ?? 0) > 0 && (
-          <div style={{ padding: '8px 16px', borderBottom: '1px solid #E2E8F0', background: '#FDFAF4', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 10, fontWeight: 700, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: 4 }}>Upload History:</span>
+          <div style={{ padding: '8px 16px', borderBottom: '1px solid #E8E9ED', background: '#FDFAF4', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#8B8D98', textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: 4 }}>Upload History:</span>
             {qbAging.trend.map((t, i) => (
-              <span key={i} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: '#DCFCE7', color: '#166534', border: '1px solid #BBF7D0', fontWeight: 500 }}>
+              <span key={i} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: '#DCFCE7', color: '#22C55E', border: '1px solid #BBF7D0', fontWeight: 500 }}>
                 ✓ {t.month.slice(0, 7)}
               </span>
             ))}
@@ -1183,7 +1184,7 @@ export default function RentalArDashboard() {
 
         {/* ── Upload panel — shown when no data yet OR user clicked Upload ── */}
         {(!qbAging?.has_data || showQbPanel) && (
-          <div style={{ padding: 16, borderBottom: '1px solid #E2E8F0', background: '#FDFAF4' }}>
+          <div style={{ padding: 16, borderBottom: '1px solid #E8E9ED', background: '#FDFAF4' }}>
 
             {/* File + date + preview row */}
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
@@ -1191,7 +1192,7 @@ export default function RentalArDashboard() {
                 <div style={{ fontSize: 11, fontWeight: 600, color: '#5C5043', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>QB Excel File</div>
                 <label style={{
                   display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px',
-                  border: '1px solid #E2E8F0', borderRadius: 6, background: '#F1F5F9',
+                  border: '1px solid #E8E9ED', borderRadius: 6, background: '#FFFFFF',
                   cursor: 'pointer', fontSize: 12, color: '#5C5043', fontWeight: 500,
                 }}>
                   <span>📎</span>
@@ -1216,7 +1217,7 @@ export default function RentalArDashboard() {
                 disabled={!qbFile || !qbAsOfDate || qbUploading}
                 style={{
                   padding: '7px 20px', borderRadius: 6, border: 'none',
-                  background: (!qbFile || !qbAsOfDate || qbUploading) ? '#6366F166' : 'linear-gradient(135deg,#6366F1,#7C3AED)',
+                  background: (!qbFile || !qbAsOfDate || qbUploading) ? '#5B5FEF66' : 'linear-gradient(135deg,#5B5FEF,#7C3AED)',
                   color: '#fff', fontWeight: 700, fontSize: 13, cursor: (!qbFile || !qbAsOfDate || qbUploading) ? 'not-allowed' : 'pointer',
                   letterSpacing: '0.02em',
                 }}
@@ -1231,7 +1232,7 @@ export default function RentalArDashboard() {
                 <span style={{ fontSize: 16, lineHeight: 1 }}>⚠️</span>
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 700, color: '#991B1B', marginBottom: 2 }}>Upload Error</div>
-                  <div style={{ fontSize: 12, color: '#B91C1C' }}>{qbError}</div>
+                  <div style={{ fontSize: 12, color: '#EF4444' }}>{qbError}</div>
                 </div>
               </div>
             )}
@@ -1244,13 +1245,13 @@ export default function RentalArDashboard() {
                 {/* Stats row */}
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
                   {[
-                    { label: 'Rows Parsed', value: qbPreview.row_count, c: '#262626' },
-                    { label: 'Matched', value: qbPreview.matched_count, c: '#166534' },
-                    { label: 'Unmatched', value: qbPreview.unmatched_count, c: qbPreview.unmatched_count > 0 ? '#B91C1C' : '#166534' },
+                    { label: 'Rows Parsed', value: qbPreview.row_count, c: '#1A1D29' },
+                    { label: 'Matched', value: qbPreview.matched_count, c: '#22C55E' },
+                    { label: 'Unmatched', value: qbPreview.unmatched_count, c: qbPreview.unmatched_count > 0 ? '#EF4444' : '#22C55E' },
                     { label: 'Subtotals Skipped', value: qbPreview.skipped_subtotals, c: '#6B6B6B' },
                     { label: 'Credit Rows', value: qbPreview.credit_rows.length, c: qbPreview.credit_rows.length > 0 ? '#7C3AED' : '#6B6B6B' },
                   ].map(k => (
-                    <div key={k.label} style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, padding: '10px 16px', textAlign: 'center', minWidth: 90 }}>
+                    <div key={k.label} style={{ background: '#FFFFFF', border: '1px solid #E8E9ED', borderRadius: 8, padding: '10px 16px', textAlign: 'center', minWidth: 90 }}>
                       <div style={{ fontSize: 22, fontWeight: 700, color: k.c, fontVariantNumeric: 'tabular-nums lining-nums' }}>{k.value}</div>
                       <div style={{ fontSize: 10, color: '#6B6B6B', marginTop: 2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{k.label}</div>
                     </div>
@@ -1260,13 +1261,13 @@ export default function RentalArDashboard() {
                 {/* Bucket totals */}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
                   {[
-                    { label: 'Current', v: qbPreview.portfolio_totals.current, c: '#166534' },
-                    { label: '1–30 Days', v: qbPreview.portfolio_totals.days_1_30, c: '#F5A623' },
+                    { label: 'Current', v: qbPreview.portfolio_totals.current, c: '#22C55E' },
+                    { label: '1–30 Days', v: qbPreview.portfolio_totals.days_1_30, c: '#F59E0B' },
                     { label: '31–60 Days', v: qbPreview.portfolio_totals.days_31_60, c: '#E97316' },
                     { label: '61–90 Days', v: qbPreview.portfolio_totals.days_61_90, c: '#DC2626' },
                     { label: '91+ Days', v: qbPreview.portfolio_totals.days_91_plus, c: '#991B1B' },
                   ].map(b => (
-                    <div key={b.label} style={{ flex: 1, minWidth: 90, background: '#F1F5F9', border: `2px solid ${b.c}33`, borderRadius: 8, padding: '10px 12px', textAlign: 'center', borderTop: `3px solid ${b.c}` }}>
+                    <div key={b.label} style={{ flex: 1, minWidth: 90, background: '#FFFFFF', border: `2px solid ${b.c}33`, borderRadius: 8, padding: '10px 12px', textAlign: 'center', borderTop: `3px solid ${b.c}` }}>
                       <div style={{ fontSize: 16, fontWeight: 700, color: b.c, fontVariantNumeric: 'tabular-nums lining-nums' }}>{fmt$(b.v)}</div>
                       <div style={{ fontSize: 10, color: '#6B6B6B', marginTop: 2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{b.label}</div>
                     </div>
@@ -1287,7 +1288,7 @@ export default function RentalArDashboard() {
                             {u.customer}{u.unit_ref ? ` · ${u.unit_ref}` : ''} — {u.building}
                           </span>
                         ))}
-                        {qbPreview.unmatched.length > 6 && <span style={{ fontSize: 11, color: '#78716C' }}>…and {qbPreview.unmatched.length - 6} more</span>}
+                        {qbPreview.unmatched.length > 6 && <span style={{ fontSize: 11, color: '#8B8D98' }}>…and {qbPreview.unmatched.length - 6} more</span>}
                       </div>
                     </div>
                   </div>
@@ -1300,7 +1301,7 @@ export default function RentalArDashboard() {
                     disabled={qbConfirming}
                     style={{
                       padding: '8px 22px', borderRadius: 6, border: 'none',
-                      background: qbConfirming ? '#86EFAC' : 'linear-gradient(135deg,#166534,#16A34A)',
+                      background: qbConfirming ? '#86EFAC' : 'linear-gradient(135deg,#22C55E,#16A34A)',
                       color: '#fff', fontWeight: 700, fontSize: 13, cursor: qbConfirming ? 'not-allowed' : 'pointer',
                       letterSpacing: '0.02em',
                     }}
@@ -1309,11 +1310,11 @@ export default function RentalArDashboard() {
                   </button>
                   <button
                     onClick={() => { setQbPreview(null); setQbFile(null); setQbAsOfDate(''); if (qbFileRef.current) qbFileRef.current.value = ''; }}
-                    style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #E2E8F0', background: '#F1F5F9', color: '#5C5043', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}
+                    style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #E8E9ED', background: '#FFFFFF', color: '#5C5043', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}
                   >
                     Cancel
                   </button>
-                  <span style={{ fontSize: 11, color: '#9CA3AF', marginLeft: 4 }}>
+                  <span style={{ fontSize: 11, color: '#8B8D98', marginLeft: 4 }}>
                     This creates a new monthly snapshot — existing history is preserved.
                   </span>
                 </div>
@@ -1330,7 +1331,7 @@ export default function RentalArDashboard() {
                 {
                   label: 'Overdue AR (30+)',
                   value: fmt$(qbPortfolioOverdue.overdue30),
-                  border: '#B91C1C',
+                  border: '#EF4444',
                   sub: '1-30 + 31-60 + 61-90 + 91+ · credits zero-floored',
                 },
                 {
@@ -1364,10 +1365,10 @@ export default function RentalArDashboard() {
                   sub: 'Overpayments · excluded from overdue & DSO',
                 }] : []),
               ].map((t, i) => (
-                <div key={i} style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, padding: '12px 14px', borderLeft: `3px solid ${t.border}` }}>
+                <div key={i} style={{ background: '#FFFFFF', border: '1px solid #E8E9ED', borderRadius: 8, padding: '12px 14px', borderLeft: `3px solid ${t.border}` }}>
                   <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#6B6B6B', marginBottom: 4, lineHeight: 1.2 }}>{t.label}</div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: '#262626', fontVariantNumeric: 'tabular-nums lining-nums' }}>{t.value}</div>
-                  <div style={{ fontSize: 10, marginTop: 3, color: '#9CA3AF' }}>{t.sub}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: '#1A1D29', fontVariantNumeric: 'tabular-nums lining-nums' }}>{t.value}</div>
+                  <div style={{ fontSize: 10, marginTop: 3, color: '#8B8D98' }}>{t.sub}</div>
                 </div>
               ))}
             </div>
@@ -1375,7 +1376,7 @@ export default function RentalArDashboard() {
             {/* AR Aging by Bucket stacked bar chart */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div style={CARD}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#262626', marginBottom: 2 }}>AR Aging by Bucket — Portfolio</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#1A1D29', marginBottom: 2 }}>AR Aging by Bucket — Portfolio</div>
                 <div style={{ fontSize: 11, color: '#6B6B6B', marginBottom: 12 }}>All tenants · as of {qbAging.latest_snapshot?.snapshot_month}</div>
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart
@@ -1385,13 +1386,13 @@ export default function RentalArDashboard() {
                     }]}
                     layout="vertical" margin={{ left: 10, right: 20, top: 5, bottom: 5 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E8E9ED" />
                     <XAxis type="number" tickFormatter={v => `$${(v/1000).toFixed(0)}K`} tick={{ fontSize: 10 }} />
                     <YAxis type="category" dataKey="name" width={60} tick={{ fontSize: 11 }} />
                     <Tooltip formatter={(v: number) => fmt$(v)} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="Current"  stackId="a" fill="#166534" />
-                    <Bar dataKey="1-30"    stackId="a" fill="#F5A623" />
+                    <Bar dataKey="Current"  stackId="a" fill="#22C55E" />
+                    <Bar dataKey="1-30"    stackId="a" fill="#F59E0B" />
                     <Bar dataKey="31-60"   stackId="a" fill="#E97316" />
                     <Bar dataKey="61-90"   stackId="a" fill="#DC2626" />
                     <Bar dataKey="91+"     stackId="a" fill="#991B1B" radius={[0,4,4,0]} />
@@ -1401,7 +1402,7 @@ export default function RentalArDashboard() {
 
               {/* By-company table */}
               <div style={CARD}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#262626', marginBottom: 2 }}>Aging by Company</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#1A1D29', marginBottom: 2 }}>Aging by Company</div>
                 <div style={{ fontSize: 11, color: '#6B6B6B', marginBottom: 10 }}>Sorted by overdue amount (30+)</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
                   {[...qbAging.by_company]
@@ -1411,9 +1412,9 @@ export default function RentalArDashboard() {
                       const dso = co.dso_estimate ?? estimateDsoFromBuckets(co);
                       return (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, background: '#F5F0E8', borderRadius: 5, padding: '6px 10px', flexWrap: 'wrap', gap: 4 }}>
-                        <span style={{ fontWeight: 600, color: '#1C1917', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{co.company_name}</span>
-                        <span style={{ color: '#166534', marginLeft: 8, minWidth: 60, textAlign: 'right' }}>{fmt$(co.current)}</span>
-                        <span style={{ color: co.overdue > 0 ? '#B91C1C' : '#9CA3AF', marginLeft: 6, minWidth: 60, textAlign: 'right', fontWeight: co.overdue > 0 ? 700 : 400 }}>{co.overdue > 0 ? fmt$(co.overdue) : '—'}</span>
+                        <span style={{ fontWeight: 600, color: '#1A1D29', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{co.company_name}</span>
+                        <span style={{ color: '#22C55E', marginLeft: 8, minWidth: 60, textAlign: 'right' }}>{fmt$(co.current)}</span>
+                        <span style={{ color: co.overdue > 0 ? '#EF4444' : '#8B8D98', marginLeft: 6, minWidth: 60, textAlign: 'right', fontWeight: co.overdue > 0 ? 700 : 400 }}>{co.overdue > 0 ? fmt$(co.overdue) : '—'}</span>
                         <span style={{ color: '#2F80ED', minWidth: 48, textAlign: 'right' }}>
                           {dso != null ? `~${dso}d` : credit > 0 ? 'N/A' : '—'}
                         </span>
@@ -1426,9 +1427,9 @@ export default function RentalArDashboard() {
                     );})
                   }
                 </div>
-                <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 10, color: '#9CA3AF', flexWrap: 'wrap' }}>
-                  <span style={{ color: '#166534' }}>■ Current</span>
-                  <span style={{ color: '#B91C1C' }}>■ Overdue (30+)</span>
+                <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 10, color: '#8B8D98', flexWrap: 'wrap' }}>
+                  <span style={{ color: '#22C55E' }}>■ Current</span>
+                  <span style={{ color: '#EF4444' }}>■ Overdue (30+)</span>
                   <span style={{ color: '#2F80ED' }}>■ Est. days</span>
                   <span style={{ color: '#7C3AED' }}>■ Credit (excl. DSO)</span>
                 </div>
@@ -1438,20 +1439,20 @@ export default function RentalArDashboard() {
             {/* Trend section — only when 3+ snapshots */}
             {qbAging.trend_ready && qbAging.trend.length >= 3 && (
               <div style={{ ...CARD, marginTop: 14 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#262626', marginBottom: 2 }}>AR Aging Trend — {qbAging.snapshot_count} Months</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#1A1D29', marginBottom: 2 }}>AR Aging Trend — {qbAging.snapshot_count} Months</div>
                 <div style={{ fontSize: 11, color: '#6B6B6B', marginBottom: 12 }}>Monthly overdue bucket breakdown</div>
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={qbAging.trend.map(t => ({
                     month: t.month.slice(0, 7),
                     ...flooredBucketsForChart(t),
                   }))} margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E8E9ED" />
                     <XAxis dataKey="month" tick={{ fontSize: 10 }} />
                     <YAxis tickFormatter={v => `$${(v/1000).toFixed(0)}K`} tick={{ fontSize: 10 }} />
                     <Tooltip formatter={(v: number) => fmt$(v)} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="Current" stackId="a" fill="#166534" />
-                    <Bar dataKey="1-30"   stackId="a" fill="#F5A623" />
+                    <Bar dataKey="Current" stackId="a" fill="#22C55E" />
+                    <Bar dataKey="1-30"   stackId="a" fill="#F59E0B" />
                     <Bar dataKey="31-60"  stackId="a" fill="#E97316" />
                     <Bar dataKey="61-90"  stackId="a" fill="#DC2626" />
                     <Bar dataKey="91+"    stackId="a" fill="#991B1B" />
@@ -1460,7 +1461,7 @@ export default function RentalArDashboard() {
               </div>
             )}
             {!qbAging.trend_ready && (
-              <div style={{ marginTop: 10, fontSize: 11, color: '#9CA3AF', textAlign: 'center', padding: '8px 0' }}>
+              <div style={{ marginTop: 10, fontSize: 11, color: '#8B8D98', textAlign: 'center', padding: '8px 0' }}>
                 📈 Trend chart available after {3 - qbAging.snapshot_count} more monthly upload{3 - qbAging.snapshot_count !== 1 ? 's' : ''} ({qbAging.snapshot_count}/3 collected)
               </div>
             )}
@@ -1510,17 +1511,17 @@ export default function RentalArDashboard() {
       {/* ══ NEW SECTION 2 — AR BY PROPERTY (ranked bar, color = collection rate) ═ */}
       {!!port && propertyBarData.length > 0 && (() => {
         const rateColor = (rate: number) =>
-          rate >= 95 ? '#166534' : rate >= 75 ? '#F5A623' : '#B91C1C';
+          rate >= 95 ? '#22C55E' : rate >= 75 ? '#F59E0B' : '#EF4444';
         const maxOutstanding = Math.max(...propertyBarData.map(d => d.outstanding), 1);
         return (
           <div style={CARD}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>AR by Property — Outstanding ranked</div>
-            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#1A1D29', marginBottom: 2 }}>AR by Property — Outstanding ranked</div>
+            <div style={{ fontSize: 11, color: '#8B8D98', marginBottom: 14 }}>
               Bar size = Outstanding AR · Color = Collection Rate · Click to filter dashboard
               <span style={{ marginLeft: 12 }}>
-                <span style={{ color: '#166534', fontWeight: 600 }}>■</span> ≥95%
-                <span style={{ color: '#F5A623', fontWeight: 600, marginLeft: 8 }}>■</span> 75–94%
-                <span style={{ color: '#B91C1C', fontWeight: 600, marginLeft: 8 }}>■</span> &lt;75%
+                <span style={{ color: '#22C55E', fontWeight: 600 }}>■</span> ≥95%
+                <span style={{ color: '#F59E0B', fontWeight: 600, marginLeft: 8 }}>■</span> 75–94%
+                <span style={{ color: '#EF4444', fontWeight: 600, marginLeft: 8 }}>■</span> &lt;75%
               </span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1533,7 +1534,7 @@ export default function RentalArDashboard() {
                     onClick={() => setSelCoId(isSelected ? '' : d.company_id)}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                      <span style={{ fontSize: 12, color: isSelected ? '#1C1917' : '#374151', fontWeight: isSelected ? 700 : 500 }}>
+                      <span style={{ fontSize: 12, color: isSelected ? '#1A1D29' : '#374151', fontWeight: isSelected ? 700 : 500 }}>
                         {d.company}
                       </span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1545,7 +1546,7 @@ export default function RentalArDashboard() {
                         </span>
                       </div>
                     </div>
-                    <div style={{ height: 10, background: '#E2E8F0', borderRadius: 6, overflow: 'hidden' }}>
+                    <div style={{ height: 10, background: '#E8E9ED', borderRadius: 6, overflow: 'hidden' }}>
                       <div style={{
                         height: '100%', borderRadius: 6, transition: 'width 0.4s',
                         width: `${Math.max(pct100, d.outstanding > 0 ? 1.5 : 0)}%`,
@@ -1564,25 +1565,25 @@ export default function RentalArDashboard() {
       {!!port && (
         bucketTrend.length >= 3 ? (
           <div style={CARD}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 2 }}>Overdue Trend by Aging Bucket</div>
-            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#1A1D29', marginBottom: 2 }}>Overdue Trend by Aging Bucket</div>
+            <div style={{ fontSize: 11, color: '#8B8D98', marginBottom: 14 }}>
               Three distinct overdue buckets over time — shows whether the worst-aged AR is growing or resolving
             </div>
             <ResponsiveContainer width="100%" height={220}>
               <ComposedChart data={bucketTrend} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-                <CartesianGrid vertical={false} stroke="#E5E7EB" strokeDasharray="3 3" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6B7280' }} axisLine={false} tickLine={false} />
+                <CartesianGrid vertical={false} stroke="#E8E9ED" strokeDasharray="3 3" />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#8B8D98' }} axisLine={false} tickLine={false} />
                 <YAxis
-                  tick={{ fontSize: 11, fill: '#6B7280' }}
+                  tick={{ fontSize: 11, fill: '#8B8D98' }}
                   tickFormatter={(v: number) => v === 0 ? '$0' : v >= 1_000_000 ? `$${(v/1_000_000).toFixed(1)}M` : `$${(v/1000).toFixed(0)}k`}
                   axisLine={false} tickLine={false} width={44}
                 />
                 <Tooltip
-                  contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #E2E8F0', background: '#F1F5F9' }}
+                  contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #E8E9ED', background: '#FFFFFF' }}
                   formatter={(v: number, name: string) => [fmt$(v), name]}
                 />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Line type="monotone" dataKey="31–60" name="31–60 days" stroke="#F5A623" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="31–60" name="31–60 days" stroke="#F59E0B" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
                 <Line type="monotone" dataKey="61–90" name="61–90 days" stroke="#C0392B" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
                 <Line type="monotone" dataKey="91+"   name="91+ days"   stroke="#991B1B" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
               </ComposedChart>
@@ -1590,7 +1591,7 @@ export default function RentalArDashboard() {
           </div>
         ) : (
           <div style={CARD}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1917' }}>Overdue Trend by Bucket</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#1A1D29' }}>Overdue Trend by Bucket</div>
           </div>
         )
       )}
@@ -1604,10 +1605,10 @@ export default function RentalArDashboard() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 8 }}>
             {reconFlags.map((f, i) => (
               <div key={i} style={{ background: '#fff', border: '1px solid #FCD34D', borderRadius: 6, padding: '10px 12px', fontSize: 11 }}>
-                <div style={{ fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>{f.company} · {f.month}</div>
+                <div style={{ fontWeight: 600, color: '#1A1D29', marginBottom: 4 }}>{f.company} · {f.month}</div>
                 <div style={{ color: '#2F80ED' }}>Rent Receivable: {fmt$(f.rent_receivable)}</div>
                 <div style={{ color: '#92400E' }}>P&L: {fmt$(f.pl)}</div>
-                <div style={{ color: '#B91C1C', fontWeight: 600, marginTop: 2 }}>Δ {f.diff_pct}% difference</div>
+                <div style={{ color: '#EF4444', fontWeight: 600, marginTop: 2 }}>Δ {f.diff_pct}% difference</div>
               </div>
             ))}
           </div>
@@ -1617,7 +1618,7 @@ export default function RentalArDashboard() {
       {/* ── QB snapshot collecting history (below Overdue Trend) ──────────── */}
       {!!port && bucketTrend.length < 3 && (
         <div style={{ ...CARD, textAlign: 'center', padding: '20px 16px' }}>
-          <div style={{ fontSize: 12, color: '#9CA3AF' }}>
+          <div style={{ fontSize: 12, color: '#8B8D98' }}>
             Collecting history — chart appears after 3 monthly QB AR Aging snapshots.
             Currently {qbAging?.snapshot_count ?? 0} of 3 required.
             {!qbAging?.has_data && ' Upload QB AR Aging below to start.'}
@@ -1630,13 +1631,13 @@ export default function RentalArDashboard() {
 
       {/* ── COLLECTION DETAILS TAB ─────────────────────────────────────── */}
       {!!port && arView === 'collection' && (
-        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: 16 }}>
+        <div style={{ background: '#fff', border: '1px solid #E8E9ED', borderRadius: 10, padding: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
             <div>
-              <div style={{ fontSize: 16, fontWeight: 600, color: '#1C1917' }}>
+              <div style={{ fontSize: 16, fontWeight: 600, color: '#1A1D29' }}>
                 Collection detail — {selCoName || 'All Companies'} · {chartMonth || (period ? periodLabel : 'All Months')}
               </div>
-              <div style={{ fontSize: 13, color: '#A8A29E', marginTop: 2 }}>
+              <div style={{ fontSize: 13, color: '#8B8D98', marginTop: 2 }}>
                 Every company × every month · billed from registry · collected from Rent Receivable or P&L
               </div>
             </div>
@@ -1644,8 +1645,8 @@ export default function RentalArDashboard() {
               {['All','Zero-Pay','Partial','Paid','Low'].map(f => (
                 <button key={f} onClick={() => setStatusFlt(f)} style={{
                   fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid',
-                  borderColor: statusFlt === f ? '#1C1917' : '#E2E8F0',
-                  background:  statusFlt === f ? '#1C1917' : 'transparent',
+                  borderColor: statusFlt === f ? '#1A1D29' : '#E8E9ED',
+                  background:  statusFlt === f ? '#1A1D29' : 'transparent',
                   color:       statusFlt === f ? '#fff'    : '#6B6B6B',
                   cursor: 'pointer',
                 }}>{f}</button>
@@ -1656,7 +1657,7 @@ export default function RentalArDashboard() {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
-                <tr style={{ background: '#F7F1E6' }}>
+                <tr style={{ background: '#F7F8FA' }}>
                   {['Company','Month','Occ/Total','Billed/Mo','Collected','Outstanding','Rate','Source','Status'].map(h => (
                     <th key={h} style={{
                       textAlign: ['Company','Source','Status'].includes(h) ? 'left' : 'right',
@@ -1669,7 +1670,7 @@ export default function RentalArDashboard() {
               <tbody>
                 {filteredRows.length === 0 ? (
                   <tr>
-                    <td colSpan={9} style={{ padding: 28, textAlign: 'center', color: '#9CA3AF', fontSize: 12 }}>
+                    <td colSpan={9} style={{ padding: 28, textAlign: 'center', color: '#8B8D98', fontSize: 12 }}>
                       No data for this filter.
                       {srcSummary.none > 0 && ` Upload Rent Receivable Excel to populate ${srcSummary.none} companies.`}
                     </td>
@@ -1678,16 +1679,16 @@ export default function RentalArDashboard() {
                   const pill = getStatus(row.rate, row.collected);
                   return (
                     <tr key={i} style={{ borderTop: '1px solid #F0EBE3', background: i % 2 === 0 ? '#FDFAF6' : '#fff' }}>
-                      <td style={{ padding: '8px 10px', fontWeight: 500, color: '#1C1917', whiteSpace: 'nowrap' }}>{row.company_name}</td>
+                      <td style={{ padding: '8px 10px', fontWeight: 500, color: '#1A1D29', whiteSpace: 'nowrap' }}>{row.company_name}</td>
                       <td style={{ padding: '8px 10px', textAlign: 'right', color: '#6B6B6B', fontFamily: 'monospace', fontSize: 11 }}>{row.month}</td>
                       <td style={{ padding: '8px 10px', textAlign: 'right', color: '#6B6B6B' }}>{row.occupied}/{row.total}</td>
                       <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#374151' }}>{fmt$(row.billed)}</td>
-                      <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#166534', fontWeight: 500 }}>{fmt$(row.collected)}</td>
-                      <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: row.outstanding > 0 ? '#991B1B' : '#166534' }}>
+                      <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#22C55E', fontWeight: 500 }}>{fmt$(row.collected)}</td>
+                      <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: row.outstanding > 0 ? '#991B1B' : '#22C55E' }}>
                         {row.outstanding > 0 ? fmt$(row.outstanding) : '—'}
                       </td>
                       <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace',
-                        color: row.rate >= 95 ? '#166534' : row.rate >= 85 ? '#92400E' : '#991B1B' }}>
+                        color: row.rate >= 95 ? '#22C55E' : row.rate >= 85 ? '#92400E' : '#991B1B' }}>
                         {row.has_data ? pct(row.rate) : '—'}
                       </td>
                       <td style={{ padding: '8px 10px' }}>
@@ -1700,7 +1701,7 @@ export default function RentalArDashboard() {
                             {row.data_source === 'rent_receivable' ? 'Rent Rcv' : 'P&L'}
                           </span>
                         ) : (
-                          <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 20, background: '#F3F4F6', color: '#6B7280' }}>No data</span>
+                          <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 20, background: '#F3F4F6', color: '#8B8D98' }}>No data</span>
                         )}
                       </td>
                       <td style={{ padding: '8px 10px' }}>
@@ -1714,12 +1715,12 @@ export default function RentalArDashboard() {
               </tbody>
               {filteredRows.length > 0 && (
                 <tfoot>
-                  <tr style={{ background: '#F7F1E6', borderTop: '2px solid #E2E8F0' }}>
-                    <td colSpan={3} style={{ padding: '8px 10px', fontWeight: 700, fontSize: 11, color: '#1C1917' }}>TOTAL ({filteredRows.length} rows)</td>
+                  <tr style={{ background: '#F7F8FA', borderTop: '2px solid #E8E9ED' }}>
+                    <td colSpan={3} style={{ padding: '8px 10px', fontWeight: 700, fontSize: 11, color: '#1A1D29' }}>TOTAL ({filteredRows.length} rows)</td>
                     <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700 }}>
                       {fmt$(filteredRows.reduce((s, r) => s + r.billed, 0))}
                     </td>
-                    <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#166534' }}>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#22C55E' }}>
                       {fmt$(filteredRows.reduce((s, r) => s + r.collected, 0))}
                     </td>
                     <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#991B1B' }}>
@@ -1770,8 +1771,8 @@ export default function RentalArDashboard() {
           padding: '8px 10px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
           letterSpacing: '0.04em', color: '#6B6B6B', whiteSpace: 'nowrap',
           cursor: 'pointer', userSelect: 'none',
-          background: tenantSortCol === col ? '#F0EDE5' : '#F1F5F9',
-          borderBottom: '1px solid #E2E8F0', textAlign: 'right' as const,
+          background: tenantSortCol === col ? '#F0EDE5' : '#FFFFFF',
+          borderBottom: '1px solid #E8E9ED', textAlign: 'right' as const,
         });
         const thL = (col: keyof TenantAgingRow): React.CSSProperties => ({ ...thStyle(col), textAlign: 'left' as const });
         const arrow = (col: keyof TenantAgingRow) => tenantSortCol === col ? (tenantSortAsc ? ' ▲' : ' ▼') : '';
@@ -1782,18 +1783,18 @@ export default function RentalArDashboard() {
         const ACTION_STYLE: Record<string, React.CSSProperties> = {
           Review:  { background: '#FEE2E2', color: '#991B1B', border: '1px solid rgba(220,38,38,0.25)' },
           Monitor: { background: '#FEF3C7', color: '#92400E', border: '1px solid rgba(245,158,11,0.3)' },
-          Current: { background: '#DCFCE7', color: '#166534', border: '1px solid rgba(34,197,94,0.3)'  },
+          Current: { background: '#DCFCE7', color: '#22C55E', border: '1px solid rgba(34,197,94,0.3)'  },
         };
         return (
-          <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, overflow: 'hidden' }}>
-            <div style={{ padding: '14px 16px', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ background: '#fff', border: '1px solid #E8E9ED', borderRadius: 10, overflow: 'hidden' }}>
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid #E8E9ED', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1917' }}>Tenant AR Aging — {tenantAging.snapshot_month}</div>
-                <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#1A1D29' }}>Tenant AR Aging — {tenantAging.snapshot_month}</div>
+                <div style={{ fontSize: 11, color: '#8B8D98', marginTop: 2 }}>
                   {sortedTenants.length} tenants · from QB AR Aging Detail upload · click column header to sort
                 </div>
               </div>
-              <div style={{ fontSize: 11, color: '#78716C' }}>Last Payment Date: not captured in QB AR Aging export</div>
+              <div style={{ fontSize: 11, color: '#8B8D98' }}>Last Payment Date: not captured in QB AR Aging export</div>
             </div>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
@@ -1820,14 +1821,14 @@ export default function RentalArDashboard() {
                 <tbody>
                   {sortedTenants.map((row, i) => (
                     <tr key={i} style={{ borderBottom: '1px solid #F5F0E8', background: i % 2 === 0 ? '#fff' : '#FDFAF5' }}>
-                      <td style={{ padding: '8px 10px', color: '#1C1917', fontWeight: 500, whiteSpace: 'nowrap' }}>{row.customer}</td>
-                      <td style={{ padding: '8px 10px', color: '#78716C', whiteSpace: 'nowrap' }}>{row.unit_ref}</td>
-                      <td style={{ padding: '8px 10px', color: '#78716C', whiteSpace: 'nowrap' }}>
-                        {row.lease_end ?? <span style={{ color: '#6366F1', fontStyle: 'italic' }}>Not tracked</span>}
+                      <td style={{ padding: '8px 10px', color: '#1A1D29', fontWeight: 500, whiteSpace: 'nowrap' }}>{row.customer}</td>
+                      <td style={{ padding: '8px 10px', color: '#8B8D98', whiteSpace: 'nowrap' }}>{row.unit_ref}</td>
+                      <td style={{ padding: '8px 10px', color: '#8B8D98', whiteSpace: 'nowrap' }}>
+                        {row.lease_end ?? <span style={{ color: '#5B5FEF', fontStyle: 'italic' }}>Not tracked</span>}
                       </td>
                       {[row.current, row.days_1_30, row.days_31_60, row.days_61_90, row.days_91_plus, row.total].map((v, vi) => (
                         <td key={vi} style={{ padding: '8px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums',
-                          color: vi >= 2 && v > 0 ? (vi >= 3 ? '#B91C1C' : '#92400E') : '#374151',
+                          color: vi >= 2 && v > 0 ? (vi >= 3 ? '#EF4444' : '#92400E') : '#374151',
                           fontWeight: vi === 5 ? 700 : 400 }}>
                           {v > 0 ? fmt$(v) : '—'}
                         </td>
