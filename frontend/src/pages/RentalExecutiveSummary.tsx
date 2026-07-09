@@ -18,8 +18,8 @@ import { useExecutiveSummaryData } from '../hooks/useExecutiveSummaryData';
 import { mergeFinRows } from '../utils/executiveSummaryFinRows';
 
 const P = {
-  pageBg: '#F7F1E6', cardBg: '#FBF6EE', border: '#E8DEC8',
-  gold: '#D4AF37', text: '#1C1917', muted: '#78716C',
+  pageBg: '#F7F1E6', cardBg: '#F1F5F9', border: '#E2E8F0',
+  gold: '#6366F1', text: '#1C1917', muted: '#78716C',
 } as const;
 
 const MNAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -179,7 +179,7 @@ export default function RentalExecutiveSummary() {
             type="button"
             onClick={() => setShowExportModal(true)}
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px',
-              background: `linear-gradient(135deg, ${P.gold}, #B8860B)`, border: 'none', borderRadius: 8,
+              background: `linear-gradient(135deg, ${P.gold}, #7C3AED)`, border: 'none', borderRadius: 8,
               fontSize: 13, fontWeight: 700, color: '#fff', cursor: 'pointer' }}
           >
             <Download size={14} />

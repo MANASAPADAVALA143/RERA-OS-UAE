@@ -60,7 +60,7 @@ export default function RentalAnalytics({ embedded = false }: Props) {
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <BarChart3 size={28} color="#B8860B" />
+              <BarChart3 size={28} color="#7C3AED" />
               <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1C1917', margin: 0 }}>Analytics</h1>
             </div>
           </div>
@@ -70,7 +70,7 @@ export default function RentalAnalytics({ embedded = false }: Props) {
               onChange={e => setSelectedCompanyId(e.target.value || null)}
               style={{
                 fontSize: 13, padding: '8px 12px', borderRadius: 8,
-                border: '1px solid #E8DEC8', background: '#FBF6EE', minWidth: 200,
+                border: '1px solid #E2E8F0', background: '#F1F5F9', minWidth: 200,
               }}
             >
               {companies.map(c => (
@@ -95,7 +95,7 @@ export default function RentalAnalytics({ embedded = false }: Props) {
             onChange={e => setSelectedCompanyId(e.target.value || null)}
             style={{
               fontSize: 13, padding: '8px 12px', borderRadius: 8,
-              border: '1px solid #E8DEC8', background: '#FBF6EE', minWidth: 200,
+              border: '1px solid #E2E8F0', background: '#F1F5F9', minWidth: 200,
             }}
           >
             {companies.map(c => (
@@ -112,7 +112,7 @@ export default function RentalAnalytics({ embedded = false }: Props) {
         </div>
       )}
 
-      <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 6, borderBottom: embedded ? 'none' : '1px solid #E8DEC8', paddingBottom: 0 }}>
+      <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 6, borderBottom: embedded ? 'none' : '1px solid #E2E8F0', paddingBottom: 0 }}>
         {SUB_PAGES.map(sp => {
           const active = activeSub === sp.id;
           return (
@@ -123,9 +123,9 @@ export default function RentalAnalytics({ embedded = false }: Props) {
               style={{
                 fontSize: 13, fontWeight: active ? 600 : 500,
                 color: active ? '#92400E' : '#78716C',
-                background: active ? '#FBF6EE' : 'transparent',
+                background: active ? '#F1F5F9' : 'transparent',
                 border: 'none',
-                borderBottom: active ? '2px solid #B8860B' : '2px solid transparent',
+                borderBottom: active ? '2px solid #7C3AED' : '2px solid transparent',
                 padding: '10px 14px', cursor: 'pointer', marginBottom: -1,
               }}
             >

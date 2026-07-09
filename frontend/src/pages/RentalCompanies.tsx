@@ -218,11 +218,11 @@ export default function RentalCompanies() {
               onChange={e => setSelectedMonth(e.target.value)}
               style={{
                 padding: '6px 12px',
-                border: '1px solid #E8DEC8',
+                border: '1px solid #E2E8F0',
                 borderRadius: 8,
                 fontSize: 14,
                 fontWeight: 500,
-                background: '#FBF6EE',
+                background: '#F1F5F9',
                 color: '#1C1917',
                 outline: 'none',
                 cursor: 'pointer',

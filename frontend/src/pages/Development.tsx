@@ -1,4 +1,4 @@
-ï»¿import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
@@ -58,9 +58,9 @@ function buildSalesVelocity(units: Unit[]) {
 
 function buildAgingBuckets(units: Unit[]) {
   const buckets = [
-    { range: '0â€“30 days', count: 0 },
-    { range: '31â€“60 days', count: 0 },
-    { range: '61â€“90 days', count: 0 },
+    { range: '0–30 days', count: 0 },
+    { range: '31–60 days', count: 0 },
+    { range: '61–90 days', count: 0 },
     { range: '90+ days', count: 0 },
   ];
   units
@@ -127,12 +127,12 @@ export default function Development() {
   const unitColumns: Column<Unit>[] = [
     { key: 'unit_number', label: 'Unit', sortValue: (r) => r.unit_number },
     { key: 'unit_type', label: 'Type', render: (r) => r.unit_type.replace(/_/g, ' ') },
-    { key: 'sqft', label: 'Sq Ft', render: (r) => (r.sqft ? r.sqft.toLocaleString() : 'â€”'), sortValue: (r) => safe(r.sqft) },
+    { key: 'sqft', label: 'Sq Ft', render: (r) => (r.sqft ? r.sqft.toLocaleString() : '—'), sortValue: (r) => safe(r.sqft) },
     { key: 'status', label: 'Status', render: (r) => <StatusPill status={r.status} /> },
     { key: 'list_price', label: 'List Price', render: (r) => fmtUSD(r.list_price), sortValue: (r) => safe(r.list_price) },
     { key: 'achieved_sale_price', label: 'Sale Price', render: (r) => fmtUSD(r.achieved_sale_price), sortValue: (r) => safe(r.achieved_sale_price) },
     { key: 'margin_pct', label: 'Margin', render: (r) => fmtPct(r.margin_pct), sortValue: (r) => safe(r.margin_pct) },
-    { key: 'days_on_market', label: 'DOM', render: (r) => (r.days_on_market ?? 'â€”'), sortValue: (r) => safe(r.days_on_market) },
+    { key: 'days_on_market', label: 'DOM', render: (r) => (r.days_on_market ?? '—'), sortValue: (r) => safe(r.days_on_market) },
   ];
 
   return (
@@ -185,7 +185,7 @@ export default function Development() {
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                       <YAxis allowDecimals={false} />
                       <Tooltip />
-                      <Line type="monotone" dataKey="sold" stroke="#D4AF37" strokeWidth={2} dot={{ fill: '#B8962E' }} name="Units Sold" />
+                      <Line type="monotone" dataKey="sold" stroke="#6366F1" strokeWidth={2} dot={{ fill: '#4F46E5' }} name="Units Sold" />
                     </LineChart>
                   </ResponsiveContainer>
                 )}
@@ -202,7 +202,7 @@ export default function Development() {
                       <XAxis dataKey="range" tick={{ fontSize: 11 }} />
                       <YAxis allowDecimals={false} />
                       <Tooltip />
-                      <Bar dataKey="count" fill="#B8962E" name="Units" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="count" fill="#4F46E5" name="Units" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}

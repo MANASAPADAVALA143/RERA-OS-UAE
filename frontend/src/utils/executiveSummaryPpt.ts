@@ -1,5 +1,5 @@
 /**
- * CEO Board Review PPT — section-sourced deck, EstateCFO gold/parchment palette.
+ * CEO Board Review PPT — section-sourced deck, RERA OS indigo/purple palette.
  */
 import PptxGenJSImport from 'pptxgenjs';
 
@@ -24,7 +24,7 @@ import type {
 
 const C = {
   pageBg: 'F7F1E6', cardBg: 'FBF6EE', border: 'E8DEC8',
-  gold: 'D4AF37', darkGold: 'B8860B', text: '1C1917', muted: '78716C',
+  gold: '6366F1', darkGold: '4F46E5', purple: '7C3AED', teal: '14B8A6', text: '0F172A', muted: '64748B',
   sidebar: '3A2F1F', green: '166534', amber: 'F5A623', red: 'B91C1C',
   blue: '1F6FEB', teal: '0F766E',
 };
@@ -117,7 +117,7 @@ function header(slide: PptxGenJS.Slide, title: string, subtitle: string) {
 }
 
 function footer(slide: PptxGenJS.Slide, entity: string, period: string) {
-  slide.addText(`EstateCFO · ${entity} · ${period}`, {
+  slide.addText(`RERA OS · ${entity} · ${period}`, {
     x: 0.4, y: 5.35, w: 9, h: 0.2, fontSize: 8, color: C.muted, fontFace: 'Segoe UI',
   });
 }
@@ -212,7 +212,7 @@ function slideCommentary(slide: PptxGenJS.Slide, text: string) {
 
 export function buildCeoBoardReviewFilename(entityLabel: string, periodLabel: string): string {
   const safe = (s: string) => s.replace(/[^\w\-]+/g, '_').replace(/_+/g, '_');
-  return `EstateCFO_CEOBoardReview_${safe(entityLabel)}_${safe(periodLabel)}.pptx`;
+  return `RERA_OS_CEOBoardReview_${safe(entityLabel)}_${safe(periodLabel)}.pptx`;
 }
 
 export function buildExecutiveSummaryFilename(entityLabel: string, periodLabel: string): string {
@@ -222,7 +222,7 @@ export function buildExecutiveSummaryFilename(entityLabel: string, periodLabel: 
 export async function generateCeoBoardReviewPpt(data: CeoBoardExportPayload): Promise<void> {
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_WIDE';
-  pptx.author = 'EstateCFO';
+  pptx.author = 'RERA OS';
   pptx.title = `CEO Board Review — ${data.entityLabel}`;
 
   // 1 — Title

@@ -162,7 +162,7 @@ export default function RentalCfoDashboard() {
       {/* Header */}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
         <div>
-          <p className="text-xs uppercase tracking-wider" style={{ color: '#B8860B' }}>CFO VIEW</p>
+          <p className="text-xs uppercase tracking-wider" style={{ color: '#7C3AED' }}>CFO VIEW</p>
           <h1 className="text-3xl font-bold text-gray-900 mt-1">CFO Dashboard</h1>
           <p className="text-sm text-gray-500 mt-1">{fin.companyName} · Financial Overview {years[0]}–{years[years.length - 1]}</p>
         </div>
@@ -172,7 +172,7 @@ export default function RentalCfoDashboard() {
             onChange={e => setSelectedCompanyId(e.target.value)}
             style={{
               fontSize: 13, padding: '8px 12px', borderRadius: 8,
-              border: '1px solid #E8DEC8', background: '#FBF6EE', minWidth: 220,
+              border: '1px solid #E2E8F0', background: '#F1F5F9', minWidth: 220,
             }}
           >
             {companies.map(c => (

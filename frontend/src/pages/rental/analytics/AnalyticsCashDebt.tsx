@@ -9,12 +9,12 @@ import type { AnalyticsSnapshot, MonthlyTrendPoint } from '../../../hooks/useRen
 function CashTrendChart({ data }: { data: MonthlyTrendPoint[] }) {
   const chartData = data.map(d => ({ month: shortMonthLabel(d.month), cash: d.cash }));
   return (
-    <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '20px 24px' }}>
+    <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: '20px 24px' }}>
       <div style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Cash Balance Trend</div>
       <div style={{ fontSize: 12, color: '#78716C', marginBottom: 16 }}>Point-in-time balance per month (not summed)</div>
       <ResponsiveContainer width="100%" height={280}>
         <LineChart data={chartData} margin={{ left: 8, right: 16, top: 8, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
           <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#78716C' }} />
           <YAxis tick={{ fontSize: 10, fill: '#78716C' }} tickFormatter={v => fmtAnalyticsCurrency(v)} width={64} />
           <Tooltip formatter={(v: number) => fmtAnalyticsCurrency(v)} />
@@ -46,11 +46,11 @@ function LeverageTable({ selected }: { selected: AnalyticsSnapshot }) {
   ];
 
   return (
-    <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '20px 24px', overflowX: 'auto' }}>
+    <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: '20px 24px', overflowX: 'auto' }}>
       <div style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 16 }}>Leverage Ratios</div>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
-          <tr style={{ borderBottom: '1px solid #E8DEC8', textAlign: 'left' }}>
+          <tr style={{ borderBottom: '1px solid #E2E8F0', textAlign: 'left' }}>
             {['Metric', 'Value', 'Status', 'Target', 'Data Notes'].map(h => (
               <th key={h} style={{ padding: '8px 12px', fontSize: 11, fontWeight: 600, color: '#78716C', textTransform: 'uppercase' }}>{h}</th>
             ))}

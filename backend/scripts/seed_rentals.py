@@ -59,81 +59,39 @@ def seed():
             return
 
         COMPANIES = [
-            ("Palm Residency",          "123 Palm Ave, Miami FL",       "residential"),
-            ("Maple Gardens",           "45 Maple St, Orlando FL",      "residential"),
-            ("Sunset Villas",           "88 Sunset Blvd, Tampa FL",     "residential"),
-            ("Cedar Heights",           "200 Cedar Rd, Jacksonville FL","residential"),
-            ("Oak Park Residences",     "12 Oak Park Dr, Boca Raton FL","residential"),
-            ("Willow Creek Apts",       "77 Willow Ln, Sarasota FL",    "residential"),
-            ("Heritage Homes",          "5 Heritage Way, Naples FL",    "residential"),
-            ("Lakefront Suites",        "300 Lake Shore Dr, Clearwater FL","residential"),
-            ("Greenview Flats",         "19 Greenview Ct, Fort Myers FL","residential"),
-            ("Riverside Court",         "55 Riverside Rd, Pensacola FL","residential"),
+            ("Marina Heights Residences", "Marina Walk, Dubai Marina, Dubai", "residential"),
+            ("Palm Vista Apartments",     "Palm Jumeirah Crescent, Dubai",    "residential"),
+            ("Business Bay Tower",          "Sheikh Zayed Rd, Business Bay, Dubai", "mixed_use"),
+            ("JBR Coastal Suites",          "The Walk, JBR, Dubai",             "residential"),
         ]
 
-        # unit configs: (unit_number, status, monthly_rent, status_changed_at_offset_days)
-        # Per company — 6 units each
-        # occupied = None offset (lease is current)
-        # vacant = offset days since vacant
-        # notice = ongoing
-
         UNIT_CONFIGS = [
-            # C1 Palm Residency — 5 occupied, 1 vacant
-            [("A-101","occupied",2400,None),("A-102","occupied",2250,None),("A-103","occupied",2600,None),
-             ("A-104","occupied",2350,None),("A-105","occupied",2500,None),("A-106","vacant",2200,45)],
-            # C2 Maple Gardens — 6 occupied
-            [("B-101","occupied",2300,None),("B-102","occupied",2450,None),("B-103","occupied",2150,None),
-             ("B-104","occupied",2550,None),("B-105","occupied",2400,None),("B-106","occupied",2250,None)],
-            # C3 Sunset Villas — 4 occupied, 1 vacant, 1 notice
-            [("C-101","occupied",2700,None),("C-102","occupied",2600,None),("C-103","vacant",2500,20),
-             ("C-104","occupied",2650,None),("C-105","notice",2800,None),("C-106","occupied",2750,None)],
-            # C4 Cedar Heights — 5 occupied, 1 notice
-            [("D-101","occupied",2200,None),("D-102","occupied",2350,None),("D-103","occupied",2100,None),
-             ("D-104","notice",2400,None),("D-105","occupied",2300,None),("D-106","occupied",2250,None)],
-            # C5 Oak Park — 6 occupied
-            [("E-101","occupied",2600,None),("E-102","occupied",2550,None),("E-103","occupied",2700,None),
-             ("E-104","occupied",2650,None),("E-105","occupied",2500,None),("E-106","occupied",2750,None)],
-            # C6 Willow Creek — 4 occupied, 1 vacant, 1 notice
-            [("F-101","occupied",2450,None),("F-102","vacant",2300,30),("F-103","occupied",2400,None),
-             ("F-104","occupied",2350,None),("F-105","notice",2500,None),("F-106","occupied",2450,None)],
-            # C7 Heritage Homes — 5 occupied, 1 vacant
-            [("G-101","occupied",2800,None),("G-102","occupied",2750,None),("G-103","vacant",2600,15),
-             ("G-104","occupied",2700,None),("G-105","occupied",2650,None),("G-106","occupied",2800,None)],
-            # C8 Lakefront Suites — 6 occupied
-            [("H-101","occupied",2500,None),("H-102","occupied",2600,None),("H-103","occupied",2450,None),
-             ("H-104","occupied",2550,None),("H-105","occupied",2400,None),("H-106","occupied",2500,None)],
-            # C9 Greenview Flats — 4 occupied, 1 vacant, 1 notice
-            [("I-101","occupied",2150,None),("I-102","occupied",2200,None),("I-103","vacant",2100,60),
-             ("I-104","notice",2250,None),("I-105","occupied",2300,None),("I-106","occupied",2200,None)],
-            # C10 Riverside Court — 5 occupied, 1 notice
-            [("J-101","occupied",2350,None),("J-102","occupied",2400,None),("J-103","occupied",2300,None),
-             ("J-104","occupied",2450,None),("J-105","notice",2500,None),("J-106","occupied",2350,None)],
+            # Marina Heights — 5 occupied, 1 vacant
+            [("M-101","occupied",12500,None),("M-102","occupied",11800,None),("M-103","occupied",13200,None),
+             ("M-104","occupied",12100,None),("M-105","occupied",12800,None),("M-106","vacant",11500,45)],
+            # Palm Vista — 5 occupied, 1 notice
+            [("P-201","occupied",18500,None),("P-202","occupied",19200,None),("P-203","occupied",17800,None),
+             ("P-204","occupied",18800,None),("P-205","notice",19500,None),("P-206","occupied",18200,None)],
+            # Business Bay — 4 occupied, 1 vacant, 1 notice
+            [("B-301","occupied",14200,None),("B-302","occupied",13800,None),("B-303","vacant",13500,20),
+             ("B-304","occupied",14500,None),("B-305","notice",15000,None),("B-306","occupied",14100,None)],
+            # JBR Coastal — 6 occupied
+            [("J-401","occupied",16200,None),("J-402","occupied",15800,None),("J-403","occupied",16500,None),
+             ("J-404","occupied",16000,None),("J-405","occupied",15500,None),("J-406","occupied",16800,None)],
         ]
 
         TENANT_NAMES = [
-            ["Alice Johnson","Bob Martinez","Carol Lee","David Kim","Eve Patel"],
-            ["Frank Chen","Grace Osei","Henry Walsh","Ivy Sharma","Jack Brown","Karen Liu"],
-            ["Liam Torres","Mia Nguyen","Noah Davis","Olivia Taylor","Paul Robinson"],
-            ["Quinn Smith","Rachel Green","Sam White","Tina Adams","Uma Scott","Victor Reed"],
-            ["Wendy Hill","Xander Barnes","Yara Flores","Zoe Morris","Aaron King","Beth Clark"],
-            ["Carlos Diaz","Diana Singh","Ethan Ross","Fiona Burke","Gina Parks"],
-            ["Hugo Grant","Iris Fox","Jason Cole","Kelly Stone","Leo Chan","Maya Patel"],
-            ["Nina Walsh","Omar Jafri","Priya Mehta","Raj Kumar","Sara Lim","Tom Evans"],
-            ["Uma Rajan","Vijay Nair","Wanda Cruz","Xavier Hunt","Yuna Park"],
-            ["Zara Ahmed","Aryan Shah","Bela Kapoor","Chris Wong","Dana Miller"],
+            ["Layla Al Mansoori","Omar Hassan","Fatima Rahman","James Cooper","Sara Malik"],
+            ["Ahmed Farouk","Priya Nair","Daniel Brooks","Meera Kapoor","Hassan Ali","Nina Petrova"],
+            ["Ravi Sharma","Emily Chen","Khalid Ibrahim","Sophie Laurent","Marcus Lee"],
+            ["Yasmin Okonkwo","Tom Bradley","Aisha Khan","Lucas Fernandez","Olivia Grant","Noah Singh"],
         ]
 
         OWNERSHIP = [
-            [("Arun Mehta",0.60,"general_partner"),("Priya Shah",0.40,"limited_partner")],
-            [("Arun Mehta",0.50,"general_partner"),("Ravi Kumar",0.50,"limited_partner")],
-            [("Priya Shah",0.70,"general_partner"),("Ravi Kumar",0.30,"limited_partner")],
-            [("Arun Mehta",0.40,"general_partner"),("Priya Shah",0.30,"limited_partner"),("Ravi Kumar",0.30,"limited_partner")],
-            [("Priya Shah",0.40,"limited_partner"),("Vikram Singh",0.60,"general_partner")],
-            [("Ravi Kumar",0.50,"general_partner"),("Vikram Singh",0.50,"limited_partner")],
-            [("Arun Mehta",0.50,"limited_partner"),("Vikram Singh",0.50,"general_partner")],
-            [("Ravi Kumar",0.60,"general_partner"),("Vikram Singh",0.40,"limited_partner")],
-            [("Arun Mehta",0.45,"limited_partner"),("Priya Shah",0.55,"general_partner")],
-            [("Ravi Kumar",0.65,"general_partner"),("Vikram Singh",0.35,"limited_partner")],
+            [("Gulf Horizon Partners",0.60,"general_partner"),("Emirates Capital LLC",0.40,"limited_partner")],
+            [("Gulf Horizon Partners",0.55,"general_partner"),("Marina RE Holdings",0.45,"limited_partner")],
+            [("Emirates Capital LLC",0.50,"general_partner"),("Dubai Creek Investors",0.50,"limited_partner")],
+            [("Marina RE Holdings",0.65,"general_partner"),("Dubai Creek Investors",0.35,"limited_partner")],
         ]
 
         EXPENSE_DATA = [
@@ -153,14 +111,10 @@ def seed():
         # 3 months back (Mar 2026) => 61-90
         # 5 months back (Jan 2026) => 90+
         ARREARS_UNITS = [
-            (0, 0, 1),  # Palm A-101 — May unpaid (0-30)
-            (1, 1, 1),  # Maple B-102 — May unpaid (0-30)
-            (3, 2, 1),  # Cedar D-103 — May unpaid (0-30)
-            (4, 0, 2),  # Oak E-101 — Apr unpaid (31-60)
-            (5, 3, 2),  # Willow F-104 — Apr unpaid (31-60)
-            (6, 1, 3),  # Heritage G-102 — Mar unpaid (61-90)
-            (7, 4, 3),  # Lakefront H-105 — Mar unpaid (61-90)
-            (9, 0, 5),  # Riverside J-101 — Jan unpaid (90+)
+            (0, 0, 1),  # Marina M-101 — May unpaid (0-30)
+            (1, 1, 1),  # Palm P-202 — May unpaid (0-30)
+            (2, 2, 2),  # Business Bay B-303 — Apr unpaid (31-60)
+            (3, 4, 3),  # JBR J-405 — Mar unpaid (61-90)
         ]
         arrears_set = {(co_i, u_i): mo for co_i, u_i, mo in ARREARS_UNITS}
 
@@ -311,9 +265,9 @@ def seed():
         total_units = sum(len(cfg) for cfg in UNIT_CONFIGS)
         total_occupied = sum(sum(1 for u in cfg if u[1] in ("occupied", "notice")) for cfg in UNIT_CONFIGS)
         total_vacant = sum(sum(1 for u in cfg if u[1] == "vacant") for cfg in UNIT_CONFIGS)
-        print(f"Seeded 10 companies, 10 properties, {total_units} units ({total_occupied} occupied/notice, {total_vacant} vacant)")
+        print(f"Seeded {len(COMPANIES)} companies, {len(COMPANIES)} properties, {total_units} units ({total_occupied} occupied/notice, {total_vacant} vacant)")
         print(f"  6 months of invoices + collections seeded, {len(ARREARS_UNITS)} units with arrears")
-        print(f"  60 expense records, 21 ownership records (4 partners across 10 companies)")
+        print(f"  {len(COMPANIES) * len(EXPENSE_DATA)} expense records, {sum(len(o) for o in OWNERSHIP)} ownership records")
     finally:
         db.close()
 

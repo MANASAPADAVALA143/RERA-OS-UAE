@@ -180,7 +180,7 @@ const MODULES: ModuleDef[] = [
       const syncCell: ReactNode = (
         <div>
           <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
-            style={{ background: 'rgba(212,175,55,0.15)', color: '#92400E' }}>
+            style={{ background: 'rgba(99,102,241,0.15)', color: '#92400E' }}>
             {viewMonth}
           </span>
           {c.last_sync_month && c.last_sync_month !== viewMonth && (
@@ -523,7 +523,7 @@ function InlineSuites({
         <div className="bg-blue-50/50 px-6 py-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <div className="w-1 h-5 rounded-full" style={{ background: '#D4AF37' }} />
+              <div className="w-1 h-5 rounded-full" style={{ background: '#6366F1' }} />
               <span className="text-sm font-semibold text-gray-700">
                 Property Name — <span className="font-normal text-gray-500">{companyName}</span>
               </span>
@@ -536,7 +536,7 @@ function InlineSuites({
             {canWrite && (
               <button onClick={() => onAdd(companyId, companyName)}
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors"
-                style={{ background: '#161310', color: '#D4AF37' }}>
+                style={{ background: '#1E1B4B', color: '#6366F1' }}>
                 <Plus size={12} /> Add Property Name
               </button>
             )}
@@ -591,7 +591,7 @@ function InlineSuites({
                           <button
                             onClick={() => toggleUnits(s.id)}
                             className="inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded transition-colors"
-                            style={{ color: '#D4AF37' }}
+                            style={{ color: '#6366F1' }}
                             title="Click to show/hide units"
                           >
                             {s.unit_count}
@@ -622,7 +622,7 @@ function InlineSuites({
                             <div className="bg-indigo-50/30 px-6 py-3">
                               <div className="flex items-center justify-between mb-2">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <div className="w-0.5 h-4 rounded-full" style={{ background: '#B8962E' }} />
+                                  <div className="w-0.5 h-4 rounded-full" style={{ background: '#4F46E5' }} />
                                   <span className="text-xs font-semibold text-gray-600">
                                     Units — {s.property_name}
                                   </span>
@@ -646,7 +646,7 @@ function InlineSuites({
                                           </span>
                                         )}
                                         {tot - occ - vac > 0 && (
-                                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(212,175,55,0.12)', color: '#92400E' }}>
+                                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(99,102,241,0.12)', color: '#92400E' }}>
                                             {tot - occ - vac} other
                                           </span>
                                         )}
@@ -658,18 +658,18 @@ function InlineSuites({
                                   <button
                                     onClick={() => { setAddingUnitSuiteId(s.id); setNewUnitNum(''); setNewUnitRent(''); setNewUnitStatus('vacant'); }}
                                     className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg font-medium transition-colors"
-                                    style={{ background: '#D4AF37', color: '#161310' }}>
+                                    style={{ background: '#6366F1', color: '#1E1B4B' }}>
                                     <Plus size={10} /> Add Unit
                                   </button>
                                 )}
                               </div>
                               {!unitsMap[s.id] ? (
                                 <div className="flex items-center gap-2 py-3">
-                                  <div className="w-4 h-4 border-2 border-gray-200 rounded-full animate-spin" style={{ borderTopColor: '#D4AF37' }} />
+                                  <div className="w-4 h-4 border-2 border-gray-200 rounded-full animate-spin" style={{ borderTopColor: '#6366F1' }} />
                                   <span className="text-xs text-gray-400">Loading units…</span>
                                 </div>
                               ) : unitsMap[s.id].length === 0 && addingUnitSuiteId !== s.id ? (
-                                <p className="text-xs text-gray-400 py-2">No units found for this property. Click <span className="font-medium" style={{ color: '#D4AF37' }}>+ Add Unit</span> to create one.</p>
+                                <p className="text-xs text-gray-400 py-2">No units found for this property. Click <span className="font-medium" style={{ color: '#6366F1' }}>+ Add Unit</span> to create one.</p>
                               ) : (
                                 <div className="bg-white rounded-lg border border-indigo-100 overflow-hidden">
                                   <table className="w-full text-xs">
@@ -1180,7 +1180,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
         const syncedCount = companies.filter(c => c.last_sync_month || c.monthly_rent_data).length;
         return (
           <div className="flex items-center justify-between px-4 py-2.5 rounded-xl"
-            style={{ background: 'rgba(212,175,55,0.10)', border: '1px solid rgba(212,175,55,0.30)' }}>
+            style={{ background: 'rgba(99,102,241,0.10)', border: '1px solid rgba(99,102,241,0.30)' }}>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#92400E' }}>Live Sync</span>
               <span className="text-sm font-semibold" style={{ color: '#1C1917' }}>{importMonth}</span>
@@ -1300,7 +1300,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                   const isExpanded = expandedSuiteId === c.id;
                   return (
                     <Fragment key={c.id}>
-                      <tr className={`border-b border-gray-50 transition-colors ${isExpanded ? 'bg-blue-50/30' : 'hover:bg-gray-50/60'}`} style={isExpanded ? { background: 'rgba(212,175,55,0.05)' } : {}}>
+                      <tr className={`border-b border-gray-50 transition-colors ${isExpanded ? 'bg-blue-50/30' : 'hover:bg-gray-50/60'}`} style={isExpanded ? { background: 'rgba(99,102,241,0.05)' } : {}}>
                         <td className="px-4 py-3 text-sm text-gray-400">{idx + 1}</td>
                         {cells.map((cell, ci) => (
                           <td key={ci} className={`px-4 py-3 ${ci === 0 ? 'text-base font-semibold text-gray-900' : 'text-sm text-gray-600'}`}>
@@ -1315,8 +1315,8 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                               onClick={() => setExpandedSuiteId(isExpanded ? null : c.id)}
                               className="flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors"
                               style={isExpanded
-                                ? { background: '#D4AF37', color: '#161310', borderColor: '#D4AF37' }
-                                : { color: '#D4AF37', borderColor: 'rgba(212,175,55,0.35)', background: 'rgba(212,175,55,0.08)' }}>
+                                ? { background: '#6366F1', color: '#1E1B4B', borderColor: '#6366F1' }
+                                : { color: '#6366F1', borderColor: 'rgba(99,102,241,0.35)', background: 'rgba(99,102,241,0.08)' }}>
                               {isExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />} Property Name
                             </button>
                           </td>
@@ -1519,7 +1519,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
             <div className="grid grid-cols-4 divide-x divide-gray-100 border-b border-gray-100 flex-shrink-0">
               {[
                 { label: 'Companies to create', value: importPreview.summary.companies_to_create, color: '#059669' },
-                { label: 'Matched to existing', value: importPreview.summary.companies_to_match, color: '#D4AF37' },
+                { label: 'Matched to existing', value: importPreview.summary.companies_to_match, color: '#6366F1' },
                 { label: 'Units to create',     value: importPreview.summary.units_to_create,    color: '#3B82F6' },
                 { label: 'Units already exist', value: importPreview.summary.units_to_skip,      color: '#9CA3AF' },
               ].map(s => (
@@ -1552,7 +1552,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                           {co.action === 'create' ? (
                             <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(5,150,105,0.12)', color: '#059669' }}>CREATE</span>
                           ) : (
-                            <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(212,175,55,0.15)', color: '#92400E' }}>MATCH</span>
+                            <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(99,102,241,0.15)', color: '#92400E' }}>MATCH</span>
                           )}
                           {co.target_month && (
                             <span className="text-xs text-gray-400">· {co.target_month}</span>
@@ -1594,7 +1594,7 @@ export default function CompanyRegistry({ embedded = false }: Props) {
                                     <span className="px-1.5 py-0.5 rounded text-gray-400">Skip</span>
                                   )}
                                   {u.action === 'update_rent' && (
-                                    <span className="px-1.5 py-0.5 rounded font-semibold" style={{ background: 'rgba(212,175,55,0.15)', color: '#92400E' }}>Fill rent</span>
+                                    <span className="px-1.5 py-0.5 rounded font-semibold" style={{ background: 'rgba(99,102,241,0.15)', color: '#92400E' }}>Fill rent</span>
                                   )}
                                 </td>
                                 <td className="py-1.5">

@@ -37,7 +37,7 @@ const NAV = [
 ];
 
 // ── Sub-nav shared styles ──────────────────────────────────────────────────
-const subActive   = { background: 'rgba(212,175,55,0.18)', color: '#D4AF37' } as const;
+const subActive   = { background: 'rgba(99,102,241,0.18)', color: '#6366F1' } as const;
 const subInactive = { color: '#9C9893' } as const;
 const subBase     = 'w-full flex items-center gap-2 pl-7 pr-3 py-1.5 rounded-lg text-base transition-colors text-left hover:bg-white/5';
 
@@ -62,7 +62,7 @@ function SidebarInner() {
   const currentPage = NAV.find(n => location.pathname.startsWith(n.to))?.label ?? 'All in one MIS';
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: '#ECE9E3' }}>
+    <div className="flex h-screen overflow-hidden" style={{ background: '#EEF2FF' }}>
 
       {/* ── Mobile backdrop ───────────────────────────────────────────── */}
       {sidebarOpen && (
@@ -83,14 +83,14 @@ function SidebarInner() {
           md:relative md:translate-x-0 md:shrink-0
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
-        style={{ background: '#161310', borderRight: '1px solid rgba(212,175,55,0.15)' }}
+        style={{ background: '#1E1B4B', borderRight: '1px solid rgba(99,102,241,0.2)' }}
       >
         {/* Brand + mobile close button */}
         <div className="flex items-center justify-between p-5"
-          style={{ borderBottom: '1px solid rgba(212,175,55,0.12)' }}>
+          style={{ borderBottom: '1px solid rgba(99,102,241,0.12)' }}>
           <div className="min-w-0">
-            <h1 className="text-xl font-bold tracking-tight" style={{ color: '#F5F5F4' }}>All in one MIS</h1>
-            <p className="text-xs mt-1 truncate" style={{ color: '#D4AF37' }}>{profile?.company_name}</p>
+            <h1 className="text-xl font-bold tracking-tight" style={{ color: '#F5F5F4' }}>RERA OS</h1>
+            <p className="text-xs mt-1 truncate" style={{ color: '#A5B4FC' }}>{profile?.company_name ?? 'Demo Portfolio'}</p>
           </div>
           <button
             onClick={closeSidebar}
@@ -110,7 +110,7 @@ function SidebarInner() {
                 className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-base transition-colors hover:bg-white/5"
                 style={({ isActive }) =>
                   isActive
-                    ? { background: '#D4AF37', color: '#161310', fontWeight: 600 }
+                    ? { background: '#6366F1', color: '#fff', fontWeight: 600 }
                     : { color: '#9C9893' }
                 }
               >
@@ -125,7 +125,7 @@ function SidebarInner() {
                     <div key={id}>
                       {groupLabel && (
                         <p className="pl-7 pr-3 pt-3 pb-1 text-sm uppercase tracking-wider font-medium"
-                          style={{ color: '#D4AF37', opacity: 0.7 }}>
+                          style={{ color: '#6366F1', opacity: 0.7 }}>
                           ─── {groupLabel} ───
                         </p>
                       )}
@@ -153,7 +153,7 @@ function SidebarInner() {
                     <div key={id}>
                       {groupLabel && (
                         <p className="pl-7 pr-3 pt-2 pb-0.5 text-sm uppercase tracking-wider font-medium"
-                          style={{ color: '#D4AF37', opacity: 0.7 }}>
+                          style={{ color: '#6366F1', opacity: 0.7 }}>
                           ─── {groupLabel} ───
                         </p>
                       )}
@@ -179,14 +179,14 @@ function SidebarInner() {
                       onChange={(e) => setProjectId(e.target.value)}
                       className="w-full px-2 py-1.5 rounded-md text-xs focus:outline-none focus:ring-1"
                       style={{
-                        background: 'rgba(212,175,55,0.08)',
-                        border: '1px solid rgba(212,175,55,0.2)',
+                        background: 'rgba(99,102,241,0.08)',
+                        border: '1px solid rgba(99,102,241,0.2)',
                         color: '#F5F5F4',
                       }}
                     >
                       {projects.length === 0 && <option value="">No projects</option>}
                       {projects.map((p) => (
-                        <option key={p.id} value={p.id} style={{ background: '#161310', color: '#F5F5F4' }}>
+                        <option key={p.id} value={p.id} style={{ background: '#1E1B4B', color: '#F5F5F4' }}>
                           {p.project_code ? `${p.project_code} — ` : ''}{p.project_name}
                         </option>
                       ))}
@@ -210,7 +210,7 @@ function SidebarInner() {
         </nav>
 
         {/* Footer */}
-        <div className="p-4 space-y-3" style={{ borderTop: '1px solid rgba(212,175,55,0.12)' }}>
+        <div className="p-4 space-y-3" style={{ borderTop: '1px solid rgba(99,102,241,0.12)' }}>
           <div className="text-base">
             <p className="font-medium truncate" style={{ color: '#F5F5F4' }}>{profile?.email}</p>
             <Badge variant="accent">{profile?.role}</Badge>
@@ -239,12 +239,12 @@ function SidebarInner() {
         {/* Mobile top bar (hidden on md+) */}
         <header
           className="md:hidden flex items-center gap-3 px-4 shrink-0"
-          style={{ height: 48, background: '#161310', borderBottom: '1px solid rgba(212,175,55,0.15)' }}
+          style={{ height: 48, background: '#1E1B4B', borderBottom: '1px solid rgba(99,102,241,0.15)' }}
         >
           <button
             onClick={() => setSidebarOpen(true)}
             className="p-1 rounded hover:bg-white/10 transition-colors"
-            style={{ color: '#D4AF37' }}
+            style={{ color: '#6366F1' }}
             aria-label="Open menu"
           >
             <Menu size={22} />
@@ -255,7 +255,7 @@ function SidebarInner() {
         </header>
 
         {/* Main content — full width when sidebar is hidden on mobile */}
-        <main className="dark-app flex-1 overflow-y-auto p-4 lg:p-6" style={{ background: '#ECE9E3' }}>
+        <main className="dark-app flex-1 overflow-y-auto p-4 lg:p-6" style={{ background: '#EEF2FF' }}>
           <Outlet />
         </main>
       </div>

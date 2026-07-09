@@ -34,18 +34,18 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: '#161310' }}>
+      style={{ background: '#1E1B4B' }}>
       <div className="w-full max-w-sm p-8 rounded-2xl"
-        style={{ background: '#1C1917', border: '1px solid rgba(212,175,55,0.25)', boxShadow: '0 24px 60px rgba(0,0,0,0.5)' }}>
+        style={{ background: '#1C1917', border: '1px solid rgba(99,102,241,0.25)', boxShadow: '0 24px 60px rgba(0,0,0,0.5)' }}>
 
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, #D4AF37, #B8962E)' }}>
-            <span className="font-bold text-lg" style={{ color: '#161310' }}>E</span>
+            style={{ background: 'linear-gradient(135deg, #6366F1, #7C3AED)' }}>
+            <span className="font-bold text-lg" style={{ color: '#fff' }}>R</span>
           </div>
-          <h1 className="text-xl font-bold" style={{ color: '#F5F5F4' }}>EstateCFO</h1>
-          <p className="text-sm mt-1" style={{ color: '#9C9893' }}>Real estate financial intelligence</p>
+          <h1 className="text-xl font-bold" style={{ color: '#F5F5F4' }}>RERA OS</h1>
+          <p className="text-sm mt-1" style={{ color: '#A5B4FC' }}>Public demo · UAE rental portfolio</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -62,11 +62,11 @@ export default function Login() {
               autoComplete="email"
               className="w-full text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2"
               style={{
-                background: '#161310',
+                background: '#1E1B4B',
                 border: '1px solid #44403C',
                 color: '#F5F5F4',
                 // @ts-expect-error - CSS custom prop
-                '--tw-ring-color': '#D4AF37',
+                '--tw-ring-color': '#6366F1',
               }}
             />
           </div>
@@ -84,7 +84,7 @@ export default function Login() {
                 required
                 autoComplete="current-password"
                 className="w-full text-sm rounded-xl px-3 py-2.5 pr-10 focus:outline-none focus:ring-2"
-                style={{ background: '#161310', border: '1px solid #44403C', color: '#F5F5F4' }}
+                style={{ background: '#1E1B4B', border: '1px solid #44403C', color: '#F5F5F4' }}
               />
               <button
                 type="button"
@@ -109,7 +109,7 @@ export default function Login() {
             type="submit"
             disabled={loading}
             className="w-full text-sm py-2.5 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-            style={{ background: '#D4AF37', color: '#161310' }}
+            style={{ background: '#6366F1', color: '#1E1B4B' }}
           >
             {loading ? 'Signing in...' : 'Sign in'}
           </button>

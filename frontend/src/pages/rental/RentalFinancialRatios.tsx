@@ -129,7 +129,7 @@ function LiveDataPanel({ fin, activeYear, totalDebt }: { fin: LiveFin; activeYea
   ];
 
   return (
-    <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: 20 }} className="space-y-4">
+    <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20 }} className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#92400E' }}>
@@ -143,7 +143,7 @@ function LiveDataPanel({ fin, activeYear, totalDebt }: { fin: LiveFin; activeYea
           {fin.years.map(y => (
             <span key={y} style={{
               fontSize: 11, background: '#F7F1E6', color: '#78716C',
-              border: '1px solid #E8DEC8', borderRadius: 20, padding: '3px 10px', fontWeight: 600,
+              border: '1px solid #E2E8F0', borderRadius: 20, padding: '3px 10px', fontWeight: 600,
             }}>
               {y}
             </span>
@@ -165,21 +165,21 @@ function LiveDataPanel({ fin, activeYear, totalDebt }: { fin: LiveFin; activeYea
       </div>
 
       {trendRows.length >= 2 && (
-        <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: 16 }}>
+        <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: 16 }}>
           <p style={{ fontSize: 13, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Multi-Year P&amp;L Trend</p>
           <p style={{ fontSize: 12, color: '#A8A29E', marginBottom: 12 }}>Revenue, NOI, and Net Income across all available years</p>
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={trendRows} margin={{ left: 20, right: 10, top: 4, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
               <XAxis dataKey="year" tick={{ fontSize: 11, fill: '#78716C' }} />
               <YAxis tickFormatter={v => fmtV(v as number)} tick={{ fontSize: 10, fill: '#78716C' }} />
               <Tooltip
                 formatter={(v: number) => fmtV(v)}
-                contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 }}
+                contentStyle={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13 }}
               />
               <Legend wrapperStyle={{ fontSize: 12, color: '#78716C' }} />
-              <Line type="monotone" dataKey="Revenue" stroke="#D4AF37" strokeWidth={2} dot={{ r: 3, fill: '#D4AF37' }} />
-              <Line type="monotone" dataKey="NOI" stroke="#B8860B" strokeWidth={2} dot={{ r: 3, fill: '#B8860B' }} />
+              <Line type="monotone" dataKey="Revenue" stroke="#6366F1" strokeWidth={2} dot={{ r: 3, fill: '#6366F1' }} />
+              <Line type="monotone" dataKey="NOI" stroke="#7C3AED" strokeWidth={2} dot={{ r: 3, fill: '#7C3AED' }} />
               <Line type="monotone" dataKey="Net Income" stroke="#8B6914" strokeWidth={1.5} strokeDasharray="5 3" dot={{ r: 3, fill: '#8B6914' }} />
             </LineChart>
           </ResponsiveContainer>
@@ -281,13 +281,13 @@ function ProfTrendChart({ data }: { data: ProfPt[] }) {
   return (
     <ResponsiveContainer width="100%" height={200}>
       <LineChart data={data} margin={{ left: 0, right: 12, top: 8, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+        <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
         <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#6B7280' }} axisLine={false} tickLine={false} />
         <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} tickFormatter={v => `${v}%`} axisLine={false} tickLine={false} width={38} />
-        <Tooltip contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 12 }} formatter={(v: number) => [`${v?.toFixed(1)}%`]} />
+        <Tooltip contentStyle={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 12 }} formatter={(v: number) => [`${v?.toFixed(1)}%`]} />
         <Legend wrapperStyle={{ fontSize: 11 }} />
         <Line type="monotone" dataKey="noi"    name="NOI Margin"        stroke="#166534" strokeWidth={2} dot={{ r: 3 }} connectNulls />
-        <Line type="monotone" dataKey="ebitda" name="EBITDA Margin"     stroke="#D4AF37" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+        <Line type="monotone" dataKey="ebitda" name="EBITDA Margin"     stroke="#6366F1" strokeWidth={2} dot={{ r: 3 }} connectNulls />
         <Line type="monotone" dataKey="npm"    name="Net Profit Margin" stroke="#1C1917" strokeWidth={2} dot={{ r: 3 }} strokeDasharray="5 3" connectNulls />
       </LineChart>
     </ResponsiveContainer>
@@ -299,10 +299,10 @@ function RetTrendChart({ data }: { data: RetPt[] }) {
   return (
     <ResponsiveContainer width="100%" height={200}>
       <LineChart data={data} margin={{ left: 0, right: 12, top: 8, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+        <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
         <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#6B7280' }} axisLine={false} tickLine={false} />
         <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} tickFormatter={v => `${v}%`} axisLine={false} tickLine={false} width={38} />
-        <Tooltip contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 12 }} formatter={(v: number) => [`${v?.toFixed(1)}%`]} />
+        <Tooltip contentStyle={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 12 }} formatter={(v: number) => [`${v?.toFixed(1)}%`]} />
         <Legend wrapperStyle={{ fontSize: 11 }} />
         <Line type="monotone" dataKey="roa" name="Return on Assets" stroke="#0F766E" strokeWidth={2} dot={{ r: 3 }} connectNulls />
         <Line type="monotone" dataKey="roe" name="Return on Equity" stroke="#4E79A7" strokeWidth={2} dot={{ r: 3 }} connectNulls />
@@ -322,7 +322,7 @@ const DEFAULT_LOAN_DATA: any[] = [];
 const fmt$ = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 
-function Spark({ data, color = '#B8860B' }: { data: number[]; color?: string }) {
+function Spark({ data, color = '#7C3AED' }: { data: number[]; color?: string }) {
   const pts = data.map((v, i) => ({ v, i }));
   return (
     <div className="h-7 w-full mt-2 opacity-60">
@@ -366,7 +366,7 @@ function RatioCardComp({
             title="Show calculation breakdown (admin)"
             style={{
               position: 'absolute', top: 6, right: 6, width: 22, height: 22,
-              borderRadius: '50%', border: '1px solid #E8DEC8', background: '#fff',
+              borderRadius: '50%', border: '1px solid #E2E8F0', background: '#fff',
               color: '#78716C', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
           >
@@ -617,14 +617,14 @@ function ProfitabilityTab({ coData, trendData, liveCards, liveFin, auditProps }:
 
       {/* ── NEW: Trend charts ──────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '20px 24px' }}>
+        <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: '20px 24px' }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: '#1C1917' }}>Profitability Trend</div>
           <div style={{ fontSize: 12, color: '#6B7280', marginTop: 3, marginBottom: 16 }}>
             NOI Margin · EBITDA Margin · Net Profit Margin over time
           </div>
           <ProfTrendChart data={profTrend} />
         </div>
-        <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '20px 24px' }}>
+        <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: '20px 24px' }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: '#1C1917' }}>Returns Trend</div>
           <div style={{ fontSize: 12, color: '#6B7280', marginTop: 3, marginBottom: 16 }}>
             Return on Assets · Return on Equity · Cash-on-Cash Return
@@ -720,14 +720,14 @@ function buildLiqTrendFromLive(fin: LiveFin): { liqTrend: LiqPt[]; cashTrend: { 
   return { liqTrend: pts, cashTrend, wcData };
 }
 
-const LIQ_PANEL = { background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '16px 20px' } as const;
+const LIQ_PANEL = { background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: '16px 20px' } as const;
 const LIQ_H3    = { fontSize: 13, color: '#1C1917', fontWeight: 600, marginBottom: 16 } as const;
 
 function LiqRatiosTrendChart({ data }: { data: LiqPt[] }) {
   if (!data.length) return null;
   const LINES: { key: keyof LiqPt; label: string; color: string }[] = [
     { key: 'currR',  label: 'Current Ratio',  color: '#0F766E' },
-    { key: 'quickR', label: 'Quick Ratio',    color: '#D4AF37' },
+    { key: 'quickR', label: 'Quick Ratio',    color: '#6366F1' },
     { key: 'cashR',  label: 'Cash Ratio',     color: '#C0392B' },
     { key: 'ocfR',   label: 'OCF Ratio',      color: '#4E79A7' },
   ];
@@ -736,7 +736,7 @@ function LiqRatiosTrendChart({ data }: { data: LiqPt[] }) {
       <h3 style={LIQ_H3}>Liquidity Ratios — Trend</h3>
       <ResponsiveContainer width="100%" height={200}>
         <ComposedChart data={data} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
           <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#78716C' }} />
           <YAxis tick={{ fontSize: 10, fill: '#78716C' }} tickFormatter={v => `${v}x`} width={36} />
           <Tooltip formatter={(v: number, name: string) => [`${(+v).toFixed(2)}x`, name]} contentStyle={{ fontSize: 11 }} />
@@ -763,18 +763,18 @@ function LiqRatiosTrendChart({ data }: { data: LiqPt[] }) {
 }
 
 function DaysCashChart({ data }: { data: { label: string; days: number }[] }) {
-  const colored = data.map(d => ({ ...d, fill: d.days < 30 ? '#C0392B' : d.days < 60 ? '#F2C94C' : '#166534' }));
+  const colored = data.map(d => ({ ...d, fill: d.days < 30 ? '#C0392B' : d.days < 60 ? '#818CF8' : '#166534' }));
   return (
     <div style={LIQ_PANEL}>
       <h3 style={LIQ_H3}>Days Cash on Hand — Runway</h3>
       <ResponsiveContainer width="100%" height={200}>
         <BarChart data={colored} margin={{ left: 0, right: 48, top: 8, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
           <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#78716C' }} />
           <YAxis tick={{ fontSize: 10, fill: '#78716C' }} tickFormatter={v => `${v}d`} width={36} domain={[0, 'auto']} />
           <Tooltip formatter={(v: number) => [`${v} days`, 'Days Cash on Hand']} contentStyle={{ fontSize: 11 }} />
-          <ReferenceLine y={60} stroke="#D4AF37" strokeDasharray="5 3" strokeWidth={1.5}
-            label={{ value: '60d floor', position: 'right', fontSize: 9, fill: '#B8860B' }} />
+          <ReferenceLine y={60} stroke="#6366F1" strokeDasharray="5 3" strokeWidth={1.5}
+            label={{ value: '60d floor', position: 'right', fontSize: 9, fill: '#7C3AED' }} />
           <ReferenceLine y={30} stroke="#C0392B" strokeDasharray="4 2" strokeWidth={1}
             label={{ value: '30d min', position: 'right', fontSize: 9, fill: '#C0392B' }} />
           <Bar dataKey="days" name="Days Cash" radius={[4, 4, 0, 0]} maxBarSize={40}>
@@ -783,7 +783,7 @@ function DaysCashChart({ data }: { data: { label: string; days: number }[] }) {
         </BarChart>
       </ResponsiveContainer>
       <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 11, color: '#57534E' }}>
-        {[['#166534', '> 60 days'], ['#F2C94C', '30–60 days'], ['#C0392B', '< 30 days']].map(([bg, label]) => (
+        {[['#166534', '> 60 days'], ['#818CF8', '30–60 days'], ['#C0392B', '< 30 days']].map(([bg, label]) => (
           <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <span style={{ background: bg, display: 'inline-block', width: 10, height: 10, borderRadius: 2 }} />{label}
           </span>
@@ -800,7 +800,7 @@ function WcCompositionChart({ data }: { data: WcRow[] }) {
       <h3 style={LIQ_H3}>Working Capital Composition — Waterfall</h3>
       <ResponsiveContainer width="100%" height={200}>
         <BarChart data={data} margin={{ left: 20, right: 20, top: 8, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
           <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#78716C' }} />
           <YAxis tick={{ fontSize: 10, fill: '#78716C' }} tickFormatter={v => v >= 1000 ? `$${Math.round(v / 1000)}K` : `$${v}`} width={52} />
           <Tooltip
@@ -880,13 +880,13 @@ function SolvencyTab({ coData, liveCards, auditProps }: {
               <Tooltip formatter={(v: number) => [`${v.toFixed(2)}x`]} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <ReferenceLine y={1.25} stroke="#166534" strokeDasharray="4 2" label={{ value: '1.25x DSCR floor', position: 'right', fontSize: 9, fill: '#166534' }} />
-              <ReferenceLine y={1.5}  stroke="#B8860B" strokeDasharray="4 2" label={{ value: '1.5x ICR benchmark', position: 'right', fontSize: 9, fill: '#B8860B' }} />
+              <ReferenceLine y={1.5}  stroke="#7C3AED" strokeDasharray="4 2" label={{ value: '1.5x ICR benchmark', position: 'right', fontSize: 9, fill: '#7C3AED' }} />
               <Bar dataKey="dscr" name="DSCR" radius={[3, 3, 0, 0]}>
                 {dscrData.map((d, i) => (
                   <Cell key={i} fill={d.dscr >= 1.25 ? '#166534' : d.dscr >= 1.0 ? '#F5A623' : '#B91C1C'} />
                 ))}
               </Bar>
-              <Bar dataKey="icr"  name="Interest Coverage" fill="#B8860B" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="icr"  name="Interest Coverage" fill="#7C3AED" radius={[3, 3, 0, 0]} />
             </ComposedChart>); })()}
           </ResponsiveContainer>
         )}
@@ -1133,7 +1133,7 @@ export default function RentalFinancialRatios() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <p className="text-xs uppercase tracking-wider" style={{ color: '#B8860B' }}>FINANCIALS & RISK</p>
+        <p className="text-xs uppercase tracking-wider" style={{ color: '#7C3AED' }}>FINANCIALS & RISK</p>
         <h1 className="text-3xl font-bold text-gray-900 mt-1">Financial Ratios & Analysis</h1>
         <p className="text-sm text-gray-500 mt-1">Rental Portfolio — Solvency, Profitability, Liquidity &amp; Rental KPIs</p>
       </div>

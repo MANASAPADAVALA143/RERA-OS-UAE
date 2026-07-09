@@ -23,14 +23,14 @@ const C_TEAL  = RENTAL_TEAL;
 const C_GREEN = RENTAL_GREEN;
 const C_AMBER = '#F2C14E';
 const C_RED   = RENTAL_RED;
-const C_GOLD  = '#D4AF37';
-const C_CARD  = '#FBF6EE';
-const C_BORD  = '#E8DEC8';
+const C_GOLD  = '#6366F1';
+const C_CARD  = '#F1F5F9';
+const C_BORD  = '#E2E8F0';
 const OCCUPANCY_TARGET = 92; // percent
 
 /** Distinct bar colors per company — vivid palette, gold/teal first (not red) */
 const COMPANY_BAR_COLORS = [
-  '#D4AF37', '#0F766E', '#7B68AD', '#5B9BD5', '#E9A358',
+  '#6366F1', '#0F766E', '#7B68AD', '#5B9BD5', '#E9A358',
   '#6B8E6B', '#C75B7A', '#D97B4A', '#4A90A4', '#C0392B',
 ];
 
@@ -38,14 +38,14 @@ const AGING_BUCKET_COLORS = [RENTAL_CHART_GREEN, '#F5A623', '#E97316', '#DC2626'
 
 const CARD: React.CSSProperties = {
   background: C_CARD,
-  border: '1px solid #E8DEC8',
+  border: '1px solid #E2E8F0',
   borderRadius: 12,
   padding: '14px 16px',
 };
 
 const KPI_CARD: React.CSSProperties = {
   background: C_CARD,
-  border: '1px solid #E8DEC8',
+  border: '1px solid #E2E8F0',
   borderRadius: 10,
   padding: '10px 12px',
 };
@@ -290,18 +290,18 @@ function buildAttentionNow(
 
 function SkeletonKpi() {
   return (
-    <div className="rounded-lg p-3 animate-pulse" style={{ background: '#F7F5F0', border: '1px solid #DDD8CC' }}>
-      <div className="h-2.5 rounded w-2/3 mb-2" style={{ background: '#DDD8CC' }} />
-      <div className="h-6 rounded w-1/2" style={{ background: '#DDD8CC' }} />
+    <div className="rounded-lg p-3 animate-pulse" style={{ background: '#F8FAFC', border: '1px solid #CBD5E1' }}>
+      <div className="h-2.5 rounded w-2/3 mb-2" style={{ background: '#CBD5E1' }} />
+      <div className="h-6 rounded w-1/2" style={{ background: '#CBD5E1' }} />
     </div>
   );
 }
 
 function SkeletonChart() {
   return (
-    <div className="rounded-xl p-5 animate-pulse" style={{ background: '#F7F5F0', border: '1px solid #DDD8CC' }}>
-      <div className="h-4 rounded w-1/3 mb-4" style={{ background: '#DDD8CC' }} />
-      <div className="h-52 rounded" style={{ background: '#DDD8CC' }} />
+    <div className="rounded-xl p-5 animate-pulse" style={{ background: '#F8FAFC', border: '1px solid #CBD5E1' }}>
+      <div className="h-4 rounded w-1/3 mb-4" style={{ background: '#CBD5E1' }} />
+      <div className="h-52 rounded" style={{ background: '#CBD5E1' }} />
     </div>
   );
 }
@@ -341,8 +341,8 @@ function PriTile({
     <div
       style={{
         ...KPI_CARD,
-        background: gold ? 'linear-gradient(135deg,#D4AF37,#B8860B)' : KPI_CARD.background,
-        border: gold ? '1px solid #B8860B' : KPI_CARD.border,
+        background: gold ? 'linear-gradient(135deg,#6366F1,#7C3AED)' : KPI_CARD.background,
+        border: gold ? '1px solid #7C3AED' : KPI_CARD.border,
         cursor: onClick ? 'pointer' : undefined,
         transition: onClick ? 'box-shadow 0.15s, border-color 0.15s' : undefined,
       }}
@@ -419,7 +419,7 @@ function agingBucketsFromTotals(t: {
 // ── SELECT styles ─────────────────────────────────────────────────────────────
 
 const SEL_STYLE: React.CSSProperties = {
-  background: '#F7F5F0', border: `1px solid ${C_BORD}`, color: '#1C1917',
+  background: '#F8FAFC', border: `1px solid ${C_BORD}`, color: '#1C1917',
   borderRadius: '0.5rem', padding: '0.35rem 0.65rem', fontSize: '0.8125rem',
 };
 
@@ -747,7 +747,7 @@ export default function RentalOverview() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="h-8 rounded w-64 animate-pulse" style={{ background: '#F7F5F0' }} />
+        <div className="h-8 rounded w-64 animate-pulse" style={{ background: '#F8FAFC' }} />
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => <SkeletonKpi key={i} />)}
         </div>
@@ -819,16 +819,16 @@ export default function RentalOverview() {
           <span style={{ fontSize: 12, fontWeight: 500, color: '#3A3A3A' }}>PERIOD</span>
           <select value={selectedMonth} onChange={e => setMonth(e.target.value)} style={SEL_STYLE}>
             {MONTH_OPTIONS.map(o => (
-              <option key={o.value} value={o.value} style={{ background: '#F7F5F0' }}>{o.label}</option>
+              <option key={o.value} value={o.value} style={{ background: '#F8FAFC' }}>{o.label}</option>
             ))}
           </select>
         </div>
         <div className="flex items-center gap-2">
           <span style={{ fontSize: 12, fontWeight: 500, color: '#3A3A3A' }}>COMPANY</span>
           <select value={selectedCoId} onChange={e => setCompany(e.target.value)} style={SEL_STYLE}>
-            <option value="" style={{ background: '#F7F5F0' }}>All Companies</option>
+            <option value="" style={{ background: '#F8FAFC' }}>All Companies</option>
             {data.by_company.map(c => (
-              <option key={c.company_id} value={c.company_id} style={{ background: '#F7F5F0' }}>{c.company_name}</option>
+              <option key={c.company_id} value={c.company_id} style={{ background: '#F8FAFC' }}>{c.company_name}</option>
             ))}
           </select>
         </div>
@@ -1068,7 +1068,7 @@ export default function RentalOverview() {
                   onClick={() => setTab('portfolio-upload')}
                   style={{
                     marginTop: 8, padding: '7px 16px', borderRadius: 8, border: 'none',
-                    background: 'linear-gradient(135deg,#D4AF37,#B8860B)', color: '#fff',
+                    background: 'linear-gradient(135deg,#6366F1,#7C3AED)', color: '#fff',
                     fontSize: 12, fontWeight: 700, cursor: 'pointer',
                   }}
                 >

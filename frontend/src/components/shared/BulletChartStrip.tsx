@@ -17,7 +17,7 @@ export interface BulletCard {
 
 export const STATUS_BAR: Record<BulletStatus, string> = {
   good:     '#166534',
-  watch:    '#F2C94C',
+  watch:    '#818CF8',
   critical: '#C0392B',
   monitor:  '#C0392B',
   info:     '#78716C',
@@ -40,13 +40,13 @@ export function BulletChartStrip({ cards, defs, title = 'Benchmark Comparison', 
   if (!rows.length) return null;
 
   return (
-    <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '20px 24px' }}>
+    <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: '20px 24px' }}>
       <div style={{ fontSize: 15, fontWeight: 600, color: '#1C1917' }}>{title}</div>
       <div style={{ fontSize: 12, color: '#6B7280', marginTop: 3, marginBottom: 18 }}>
         {subtitle ?? 'Current metric health vs benchmark — bar colour reflects card status · ▎ marker = target'}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr 80px', gap: 12, paddingBottom: 8, borderBottom: '1px solid #E8DEC8', marginBottom: 4 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr 80px', gap: 12, paddingBottom: 8, borderBottom: '1px solid #E2E8F0', marginBottom: 4 }}>
         {['Metric', 'vs Benchmark', 'Current'].map((h, i) => (
           <div key={h} style={{ fontSize: 11, fontWeight: 600, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: i === 2 ? 'right' : 'left' }}>{h}</div>
         ))}
@@ -66,7 +66,7 @@ export function BulletChartStrip({ cards, defs, title = 'Benchmark Comparison', 
             </div>
 
             <div style={{ position: 'relative', height: 22 }}>
-              <div style={{ position: 'absolute', top: 6, left: 0, right: 0, height: 10, background: '#E8DEC8', borderRadius: 5 }} />
+              <div style={{ position: 'absolute', top: 6, left: 0, right: 0, height: 10, background: '#E2E8F0', borderRadius: 5 }} />
               {[25, 50, 75].map(t => (
                 <div key={t} style={{ position: 'absolute', top: 6, left: `${t}%`, width: 1, height: 10, background: 'rgba(120,113,108,0.18)' }} />
               ))}

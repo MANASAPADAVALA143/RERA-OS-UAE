@@ -333,7 +333,7 @@ export default function PD02DealPL() {
 
       {/* Pre-sale / Development Phase banner for single-lot land dev */}
       {p.totalLots <= 1 && p.saleConsideration === 0 && (
-        <div className="rounded-xl border px-4 py-3" style={{ background: 'rgba(212,175,55,0.08)', borderColor: 'rgba(212,175,55,0.35)' }}>
+        <div className="rounded-xl border px-4 py-3" style={{ background: 'rgba(99,102,241,0.08)', borderColor: 'rgba(99,102,241,0.35)' }}>
           <div className="flex items-center gap-3 flex-wrap">
             <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#92400E' }}>Pre-sale · Development Phase</span>
             <span className="text-xs text-gray-500">Land not yet sold — showing cost basis only.</span>
@@ -341,7 +341,7 @@ export default function PD02DealPL() {
               <span>Land: <strong>${p.landCost.toLocaleString('en-US',{maximumFractionDigits:0})}</strong></span>
               <span>Improvements: <strong>${(p.hardCost).toLocaleString('en-US',{maximumFractionDigits:0})}</strong></span>
               {p.interestCapitalised ? <span>Int. Cap.: <strong>${p.interestCapitalised.toLocaleString('en-US',{maximumFractionDigits:0})}</strong></span> : null}
-              <span className="font-bold" style={{ color: '#D4AF37' }}>
+              <span className="font-bold" style={{ color: '#6366F1' }}>
                 Total: ${(p.landCost + p.hardCost + (p.interestCapitalised ?? 0)).toLocaleString('en-US',{maximumFractionDigits:0})}
               </span>
             </div>

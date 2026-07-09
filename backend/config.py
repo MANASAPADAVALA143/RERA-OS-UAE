@@ -25,10 +25,9 @@ class Settings(BaseSettings):
     # ── Anthropic ─────────────────────────────────────────────────────────────
     anthropic_api_key: str = ""
 
-    # ── CA firm KPI reviewer emails (Calculations Review + ⓘ breakdown) ───────
-    kpi_reviewer_emails: str = "consulting.akk@gmail.com,consultingakk@gmail.com"
-    # Legacy alias — first email in kpi_reviewer_emails if unset
-    primary_user_email: str = "consulting.akk@gmail.com"
+    # ── Demo KPI reviewer emails (Calculations Review + breakdown tools) ───────
+    kpi_reviewer_emails: str = "demo@reraos.demo"
+    primary_user_email: str = "demo@reraos.demo"
 
     # ── S3 file storage ───────────────────────────────────────────────────────
     # Set to the bucket name output by Terraform (outputs.tf → s3_bucket_name).

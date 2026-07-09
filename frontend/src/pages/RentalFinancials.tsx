@@ -720,8 +720,8 @@ function resolveKpiViewForPeriod(
 function EmptyUpload({ onUpload, company, onAddMetrics }: { onUpload: () => void; onAddMetrics: () => void; company: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
-      <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ background: '#F7F5F0' }}>
-        <FileSpreadsheet className="w-8 h-8" style={{ color: '#D4AF37' }} />
+      <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ background: '#F8FAFC' }}>
+        <FileSpreadsheet className="w-8 h-8" style={{ color: '#6366F1' }} />
       </div>
       <h3 className="text-lg font-semibold mb-2" style={{ color: '#1C1917' }}>No Financial Data Uploaded</h3>
       <p className="text-sm mb-6 max-w-sm" style={{ color: '#92400E' }}>
@@ -773,7 +773,7 @@ function FinTable({ items, years, labelCol = 'Line Item', selectedYear, periods,
     if (isGrandTotal(item)) return '#D4C4A8';
     if (item.isTotal) return '#EDE5D8';
     if (item.isSectionHeader) return '#E8E0CF';
-    return idx % 2 === 0 ? '#F7F1E6' : '#FBF6EE';
+    return idx % 2 === 0 ? '#F7F1E6' : '#F1F5F9';
   };
 
   const rowBorderTop = (item: FinItem): string => {
@@ -934,7 +934,7 @@ function CFTable({ fin, selectedYear, period, pMonth, pYear }: {
     <div className="space-y-6">
       {/* Summary bar chart — only in Annual Summary mode */}
       {!selectedYear && !period && netCFByYear.some(d => d.value !== 0) && (
-        <div className="rounded-lg p-4 shadow-sm border" style={{ background: '#F7F5F0', borderColor: '#DDD8CC' }}>
+        <div className="rounded-lg p-4 shadow-sm border" style={{ background: '#F8FAFC', borderColor: '#CBD5E1' }}>
           <p className="text-sm font-semibold mb-3" style={{ color: '#1C1917' }}>Net Cash Flow by Year</p>
           <ResponsiveContainer width="100%" height={160}>
             <BarChart data={netCFByYear} margin={{ left: 20 }}>
@@ -992,7 +992,7 @@ function KCard({
               width: 26,
               height: 26,
               borderRadius: '50%',
-              border: `1px solid ${accent ? 'rgba(255,255,255,0.5)' : '#E8DEC8'}`,
+              border: `1px solid ${accent ? 'rgba(255,255,255,0.5)' : '#E2E8F0'}`,
               background: accent ? 'rgba(0,0,0,0.15)' : '#fff',
               color: accent ? '#fff' : '#78716C',
               cursor: 'pointer',
@@ -1009,7 +1009,7 @@ function KCard({
             <div style={{ height: 28, marginTop: 8 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={trendData.map((v, i) => ({ x: i, y: v }))}>
-                  <Line type="monotone" dataKey="y" stroke={accent ? 'rgba(255,255,255,0.7)' : '#D4AF37'} dot={false} strokeWidth={1.5} isAnimationActive={false} />
+                  <Line type="monotone" dataKey="y" stroke={accent ? 'rgba(255,255,255,0.7)' : '#6366F1'} dot={false} strokeWidth={1.5} isAnimationActive={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -1240,34 +1240,34 @@ function KPITab({
       </div>
 
       {/* ── Margins & Ratios Trend ──────────────────────────────────────── */}
-      <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: 20 }}>
+      <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20 }}>
         <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Margins &amp; Ratios Trend</p>
         <p style={{ fontSize: 12, color: '#A8A29E', marginBottom: 16 }}>NOI Margin, Net Margin, and Expense Ratio over all available years</p>
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={marginsTrend} margin={{ left: 0, right: 16, top: 4, bottom: 4 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
             <XAxis dataKey="year" tick={{ fontSize: 11 }} />
             <YAxis tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} />
-            <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 }} />
+            <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} contentStyle={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13 }} />
             <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
-            <Line type="monotone" dataKey="NOI Margin %"    stroke="#D4AF37" strokeWidth={2} dot={{ r: 3, fill: '#D4AF37' }} />
+            <Line type="monotone" dataKey="NOI Margin %"    stroke="#6366F1" strokeWidth={2} dot={{ r: 3, fill: '#6366F1' }} />
             <Line type="monotone" dataKey="Net Margin %"    stroke="#166534" strokeWidth={2} dot={{ r: 3, fill: '#166534' }} />
             <Line type="monotone" dataKey="Expense Ratio %" stroke="#C0392B" strokeWidth={2} strokeDasharray="5 3" dot={{ r: 3, fill: '#C0392B' }} />
           </LineChart>
         </ResponsiveContainer>
       </div>
 
-      <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: 20 }}>
+      <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20 }}>
         <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>5-Year Financial Trend</p>
         <p style={{ fontSize: 12, color: '#A8A29E', marginBottom: 14 }}>Revenue, Expenses, Net Income and NOI across all available years</p>
         <ResponsiveContainer width="100%" height={240}>
           <LineChart data={trendData} margin={{ left: 16, right: 16, top: 4, bottom: 4 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
             <XAxis dataKey="year" tick={{ fontSize: 11 }} />
             <YAxis tickFormatter={v => fmt(v as number)} tick={{ fontSize: 10 }} />
-            <Tooltip formatter={(v: number) => fmtFull(v)} contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 }} />
+            <Tooltip formatter={(v: number) => fmtFull(v)} contentStyle={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13 }} />
             <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
-            <Line type="monotone" dataKey="Revenue"    stroke="#D4AF37" strokeWidth={2} dot={{ r: 3 }} />
+            <Line type="monotone" dataKey="Revenue"    stroke="#6366F1" strokeWidth={2} dot={{ r: 3 }} />
             <Line type="monotone" dataKey="Expenses"   stroke="#C0392B" strokeWidth={2} dot={{ r: 3 }} />
             <Line type="monotone" dataKey="Net Income" stroke="#166534" strokeWidth={2} dot={{ r: 3 }} />
             <Line type="monotone" dataKey="NOI"        stroke="#8B6914" strokeWidth={2} strokeDasharray="5 3" dot={{ r: 3 }} />
@@ -1277,31 +1277,31 @@ function KPITab({
 
       {/* Revenue Allocation + YoY */}
       <div className="grid grid-cols-2 gap-4">
-        <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: 20 }}>
+        <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20 }}>
           <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 14 }}>Revenue Allocation ({label})</p>
           <ResponsiveContainer width="100%" height={220}>
             <PieChart>
               <Pie data={revenueAllocation} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value">
-                <Cell fill="#D4AF37" />
+                <Cell fill="#6366F1" />
                 <Cell fill="#C0392B" />
               </Pie>
-              <Tooltip formatter={(v: number) => fmtFull(v)} contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 }} />
+              <Tooltip formatter={(v: number) => fmtFull(v)} contentStyle={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13 }} />
               <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
             </PieChart>
           </ResponsiveContainer>
         </div>
 
         {yoyComparison.length > 0 && (
-          <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: 20 }}>
+          <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20 }}>
             <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 14 }}>{label} vs {compareLabel || 'Prior Period'}</p>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={yoyComparison}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
                 <XAxis dataKey="kpi" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip formatter={(v: number) => v.toFixed(2)} contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 }} />
+                <Tooltip formatter={(v: number) => v.toFixed(2)} contentStyle={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13 }} />
                 <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="current"  name={label}  fill="#D4AF37" radius={[4,4,0,0]} />
+                <Bar dataKey="current"  name={label}  fill="#6366F1" radius={[4,4,0,0]} />
                 <Bar dataKey="previous" name={compareLabel || 'Prior'} fill="#A8A29E" radius={[4,4,0,0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -1315,7 +1315,7 @@ function KPITab({
 // ── CFO Dashboard helpers ─────────────────────────────────────────────────────
 
 const CFO_TT = {
-  contentStyle: { background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13, color: '#1C1917' },
+  contentStyle: { background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, color: '#1C1917' },
   labelStyle: { color: '#57534E', fontWeight: 600, fontSize: 13 },
   itemStyle: { color: '#1C1917', fontSize: 13 },
 };
@@ -1387,7 +1387,7 @@ function CfoDrillPanel({
         <button
           type="button"
           onClick={onClear}
-          style={{ fontSize: 12, color: '#D4AF37', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline', padding: 0 }}
+          style={{ fontSize: 12, color: '#6366F1', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline', padding: 0 }}
         >
           × clear drill-down
         </button>
@@ -1465,7 +1465,7 @@ function CFOTab({
   } else if (margin > 0) {
     insightText = `Healthy margin at ${margin.toFixed(1)}%. Watch expense growth relative to ${fmtFull(k.totalRevenue)} revenue.`;
     insightColor = '#1E40AF'; insightBg = '#EFF6FF'; insightBorder = '#BFDBFE';
-    InsightIcon = <TrendingUp size={20} style={{ color: '#D4AF37', flexShrink: 0 }} />;
+    InsightIcon = <TrendingUp size={20} style={{ color: '#6366F1', flexShrink: 0 }} />;
   } else if (k.totalRevenue > 0) {
     insightText = `Net loss of ${fmtFull(Math.abs(k.netIncome))} (${margin.toFixed(1)}% margin). NOI is ${fmtFull(k.noi)} — check interest and depreciation charges.`;
     insightColor = '#92400E'; insightBg = '#FFFBEB'; insightBorder = '#FCD34D';
@@ -1531,7 +1531,7 @@ function CFOTab({
     });
   }, [fin.pl, periodKeys]);
 
-  const OPEX_PALETTE = ['#D4AF37','#F2994A','#2F80ED','#166534','#B91C1C','#9B59B6','#F2C94C','#E8DEC8'];
+  const OPEX_PALETTE = ['#6366F1','#F2994A','#2F80ED','#166534','#B91C1C','#9B59B6','#818CF8','#E2E8F0'];
 
   const drillKeys = periodKeys.length ? periodKeys : [];
   const drillRows = useMemo(() => {
@@ -1582,7 +1582,7 @@ function CFOTab({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
 
             {/* Panel 1 — Revenue Mix Donut */}
-            <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+            <div style={{ background: '#F1F5F9', border: '0.5px solid #E2E8F0', borderRadius: 8, padding: 16 }}>
               <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Revenue Mix</p>
               <p className="cfo-chart-hint">Click a segment to drill into P&amp;L revenue lines</p>
               {periodAgg.totalRevenue > 0 ? (
@@ -1598,7 +1598,7 @@ function CFOTab({
                         onClick={(d) => setDrillRevenueType(prev => prev === d.name ? null : String(d.name))}
                         style={{ cursor: 'pointer' }}
                       >
-                        <Cell fill="#D4AF37" />
+                        <Cell fill="#6366F1" />
                         <Cell fill="#2F80ED" />
                       </Pie>
                       <Tooltip formatter={(v: number) => fmtFull(v)} {...CFO_TT} />
@@ -1606,7 +1606,7 @@ function CFOTab({
                   </ResponsiveContainer>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
                     {[
-                      { name: 'Rent Income',  val: periodAgg.rentIncome,  color: '#D4AF37' },
+                      { name: 'Rent Income',  val: periodAgg.rentIncome,  color: '#6366F1' },
                       { name: 'Other Income', val: periodAgg.otherIncome, color: '#2F80ED' },
                     ].map(s => (
                       <div
@@ -1627,7 +1627,7 @@ function CFOTab({
                         </div>
                       </div>
                     ))}
-                    <div style={{ borderTop: '1px solid #E8DEC8', paddingTop: 6, display: 'flex', justifyContent: 'space-between' }}>
+                    <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: 6, display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ fontSize: 13, fontWeight: 600, color: '#78716C' }}>Total Revenue</span>
                       <span style={{ fontSize: 14, fontWeight: 700, color: '#1C1917', fontFamily: 'monospace' }}>{fmtFull(periodAgg.totalRevenue)}</span>
                     </div>
@@ -1639,12 +1639,12 @@ function CFOTab({
             </div>
 
             {/* Panel 2 — Opex Breakdown */}
-            <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+            <div style={{ background: '#F1F5F9', border: '0.5px solid #E2E8F0', borderRadius: 8, padding: 16 }}>
               <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Opex Breakdown</p>
               <p className="cfo-chart-hint">Click a bar to drill into P&amp;L expense lines</p>
               {drillOpexCat && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 10px', borderRadius: 20, background: '#D4AF37', color: '#fff' }}>{drillOpexCat}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 10px', borderRadius: 20, background: '#6366F1', color: '#fff' }}>{drillOpexCat}</span>
                   <button type="button" onClick={() => setDrillOpexCat(null)} style={{ fontSize: 12, color: '#A8A29E', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>× clear</button>
                 </div>
               )}
@@ -1676,7 +1676,7 @@ function CFOTab({
                         }}
                         style={{ cursor: 'pointer' }}
                       >
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E8DEC8" />
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E2E8F0" />
                         <XAxis type="number" tick={{ fontSize: 11, fill: '#78716C' }} tickFormatter={v => fmt(v as number)} axisLine={false} tickLine={false} />
                         <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: '#57534E' }} axisLine={false} tickLine={false} width={96} />
                         <Tooltip
@@ -1721,12 +1721,12 @@ function CFOTab({
             </div>
 
             {/* Panel 3 — Profitability Trend */}
-            <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+            <div style={{ background: '#F1F5F9', border: '0.5px solid #E2E8F0', borderRadius: 8, padding: 16 }}>
               <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>Profitability Trend</p>
               {periodTrend.some(d => d.grossMargin !== 0 || d.operatingMargin !== 0 || d.netMargin !== 0) ? (
                 <ResponsiveContainer width="100%" height={200}>
                   <LineChart data={periodTrend} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
                     <XAxis dataKey="month" tick={{ fontSize: 9 }} />
                     <YAxis tick={{ fontSize: 9 }} tickFormatter={v => `${(v as number).toFixed(0)}%`} />
                     <Tooltip formatter={(v: number, name: string) => [`${v.toFixed(1)}%`, name]} {...CFO_TT} />
@@ -1742,7 +1742,7 @@ function CFOTab({
             </div>
 
             {/* Panel 4 — Revenue by Month */}
-            <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+            <div style={{ background: '#F1F5F9', border: '0.5px solid #E2E8F0', borderRadius: 8, padding: 16 }}>
               <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Revenue by Month</p>
               <p className="cfo-chart-hint">Click a month bar to drill into that month&apos;s P&amp;L lines</p>
               {periodRevByMonth.some(d => d.rentIncome > 0 || d.otherIncome > 0) ? (
@@ -1757,12 +1757,12 @@ function CFOTab({
                       }}
                       style={{ cursor: 'pointer' }}
                     >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
                       <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#78716C' }} />
                       <YAxis tick={{ fontSize: 11, fill: '#78716C' }} tickFormatter={v => fmt(v as number)} />
                       <Tooltip formatter={(v: number, name: string) => [fmtFull(v), name]} {...CFO_TT} />
                       <Legend iconSize={8} wrapperStyle={{ fontSize: 12, color: '#57534E' }} />
-                      <Bar dataKey="rentIncome"  stackId="rev" fill="#D4AF37" name="Rent Income"  radius={[0,0,0,0]} className="cfo-bar-clickable" />
+                      <Bar dataKey="rentIncome"  stackId="rev" fill="#6366F1" name="Rent Income"  radius={[0,0,0,0]} className="cfo-bar-clickable" />
                       <Bar dataKey="otherIncome" stackId="rev" fill="#2F80ED" name="Other Income" radius={[4,4,0,0]} className="cfo-bar-clickable" />
                     </BarChart>
                   </ResponsiveContainer>
@@ -1812,7 +1812,7 @@ function CFOTab({
       </div>
 
       {/* Multi-Year Snapshot Table */}
-      <div style={{ background:'#FBF6EE', border:'0.5px solid #E8DEC8', borderRadius:8, overflow:'hidden' }}>
+      <div style={{ background:'#F1F5F9', border:'0.5px solid #E2E8F0', borderRadius:8, overflow:'hidden' }}>
         <div style={{ background:'#DDD5C4', color:'#78716C', padding:'8px 16px', fontSize:13, fontWeight:700 }}>Multi-Year Financial Snapshot</div>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -1825,7 +1825,7 @@ function CFOTab({
             </thead>
             <tbody>
               {snapshotRows.map((r, i) => (
-                <tr key={i} style={{ background: r.year === selectedYear ? '#EDE5D8' : i % 2 === 0 ? '#F7F1E6' : '#FBF6EE', borderTop:'1px solid #E8DEC8' }}>
+                <tr key={i} style={{ background: r.year === selectedYear ? '#EDE5D8' : i % 2 === 0 ? '#F7F1E6' : '#F1F5F9', borderTop:'1px solid #E2E8F0' }}>
                   <td style={{ padding:'8px 16px', fontSize:14, fontWeight: r.year === selectedYear ? 700 : 500, color:'#1C1917' }}>{r.year}{r.year === selectedYear ? ' ◀' : ''}</td>
                   <td style={{ padding:'8px 16px', textAlign:'right', fontFamily:'monospace', fontSize:14, color:'#1C1917' }}>{fmt(r.revenue)}</td>
                   <td style={{ padding:'8px 16px', textAlign:'right', fontFamily:'monospace', fontSize:14, color:'#B91C1C' }}>{fmt(r.expenses)}</td>
@@ -1850,17 +1850,17 @@ function CFOTab({
 
       {/* Summary Tiles */}
       <div className="grid grid-cols-3 gap-4">
-        <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+        <div style={{ background: '#F1F5F9', border: '0.5px solid #E2E8F0', borderRadius: 8, padding: 16 }}>
           <p style={{ fontSize: 11, color: '#6B6B6B', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Latest Net Income ({lastY})</p>
           <p style={{ fontSize: 20, fontWeight: 700, color: latestRow.netIncome >= 0 ? '#1C1917' : '#B91C1C', marginTop: 8 }}>{latestRow.netIncome < 0 ? `(${fmtFull(Math.abs(latestRow.netIncome))})` : fmtFull(latestRow.netIncome)}</p>
           {prevRow && <p style={{ fontSize: 11, color: niChange >= 0 ? '#166534' : '#B91C1C', marginTop: 4 }}>{niChange >= 0 ? '↑' : '↓'} {Math.abs(niChange).toFixed(1)}% vs {prevRow.year}</p>}
         </div>
-        <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+        <div style={{ background: '#F1F5F9', border: '0.5px solid #E2E8F0', borderRadius: 8, padding: 16 }}>
           <p style={{ fontSize: 11, color: '#6B6B6B', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Avg Profit Margin</p>
           <p style={{ fontSize: 20, fontWeight: 700, color: avgMargin >= 0 ? '#1C1917' : '#B91C1C', marginTop: 8 }}>{avgMargin.toFixed(1)}%</p>
           <p style={{ fontSize: 11, color: '#6B6B6B', marginTop: 4 }}>Across {fin.years.length} years</p>
         </div>
-        <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+        <div style={{ background: '#F1F5F9', border: '0.5px solid #E2E8F0', borderRadius: 8, padding: 16 }}>
           <p style={{ fontSize: 11, color: '#6B6B6B', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Latest Cash Position</p>
           <p style={{ fontSize: 20, fontWeight: 700, color: '#2F80ED', marginTop: 8 }}>{latestRow.cash > 0 ? fmtFull(latestRow.cash) : '—'}</p>
           <p style={{ fontSize: 11, color: '#6B6B6B', marginTop: 4 }}>Bank accounts ({lastY})</p>
@@ -1873,7 +1873,7 @@ function CFOTab({
         {insights.length === 0
           ? <p style={{ fontSize:13, color:'#9CA3AF' }}>Upload complete financials to generate CFO insights.</p>
           : insights.map((ins, i) => (
-              <div key={i} style={{ border:'1px solid #E8DEC8', borderRadius:8, padding:16, background:'#FBF6EE' }}>
+              <div key={i} style={{ border:'1px solid #E2E8F0', borderRadius:8, padding:16, background:'#F1F5F9' }}>
                 <p style={{ fontSize:13, color:'#374151' }}>{ins.text}</p>
               </div>
             ))
@@ -1923,8 +1923,8 @@ function AllCompaniesSummary({ all }: { all: Record<string, ParsedFinancials> })
 }
 
 const FM_INPUT: React.CSSProperties = {
-  width: '100%', padding: '8px 12px', border: '1px solid #E8DEC8',
-  borderRadius: 8, fontSize: 14, color: '#1C1917', background: '#FBF6EE',
+  width: '100%', padding: '8px 12px', border: '1px solid #E2E8F0',
+  borderRadius: 8, fontSize: 14, color: '#1C1917', background: '#F1F5F9',
   outline: 'none', fontFamily: FIN_FONT,
 };
 const FM_LABEL: React.CSSProperties = {
@@ -1979,13 +1979,13 @@ function FinancialMetricsTab({ companyName }: { companyName: string }) {
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 680 }}>
         {/* Month */}
-        <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '16px 18px' }}>
+        <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: '16px 18px' }}>
           <label style={FM_LABEL}>Period (Month)</label>
           <input type="month" name="month" value={metrics.month} onChange={handleChange} style={FM_INPUT} />
         </div>
 
         {/* Financial Figures Grid */}
-        <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '16px 18px' }}>
+        <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: '16px 18px' }}>
           <p style={{ fontSize: 13, fontWeight: 600, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
             Financial Figures
           </p>
@@ -2009,14 +2009,14 @@ function FinancialMetricsTab({ companyName }: { companyName: string }) {
         </div>
 
         {/* Loan Payments */}
-        <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '16px 18px' }}>
+        <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: '16px 18px' }}>
           <label style={FM_LABEL}>Loan Payments (if any)</label>
           <input type="number" name="loanPayments" placeholder="0.00"
             value={metrics.loanPayments} onChange={handleChange} style={{ ...FM_INPUT, maxWidth: 320 }} />
         </div>
 
         {/* Notes */}
-        <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '16px 18px' }}>
+        <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: '16px 18px' }}>
           <label style={FM_LABEL}>Notes / Comments</label>
           <textarea
             name="notes" placeholder="Any notes about this period..."
@@ -2031,7 +2031,7 @@ function FinancialMetricsTab({ companyName }: { companyName: string }) {
             type="submit"
             style={{
               padding: '9px 24px', borderRadius: 8, border: 'none', cursor: 'pointer',
-              background: 'linear-gradient(135deg,#D4AF37,#B8860B)', color: '#fff',
+              background: 'linear-gradient(135deg,#6366F1,#7C3AED)', color: '#fff',
               fontSize: 14, fontWeight: 600, letterSpacing: '0.02em',
             }}
           >
@@ -2087,8 +2087,8 @@ export default function RentalFinancials() {
   const visibleTabs: FinTab[] = isKpiAdmin ? [...TABS, ADMIN_TAB] : [...TABS];
 
   const selectStyle: React.CSSProperties = {
-    fontSize: 13, border: '1px solid #E8DEC8', borderRadius: 6,
-    padding: '5px 10px', background: '#FBF6EE', color: '#1C1917', cursor: 'pointer',
+    fontSize: 13, border: '1px solid #E2E8F0', borderRadius: 6,
+    padding: '5px 10px', background: '#F1F5F9', color: '#1C1917', cursor: 'pointer',
   };
 
   const currentFin = selectedCompanyId ? allFinancials[selectedCompanyId] : null;
@@ -2259,7 +2259,7 @@ export default function RentalFinancials() {
   return (
     <div className="space-y-6">
       {/* Controls bar */}
-      <div className="sticky top-0 z-10 border-b shadow-sm -mx-6 px-6 py-3" style={{ background: '#ECE9E3', borderColor: '#DDD8CC' }}>
+      <div className="sticky top-0 z-10 border-b shadow-sm -mx-6 px-6 py-3" style={{ background: '#EEF2FF', borderColor: '#CBD5E1' }}>
         <div className="flex flex-wrap items-center gap-3">
           <Building2 size={15} className="text-gray-400 shrink-0" />
           <select
@@ -2292,7 +2292,7 @@ export default function RentalFinancials() {
 
       {/* Content */}
       {isAll ? (
-        <div className="border rounded-2xl shadow-sm p-6" style={{ background: '#F7F5F0', borderColor: '#DDD8CC' }}>
+        <div className="border rounded-2xl shadow-sm p-6" style={{ background: '#F8FAFC', borderColor: '#CBD5E1' }}>
           <div className="flex items-center gap-2 mb-1">
             <TrendingUp size={18} className="text-emerald-600" />
             <h2 className="text-lg font-bold text-gray-900">All Companies — Portfolio Overview</h2>
@@ -2300,7 +2300,7 @@ export default function RentalFinancials() {
           <p className="text-gray-400 text-sm mb-6">{Object.keys(allFinancials).length} companies with uploaded data</p>
           {loadingFin && Object.keys(allFinancials).length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 0', gap: 12 }}>
-              <div style={{ width: 32, height: 32, border: '3px solid #E8DEC8', borderTopColor: '#D4AF37', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+              <div style={{ width: 32, height: 32, border: '3px solid #E2E8F0', borderTopColor: '#6366F1', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
               <p style={{ fontSize: 13, color: '#78716C' }}>Loading financials…</p>
               <p style={{ fontSize: 11, color: '#B0A898' }}>First load may take ~30s while the server wakes up</p>
               <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -2313,7 +2313,7 @@ export default function RentalFinancials() {
         </div>
       ) : loadingFin ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '64px 0', gap: 12 }}>
-          <div style={{ width: 32, height: 32, border: '3px solid #E8DEC8', borderTopColor: '#D4AF37', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          <div style={{ width: 32, height: 32, border: '3px solid #E2E8F0', borderTopColor: '#6366F1', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           <p style={{ fontSize: 13, color: '#78716C' }}>Loading financials…</p>
           <p style={{ fontSize: 11, color: '#B0A898' }}>First load may take ~30s while the server wakes up</p>
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -2321,7 +2321,7 @@ export default function RentalFinancials() {
       ) : currentFin ? (
         <div className="space-y-4">
           {/* Header */}
-          <div className="border rounded-2xl shadow-sm p-4 flex items-center justify-between gap-4 flex-wrap" style={{ background: '#F7F5F0', borderColor: '#DDD8CC' }}>
+          <div className="border rounded-2xl shadow-sm p-4 flex items-center justify-between gap-4 flex-wrap" style={{ background: '#F8FAFC', borderColor: '#CBD5E1' }}>
             <div>
               <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1C1917' }}>{currentFin.companyName}</h1>
               <p style={{ fontSize: 13, color: '#A8A29E', marginTop: 2 }}>
@@ -2332,7 +2332,7 @@ export default function RentalFinancials() {
               {activeTab === 'CFO Dashboard' && currentFin ? (
                 <div style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6,
-                  background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: '10px 12px',
+                  background: '#F1F5F9', border: '0.5px solid #E2E8F0', borderRadius: 8, padding: '10px 12px',
                 }}>
                   <div style={{ fontSize: 11, fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Income Analysis Period
@@ -2388,7 +2388,7 @@ export default function RentalFinancials() {
                   )}
                   <span style={{
                     fontSize: 11, color: '#78716C', background: '#F7F1E6',
-                    border: '1px solid #E8DEC8', borderRadius: 20, padding: '3px 12px',
+                    border: '1px solid #E2E8F0', borderRadius: 20, padding: '3px 12px',
                   }}>
                     {kpiMonth ? `${MONTH_DISPLAY[kpiMonth - 1]} ${kpiYear}` : `FY ${kpiYear}`}
                   </span>
@@ -2409,7 +2409,7 @@ export default function RentalFinancials() {
                     ← Annual Summary
                   </button>
                   <span style={{ color: '#C8C0B0', fontSize: 13 }}>|</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#D4AF37', padding: '3px 10px', borderRadius: 20, background: '#FDF3D7', border: '1.5px solid #D4AF37' }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#6366F1', padding: '3px 10px', borderRadius: 20, background: '#FDF3D7', border: '1.5px solid #6366F1' }}>
                     {selectedYear} — Monthly Detail
                   </span>
                   {/* Quick-jump to other years */}
@@ -2429,9 +2429,9 @@ export default function RentalFinancials() {
                     onClick={() => { setSelectedYear(y); setPeriod(null); }}
                     style={{
                       fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 20,
-                      border: selectedYear === y ? '1.5px solid #D4AF37' : '1.5px solid #C8C0B0',
+                      border: selectedYear === y ? '1.5px solid #6366F1' : '1.5px solid #C8C0B0',
                       background: selectedYear === y ? '#FDF3D7' : 'transparent',
-                      color: selectedYear === y ? '#D4AF37' : '#78716C',
+                      color: selectedYear === y ? '#6366F1' : '#78716C',
                       cursor: 'pointer', transition: 'all 0.15s',
                     }}
                   >
@@ -2482,7 +2482,7 @@ export default function RentalFinancials() {
               }}
                 className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors"
                 style={activeTab === t
-                  ? { background: '#D4AF37', color: '#161310', boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }
+                  ? { background: '#6366F1', color: '#1E1B4B', boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }
                   : { color: '#78716C', background: 'transparent' }}>
                 {t}
               </button>
@@ -2490,7 +2490,7 @@ export default function RentalFinancials() {
           </div>
 
           {/* Tab content */}
-          <div className="border rounded-2xl shadow-sm p-6" style={{ background: '#F7F5F0', borderColor: '#DDD8CC' }}>
+          <div className="border rounded-2xl shadow-sm p-6" style={{ background: '#F8FAFC', borderColor: '#CBD5E1' }}>
             {activeTab === 'P&L Statement' && <PLTable fin={currentFin} selectedYear={selectedYear} period={period} pMonth={pMonth} pYear={pYear} />}
             {activeTab === 'Balance Sheet'  && <BSTable fin={currentFin} selectedYear={selectedYear} period={period} pMonth={pMonth} pYear={pYear} />}
             {activeTab === 'Cash Flow'      && <CFTable fin={currentFin} selectedYear={selectedYear} period={period} pMonth={pMonth} pYear={pYear} />}

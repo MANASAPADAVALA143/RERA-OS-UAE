@@ -26,13 +26,13 @@ const DSCR_STYLE = { green: 'bg-green-100 text-green-800', amber: 'bg-amber-100 
 
 // Cream/amber theme tokens (matches app-wide palette)
 const PT = {
-  pageBg:   '#ECE9E3',
-  cardBg:   '#F7F5F0',
-  border:   '#DDD8CC',
+  pageBg:   '#EEF2FF',
+  cardBg:   '#F8FAFC',
+  border:   '#CBD5E1',
   hdrBg:    '#F0EDE5',
   hdrText:  '#44403C',
-  rowOdd:   '#ECE9E3',
-  rowEven:  '#F7F5F0',
+  rowOdd:   '#EEF2FF',
+  rowEven:  '#F8FAFC',
   text:     '#1C1917',
   muted:    '#78716C',
 };
@@ -609,8 +609,8 @@ export default function RentalLoanTracker() {
           { label: companyFilter !== 'all' ? 'Company Outstanding' : 'Total Outstanding', value: fmtUSD(kpis.portfolio ?? 0), sub: `${scopeLabel} · sum of balances` },
         ].map(k => (
           <div key={k.label} style={{
-            background: k.hero ? 'linear-gradient(135deg,#D4AF37,#B8860B)' : PT.cardBg,
-            border: k.hero ? '1px solid #D4AF37' : `1px solid ${PT.border}`,
+            background: k.hero ? 'linear-gradient(135deg,#6366F1,#7C3AED)' : PT.cardBg,
+            border: k.hero ? '1px solid #6366F1' : `1px solid ${PT.border}`,
             borderRadius: 12, padding: '16px 18px',
           }}>
             <p style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: k.hero ? 'rgba(255,255,255,0.85)' : PT.muted, marginBottom: 4 }}>{k.label}</p>
@@ -624,12 +624,12 @@ export default function RentalLoanTracker() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Portfolio DSCR */}
         <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 12, padding: '16px 18px',
-          borderLeft: extKpis.portfolioDscr == null ? `3px solid ${PT.border}` : extKpis.portfolioDscr > 1.25 ? '3px solid #166534' : extKpis.portfolioDscr >= 1.0 ? '3px solid #F2C94C' : '3px solid #C0392B' }}>
+          borderLeft: extKpis.portfolioDscr == null ? `3px solid ${PT.border}` : extKpis.portfolioDscr > 1.25 ? '3px solid #166534' : extKpis.portfolioDscr >= 1.0 ? '3px solid #818CF8' : '3px solid #C0392B' }}>
           <p style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 4 }}>Portfolio DSCR</p>
           {extKpis.portfolioDscr != null ? (
             <>
               <p style={{ fontSize: 30, fontWeight: 700, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums lining-nums',
-                color: extKpis.portfolioDscr > 1.25 ? '#166534' : extKpis.portfolioDscr >= 1.0 ? '#F2C94C' : '#C0392B' }}>
+                color: extKpis.portfolioDscr > 1.25 ? '#166534' : extKpis.portfolioDscr >= 1.0 ? '#818CF8' : '#C0392B' }}>
                 {extKpis.portfolioDscr.toFixed(2)}x
               </p>
               <p style={{ fontSize: 12, color: PT.muted, marginTop: 4 }}>NOI {fmtUSD(extKpis.totalNoi)}/yr ÷ DS {fmtUSD(extKpis.totalDebtService)}/yr</p>
@@ -647,7 +647,7 @@ export default function RentalLoanTracker() {
           <p style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 4 }}>Wtd Avg Remaining Term</p>
           {extKpis.weightedAvgTerm != null ? (
             <>
-              <p style={{ fontSize: 30, fontWeight: 700, color: extKpis.weightedAvgTerm < 12 ? '#C0392B' : extKpis.weightedAvgTerm < 36 ? '#F2C94C' : PT.text, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums lining-nums' }}>
+              <p style={{ fontSize: 30, fontWeight: 700, color: extKpis.weightedAvgTerm < 12 ? '#C0392B' : extKpis.weightedAvgTerm < 36 ? '#818CF8' : PT.text, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums lining-nums' }}>
                 {Math.round(extKpis.weightedAvgTerm)}mo
               </p>
               <p style={{ fontSize: 12, color: PT.muted, marginTop: 4 }}>~{(extKpis.weightedAvgTerm / 12).toFixed(1)} yrs · weighted by balance</p>
@@ -675,7 +675,7 @@ export default function RentalLoanTracker() {
           {extKpis.avgLtv != null ? (
             <>
               <p style={{ fontSize: 30, fontWeight: 700, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums lining-nums',
-                color: extKpis.avgLtv <= 75 ? '#166534' : extKpis.avgLtv <= 85 ? '#F2C94C' : '#C0392B' }}>
+                color: extKpis.avgLtv <= 75 ? '#166534' : extKpis.avgLtv <= 85 ? '#818CF8' : '#C0392B' }}>
                 {extKpis.avgLtv.toFixed(1)}%
               </p>
               <p style={{ fontSize: 12, color: PT.muted, marginTop: 4 }}>{extKpis.ltvCount} of {filtered.length} loans have property value</p>
@@ -695,7 +695,7 @@ export default function RentalLoanTracker() {
           <p style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 4 }}>Building Concentration Risk</p>
           {extKpis.topBuildingPct != null ? (
             <>
-              <p style={{ fontSize: 30, fontWeight: 700, color: extKpis.topBuildingPct > 50 ? '#C0392B' : extKpis.topBuildingPct > 33 ? '#F2C94C' : '#166534', fontVariantNumeric: 'tabular-nums lining-nums', lineHeight: 1.1 }}>
+              <p style={{ fontSize: 30, fontWeight: 700, color: extKpis.topBuildingPct > 50 ? '#C0392B' : extKpis.topBuildingPct > 33 ? '#818CF8' : '#166534', fontVariantNumeric: 'tabular-nums lining-nums', lineHeight: 1.1 }}>
                 {extKpis.topBuildingPct.toFixed(0)}%
               </p>
               <p style={{ fontSize: 12, color: PT.muted, marginTop: 4 }}>Largest: {extKpis.topBuilding}</p>
@@ -706,7 +706,7 @@ export default function RentalLoanTracker() {
           <p style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: PT.muted, marginBottom: 4 }}>Lender Concentration Risk</p>
           {extKpis.topLenderPct != null ? (
             <>
-              <p style={{ fontSize: 30, fontWeight: 700, color: extKpis.topLenderPct > 60 ? '#C0392B' : extKpis.topLenderPct > 40 ? '#F2C94C' : '#166534', fontVariantNumeric: 'tabular-nums lining-nums', lineHeight: 1.1 }}>
+              <p style={{ fontSize: 30, fontWeight: 700, color: extKpis.topLenderPct > 60 ? '#C0392B' : extKpis.topLenderPct > 40 ? '#818CF8' : '#166534', fontVariantNumeric: 'tabular-nums lining-nums', lineHeight: 1.1 }}>
                 {extKpis.topLenderPct.toFixed(0)}%
               </p>
               <p style={{ fontSize: 12, color: PT.muted, marginTop: 4 }}>Largest lender: {extKpis.topLender}</p>
@@ -858,7 +858,7 @@ export default function RentalLoanTracker() {
                 <YAxis type="category" dataKey="label" width={110} tick={{ fontSize: 12, fill: PT.text }} />
                 <Tooltip formatter={(v: number) => fmtUSD(v)} labelFormatter={(_l, payload) => payload?.[0]?.payload?.name ?? ''} />
                 <Bar dataKey="value" name="Balance" radius={[0, 4, 4, 0]}>
-                  {debtByBuildingRanked.map((_, i) => <Cell key={i} fill={i === 0 ? '#D4AF37' : i === 1 ? '#F2C94C' : '#E8DEC8'} />)}
+                  {debtByBuildingRanked.map((_, i) => <Cell key={i} fill={i === 0 ? '#6366F1' : i === 1 ? '#818CF8' : '#E2E8F0'} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -873,7 +873,7 @@ export default function RentalLoanTracker() {
               <XAxis dataKey="name" angle={-30} textAnchor="end" height={70} tick={{ fontSize: 11, fill: PT.muted }} />
               <YAxis tick={{ fontSize: 11, fill: PT.muted }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
               <Tooltip formatter={(v: number) => fmtUSD(v)} />
-              <Bar dataKey="value" fill="#D4AF37" name="Monthly EMI" radius={[4, 4, 0, 0]}>
+              <Bar dataKey="value" fill="#6366F1" name="Monthly EMI" radius={[4, 4, 0, 0]}>
                 <LabelList dataKey="value" position="top" formatter={(v: number) => fmtUSD(v)} style={{ fontSize: 10, fill: PT.text }} />
               </Bar>
             </BarChart>
@@ -898,7 +898,7 @@ export default function RentalLoanTracker() {
                   {maturityLadderData.map((d, i) => {
                     const yr = typeof d.year === 'string' ? parseInt(d.year) : d.year;
                     const now = new Date().getFullYear();
-                    return <Cell key={i} fill={yr - now <= 1 ? '#C0392B' : yr - now <= 2 ? '#F2C94C' : '#D4AF37'} />;
+                    return <Cell key={i} fill={yr - now <= 1 ? '#C0392B' : yr - now <= 2 ? '#818CF8' : '#6366F1'} />;
                   })}
                 </Bar>
               </BarChart>
@@ -920,7 +920,7 @@ export default function RentalLoanTracker() {
                 <Tooltip formatter={(v: number) => [`${v > 0 ? '+' : ''}${v} bps`, 'Rate vs Market']} />
                 <ReferenceLine y={0} stroke={PT.border} strokeWidth={2} />
                 <Bar dataKey="bps" name="Rate vs Market" radius={[4, 4, 0, 0]}>
-                  {rateVarianceData.map((d, i) => <Cell key={i} fill={d.bps <= 0 ? '#166534' : d.bps <= 50 ? '#F2C94C' : '#C0392B'} />)}
+                  {rateVarianceData.map((d, i) => <Cell key={i} fill={d.bps <= 0 ? '#166534' : d.bps <= 50 ? '#818CF8' : '#C0392B'} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>

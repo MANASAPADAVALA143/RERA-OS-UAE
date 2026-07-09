@@ -115,7 +115,7 @@ function buildRevRows(pl: FinItem[]): { month: string; amount: number }[] {
   return rows;
 }
 
-const TT = { contentStyle: { background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: '0.5rem', fontSize: 13 } };
+const TT = { contentStyle: { background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: '0.5rem', fontSize: 13 } };
 
 // ── component ─────────────────────────────────────────────────────────────────
 export default function RentalExpenses() {
@@ -657,7 +657,7 @@ export default function RentalExpenses() {
         .exp-kpi-card:hover, .parchment-kpi-tile:hover { transform: scale(1.03); box-shadow: 0 6px 12px rgba(0,0,0,0.08); }
         .exp-kpi-card:active, .parchment-kpi-tile:active { transform: scale(0.98); }
         .exp-row:hover td { background: #F7F1E6 !important; }
-        .exp-interactive:focus-visible { outline: 2px solid #D4AF37; outline-offset: 2px; }
+        .exp-interactive:focus-visible { outline: 2px solid #6366F1; outline-offset: 2px; }
         .exp-bar-clickable:hover { cursor: pointer; filter: brightness(1.08); }
         .exp-cat-item:hover { background: #F7F1E6; border-radius: 6px; cursor: pointer; }
       `}</style>
@@ -681,7 +681,7 @@ export default function RentalExpenses() {
           <button
             type="button"
             className="exp-interactive flex items-center gap-2 px-4 py-2 rounded-lg"
-            style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', color: '#57534E', fontSize: 13, fontWeight: 600 }}
+            style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', color: '#57534E', fontSize: 13, fontWeight: 600 }}
             onClick={() => uploadRef.current?.click()}
             disabled={uploading}
           >
@@ -723,12 +723,12 @@ export default function RentalExpenses() {
           </div>
           <div className="flex gap-2">
             <button type="button" className="exp-interactive px-4 py-2 rounded-lg"
-              style={{ background: '#D4AF37', color: '#fff', fontWeight: 600, fontSize: 13 }}
+              style={{ background: '#6366F1', color: '#fff', fontWeight: 600, fontSize: 13 }}
               onClick={confirmMatrixUpload} disabled={confirmingUpload}>
               {confirmingUpload ? 'Saving…' : 'Confirm import'}
             </button>
             <button type="button" className="exp-interactive px-4 py-2 rounded-lg"
-              style={{ background: 'transparent', border: '1px solid #E8DEC8', color: '#78716C', fontSize: 13 }}
+              style={{ background: 'transparent', border: '1px solid #E2E8F0', color: '#78716C', fontSize: 13 }}
               onClick={() => setUploadPreview(null)}>
               Cancel
             </button>
@@ -738,13 +738,13 @@ export default function RentalExpenses() {
 
       {/* Filters + PeriodToggle */}
       <div className="flex flex-wrap items-center gap-4 px-4 py-3 rounded-xl"
-        style={{ background: '#F0EDE5', border: '1px solid #E8DEC8' }}>
+        style={{ background: '#F0EDE5', border: '1px solid #E2E8F0' }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Company</span>
         <select
           value={filterCompany}
           onChange={e => { setFilterCompany(e.target.value); setFilterCat(null); }}
           className="exp-interactive"
-          style={{ background: '#FBF6EE', color: '#1C1917', border: '1px solid #E8DEC8',
+          style={{ background: '#F1F5F9', color: '#1C1917', border: '1px solid #E2E8F0',
             borderRadius: 8, padding: '6px 12px', fontSize: 14 }}
         >
           <option value="">All Companies</option>
@@ -752,7 +752,7 @@ export default function RentalExpenses() {
         </select>
         {filterCompany && (
           <button className="exp-interactive" onClick={() => setFilterCompany('')}
-            style={{ fontSize: 12, color: '#D4AF37', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+            style={{ fontSize: 12, color: '#6366F1', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
             × clear
           </button>
         )}
@@ -764,7 +764,7 @@ export default function RentalExpenses() {
 
       {loading ? <LoadingSkeleton rows={8} /> : noData ? (
         <div className="p-6 rounded-xl text-center space-y-3"
-          style={{ background: '#F0EDE5', border: '1px solid #E8DEC8', color: '#A8A29E', fontSize: 15 }}>
+          style={{ background: '#F0EDE5', border: '1px solid #E2E8F0', color: '#A8A29E', fontSize: 15 }}>
           <p>No expense data yet.</p>
           <p style={{ fontSize: 13 }}>
             Upload a company × month matrix (rows = companies, columns = Dec 2021, Jan 2022, …)
@@ -832,7 +832,7 @@ export default function RentalExpenses() {
                   setShowOneTime(v => !v);
                   setTimeout(() => oneTimePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 80);
                 }}
-                style={{ color: '#D4AF37', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+                style={{ color: '#6366F1', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
                 {showOneTime ? 'hide' : 'view'}
               </button>
               {showOneTime && (
@@ -868,7 +868,7 @@ export default function RentalExpenses() {
           {/* ── Charts row 1: Donut, Company bar, Trend ───────────────────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Horizontal bar chart — click to filter table */}
-            <div className="rounded-xl p-4" style={{ background: '#FBF6EE', border: '1px solid #E8DEC8' }}>
+            <div className="rounded-xl p-4" style={{ background: '#F1F5F9', border: '1px solid #E2E8F0' }}>
               <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 8 }}>Expense by Category</p>
               {filterCat && (
                 <div className="flex items-center gap-2 mb-2">
@@ -924,7 +924,7 @@ export default function RentalExpenses() {
             </div>
 
             {/* By Company — click bar to drill down */}
-            <div className="rounded-xl p-4" style={{ background: '#FBF6EE', border: '1px solid #E8DEC8' }}>
+            <div className="rounded-xl p-4" style={{ background: '#F1F5F9', border: '1px solid #E2E8F0' }}>
               <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Expense by Company</p>
               <p style={{ fontSize: 12, color: '#A8A29E', marginBottom: 2 }}>Click a bar to filter to that company</p>
               <p style={{ fontSize: 11, color: '#B8A99A', marginBottom: 8 }}>
@@ -954,7 +954,7 @@ export default function RentalExpenses() {
                     <Tooltip formatter={(v: number) => fmtUSD(v)} {...TT} />
                     <Bar dataKey="amount" radius={[0, 4, 4, 0]} className="exp-bar-clickable">
                       {byCompany.map((e, i) => (
-                        <Cell key={i} fill="#D4AF37"
+                        <Cell key={i} fill="#6366F1"
                           opacity={!filterCompany || filterCompany === (nameToId[e.name] ?? '') ? 1 : 0.35} />
                       ))}
                     </Bar>
@@ -966,7 +966,7 @@ export default function RentalExpenses() {
             </div>
 
             {/* Trend 6 months */}
-            <div className="rounded-xl p-4" style={{ background: '#FBF6EE', border: '1px solid #E8DEC8' }}>
+            <div className="rounded-xl p-4" style={{ background: '#F1F5F9', border: '1px solid #E2E8F0' }}>
               <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>
                 Expense Trend — 6 Months to {trendEndLabel}
               </p>
@@ -983,9 +983,9 @@ export default function RentalExpenses() {
                         return `${label}${mom !== null && mom !== undefined ? `  •  MoM: ${mom > 0 ? '+' : ''}${mom.toFixed(1)}%` : ''}`;
                       }}
                       {...TT} />
-                    <Line type="monotone" dataKey="amount" stroke="#D4AF37" strokeWidth={2}
-                      dot={{ fill: '#D4AF37', r: 4, strokeWidth: 0 }}
-                      activeDot={{ r: 6, fill: '#B8860B' }} />
+                    <Line type="monotone" dataKey="amount" stroke="#6366F1" strokeWidth={2}
+                      dot={{ fill: '#6366F1', r: 4, strokeWidth: 0 }}
+                      activeDot={{ r: 6, fill: '#7C3AED' }} />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
@@ -996,7 +996,7 @@ export default function RentalExpenses() {
 
           {/* ── Top Category Trends — stacked column (default) / single line (filter active) ── */}
           {(stackedTrendData.length > 0 || singleCatTrend.length > 0) && (
-            <div className="rounded-xl p-4" style={{ background: '#FBF6EE', border: '1px solid #E8DEC8' }}>
+            <div className="rounded-xl p-4" style={{ background: '#F1F5F9', border: '1px solid #E2E8F0' }}>
               <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>
                 Top Category Trends — 6 Months to {trendEndLabel}
               </p>
@@ -1054,7 +1054,7 @@ export default function RentalExpenses() {
           {/* ── Charts row 3: YoY comparison + Heatmap ────────────────────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* YoY */}
-            <div className="rounded-xl p-4" style={{ background: '#FBF6EE', border: '1px solid #E8DEC8' }}>
+            <div className="rounded-xl p-4" style={{ background: '#F1F5F9', border: '1px solid #E2E8F0' }}>
               <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Year-over-Year Comparison</p>
               <p style={{ fontSize: 12, color: '#A8A29E', marginBottom: 10 }}>This year vs same months last year</p>
               <ResponsiveContainer width="100%" height={220}>
@@ -1062,12 +1062,12 @@ export default function RentalExpenses() {
                   <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#78716C' }} />
                   <YAxis tick={{ fontSize: 12, fill: '#78716C' }} tickFormatter={(v: number) => `$${(v/1000).toFixed(0)}k`} />
                   <Tooltip formatter={(v: number) => fmtUSD(v)} {...TT} />
-                  <Bar dataKey="thisYear" name="This Year" fill="#D4AF37" radius={[3,3,0,0]} />
-                  <Bar dataKey="lastYear" name="Last Year" fill="#E8DEC8" radius={[3,3,0,0]} />
+                  <Bar dataKey="thisYear" name="This Year" fill="#6366F1" radius={[3,3,0,0]} />
+                  <Bar dataKey="lastYear" name="Last Year" fill="#E2E8F0" radius={[3,3,0,0]} />
                 </BarChart>
               </ResponsiveContainer>
               <div className="flex gap-4 mt-2">
-                {[{color:'#D4AF37',label:'This Year'},{color:'#E8DEC8',label:'Last Year'}].map(({color,label})=>(
+                {[{color:'#6366F1',label:'This Year'},{color:'#E2E8F0',label:'Last Year'}].map(({color,label})=>(
                   <span key={label} className="flex items-center gap-1.5" style={{ fontSize: 12, color: '#78716C' }}>
                     <span className="w-3 h-2 rounded-sm" style={{ background: color, display: 'inline-block' }} />{label}
                   </span>
@@ -1076,7 +1076,7 @@ export default function RentalExpenses() {
             </div>
 
             {/* Heatmap — company × month */}
-            <div className="rounded-xl p-4" style={{ background: '#FBF6EE', border: '1px solid #E8DEC8' }}>
+            <div className="rounded-xl p-4" style={{ background: '#F1F5F9', border: '1px solid #E2E8F0' }}>
               <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Expense Heatmap — Company × Month</p>
               <p style={{ fontSize: 12, color: '#A8A29E', marginBottom: 10 }}>Darker gold = higher spend</p>
               {heatmapCompanies.length > 0 ? (
@@ -1104,7 +1104,7 @@ export default function RentalExpenses() {
                             return (
                               <td key={m} title={`${co} · ${m}: ${fmtUSD(amt)}`}
                                 style={{
-                                  background: amt > 0 ? `rgba(212,175,55,${Math.max(0.08, intensity * 0.9)})` : '#F7F1E6',
+                                  background: amt > 0 ? `rgba(99,102,241,${Math.max(0.08, intensity * 0.9)})` : '#F7F1E6',
                                   borderRadius: 4, textAlign: 'center', fontSize: 11, color: intensity > 0.5 ? '#5C4033' : '#78716C',
                                   fontWeight: intensity > 0.5 ? 600 : 400, padding: '5px 4px', minWidth: 44,
                                   transition: 'background 0.15s ease-out',
@@ -1125,8 +1125,8 @@ export default function RentalExpenses() {
           </div>
 
           {/* ── All Expenses table ────────────────────────────────────────────── */}
-          <div className="rounded-xl" style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', overflow: 'hidden' }}>
-            <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid #E8DEC8' }}>
+          <div className="rounded-xl" style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+            <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid #E2E8F0' }}>
               <p style={{ fontSize: 16, fontWeight: 600, color: '#1C1917' }}>
                 All Expenses{period ? ` — ${period}` : ''}
               </p>
@@ -1145,7 +1145,7 @@ export default function RentalExpenses() {
             <div className="overflow-x-auto" style={{ maxHeight: 480, overflowY: 'auto' }}>
               <table className="w-full">
                 <thead className="sticky top-0" style={{ background: '#F0EDE5' }}>
-                  <tr style={{ borderBottom: '1px solid #E8DEC8' }}>
+                  <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
                     {['Company','Category','Month','Amount'].map(h => (
                       <th key={h} className="py-2 px-3 text-left"
                         style={{ fontSize: 14, fontWeight: 600, color: '#78716C' }}>{h}</th>
@@ -1173,9 +1173,9 @@ export default function RentalExpenses() {
                 </tbody>
                 {tableRows.length > 0 && (
                   <tfoot>
-                    <tr style={{ borderTop: '2px solid #E8DEC8', background: '#F0EDE5' }}>
+                    <tr style={{ borderTop: '2px solid #E2E8F0', background: '#F0EDE5' }}>
                       <td colSpan={3} className="py-2 px-3" style={{ fontSize: 14, fontWeight: 700, color: '#1C1917' }}>Total</td>
-                      <td className="py-2 px-3 text-right" style={{ fontSize: 17, fontWeight: 700, color: '#D4AF37' }}>
+                      <td className="py-2 px-3 text-right" style={{ fontSize: 17, fontWeight: 700, color: '#6366F1' }}>
                         {fmtUSD(tableRows.reduce((s, r) => s + r.amount, 0))}
                       </td>
                     </tr>

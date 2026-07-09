@@ -7,8 +7,8 @@ import jwt
 from config import settings
 
 DEMO_EMAIL = settings.primary_user_email
-DEMO_PASSWORD = "AiM1S@2026#Secure"
-DEMO_COMPANY = "Summit Holdings LLC"
+DEMO_PASSWORD = "DemoRera2026!"
+DEMO_COMPANY = "RERA OS Demo Portfolio"
 
 
 def hash_password(password: str) -> str:

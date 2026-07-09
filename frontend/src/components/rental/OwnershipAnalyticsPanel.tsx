@@ -6,8 +6,8 @@ import { useOwnershipAnalyticsData } from '../../hooks/useOwnershipAnalyticsData
 import { fmtOwnershipK, OWNERSHIP_CHART_COLORS } from '../../utils/ownershipFinancials';
 
 const P = {
-  cardBg: '#FBF6EE',
-  border: '#E8DEC8',
+  cardBg: '#F1F5F9',
+  border: '#E2E8F0',
   text: '#1C1917',
   muted: '#78716C',
 } as const;
@@ -166,7 +166,7 @@ export default function OwnershipAnalyticsPanel({ entityCompanyId = 'portfolio',
                   ]}
                   labelFormatter={(_, payload) => payload?.[0]?.payload?.name ?? ''}
                 />
-                <Scatter data={scatterPoints} fill="#B8860B" fillOpacity={0.75} />
+                <Scatter data={scatterPoints} fill="#7C3AED" fillOpacity={0.75} />
               </ScatterChart>
             </ResponsiveContainer>
           ) : (

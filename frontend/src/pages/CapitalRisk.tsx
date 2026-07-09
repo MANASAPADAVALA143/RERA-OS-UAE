@@ -1,4 +1,4 @@
-ï»¿import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
@@ -35,12 +35,12 @@ interface LenderRiskSummary {
 }
 
 function fmtDscr(v: number | null) {
-  if (v == null) return 'â€”';
+  if (v == null) return '—';
   return v.toFixed(2) + 'x';
 }
 
 function fmtLtv(v: number | null) {
-  if (v == null) return 'â€”';
+  if (v == null) return '—';
   return (v * 100).toFixed(1) + '%';
 }
 
@@ -53,10 +53,10 @@ function dscrCellClass(v: number | null) {
 
 const BUCKET_ORDER = ['0-30_days', '31-60_days', '61-90_days', '91-180_days', '180_plus_days'];
 const BUCKET_LABELS: Record<string, string> = {
-  '0-30_days': '0â€“30 days',
-  '31-60_days': '31â€“60 days',
-  '61-90_days': '61â€“90 days',
-  '91-180_days': '91â€“180 days',
+  '0-30_days': '0–30 days',
+  '31-60_days': '31–60 days',
+  '61-90_days': '61–90 days',
+  '91-180_days': '91–180 days',
   '180_plus_days': '180+ days',
 };
 const safe = (n: number | null | undefined) => (n == null || Number.isNaN(n) ? 0 : n);
@@ -170,7 +170,7 @@ export default function CapitalRisk() {
     { key: 'ltv_headroom_pct', label: 'LTV Headroom', render: (r) => `${safe(r.ltv_headroom_pct).toFixed(1)}%`, sortValue: (r) => safe(r.ltv_headroom_pct) },
     { key: 'dscr_headroom', label: 'DSCR Headroom', render: (r) => safe(r.dscr_headroom).toFixed(2), sortValue: (r) => safe(r.dscr_headroom) },
     { key: 'breach_risk', label: 'Covenant', render: (r) => <StatusPill status={r.breach_risk === 'none' ? 'healthy' : r.breach_risk} /> },
-    { key: 'maturity_date', label: 'Maturity', render: (r) => r.maturity_date || 'â€”' },
+    { key: 'maturity_date', label: 'Maturity', render: (r) => r.maturity_date || '—' },
   ];
 
   const litigationColumns: Column<LitigationClaim>[] = [
@@ -183,7 +183,7 @@ export default function CapitalRisk() {
 
   const taxColumns: Column<TaxEvent>[] = [
     { key: 'event_type', label: 'Event', render: (r) => r.event_type.replace(/_/g, ' ') },
-    { key: 'deadline_date', label: 'Deadline', render: (r) => r.deadline_date || 'â€”' },
+    { key: 'deadline_date', label: 'Deadline', render: (r) => r.deadline_date || '—' },
     { key: 'days_until_deadline', label: 'Days Left', sortValue: (r) => safe(r.days_until_deadline) },
     { key: 'amount', label: 'Amount', render: (r) => fmtUSD(r.amount), sortValue: (r) => safe(r.amount) },
     { key: 'status', label: 'Status', render: (r) => <StatusPill status={r.status} /> },
@@ -216,7 +216,7 @@ export default function CapitalRisk() {
         <KpiCard label="Capital Available" value={fmtUSD(capital?.total)} accent />
         <KpiCard label="Total Exposure" value={fmtUSD(litigation?.summary.total_exposure)} sub="Litigation" />
         <KpiCard label="Reserved" value={fmtUSD(litigation?.summary.total_reserved)} sub="Litigation" />
-        <KpiCard label="Top Vendor Share" value={fmtPct(vendorConc?.top_vendor_pct)} sub={vendorConc?.top_vendor || 'â€”'} />
+        <KpiCard label="Top Vendor Share" value={fmtPct(vendorConc?.top_vendor_pct)} sub={vendorConc?.top_vendor || '—'} />
       </div>
 
       {vendorConc?.concentration_risk && (
@@ -239,7 +239,7 @@ export default function CapitalRisk() {
                 <XAxis dataKey="bucket" tick={{ fontSize: 11 }} />
                 <YAxis tickFormatter={(v) => `$${(v / 1e6).toFixed(1)}M`} />
                 <Tooltip formatter={(v: number) => fmtUSD(v)} />
-                <Bar dataKey="amount" fill="#B8962E" name="Committed" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="amount" fill="#4F46E5" name="Committed" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -279,7 +279,7 @@ export default function CapitalRisk() {
                 <XAxis type="number" tickFormatter={(v) => `${v}%`} />
                 <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} />
                 <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} />
-                <Bar dataKey="pct" fill="#D4AF37" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="pct" fill="#6366F1" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -300,7 +300,7 @@ export default function CapitalRisk() {
         </ErrorBoundary>
       </div>
 
-      {/* Lender Risk â€” DSCR / LTV across all loans */}
+      {/* Lender Risk — DSCR / LTV across all loans */}
       {lenderRisk && (
         <ErrorBoundary>
           <Card title="Lender Risk (DSCR / LTV)">
@@ -326,7 +326,7 @@ export default function CapitalRisk() {
             {lenderRisk.loans_below_1_00x.count > 0 && (
               <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg mb-4 text-sm text-red-800">
                 <AlertTriangle size={16} className="shrink-0 mt-0.5 text-red-600" />
-                {lenderRisk.loans_below_1_00x.count} loan{lenderRisk.loans_below_1_00x.count > 1 ? 's' : ''} below 1.00x DSCR â€” potential covenant breach.
+                {lenderRisk.loans_below_1_00x.count} loan{lenderRisk.loans_below_1_00x.count > 1 ? 's' : ''} below 1.00x DSCR — potential covenant breach.
               </div>
             )}
 
@@ -355,10 +355,10 @@ export default function CapitalRisk() {
                           {loan.context_type ?? 'construction'}
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-right">{loan.loan_balance_as_of != null ? fmtUSD(loan.loan_balance_as_of) : 'â€”'}</td>
+                      <td className="px-3 py-2 text-right">{loan.loan_balance_as_of != null ? fmtUSD(loan.loan_balance_as_of) : '—'}</td>
                       <td className={`px-3 py-2 text-right ${dscrCellClass(loan.dscr)}`}>{fmtDscr(loan.dscr)}</td>
                       <td className="px-3 py-2 text-right">{fmtLtv(loan.ltv_current)}</td>
-                      <td className="px-3 py-2 text-right text-gray-500">{loan.loan_maturity_date ?? 'â€”'}</td>
+                      <td className="px-3 py-2 text-right text-gray-500">{loan.loan_maturity_date ?? '—'}</td>
                     </tr>
                   ))}
                   {lenderRisk.all_loans.length === 0 && (

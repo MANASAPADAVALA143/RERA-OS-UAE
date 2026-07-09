@@ -20,8 +20,8 @@ export function ParchmentKpiTile({
       className="parchment-kpi-tile"
       title={tip}
       style={{
-        background: accent ? 'linear-gradient(135deg,#D4AF37,#B8860B)' : warn ? '#FEF3C7' : '#FBF6EE',
-        border: `1px solid ${warn ? '#FDE68A' : '#E8DEC8'}`,
+        background: accent ? 'linear-gradient(135deg,#6366F1,#7C3AED)' : warn ? '#FEF3C7' : '#F1F5F9',
+        border: `1px solid ${warn ? '#FDE68A' : '#E2E8F0'}`,
         borderRadius: 12,
         padding: compact ? '12px 14px' : '16px 18px',
         cursor: 'default',

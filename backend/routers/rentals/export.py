@@ -167,7 +167,7 @@ def export_cfo_dashboard(
     )
 
     from datetime import date
-    filename = f"EstateCFO_Dashboard_{date.today().isoformat()}.xlsx"
+    filename = f"RERA_OS_Dashboard_{date.today().isoformat()}.xlsx"
     return Response(
         content=xlsx_bytes,
         media_type=_XLSX_MIME,

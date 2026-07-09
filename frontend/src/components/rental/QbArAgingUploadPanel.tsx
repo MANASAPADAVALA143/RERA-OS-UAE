@@ -58,10 +58,10 @@ interface QBPreview {
 
 const SEL: React.CSSProperties = {
   fontSize: 12,
-  border: '1px solid #E8DEC8',
+  border: '1px solid #E2E8F0',
   borderRadius: 6,
   padding: '5px 10px',
-  background: '#FBF6EE',
+  background: '#F1F5F9',
   color: '#374151',
 };
 
@@ -305,10 +305,10 @@ export default function QbArAgingUploadPanel({
   };
 
   return (
-    <div style={{ border: '1px solid #E8DEC8', borderRadius: 10, overflow: 'hidden', background: '#FDFAF4' }}>
+    <div style={{ border: '1px solid #E2E8F0', borderRadius: 10, overflow: 'hidden', background: '#FDFAF4' }}>
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '10px 14px', borderBottom: expanded ? '1px solid #E8DEC8' : 'none',
+        padding: '10px 14px', borderBottom: expanded ? '1px solid #E2E8F0' : 'none',
         background: '#F5F0E8', flexWrap: 'wrap', gap: 8,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -353,8 +353,8 @@ export default function QbArAgingUploadPanel({
           onClick={() => setExpanded(v => !v)}
           style={{
             fontSize: 12, padding: '5px 14px', borderRadius: 6,
-            border: '1px solid #D4AF37',
-            background: expanded ? '#FBF6EE' : 'linear-gradient(135deg,#D4AF37,#B8860B)',
+            border: '1px solid #6366F1',
+            background: expanded ? '#F1F5F9' : 'linear-gradient(135deg,#6366F1,#7C3AED)',
             color: expanded ? '#5C5043' : '#fff',
             cursor: 'pointer', fontWeight: 600,
           }}
@@ -474,7 +474,7 @@ export default function QbArAgingUploadPanel({
               </div>
               <label style={{
                 display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px',
-                border: '1px solid #E8DEC8', borderRadius: 6, background: '#FBF6EE',
+                border: '1px solid #E2E8F0', borderRadius: 6, background: '#F1F5F9',
                 cursor: 'pointer', fontSize: 12, color: '#5C5043', fontWeight: 500,
               }}>
                 <span>📎</span>
@@ -498,7 +498,7 @@ export default function QbArAgingUploadPanel({
             disabled={!qbAsOfDate || qbUploading}
             style={{
               padding: '7px 20px', borderRadius: 6, border: 'none',
-              background: (!qbAsOfDate || qbUploading) ? '#D4AF3766' : 'linear-gradient(135deg,#D4AF37,#B8860B)',
+              background: (!qbAsOfDate || qbUploading) ? '#6366F166' : 'linear-gradient(135deg,#6366F1,#7C3AED)',
               color: '#fff', fontWeight: 700, fontSize: 13,
               cursor: (!qbAsOfDate || qbUploading) ? 'not-allowed' : 'pointer',
               marginBottom: 10,
@@ -537,7 +537,7 @@ export default function QbArAgingUploadPanel({
                   { label: 'Unit Matched', value: qbPreview.matched_count },
                   { label: 'Unit Unmatched', value: qbPreview.unmatched_count },
                 ].map(k => (
-                  <div key={k.label} style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, padding: '8px 14px', textAlign: 'center', minWidth: 80 }}>
+                  <div key={k.label} style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px 14px', textAlign: 'center', minWidth: 80 }}>
                     <div style={{ fontSize: 18, fontWeight: 700, color: '#262626' }}>{k.value}</div>
                     <div style={{ fontSize: 10, color: '#6B6B6B', marginTop: 2, fontWeight: 600 }}>{k.label}</div>
                   </div>
@@ -552,7 +552,7 @@ export default function QbArAgingUploadPanel({
                   { label: '61–90d', v: qbPreview.portfolio_totals.days_61_90, c: '#DC2626' },
                   { label: '90+d', v: qbPreview.portfolio_totals.days_91_plus, c: '#991B1B' },
                 ].map(b => (
-                  <div key={b.label} style={{ flex: 1, minWidth: 72, background: '#FBF6EE', borderRadius: 8, padding: '8px 10px', textAlign: 'center', borderTop: `3px solid ${b.c}` }}>
+                  <div key={b.label} style={{ flex: 1, minWidth: 72, background: '#F1F5F9', borderRadius: 8, padding: '8px 10px', textAlign: 'center', borderTop: `3px solid ${b.c}` }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: b.c }}>{fmtUSD(b.v)}</div>
                     <div style={{ fontSize: 10, color: '#6B6B6B', marginTop: 2 }}>{b.label}</div>
                   </div>

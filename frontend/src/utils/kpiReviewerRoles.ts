@@ -4,10 +4,9 @@ export const KPI_REVIEWER_ROLES = new Set([
   'internal_reviewer',
 ]);
 
-/** CA firm operator emails — Calculations Review (matches backend kpi_reviewer_emails). */
+/** Demo operator emails — Calculations Review (matches backend kpi_reviewer_emails). */
 export const KPI_REVIEWER_EMAILS = new Set([
-  'consulting.akk@gmail.com',
-  'consultingakk@gmail.com',
+  'demo@reraos.demo',
 ]);
 
 export function isKpiReviewerRole(role: string | undefined | null): boolean {

@@ -456,7 +456,7 @@ def delete_tenant(
     - Return a table-by-table row-count summary for the audit trail.
     - Log the operation to audit_logs BEFORE committing (using caller's tenant_id).
 
-    NEVER call this against AKK's tenant or any live LLC tenant without
+    NEVER call this against a production tenant without explicit confirmation.
     confirming on a disposable test tenant first.
     """
     try:

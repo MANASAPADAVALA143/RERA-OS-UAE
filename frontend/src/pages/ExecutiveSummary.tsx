@@ -1,4 +1,4 @@
-ï»¿import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
@@ -10,7 +10,7 @@ import { LoadingSkeleton } from '../components/ui/Table';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { fmtUSD, fmtPct } from '../components/ProtectedRoute';
 
-const CHART_COLORS = ['#D4AF37', '#B8962E', '#92400E', '#F0D070'];
+const CHART_COLORS = ['#6366F1', '#4F46E5', '#92400E', '#F0D070'];
 
 const safe = (n: number | null | undefined) => (n == null || Number.isNaN(n) ? 0 : n);
 
@@ -244,7 +244,7 @@ export default function ExecutiveSummary() {
                     <AlertTriangle size={16} className={a.severity === 'red' ? 'text-red-600' : 'text-amber-600'} />
                     <div className="flex-1">
                       <p className="text-sm text-charcoal">{a.message}</p>
-                      <Link to={a.route} className="text-xs text-accent hover:underline">{a.type.replace(/_/g, ' ')} â†’</Link>
+                      <Link to={a.route} className="text-xs text-accent hover:underline">{a.type.replace(/_/g, ' ')} ?</Link>
                     </div>
                   </li>
                 ))}
@@ -265,7 +265,7 @@ export default function ExecutiveSummary() {
                   <XAxis dataKey="status" tick={{ fontSize: 11 }} />
                   <YAxis allowDecimals={false} />
                   <Tooltip />
-                  <Bar dataKey="count" fill="#D4AF37" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="count" fill="#6366F1" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -279,7 +279,7 @@ export default function ExecutiveSummary() {
         <Card title="Returns by Project">
           {!portfolioRoi?.configured_project_count ? (
             <p className="text-gray-400 text-center py-6">
-              No active projects with ROI assumptions. Configure assumptions under Construction â†’ Financials & ROI.
+              No active projects with ROI assumptions. Configure assumptions under Construction ? Financials & ROI.
             </p>
           ) : (
             <>
@@ -310,20 +310,20 @@ export default function ExecutiveSummary() {
                       <tr key={p.project_id} className="border-b border-gray-50 hover:bg-gray-50/50">
                         <td className="py-2 pr-4">
                           <Link to="/construction" className="text-accent hover:underline">
-                            {p.project_code ? `${p.project_code} â€” ` : ''}{p.project_name}
+                            {p.project_code ? `${p.project_code} — ` : ''}{p.project_name}
                           </Link>
                         </td>
                         <td className="py-2 pr-4">{fmtUSD(p.equity_invested)}</td>
-                        <td className="py-2 pr-4">{p.roi != null ? fmtPct(p.roi) : 'â€”'}</td>
-                        <td className="py-2 pr-4">{p.moic != null ? `${p.moic.toFixed(2)}x` : 'â€”'}</td>
-                        <td className="py-2">{p.net_profit != null ? fmtUSD(p.net_profit) : 'â€”'}</td>
+                        <td className="py-2 pr-4">{p.roi != null ? fmtPct(p.roi) : '—'}</td>
+                        <td className="py-2 pr-4">{p.moic != null ? `${p.moic.toFixed(2)}x` : '—'}</td>
+                        <td className="py-2">{p.net_profit != null ? fmtUSD(p.net_profit) : '—'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
               <p className="text-xs text-gray-400 mt-3">
-                Sorted by ROI (highest first). Portfolio KPIs use total profit Ã· total equity â€” not a simple average of project ROI percentages.
+                Sorted by ROI (highest first). Portfolio KPIs use total profit ÷ total equity — not a simple average of project ROI percentages.
               </p>
             </>
           )}
@@ -352,7 +352,7 @@ export default function ExecutiveSummary() {
                   <XAxis type="number" tickFormatter={(v) => `$${(v / 1e6).toFixed(1)}M`} />
                   <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 12 }} />
                   <Tooltip formatter={(v: number) => fmtUSD(v)} />
-                  <Bar dataKey="value" fill="#B8962E" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="value" fill="#4F46E5" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

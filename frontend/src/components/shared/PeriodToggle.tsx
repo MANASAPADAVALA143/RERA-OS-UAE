@@ -54,14 +54,14 @@ export default function PeriodToggle({ period, month, year, onChange, availableK
       {/* Segmented control */}
       <div style={{
         display: 'inline-flex', background: '#F7F1E6',
-        border: '1px solid #E8DEC8', borderRadius: 8, padding: 3,
+        border: '1px solid #E2E8F0', borderRadius: 8, padding: 3,
       }}>
         {PERIODS.map(p => (
           <button key={p} onClick={() => handlePeriodClick(p)} style={{
             fontSize: 13,
             fontWeight: period === p ? 700 : 500,
             color: period === p ? '#1C1917' : '#78716C',
-            background: period === p ? '#D4AF37' : 'transparent',
+            background: period === p ? '#6366F1' : 'transparent',
             borderRadius: period === p ? 6 : 0,
             padding: '4px 16px',
             border: 'none',
@@ -79,7 +79,7 @@ export default function PeriodToggle({ period, month, year, onChange, availableK
         <select
           value={month}
           onChange={e => handleMonthChange(Number(e.target.value))}
-          style={{ fontSize: 13, border: '1px solid #E8DEC8', borderRadius: 6, padding: '5px 10px', background: '#FBF6EE', color: '#1C1917', cursor: 'pointer' }}
+          style={{ fontSize: 13, border: '1px solid #E2E8F0', borderRadius: 6, padding: '5px 10px', background: '#F1F5F9', color: '#1C1917', cursor: 'pointer' }}
         >
           {availableMonthsForYear.map(m => (
             <option key={m} value={m}>{MONTH_NAMES[m - 1]}</option>
@@ -92,7 +92,7 @@ export default function PeriodToggle({ period, month, year, onChange, availableK
         <select
           value={year}
           onChange={e => handleYearChange(Number(e.target.value))}
-          style={{ fontSize: 13, border: '1px solid #E8DEC8', borderRadius: 6, padding: '5px 10px', background: '#FBF6EE', color: '#1C1917', cursor: 'pointer' }}
+          style={{ fontSize: 13, border: '1px solid #E2E8F0', borderRadius: 6, padding: '5px 10px', background: '#F1F5F9', color: '#1C1917', cursor: 'pointer' }}
         >
           {availableYears.map(y => (
             <option key={y} value={y}>{y}</option>
@@ -104,7 +104,7 @@ export default function PeriodToggle({ period, month, year, onChange, availableK
       {period && (
         <span style={{
           fontSize: 11, color: '#78716C', background: '#F7F1E6',
-          border: '1px solid #E8DEC8', borderRadius: 20, padding: '3px 12px',
+          border: '1px solid #E2E8F0', borderRadius: 20, padding: '3px 12px',
           whiteSpace: 'nowrap',
         }}>
           {periodChipText(period, month, year)}

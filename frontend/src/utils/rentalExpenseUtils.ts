@@ -105,12 +105,12 @@ export function allMonthKeys(items: FinItem[]): string[] {
   return Array.from(s);
 }
 
-/** Parchment/earth palette used across expense charts. */
+/** Indigo / purple / teal palette used across expense charts. */
 export const EXP_PALETTE = [
-  '#D4AF37','#B8860B','#C08B40','#8B6914','#A67C52',
-  '#7A6040','#C4A882','#6B4423','#C17A3F','#9B6B4A',
-  '#D4956A','#8B7355','#E8C87A','#5C4033','#A87050',
-  '#7D5A3C','#D4B896','#C19A65',
+  '#6366F1','#7C3AED','#14B8A6','#4F46E5','#8B5CF6',
+  '#0D9488','#818CF8','#A78BFA','#2DD4BF','#5B21B6',
+  '#312E81','#06B6D4','#C4B5FD','#99F6E4','#4338CA',
+  '#1E1B4B','#67E8F9','#DDD6FE','#134E4A','#6D28D9',
 ];
 export const catColor = (cat: string, cats: string[]) =>
   EXP_PALETTE[cats.indexOf(cat) % EXP_PALETTE.length] ?? '#A8A29E';

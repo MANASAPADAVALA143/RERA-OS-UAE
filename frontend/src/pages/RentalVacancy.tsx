@@ -18,24 +18,24 @@ interface CompanyOption { id: string; company_name: string }
 
 // ── shared styles ─────────────────────────────────────────────────────────────
 const CARD: React.CSSProperties = {
-  background: '#FBF6EE',
-  border: '1px solid #E8DEC8',
+  background: '#F1F5F9',
+  border: '1px solid #E2E8F0',
   borderRadius: 12,
   padding: '18px 20px',
 };
 const TT = {
-  contentStyle: { background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 },
+  contentStyle: { background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13 },
 };
 
 function VKpi({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <div style={{
       ...CARD,
-      background: accent ? '#161310' : '#FBF6EE',
-      border: accent ? '1px solid #D4AF37' : '1px solid #E8DEC8',
+      background: accent ? '#1E1B4B' : '#F1F5F9',
+      border: accent ? '1px solid #6366F1' : '1px solid #E2E8F0',
     }}>
       <p style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em',
-        color: accent ? '#D4AF37' : '#92400E', marginBottom: 6 }}>{label}</p>
+        color: accent ? '#6366F1' : '#92400E', marginBottom: 6 }}>{label}</p>
       <p style={{ fontSize: 34, fontWeight: 700, color: accent ? '#fff' : '#1C1917', lineHeight: 1.1,
         fontVariantNumeric: 'tabular-nums lining-nums' }}>{value}</p>
     </div>
@@ -43,7 +43,7 @@ function VKpi({ label, value, accent }: { label: string; value: string; accent?:
 }
 
 const SEL: React.CSSProperties = {
-  background: '#F7F5F0', border: '1px solid #E8DEC8', color: '#1C1917',
+  background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#1C1917',
   borderRadius: 8, padding: '6px 12px', fontSize: 14,
 };
 
@@ -142,13 +142,13 @@ export default function RentalVacancy() {
 
           {/* Vacant Units table */}
           <div style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid #E8DEC8' }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid #E2E8F0' }}>
               <span style={{ fontSize: 16, fontWeight: 600, color: '#92400E' }}>Vacant Units</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full" style={{ borderCollapse: 'collapse' }}>
                 <thead style={{ background: '#F0EDE5' }}>
-                  <tr style={{ borderBottom: '1px solid #E8DEC8' }}>
+                  <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
                     <TH label="Unit"           k="unit_number" />
                     <TH label="Company"        k="company_name" />
                     <TH label="Property"       k="property_name" />
@@ -161,7 +161,7 @@ export default function RentalVacancy() {
                   {sorted.length === 0 ? (
                     <tr><td colSpan={6} style={{ padding: '40px 16px', textAlign: 'center', fontSize: 14, color: '#A8A29E' }}>No vacant units</td></tr>
                   ) : sorted.map((u, i) => (
-                    <tr key={u.id} style={{ borderBottom: '1px solid #F0EDE5', background: i % 2 === 0 ? '#FBF6EE' : '#F7F1E6' }}>
+                    <tr key={u.id} style={{ borderBottom: '1px solid #F0EDE5', background: i % 2 === 0 ? '#F1F5F9' : '#F7F1E6' }}>
                       <td style={{ padding: '10px 14px', fontSize: 14, fontWeight: 500, color: '#1C1917' }}>{u.unit_number}</td>
                       <td style={{ padding: '10px 14px', fontSize: 14, color: '#92400E' }}>{u.company_name ?? '—'}</td>
                       <td style={{ padding: '10px 14px', fontSize: 14, color: '#92400E' }}>{u.property_name ?? '—'}</td>
@@ -179,7 +179,7 @@ export default function RentalVacancy() {
                 </tbody>
                 {sorted.length > 0 && (
                   <tfoot>
-                    <tr style={{ borderTop: '2px solid #E8DEC8', background: '#F0EDE5' }}>
+                    <tr style={{ borderTop: '2px solid #E2E8F0', background: '#F0EDE5' }}>
                       <td colSpan={4} style={{ padding: '10px 14px', fontSize: 14, fontWeight: 700, color: '#1C1917' }}>Total Monthly Loss</td>
                       <td style={{ padding: '10px 14px', fontSize: 17, fontWeight: 700, color: '#B91C1C', textAlign: 'right', fontVariantNumeric: 'tabular-nums lining-nums' }}>
                         {fmtUSD(totalLoss)}

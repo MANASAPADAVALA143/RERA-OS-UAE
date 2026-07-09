@@ -33,12 +33,12 @@ function PropertyColumnChart({ slices }: { slices: PropertySlice[] }) {
   }));
 
   return (
-    <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '20px 24px' }}>
+    <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: '20px 24px' }}>
       <div style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Income vs Expense by Property</div>
       <div style={{ fontSize: 12, color: '#78716C', marginBottom: 16 }}>Clustered columns per company/entity in portfolio</div>
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={data} margin={{ left: 8, right: 16, top: 8, bottom: 24 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
           <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#78716C' }} />
           <YAxis tick={{ fontSize: 10, fill: '#78716C' }} tickFormatter={v => fmtAnalyticsCurrency(v)} width={64} />
           <Tooltip formatter={(v: number) => fmtAnalyticsCurrency(v)} />
@@ -64,7 +64,7 @@ function NoiTreemap({ slices }: { slices: PropertySlice[] }) {
   [slices]);
 
   return (
-    <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '20px 24px' }}>
+    <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: '20px 24px' }}>
       <div style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Portfolio NOI Contribution</div>
       <div style={{ fontSize: 12, color: '#78716C', marginBottom: 16 }}>Treemap sized by NOI across properties/companies</div>
       {data.length === 0 ? (

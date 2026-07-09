@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell,
 } from 'recharts';
@@ -189,9 +189,9 @@ const EMPTY_ASSUMPTIONS_FORM = {
   selling_costs_pct: '0.025',
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Sub-components for the Overview mission-control layout
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 function BulletBar({ fill, target, label }: { fill: number; target: number | null; label: string }) {
   const fillPct = Math.min(1, Math.max(0, fill)) * 100;
@@ -204,7 +204,7 @@ function BulletBar({ fill, target, label }: { fill: number; target: number | nul
         <span className="text-sm font-medium text-charcoal">{label}</span>
         {targetPct != null && (
           <span className={`text-xs font-medium ${ahead ? 'text-green-700' : 'text-amber-700'}`}>
-            {ahead ? '▲ Ahead of schedule' : '▼ Behind schedule'} ({targetPct.toFixed(1)}% elapsed)
+            {ahead ? '? Ahead of schedule' : '? Behind schedule'} ({targetPct.toFixed(1)}% elapsed)
           </span>
         )}
       </div>
@@ -338,8 +338,8 @@ function VendorHeatmap({ docs }: { docs: ComplianceDoc[] }) {
   };
 
   const cellLabel = (status: string | undefined) => {
-    if (!status) return '—';
-    if (status === 'approved' || status === 'compliant') return '✓';
+    if (!status) return '�';
+    if (status === 'approved' || status === 'compliant') return '?';
     if (status === 'missing') return 'Missing';
     if (status === 'expired') return 'Expired';
     return status.replace(/_/g, ' ');
@@ -398,7 +398,7 @@ function ScheduleDelayChart({ tasks, onViewAll }: { tasks: ScheduleTask[]; onVie
   }
 
   const chartData = displayTasks.map((t) => ({
-    name: t.task_name.length > 28 ? t.task_name.slice(0, 26) + '…' : t.task_name,
+    name: t.task_name.length > 28 ? t.task_name.slice(0, 26) + '�' : t.task_name,
     days_late: safe(t.days_late),
     status: t.days_late > 30 ? 'critical' : 'late',
   }));
@@ -456,7 +456,7 @@ function CostExposureChart({ trades }: { trades: CostTrade[] }) {
   const statusColor = (status: string) => {
     if (status === 'over_budget') return '#DC2626';
     if (status === 'watch') return '#F59E0B';
-    return '#D4AF37';
+    return '#6366F1';
   };
 
   return (
@@ -470,7 +470,7 @@ function CostExposureChart({ trades }: { trades: CostTrade[] }) {
         <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={160} />
         <Tooltip formatter={(v: number) => fmtUSD(v)} />
         <Legend wrapperStyle={{ fontSize: 11 }} />
-        <Bar dataKey="budgeted" name="Budgeted" fill="#B8962E" radius={[0, 3, 3, 0]} maxBarSize={12} />
+        <Bar dataKey="budgeted" name="Budgeted" fill="#4F46E5" radius={[0, 3, 3, 0]} maxBarSize={12} />
         <Bar dataKey="exposure" name="Actual + Committed" radius={[0, 3, 3, 0]} maxBarSize={12}>
           {chartData.map((entry, i) => (
             <Cell key={i} fill={statusColor(entry.status)} />
@@ -481,9 +481,9 @@ function CostExposureChart({ trades }: { trades: CostTrade[] }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Priority-ranked attention items across all categories
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 function buildAttentionItems(
   permits: Permit[],
@@ -563,9 +563,9 @@ function buildAttentionItems(
   return items.slice(0, 3);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Schedule elapsed calculation
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 function calcScheduleElapsed(start: string | null | undefined, end: string | null | undefined): number | null {
   if (!start || !end) return null;
@@ -576,9 +576,9 @@ function calcScheduleElapsed(start: string | null | undefined, end: string | nul
   return Math.max(0, Math.min(1, (nowMs - startMs) / (endMs - startMs)));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Main component
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 export default function Construction() {
   const { canWrite } = useAuth();
@@ -711,7 +711,7 @@ export default function Construction() {
     }
   }, [projectId, projects, fetchProjectData]);
 
-  // ── Derived values for the overview ───────────────────────────────────────
+  // -- Derived values for the overview ---------------------------------------
 
   const totalBudget = trades.reduce((s, t) => s + safe(t.budgeted_cost), 0);
   const weightedComplete = totalBudget > 0
@@ -736,30 +736,30 @@ export default function Construction() {
   const coColumns: Column<ChangeOrder>[] = [
     { key: 'co_number', label: 'CO #', sortValue: (r) => r.co_number },
     { key: 'title', label: 'Title', sortValue: (r) => r.title },
-    { key: 'csi_division_code', label: 'CSI', render: (r) => r.csi_division_code || '—' },
+    { key: 'csi_division_code', label: 'CSI', render: (r) => r.csi_division_code || '�' },
     { key: 'requested_amount', label: 'Requested', render: (r) => fmtUSD(r.requested_amount), sortValue: (r) => safe(r.requested_amount) },
-    { key: 'approved_amount', label: 'Approved', render: (r) => (r.approved_amount != null ? fmtUSD(r.approved_amount) : '—'), sortValue: (r) => safe(r.approved_amount) },
+    { key: 'approved_amount', label: 'Approved', render: (r) => (r.approved_amount != null ? fmtUSD(r.approved_amount) : '�'), sortValue: (r) => safe(r.approved_amount) },
     { key: 'status', label: 'Status', render: (r) => <StatusPill status={r.status} /> },
-    { key: 'impact_on_schedule_days', label: 'Schedule Impact', render: (r) => (r.impact_on_schedule_days != null ? `${r.impact_on_schedule_days}d` : '—') },
+    { key: 'impact_on_schedule_days', label: 'Schedule Impact', render: (r) => (r.impact_on_schedule_days != null ? `${r.impact_on_schedule_days}d` : '�') },
   ];
 
   const scheduleColumns: Column<ScheduleTask>[] = [
     { key: 'task_name', label: 'Task', sortValue: (r) => r.task_name },
-    { key: 'vendor_name', label: 'Vendor', render: (r) => r.vendor_name || '—' },
-    { key: 'planned_end', label: 'Planned End', render: (r) => r.planned_end || '—' },
+    { key: 'vendor_name', label: 'Vendor', render: (r) => r.vendor_name || '�' },
+    { key: 'planned_end', label: 'Planned End', render: (r) => r.planned_end || '�' },
     { key: 'pct_complete', label: '% Complete', render: (r) => fmtPct(r.pct_complete), sortValue: (r) => safe(r.pct_complete) },
     { key: 'status', label: 'Status', render: (r) => <StatusPill status={r.is_late ? 'late' : r.status} /> },
-    { key: 'days_late', label: 'Days Late', render: (r) => (r.is_late ? `${r.days_late}d` : '—'), sortValue: (r) => safe(r.days_late) },
-    { key: 'is_critical', label: 'Critical', render: (r) => (r.is_critical ? 'Yes' : '—') },
+    { key: 'days_late', label: 'Days Late', render: (r) => (r.is_late ? `${r.days_late}d` : '�'), sortValue: (r) => safe(r.days_late) },
+    { key: 'is_critical', label: 'Critical', render: (r) => (r.is_critical ? 'Yes' : '�') },
   ];
 
   const complianceColumns: Column<ComplianceDoc>[] = [
     { key: 'vendor_name', label: 'Vendor', sortValue: (r) => r.vendor_name },
     { key: 'doc_type', label: 'Doc Type', render: (r) => r.doc_type.replace(/_/g, ' ') },
-    { key: 'doc_name', label: 'Document', render: (r) => r.doc_name || '—' },
+    { key: 'doc_name', label: 'Document', render: (r) => r.doc_name || '�' },
     { key: 'status', label: 'Status', render: (r) => <StatusPill status={r.status} /> },
-    { key: 'expiry_date', label: 'Expiry', render: (r) => r.expiry_date || '—' },
-    { key: 'is_blocking', label: 'Blocking', render: (r) => (r.is_blocking ? 'Yes' : '—') },
+    { key: 'expiry_date', label: 'Expiry', render: (r) => r.expiry_date || '�' },
+    { key: 'is_blocking', label: 'Blocking', render: (r) => (r.is_blocking ? 'Yes' : '�') },
   ];
 
   const handleSaveSnapshot = async (e: React.FormEvent) => {
@@ -819,7 +819,7 @@ export default function Construction() {
   };
 
   const snapshotColumns: Column<FinancialSnapshot>[] = [
-    { key: 'period_end', label: 'Period End', render: (r) => r.period_end || '—', sortValue: (r) => r.period_end || '' },
+    { key: 'period_end', label: 'Period End', render: (r) => r.period_end || '�', sortValue: (r) => r.period_end || '' },
     { key: 'received_from_owner', label: 'Received', render: (r) => fmtUSD(r.received_from_owner), sortValue: (r) => safe(r.received_from_owner) },
     { key: 'paid_to_subcontractors', label: 'Paid Subs', render: (r) => fmtUSD(r.paid_to_subcontractors), sortValue: (r) => safe(r.paid_to_subcontractors) },
     { key: 'other_expenses', label: 'Other', render: (r) => fmtUSD(r.other_expenses), sortValue: (r) => safe(r.other_expenses) },
@@ -828,9 +828,9 @@ export default function Construction() {
     { key: 'retainage_receivable', label: 'Retainage Recv.', render: (r) => fmtUSD(r.retainage_receivable), sortValue: (r) => safe(r.retainage_receivable) },
   ];
 
-  // ─────────────────────────────────────────────────────────────────────────
+  // -------------------------------------------------------------------------
   // Render
-  // ─────────────────────────────────────────────────────────────────────────
+  // -------------------------------------------------------------------------
 
   return (
     <div className="space-y-6">
@@ -845,7 +845,7 @@ export default function Construction() {
           {projects.length === 0 && <option value="">No projects</option>}
           {projects.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.project_code ? `${p.project_code} — ` : ''}{p.project_name}
+              {p.project_code ? `${p.project_code} � ` : ''}{p.project_name}
             </option>
           ))}
         </select>
@@ -864,9 +864,9 @@ export default function Construction() {
         <LoadingSkeleton rows={8} />
       ) : (
         <>
-          {/* ══════════════════════════════════════════════════════════════════
-              OVERVIEW TAB — Mission-Control Layout
-          ══════════════════════════════════════════════════════════════════ */}
+          {/* ------------------------------------------------------------------
+              OVERVIEW TAB � Mission-Control Layout
+          ------------------------------------------------------------------ */}
           {tab === 'overview' && selectedProject && (
             <div className="space-y-6">
 
@@ -887,7 +887,7 @@ export default function Construction() {
                       selectedProject.project_type?.replace(/_/g, ' '),
                       selectedProject.created_by,
                       [selectedProject.city, selectedProject.state].filter(Boolean).join(', '),
-                    ].filter(Boolean).join(' · ')}
+                    ].filter(Boolean).join(' � ')}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-gray-400 shrink-0">
@@ -939,7 +939,7 @@ export default function Construction() {
                     <div className="flex gap-3">
                       <span className="text-sm text-gray-500 w-32 shrink-0">Schedule</span>
                       <span className="text-sm text-charcoal">
-                        {selectedProject.start_date ?? '—'} → {selectedProject.target_completion_date ?? '—'}
+                        {selectedProject.start_date ?? '�'} ? {selectedProject.target_completion_date ?? '�'}
                       </span>
                     </div>
                   )}
@@ -977,7 +977,7 @@ export default function Construction() {
                     <StatCell label="Pending" value={fmtPct(Math.max(0, 1 - weightedComplete))} />
                     {scheduleElapsed == null && (
                       <p className="col-span-2 text-xs text-gray-400">
-                        Schedule dates not set — target marker unavailable.
+                        Schedule dates not set � target marker unavailable.
                       </p>
                     )}
                   </div>
@@ -999,12 +999,12 @@ export default function Construction() {
                       </div>
                       <div className="grid grid-cols-2 gap-x-6 gap-y-3 mt-5 border-t border-gray-100 pt-4">
                         <StatCell label="Contract Value" value={fmtUSD(contractValue)} />
-                        <StatCell label="Total Completed" value={cashLatest ? fmtUSD(totalCompleted) : '—'} />
+                        <StatCell label="Total Completed" value={cashLatest ? fmtUSD(totalCompleted) : '�'} />
                         <StatCell
                           label="Balance to Finish"
-                          value={balanceToFinish != null ? fmtUSD(balanceToFinish) : '—'}
+                          value={balanceToFinish != null ? fmtUSD(balanceToFinish) : '�'}
                         />
-                        <StatCell label="Amount Paid" value={cashLatest ? fmtUSD(amtPaid) : '—'} />
+                        <StatCell label="Amount Paid" value={cashLatest ? fmtUSD(amtPaid) : '�'} />
                         <StatCell
                           label="Retainage"
                           value={retainageHeld != null ? fmtUSD(retainageHeld) : 'not tracked'}
@@ -1017,7 +1017,7 @@ export default function Construction() {
                         />
                       </div>
                       {!cashLatest && (
-                        <p className="text-xs text-gray-400 mt-3">No financial snapshot recorded yet — paid / retainage figures unavailable.</p>
+                        <p className="text-xs text-gray-400 mt-3">No financial snapshot recorded yet � paid / retainage figures unavailable.</p>
                       )}
                     </>
                   )}
@@ -1029,7 +1029,7 @@ export default function Construction() {
                 <div className="bg-red-50 border border-red-200 rounded-xl p-5">
                   <h3 className="font-semibold text-red-800 flex items-center gap-2 mb-3 text-sm">
                     <AlertTriangle size={15} />
-                    Attention Required — top {attentionItems.length} issue{attentionItems.length !== 1 ? 's' : ''} across all categories
+                    Attention Required � top {attentionItems.length} issue{attentionItems.length !== 1 ? 's' : ''} across all categories
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {attentionItems.map((item) => (
@@ -1100,7 +1100,7 @@ export default function Construction() {
               </div>
 
               {/* Section 5: Division cost exposure */}
-              <Card title="Division Cost Exposure — sorted worst variance first">
+              <Card title="Division Cost Exposure � sorted worst variance first">
                 <ErrorBoundary>
                   <CostExposureChart trades={trades} />
                 </ErrorBoundary>
@@ -1129,36 +1129,36 @@ export default function Construction() {
             <p className="text-gray-400 text-center py-12">Select a project to view the dashboard.</p>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════════
+          {/* ------------------------------------------------------------------
               COSTS & SOV TAB
-          ══════════════════════════════════════════════════════════════════ */}
+          ------------------------------------------------------------------ */}
           {tab === 'costs' && (
             <ErrorBoundary>
               <ConstructionSOV projectId={projectId} />
             </ErrorBoundary>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════════
+          {/* ------------------------------------------------------------------
               PAY APPLICATIONS TAB
-          ══════════════════════════════════════════════════════════════════ */}
+          ------------------------------------------------------------------ */}
           {tab === 'pay_applications' && (
             <ErrorBoundary>
               <ConstructionPayApplications projectId={projectId} />
             </ErrorBoundary>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════════
+          {/* ------------------------------------------------------------------
               EXPENSES TAB
-          ══════════════════════════════════════════════════════════════════ */}
+          ------------------------------------------------------------------ */}
           {tab === 'expenses' && (
             <ErrorBoundary>
               <ConstructionExpenses projectId={projectId} />
             </ErrorBoundary>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════════
+          {/* ------------------------------------------------------------------
               CHANGE ORDERS TAB
-          ══════════════════════════════════════════════════════════════════ */}
+          ------------------------------------------------------------------ */}
           {tab === 'change_orders' && (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -1174,31 +1174,31 @@ export default function Construction() {
             </>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════════
+          {/* ------------------------------------------------------------------
               TASK SCHEDULE TAB
-          ══════════════════════════════════════════════════════════════════ */}
+          ------------------------------------------------------------------ */}
           {tab === 'task_schedule' && (
             <ErrorBoundary>
               <ConstructionTaskSchedule projectId={projectId} />
             </ErrorBoundary>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════════
-              SCHEDULE TAB (executive late-task exception view — unchanged)
-          ══════════════════════════════════════════════════════════════════ */}
+          {/* ------------------------------------------------------------------
+              SCHEDULE TAB (executive late-task exception view � unchanged)
+          ------------------------------------------------------------------ */}
           {tab === 'schedule' && (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <KpiCard label="Tracked Tasks" value={String(scheduleTasks.length)} />
                 <KpiCard label="Late Tasks" value={String(scheduleSummary.late_tasks)} accent={scheduleSummary.late_tasks > 0} />
-                <KpiCard label="Max Days Late" value={scheduleSummary.max_days_late > 0 ? `${scheduleSummary.max_days_late}d` : '—'} />
+                <KpiCard label="Max Days Late" value={scheduleSummary.max_days_late > 0 ? `${scheduleSummary.max_days_late}d` : '�'} />
               </div>
               {scheduleSummary.late_tasks > 0 && (
                 <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
                   <Clock className="text-amber-600 shrink-0" size={20} />
                   <p className="text-sm text-amber-800">
                     {scheduleSummary.late_tasks} task(s) behind schedule
-                    {scheduleSummary.max_days_late > 0 ? ` — worst slip ${scheduleSummary.max_days_late} days` : ''}.
+                    {scheduleSummary.max_days_late > 0 ? ` � worst slip ${scheduleSummary.max_days_late} days` : ''}.
                   </p>
                 </div>
               )}
@@ -1210,18 +1210,18 @@ export default function Construction() {
             </>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════════
+          {/* ------------------------------------------------------------------
               LOAN TRACKER TAB
-          ══════════════════════════════════════════════════════════════════ */}
+          ------------------------------------------------------------------ */}
           {tab === 'loan_tracker' && (
             <ErrorBoundary>
               <ConstructionLoanTracker />
             </ErrorBoundary>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════════
+          {/* ------------------------------------------------------------------
               COMPLIANCE TAB
-          ══════════════════════════════════════════════════════════════════ */}
+          ------------------------------------------------------------------ */}
           {tab === 'compliance' && (
             <>
               {vendorGaps.length > 0 && (
@@ -1231,7 +1231,7 @@ export default function Construction() {
                     <p className="font-medium text-red-800">Vendor compliance gaps</p>
                     <ul className="text-sm text-red-700 mt-1 list-disc list-inside">
                       {vendorGaps.map((v) => (
-                        <li key={v.vendor_name}>{v.vendor_name} — no compliant documents on file</li>
+                        <li key={v.vendor_name}>{v.vendor_name} � no compliant documents on file</li>
                       ))}
                     </ul>
                   </div>
@@ -1245,54 +1245,54 @@ export default function Construction() {
             </>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════════
+          {/* ------------------------------------------------------------------
               CHANGE REQUESTS TAB
-          ══════════════════════════════════════════════════════════════════ */}
+          ------------------------------------------------------------------ */}
           {tab === 'change_requests' && (
             <ErrorBoundary>
               <ConstructionCR projectId={projectId} />
             </ErrorBoundary>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════════
+          {/* ------------------------------------------------------------------
               WORK LOG TAB
-          ══════════════════════════════════════════════════════════════════ */}
+          ------------------------------------------------------------------ */}
           {tab === 'work_log' && (
             <ErrorBoundary>
               <ConstructionWorkLog projectId={projectId} />
             </ErrorBoundary>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════════
+          {/* ------------------------------------------------------------------
               QUALITY CHECK TAB
-          ══════════════════════════════════════════════════════════════════ */}
+          ------------------------------------------------------------------ */}
           {tab === 'quality_check' && (
             <ErrorBoundary>
               <ConstructionQC projectId={projectId} />
             </ErrorBoundary>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════════
+          {/* ------------------------------------------------------------------
               INSPECTIONS TAB
-          ══════════════════════════════════════════════════════════════════ */}
+          ------------------------------------------------------------------ */}
           {tab === 'inspections' && (
             <ErrorBoundary>
               <ConstructionInspections projectId={projectId} />
             </ErrorBoundary>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════════
+          {/* ------------------------------------------------------------------
               DOCUMENTS TAB
-          ══════════════════════════════════════════════════════════════════ */}
+          ------------------------------------------------------------------ */}
           {tab === 'documents' && (
             <ErrorBoundary>
               <ConstructionDocuments projectId={projectId} />
             </ErrorBoundary>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════════
+          {/* ------------------------------------------------------------------
               RECEIVABLES TAB
-          ══════════════════════════════════════════════════════════════════ */}
+          ------------------------------------------------------------------ */}
           {tab === 'receivables' && (
             <ErrorBoundary>
               <PropertyDevProvider>
@@ -1301,25 +1301,25 @@ export default function Construction() {
             </ErrorBoundary>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════════
+          {/* ------------------------------------------------------------------
               FINANCIALS & ROI TAB
-          ══════════════════════════════════════════════════════════════════ */}
+          ------------------------------------------------------------------ */}
           {tab === 'financials' && (
             <>
               <ErrorBoundary>
                 <Card title="Realized Cash Position">
                   <p className="text-sm text-gray-500 mb-4">
-                    Cash-basis view — independent of accrual Cost Trades. A project can show fine budget variance while cash-negative if billing lags collection.
+                    Cash-basis view � independent of accrual Cost Trades. A project can show fine budget variance while cash-negative if billing lags collection.
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                     <KpiCard
                       label="Net Realized Cash"
-                      value={cashLatest ? fmtUSD(cashLatest.net_realized_cash) : '—'}
+                      value={cashLatest ? fmtUSD(cashLatest.net_realized_cash) : '�'}
                       accent
                       sub={cashLatest?.period_end ? `Period ending ${cashLatest.period_end}` : 'No snapshot yet'}
                     />
-                    <KpiCard label="Retainage Held" value={cashLatest ? fmtUSD(cashLatest.retainage_held) : '—'} />
-                    <KpiCard label="Retainage Receivable" value={cashLatest ? fmtUSD(cashLatest.retainage_receivable) : '—'} />
+                    <KpiCard label="Retainage Held" value={cashLatest ? fmtUSD(cashLatest.retainage_held) : '�'} />
+                    <KpiCard label="Retainage Receivable" value={cashLatest ? fmtUSD(cashLatest.retainage_receivable) : '�'} />
                   </div>
 
                   {canWrite && (
@@ -1348,7 +1348,7 @@ export default function Construction() {
                       </div>
                       <button type="submit" disabled={savingSnapshot}
                         className="px-4 py-2 bg-primary text-white rounded-lg text-sm hover:bg-primary-light disabled:opacity-50">
-                        {savingSnapshot ? 'Saving…' : 'Save Snapshot'}
+                        {savingSnapshot ? 'Saving�' : 'Save Snapshot'}
                       </button>
                     </form>
                   )}
@@ -1408,7 +1408,7 @@ export default function Construction() {
                         </div>
                         <button type="submit" disabled={savingAssumptions}
                           className="px-4 py-2 bg-primary text-white rounded-lg text-sm hover:bg-primary-light disabled:opacity-50">
-                          {savingAssumptions ? 'Saving…' : 'Save Assumptions'}
+                          {savingAssumptions ? 'Saving�' : 'Save Assumptions'}
                         </button>
                       </form>
                     )}
@@ -1429,11 +1429,11 @@ export default function Construction() {
                   ) : (
                     <>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
-                        <KpiCard label="ROI" value={roiSummary.roi != null ? fmtPct(roiSummary.roi) : '—'} accent />
-                        <KpiCard label="MOIC" value={roiSummary.moic != null ? `${roiSummary.moic.toFixed(2)}x` : '—'} />
-                        <KpiCard label="Net Profit" value={roiSummary.net_profit != null ? fmtUSD(roiSummary.net_profit) : '—'} />
-                        <KpiCard label="Exit Value" value={roiSummary.exit_value != null ? fmtUSD(roiSummary.exit_value) : '—'} />
-                        <KpiCard label="Net Sale Proceeds" value={roiSummary.net_sale_proceeds != null ? fmtUSD(roiSummary.net_sale_proceeds) : '—'} />
+                        <KpiCard label="ROI" value={roiSummary.roi != null ? fmtPct(roiSummary.roi) : '�'} accent />
+                        <KpiCard label="MOIC" value={roiSummary.moic != null ? `${roiSummary.moic.toFixed(2)}x` : '�'} />
+                        <KpiCard label="Net Profit" value={roiSummary.net_profit != null ? fmtUSD(roiSummary.net_profit) : '�'} />
+                        <KpiCard label="Exit Value" value={roiSummary.exit_value != null ? fmtUSD(roiSummary.exit_value) : '�'} />
+                        <KpiCard label="Net Sale Proceeds" value={roiSummary.net_sale_proceeds != null ? fmtUSD(roiSummary.net_sale_proceeds) : '�'} />
                       </div>
                       {roiSummary.irr != null && (
                         <div className="p-3 bg-transparent rounded-lg text-sm">

@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, ScatterChart, Scatter, CartesianGrid, ReferenceLine } from 'recharts';
 import { Calendar, Filter, RefreshCw, AlertCircle, TrendingUp, TrendingDown, DollarSign, Users, Home, AlertTriangle, Building2, CreditCard, TrendingUpIcon, Zap } from 'lucide-react';
 import api from '../services/api';
@@ -27,8 +27,8 @@ interface CompanySummary {
   vacant_units: number;
 }
 
-const COLORS = ['#10B981', '#D4AF37', '#F59E0B', '#EF4444', '#8B5CF6'];
-const TOOLTIP_STYLE = { contentStyle: { background: '#F7F5F0', border: '1px solid #DDD8CC', color: '#1C1917', borderRadius: 8 } };
+const COLORS = ['#10B981', '#6366F1', '#F59E0B', '#EF4444', '#8B5CF6'];
+const TOOLTIP_STYLE = { contentStyle: { background: '#F8FAFC', border: '1px solid #CBD5E1', color: '#1C1917', borderRadius: 8 } };
 
 interface StyledKpiProps {
   icon: React.ReactNode;
@@ -111,18 +111,18 @@ export default function RentalPortfolio() {
 
   return (
     <div className="space-y-6 p-6" style={{ background: 'transparent' }}>
-      {/* ─────── TOP BAR ─────── */}
+      {/* ------- TOP BAR ------- */}
       <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold" style={{ color: '#1C1917' }}>Rental Portfolio Dashboard</h1>
           <p className="text-sm mt-1" style={{ color: '#A8A29E' }}>Executive overview of portfolio performance</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2" style={{ background: '#F7F5F0', border: '1px solid #DDD8CC', padding: '8px 12px', borderRadius: '8px' }}>
-            <Calendar size={16} style={{ color: '#D4AF37' }} />
+          <div className="flex items-center gap-2" style={{ background: '#F8FAFC', border: '1px solid #CBD5E1', padding: '8px 12px', borderRadius: '8px' }}>
+            <Calendar size={16} style={{ color: '#6366F1' }} />
             <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} style={{ background: 'transparent', color: '#1C1917', border: 'none', fontSize: '14px' }} />
           </div>
-          <button style={{ background: '#F7F5F0', border: '1px solid #DDD8CC', color: '#D4AF37', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px' }}>
+          <button style={{ background: '#F8FAFC', border: '1px solid #CBD5E1', color: '#6366F1', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px' }}>
             <Filter size={14} className="inline mr-1" /> Filters
           </button>
           <button onClick={() => fetchData()} style={{ background: 'transparent', border: 'none', color: '#92400E', cursor: 'pointer', fontSize: '12px' }}>
@@ -131,7 +131,7 @@ export default function RentalPortfolio() {
         </div>
       </div>
 
-      {/* ─────── ROW 1: KPI CARDS ─────── */}
+      {/* ------- ROW 1: KPI CARDS ------- */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <StyledKpiCard
           icon={<Building2 size={20} />}
@@ -146,7 +146,7 @@ export default function RentalPortfolio() {
           label="Rent Collected"
           value={fmtUSD(data.collected_this_month)}
           sub={`${collectionRate.toFixed(1)}% collection rate`}
-          borderColor="#D4AF37"
+          borderColor="#6366F1"
           iconBgColor="rgba(59, 130, 246, 0.15)"
         />
         <StyledKpiCard
@@ -154,7 +154,7 @@ export default function RentalPortfolio() {
           label="NOI This Month"
           value={fmtUSD(data.noi_this_month)}
           sub={`${noiMargin.toFixed(1)}% margin`}
-          borderColor="#D4AF37"
+          borderColor="#6366F1"
           iconBgColor="rgba(59, 130, 246, 0.15)"
         />
         <StyledKpiCard
@@ -183,20 +183,20 @@ export default function RentalPortfolio() {
         />
       </div>
 
-      {/* ─────── ROW 2: INCOME TREND + NOI BY COMPANY ─────── */}
+      {/* ------- ROW 2: INCOME TREND + NOI BY COMPANY ------- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div style={{ background: '#0F1629', border: '1px solid #1E2942', borderRadius: '10px', padding: '20px' }}>
           <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#1C1917', marginBottom: '16px' }}>Income Trend (Last 6 Months)</h3>
           {data.income_trend && data.income_trend.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
               <LineChart data={data.income_trend.slice(-6)}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#DDD8CC" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#CBD5E1" />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#92400E' }} />
                 <YAxis tick={{ fontSize: 11, fill: '#92400E' }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v: number) => fmtUSD(v)} {...TOOLTIP_STYLE} />
                 <Legend wrapperStyle={{ paddingTop: '16px' }} />
                 <Line type="monotone" dataKey="collected" stroke="#10B981" name="Collected" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="billed" stroke="#D4AF37" name="Gross Potential" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                <Line type="monotone" dataKey="billed" stroke="#6366F1" name="Gross Potential" strokeWidth={2} strokeDasharray="5 5" dot={false} />
               </LineChart>
             </ResponsiveContainer>
           ) : (
@@ -211,11 +211,11 @@ export default function RentalPortfolio() {
           {filteredCompanies.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={filteredCompanies.slice(0, 6)}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#DDD8CC" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#CBD5E1" />
                 <XAxis dataKey="company_name" tick={{ fontSize: 10, fill: '#92400E' }} />
                 <YAxis tick={{ fontSize: 11, fill: '#92400E' }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v: number) => fmtUSD(v)} {...TOOLTIP_STYLE} />
-                <Bar dataKey="noi_this_month" fill="#D4AF37" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="noi_this_month" fill="#6366F1" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -226,7 +226,7 @@ export default function RentalPortfolio() {
         </div>
       </div>
 
-      {/* ─────── ROW 3: OCCUPANCY GAUGE + VACANT UNITS + ARREARS ─────── */}
+      {/* ------- ROW 3: OCCUPANCY GAUGE + VACANT UNITS + ARREARS ------- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div style={{ background: '#0F1629', border: '1px solid #1E2942', borderRadius: '10px', padding: '20px' }}>
           <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#1C1917', marginBottom: '20px' }}>Occupancy vs Target</h3>
@@ -235,7 +235,7 @@ export default function RentalPortfolio() {
               {fmtPct(data.occupancy_pct)}
             </div>
             <div style={{ fontSize: '12px', color: '#92400E', marginTop: '12px' }}>
-              {data.occupancy_pct >= 0.95 ? '✓ Above 95% target' : '⚠ Below 95% target'}
+              {data.occupancy_pct >= 0.95 ? '? Above 95% target' : '? Below 95% target'}
             </div>
           </div>
         </div>
@@ -271,26 +271,26 @@ export default function RentalPortfolio() {
         </div>
       </div>
 
-      {/* ─────── ROW 5: ATTENTION PANEL ─────── */}
+      {/* ------- ROW 5: ATTENTION PANEL ------- */}
       <div style={{ background: '#0F1629', border: '1px solid #1E2942', borderRadius: '10px', padding: '20px' }}>
         <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#1C1917', marginBottom: '16px' }}>Attention Now</h3>
         <div className="space-y-2">
           {data.occupancy_pct < 0.9 && (
             <div style={{ background: '#FCEAEA', border: '1px solid rgba(192,57,43,0.25)', color: '#8B3A3A', padding: '12px', borderRadius: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
               <AlertTriangle size={18} color="#C0392B" />
-              <span>{data.vacant_units} vacant unit(s) — below occupancy target</span>
+              <span>{data.vacant_units} vacant unit(s) � below occupancy target</span>
             </div>
           )}
           {data.arrears_total > data.gross_potential_rent * 0.1 && (
             <div style={{ background: '#FCEAEA', border: '1px solid rgba(192,57,43,0.25)', color: '#8B3A3A', padding: '12px', borderRadius: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
               <AlertTriangle size={18} color="#C0392B" />
-              <span>Arrears exceeding 10% of GPR — {fmtUSD(data.arrears_total)}</span>
+              <span>Arrears exceeding 10% of GPR � {fmtUSD(data.arrears_total)}</span>
             </div>
           )}
           {collectionRate < 95 && (
             <div style={{ background: '#FDF3D9', border: '1px solid rgba(138,97,22,0.25)', color: '#6B4F1A', padding: '12px', borderRadius: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
               <AlertCircle size={18} color="#8A6116" />
-              <span>Collection rate {collectionRate.toFixed(1)}% — below 95% target</span>
+              <span>Collection rate {collectionRate.toFixed(1)}% � below 95% target</span>
             </div>
           )}
           {data.by_company.filter(c => c.occupancy_pct < 0.85).length > 0 && (

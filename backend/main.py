@@ -72,7 +72,7 @@ import models.propdev.loan  # noqa: F401
 import models.propdev.capital_call  # noqa: F401
 import models.propdev.expense  # noqa: F401
 
-app = FastAPI(title="EstateCFO API", version="1.0.0")
+app = FastAPI(title="RERA OS API", version="1.0.0-demo")
 
 
 @app.exception_handler(Exception)

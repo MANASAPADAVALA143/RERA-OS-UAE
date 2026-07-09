@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { usePropDev } from '../../contexts/PropertyDevContext';
 import CompanyComparisonPanel from '../../components/propdev/CompanyComparisonPanel';
 import {
@@ -64,16 +64,16 @@ export default function PD01Dashboard() {
   const monthlyData = p?.monthlyData ?? [];
 
   const alerts = [
-    ...overdueCalls.map(c => ({ level: 'critical' as const, msg: `Capital call overdue — ${c.partnerName}: $${(c.totalDue - c.received).toLocaleString()} outstanding` })),
-    ...customers.filter(c => c.installments.some(i => i.status === 'bounced')).map(c => ({ level: 'critical' as const, msg: `Bounced payment — ${c.name} (Lot ${c.lotNo}): $${(c.contractValue - c.collected).toLocaleString()} pending` })),
-    ...loans.filter(l => l.interestRate > 8).map(l => ({ level: 'high' as const, msg: `High rate loan — ${l.bank} at ${l.interestRate}% — refinancing opportunity` })),
-    availableLots.length > 15 ? { level: 'watch' as const, msg: `${availableLots.length} lots still available — pricing strategy review recommended` } : null,
+    ...overdueCalls.map(c => ({ level: 'critical' as const, msg: `Capital call overdue � ${c.partnerName}: $${(c.totalDue - c.received).toLocaleString()} outstanding` })),
+    ...customers.filter(c => c.installments.some(i => i.status === 'bounced')).map(c => ({ level: 'critical' as const, msg: `Bounced payment � ${c.name} (Lot ${c.lotNo}): $${(c.contractValue - c.collected).toLocaleString()} pending` })),
+    ...loans.filter(l => l.interestRate > 8).map(l => ({ level: 'high' as const, msg: `High rate loan � ${l.bank} at ${l.interestRate}% � refinancing opportunity` })),
+    availableLots.length > 15 ? { level: 'watch' as const, msg: `${availableLots.length} lots still available � pricing strategy review recommended` } : null,
   ].filter(Boolean) as { level: string; msg: string }[];
 
   const ALERT_STYLES = { critical: 'bg-red-50 border-red-200 text-red-800', high: 'bg-orange-50 border-orange-200 text-orange-800', watch: 'bg-amber-50 border-amber-200 text-amber-800' };
   const ALERT_ICONS  = { critical: <AlertCircle size={14} className="shrink-0" />, high: <AlertCircle size={14} className="shrink-0" />, watch: <Clock size={14} className="shrink-0" /> };
 
-  // ── EMI / Loan data (Sections A-D) ─────────────────────────────────────────
+  // -- EMI / Loan data (Sections A-D) -----------------------------------------
   const today = new Date();
   const todayDay = today.getDate();
   const todayMonth = today.getMonth();
@@ -107,7 +107,7 @@ export default function PD01Dashboard() {
     return { name: c.name, short: shortName(c.name), active, outstanding, monthlyEmi, nextEmiDay, daysToEmi, emiStatus, cashAvailable: c.property.cashAvailable, coverage, avgRate, color, alertFlags };
   });
 
-  // Section A — chart data
+  // Section A � chart data
   const emiBarData = companyEmiData.map(c => ({
     name: c.short,
     outstanding: Math.round(c.outstanding / 1000),
@@ -116,7 +116,7 @@ export default function PD01Dashboard() {
     fullName: c.name,
   })).filter(c => c.outstanding > 0 || c.emi > 0);
 
-  // Section B — calendar events this month
+  // Section B � calendar events this month
   const calendarEvents = companies.flatMap(c =>
     c.loans.filter(l => l.status === 'Active').map(l => {
       const day = l.emiDate;
@@ -136,7 +136,7 @@ export default function PD01Dashboard() {
   const totalMonthlyEmi = companyEmiData.reduce((s, c) => s + c.monthlyEmi, 0);
   const emiCompanyCount = companyEmiData.filter(c => c.monthlyEmi > 0).length;
 
-  // Section C — donut + rate bars
+  // Section C � donut + rate bars
   const donutData = companyEmiData
     .filter(c => c.outstanding > 0)
     .map(c => ({ name: c.short, value: c.outstanding, color: c.color }));
@@ -154,23 +154,23 @@ export default function PD01Dashboard() {
   const highestRateLoan = rateBarData[0];
   const highestRateCompany = companyEmiData.find(c => c.active.some(l => l.interestRate === highestRateLoan?.rate));
 
-  // Section D — health scorecard sort
+  // Section D � health scorecard sort
   const scorecardData = [...companyEmiData].sort((a, b) => a.coverage - b.coverage);
   const portfolioMonthlyEmi = companyEmiData.reduce((s, c) => s + c.monthlyEmi, 0);
   const portfolioCash       = companies.reduce((s, c) => s + c.property.cashAvailable, 0);
   const portfolioOutstanding = companyEmiData.reduce((s, c) => s + c.outstanding, 0);
 
   const healthBadge = (cov: number) =>
-    cov > 12 ? { label: '🟢 Excellent', cls: 'bg-green-100 text-green-800' }
-  : cov > 6  ? { label: '🟡 Good',      cls: 'bg-yellow-100 text-yellow-800' }
-  : cov > 3  ? { label: '🟠 Monitor',   cls: 'bg-orange-100 text-orange-800' }
-  :             { label: '🔴 Critical',  cls: 'bg-red-100 text-red-800' };
+    cov > 12 ? { label: '?? Excellent', cls: 'bg-green-100 text-green-800' }
+  : cov > 6  ? { label: '?? Good',      cls: 'bg-yellow-100 text-yellow-800' }
+  : cov > 3  ? { label: '?? Monitor',   cls: 'bg-orange-100 text-orange-800' }
+  :             { label: '?? Critical',  cls: 'bg-red-100 text-red-800' };
 
   const emiStatusBadge = (s: string) =>
-    s === 'Current'  ? { label: '✅ Current',  cls: 'bg-green-100 text-green-700' }
-  : s === 'Due Soon' ? { label: '⏳ Due Soon', cls: 'bg-amber-100 text-amber-700' }
-  : s === 'Overdue'  ? { label: '🔴 Overdue',  cls: 'bg-red-100 text-red-700' }
-  :                    { label: '—',            cls: 'bg-gray-100 text-gray-500' };
+    s === 'Current'  ? { label: '? Current',  cls: 'bg-green-100 text-green-700' }
+  : s === 'Due Soon' ? { label: '? Due Soon', cls: 'bg-amber-100 text-amber-700' }
+  : s === 'Overdue'  ? { label: '?? Overdue',  cls: 'bg-red-100 text-red-700' }
+  :                    { label: '�',            cls: 'bg-gray-100 text-gray-500' };
 
   const CustomEmiTooltip = ({ active, payload }: { active?: boolean; payload?: { payload: typeof emiBarData[0] }[] }) => {
     if (!active || !payload?.length) return null;
@@ -185,13 +185,13 @@ export default function PD01Dashboard() {
         <p className="text-gray-600">Monthly EMI: {money(c.monthlyEmi)}</p>
         {c.nextEmiDay && <p className="text-gray-600">Next EMI: {c.nextEmiDay}th</p>}
         <p className={`font-medium mt-1 ${c.emiStatus === 'Current' ? 'text-green-700' : c.emiStatus === 'Due Soon' ? 'text-amber-700' : 'text-red-700'}`}>
-          {c.emiStatus === 'Current' ? '✅ Current' : c.emiStatus === 'Due Soon' ? '⏳ Due Soon' : '🔴 Overdue'}
+          {c.emiStatus === 'Current' ? '? Current' : c.emiStatus === 'Due Soon' ? '? Due Soon' : '?? Overdue'}
         </p>
       </div>
     );
   };
 
-  // ── Land Dev CFO Command Center (single-lot company with yearly data) ─────────
+  // -- Land Dev CFO Command Center (single-lot company with yearly data) ---------
   const landDevYBS  = p?.yearlyBS;
   const landDevYPL  = p?.yearlyPL;
   const landDevYCF  = p?.yearlyCF;
@@ -227,18 +227,18 @@ export default function PD01Dashboard() {
       <div>
         <h2 className="text-2xl font-bold text-gray-900">{p?.name ?? 'Portfolio'}</h2>
         <p className="text-sm text-gray-500 mt-0.5">
-          {p?.address} · {lots.length <= 1 ? (p?.name ? `${p.name} — single-lot land holding` : '') : `${lots.length} lots`}
-          {p?.totalAcres && p.totalAcres > 0 ? ` · ${p.totalAcres?.toFixed(1)} acres` : ''}
+          {p?.address} � {lots.length <= 1 ? (p?.name ? `${p.name} � single-lot land holding` : '') : `${lots.length} lots`}
+          {p?.totalAcres && p.totalAcres > 0 ? ` � ${p.totalAcres?.toFixed(1)} acres` : ''}
         </p>
       </div>
 
-      {/* ── Land Dev CFO Command Center ── */}
+      {/* -- Land Dev CFO Command Center -- */}
       {isLandDev && (
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <div className="h-px flex-1 bg-gray-200" />
             <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider px-2">
-              CFO Command Center · {p?.name} · {latestYear}
+              CFO Command Center � {p?.name} � {latestYear}
             </span>
             <div className="h-px flex-1 bg-gray-200" />
           </div>
@@ -246,7 +246,7 @@ export default function PD01Dashboard() {
           {/* 6-KPI row */}
           <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
             {[
-              { label: 'Land Value',           value: `$${(landValue/1e6).toFixed(3)}M`,   sub: 'WWBL',                color: 'text-amber-700'  },
+              { label: 'Land Value',           value: `$${(landValue/1e6).toFixed(3)}M`,   sub: 'Summit Parcel',       color: 'text-indigo-700'  },
               { label: 'Total Invested',        value: `$${(totalInvested/1e6).toFixed(3)}M`, sub: 'Land+Impr+Int Cap', color: 'text-blue-700'   },
               { label: 'Outstanding Loan',      value: `$${(loanBalance/1e6).toFixed(3)}M`, sub: 'Great Plains Bank',  color: 'text-red-600'    },
               { label: 'LTV',                  value: `${ltv.toFixed(1)}%`,                sub: 'Loan / Land Value',  color: ltv < 60 ? 'text-green-700' : 'text-red-600' },
@@ -254,7 +254,7 @@ export default function PD01Dashboard() {
               { label: 'Cash on Hand',          value: `$${cashOnHand.toLocaleString('en-US',{maximumFractionDigits:0})}`, sub: `${latestYear} BS`, color: 'text-green-700' },
             ].map(({ label, value, sub, color }) => (
               <div key={label} className="rounded-xl border p-3 text-center"
-                style={{ background: '#F7F5F0', borderColor: 'rgba(212,175,55,0.30)' }}>
+                style={{ background: '#F8FAFC', borderColor: 'rgba(99,102,241,0.30)' }}>
                 <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">{label}</p>
                 <p className={`text-lg font-bold font-mono ${color}`}>{value}</p>
                 <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>
@@ -264,11 +264,11 @@ export default function PD01Dashboard() {
 
           {/* Cost Basis Breakdown */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="rounded-xl border p-4" style={{ borderColor: 'rgba(212,175,55,0.25)', background: '#F7F5F0' }}>
+            <div className="rounded-xl border p-4" style={{ borderColor: 'rgba(99,102,241,0.25)', background: '#F8FAFC' }}>
               <h4 className="text-sm font-semibold text-gray-800 mb-3">Cost Basis Breakdown</h4>
               <div className="space-y-2">
                 {[
-                  { label: 'Land (WWBL)',           val: landValue,   pct: landValue/totalInvested,    color: '#D4AF37' },
+                  { label: 'Land (Summit Parcel)',  val: landValue,   pct: landValue/totalInvested,    color: '#6366F1' },
                   { label: 'Improvements',          val: improvements, pct: improvements/totalInvested, color: '#2563EB' },
                   { label: 'Interest Capitalised',  val: intCap,      pct: intCap/totalInvested,       color: '#7C3AED' },
                 ].map(({ label, val, pct, color }) => (
@@ -290,7 +290,7 @@ export default function PD01Dashboard() {
             </div>
 
             {/* Net Income by Year */}
-            <div className="rounded-xl border p-4" style={{ borderColor: 'rgba(212,175,55,0.25)', background: '#F7F5F0' }}>
+            <div className="rounded-xl border p-4" style={{ borderColor: 'rgba(99,102,241,0.25)', background: '#F8FAFC' }}>
               <h4 className="text-sm font-semibold text-gray-800 mb-3">Net Income by Year</h4>
               <ResponsiveContainer width="100%" height={150}>
                 <BarChart data={niChartData} barSize={20}>
@@ -311,15 +311,15 @@ export default function PD01Dashboard() {
           </div>
 
           {/* Yearly BS/PL table */}
-          <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'rgba(212,175,55,0.25)' }}>
+          <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'rgba(99,102,241,0.25)' }}>
             <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide border-b"
-              style={{ background: '#F0EDE5', borderColor: 'rgba(212,175,55,0.20)' }}>
-              Balance Sheet · Year-by-Year
+              style={{ background: '#F0EDE5', borderColor: 'rgba(99,102,241,0.20)' }}>
+              Balance Sheet � Year-by-Year
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr style={{ background: '#F7F5F0' }}>
+                  <tr style={{ background: '#F8FAFC' }}>
                     <th className="text-left px-4 py-2 text-gray-500 font-medium">Item</th>
                     {LD_YEARS.map(y => <th key={y} className="text-right px-3 py-2 text-gray-500 font-medium">{y}</th>)}
                   </tr>
@@ -327,7 +327,7 @@ export default function PD01Dashboard() {
                 <tbody className="divide-y divide-gray-100">
                   {[
                     { label: 'Cash (Bank)',           key: 'cash' as const },
-                    { label: 'Land (WWBL)',           key: 'land' as const },
+                    { label: 'Land (Summit Parcel)', key: 'land' as const },
                     { label: 'Improvements',         key: 'improvements' as const },
                     { label: 'Interest Capitalised', key: 'interest_capitalised' as const },
                     { label: 'Total Assets',         key: 'total_assets' as const },
@@ -339,7 +339,7 @@ export default function PD01Dashboard() {
                         const v = landDevYBS?.[y]?.[key] ?? 0;
                         return (
                           <td key={y} className="px-3 py-1.5 text-right font-mono text-gray-800">
-                            {v === 0 ? '—' : `$${v.toLocaleString('en-US',{maximumFractionDigits:0})}`}
+                            {v === 0 ? '�' : `$${v.toLocaleString('en-US',{maximumFractionDigits:0})}`}
                           </td>
                         );
                       })}
@@ -386,7 +386,7 @@ export default function PD01Dashboard() {
         </div>
       )}
 
-      {/* Charts — 3 panels (Chart 4 removed) */}
+      {/* Charts � 3 panels (Chart 4 removed) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Chart 1: Monthly Revenue Trend */}
         <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -396,7 +396,7 @@ export default function PD01Dashboard() {
               <XAxis dataKey="month" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${(v/1000).toFixed(0)}K`} />
               <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, 'Revenue']} />
-              <Bar dataKey="revenue" fill="#D4AF37" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="revenue" fill="#6366F1" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -415,7 +415,7 @@ export default function PD01Dashboard() {
           </ResponsiveContainer>
         </div>
 
-        {/* Chart 3: Sales Velocity — spans full width */}
+        {/* Chart 3: Sales Velocity � spans full width */}
         <div className="bg-white rounded-xl border border-gray-200 p-4 lg:col-span-2">
           <h3 className="font-semibold text-gray-800 text-sm mb-3">Sales Velocity (lots/month)</h3>
           <ResponsiveContainer width="100%" height={180}>
@@ -459,7 +459,7 @@ export default function PD01Dashboard() {
                     <td className="px-4 py-3 text-right font-semibold">{count}</td>
                     <td className="px-4 py-3 text-right text-gray-500">{((count / lots.length) * 100).toFixed(0)}%</td>
                     <td className="px-4 py-3 text-right">${listVal.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right text-green-700">{saleVal > 0 ? `$${saleVal.toLocaleString()}` : '—'}</td>
+                    <td className="px-4 py-3 text-right text-green-700">{saleVal > 0 ? `$${saleVal.toLocaleString()}` : '�'}</td>
                     <td className="px-4 py-3 text-right text-xs text-gray-400">
                       {status === 'contracted' ? `${(count / lots.length * 100).toFixed(0)}% in pipeline` : ''}
                     </td>
@@ -481,12 +481,12 @@ export default function PD01Dashboard() {
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          SECTION A — Company-wise EMI Overview
-      ══════════════════════════════════════════════════════════════════════ */}
+      {/* ----------------------------------------------------------------------
+          SECTION A � Company-wise EMI Overview
+      ---------------------------------------------------------------------- */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="p-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-800">🏦 Loan &amp; EMI Overview — All Companies</h3>
+          <h3 className="font-semibold text-gray-800">?? Loan &amp; EMI Overview � All Companies</h3>
           <p className="text-xs text-gray-500 mt-0.5">Outstanding balance, monthly EMI and overdue exposure per company</p>
         </div>
         <div className="p-4">
@@ -499,7 +499,7 @@ export default function PD01Dashboard() {
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${v}K`} />
                 <Tooltip content={<CustomEmiTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="outstanding" name="Outstanding ($K)" fill="#D4AF37" radius={[3,3,0,0]} maxBarSize={18} />
+                <Bar dataKey="outstanding" name="Outstanding ($K)" fill="#6366F1" radius={[3,3,0,0]} maxBarSize={18} />
                 <Bar dataKey="emi"         name="Monthly EMI ($K)"  fill="#F97316" radius={[3,3,0,0]} maxBarSize={18} />
                 <Bar dataKey="overdue"     name="Overdue EMI ($K)"  fill="#DC2626" radius={[3,3,0,0]} maxBarSize={18} />
               </BarChart>
@@ -536,9 +536,9 @@ export default function PD01Dashboard() {
                       <td className="px-4 py-2.5 text-center text-gray-600">{c.active.length}</td>
                       <td className="px-4 py-2.5 text-right font-medium text-blue-700">{money(c.outstanding)}</td>
                       <td className="px-4 py-2.5 text-right font-medium text-orange-700">{money(c.monthlyEmi)}</td>
-                      <td className="px-4 py-2.5 text-center text-gray-600">{c.nextEmiDay ? `${c.nextEmiDay}th` : '—'}</td>
+                      <td className="px-4 py-2.5 text-center text-gray-600">{c.nextEmiDay ? `${c.nextEmiDay}th` : '�'}</td>
                       <td className="px-4 py-2.5 text-center text-gray-600">
-                        {c.daysToEmi !== null ? (c.daysToEmi === 0 ? 'Today' : `${c.daysToEmi}d`) : '—'}
+                        {c.daysToEmi !== null ? (c.daysToEmi === 0 ? 'Today' : `${c.daysToEmi}d`) : '�'}
                       </td>
                       <td className="px-4 py-2.5 text-center">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${sb.cls}`}>{sb.label}</span>
@@ -551,15 +551,15 @@ export default function PD01Dashboard() {
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          SECTION B — EMI Calendar Strip
-      ══════════════════════════════════════════════════════════════════════ */}
+      {/* ----------------------------------------------------------------------
+          SECTION B � EMI Calendar Strip
+      ---------------------------------------------------------------------- */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="font-semibold text-gray-800">📅 This Month's EMI Schedule</h3>
+            <h3 className="font-semibold text-gray-800">?? This Month's EMI Schedule</h3>
             <p className="text-xs text-gray-500 mt-0.5">
-              {today.toLocaleString('default',{month:'long',year:'numeric'})} · Total:{' '}
+              {today.toLocaleString('default',{month:'long',year:'numeric'})} � Total:{' '}
               <span className="font-semibold text-orange-700">{money(totalMonthlyEmi)}</span> across {emiCompanyCount} companies
             </p>
           </div>
@@ -579,16 +579,16 @@ export default function PD01Dashboard() {
                 <span className="text-xs opacity-60 mb-0.5">{e.day}th</span>
                 <span className="font-semibold">{e.company}</span>
                 <span className="mt-0.5">{fmtK(e.amount)}</span>
-                {e.isPast && <span className="text-xs opacity-50 mt-0.5">✓ paid</span>}
+                {e.isPast && <span className="text-xs opacity-50 mt-0.5">? paid</span>}
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          SECTION C — Loan Portfolio Composition
-      ══════════════════════════════════════════════════════════════════════ */}
+      {/* ----------------------------------------------------------------------
+          SECTION C � Loan Portfolio Composition
+      ---------------------------------------------------------------------- */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="p-4 border-b border-gray-100">
           <h3 className="font-semibold text-gray-800">Loan Portfolio by Company</h3>
@@ -597,7 +597,7 @@ export default function PD01Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
           {/* Left: Donut */}
           <div>
-            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Outstanding Balance — Portfolio Share</p>
+            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Outstanding Balance � Portfolio Share</p>
             {donutData.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-8">No active loans.</p>
             ) : (
@@ -639,7 +639,7 @@ export default function PD01Dashboard() {
                 <BarChart layout="vertical" data={rateBarData} barSize={14} margin={{ left: 8, right: 50 }}>
                   <XAxis type="number" domain={[0, 12]} tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={100} />
-                  <Tooltip formatter={(v: number, _n, props) => [`${v}% — $${props.payload.balance}K outstanding`, 'Rate']} />
+                  <Tooltip formatter={(v: number, _n, props) => [`${v}% � $${props.payload.balance}K outstanding`, 'Rate']} />
                   <Bar dataKey="rate" radius={[0, 3, 3, 0]}>
                     {rateBarData.map((entry, i) => (
                       <Cell key={i} fill={entry.barColor} />
@@ -650,7 +650,7 @@ export default function PD01Dashboard() {
             )}
             {/* Rate legend */}
             <div className="flex gap-3 mt-2 text-xs justify-center">
-              {[['#16A34A','< 6.5% (below market)'],['#D97706','6.5–7.5%'],['#DC2626','> 7.5% (above market)']].map(([c,l]) => (
+              {[['#16A34A','< 6.5% (below market)'],['#D97706','6.5�7.5%'],['#DC2626','> 7.5% (above market)']].map(([c,l]) => (
                 <span key={l} className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: c }} />{l}</span>
               ))}
             </div>
@@ -664,8 +664,8 @@ export default function PD01Dashboard() {
             {highestRateLoan ? (
               <>
                 <p className="text-xl font-bold text-red-700">{highestRateLoan.rate}%</p>
-                <p className="text-sm text-gray-700 mt-1">{highestRateCompany?.name ?? '—'}</p>
-                <button className="text-xs text-red-600 hover:underline mt-1">Refinance opportunity →</button>
+                <p className="text-sm text-gray-700 mt-1">{highestRateCompany?.name ?? '�'}</p>
+                <button className="text-xs text-red-600 hover:underline mt-1">Refinance opportunity ?</button>
               </>
             ) : <p className="text-gray-400 text-sm">No loans</p>}
           </div>
@@ -677,13 +677,13 @@ export default function PD01Dashboard() {
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          SECTION D — EMI Health Scorecard
-      ══════════════════════════════════════════════════════════════════════ */}
+      {/* ----------------------------------------------------------------------
+          SECTION D � EMI Health Scorecard
+      ---------------------------------------------------------------------- */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="p-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-800">EMI Health — Company Scorecard</h3>
-          <p className="text-xs text-gray-500 mt-0.5">Cash coverage ratio and auto-flagged alerts per company · sorted by lowest coverage first</p>
+          <h3 className="font-semibold text-gray-800">EMI Health � Company Scorecard</h3>
+          <p className="text-xs text-gray-500 mt-0.5">Cash coverage ratio and auto-flagged alerts per company � sorted by lowest coverage first</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -709,17 +709,17 @@ export default function PD01Dashboard() {
                       {c.name}
                     </td>
                     <td className="px-4 py-3 text-center text-gray-600">{c.active.length}</td>
-                    <td className="px-4 py-3 text-right text-gray-700">{c.avgRate > 0 ? `${c.avgRate.toFixed(1)}%` : '—'}</td>
+                    <td className="px-4 py-3 text-right text-gray-700">{c.avgRate > 0 ? `${c.avgRate.toFixed(1)}%` : '�'}</td>
                     <td className="px-4 py-3 text-right font-medium text-orange-700">
-                      {c.monthlyEmi > 0 ? money(c.monthlyEmi) : '—'}
+                      {c.monthlyEmi > 0 ? money(c.monthlyEmi) : '�'}
                     </td>
                     <td className="px-4 py-3 text-right text-gray-700">{money(c.cashAvailable)}</td>
                     <td className="px-4 py-3 text-right font-semibold">
                       {c.monthlyEmi > 0
                         ? <span className={c.coverage > 12 ? 'text-green-700' : c.coverage > 6 ? 'text-yellow-600' : c.coverage > 3 ? 'text-orange-600' : 'text-red-600'}>
-                            {c.coverage > 99 ? '∞' : `${c.coverage.toFixed(1)} mo`}
+                            {c.coverage > 99 ? '8' : `${c.coverage.toFixed(1)} mo`}
                           </span>
-                        : <span className="text-gray-400">—</span>
+                        : <span className="text-gray-400">�</span>
                       }
                     </td>
                     <td className="px-4 py-3 text-center">
@@ -736,7 +736,7 @@ export default function PD01Dashboard() {
                           ))}
                         </div>
                       ) : (
-                        <span className="text-xs text-green-600">✓ No issues</span>
+                        <span className="text-xs text-green-600">? No issues</span>
                       )}
                     </td>
                   </tr>
@@ -747,13 +747,13 @@ export default function PD01Dashboard() {
               <tr className="bg-gray-900 text-white font-semibold">
                 <td className="px-4 py-3">Portfolio Total</td>
                 <td className="px-4 py-3 text-center">{companyEmiData.reduce((s,c)=>s+c.active.length,0)}</td>
-                <td className="px-4 py-3 text-right text-gray-400">—</td>
+                <td className="px-4 py-3 text-right text-gray-400">�</td>
                 <td className="px-4 py-3 text-right text-orange-300">{money(portfolioMonthlyEmi)}/mo</td>
                 <td className="px-4 py-3 text-right text-blue-300">{money(portfolioCash)}</td>
                 <td className="px-4 py-3 text-right text-green-300">
-                  {portfolioMonthlyEmi > 0 ? `${(portfolioCash/portfolioMonthlyEmi).toFixed(1)} mo` : '—'}
+                  {portfolioMonthlyEmi > 0 ? `${(portfolioCash/portfolioMonthlyEmi).toFixed(1)} mo` : '�'}
                 </td>
-                <td className="px-4 py-3 text-center text-gray-400">—</td>
+                <td className="px-4 py-3 text-center text-gray-400">�</td>
                 <td className="px-4 py-3 text-xs text-gray-400">
                   Total outstanding: {money(portfolioOutstanding)}
                 </td>

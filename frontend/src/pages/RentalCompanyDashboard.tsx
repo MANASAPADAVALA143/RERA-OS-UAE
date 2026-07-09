@@ -350,7 +350,7 @@ export default function RentalCompanyDashboard({ companyId, initialMonth }: Prop
                   <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                   <Tooltip formatter={(v: number) => fmtUSD(v)} />
                   <Legend />
-                  <Line type="monotone" dataKey="billed"    stroke="#D4AF37" name="Billed"    strokeWidth={2} dot={false} connectNulls />
+                  <Line type="monotone" dataKey="billed"    stroke="#6366F1" name="Billed"    strokeWidth={2} dot={false} connectNulls />
                   <Line type="monotone" dataKey="collected" stroke="#166534" name="Collected" strokeWidth={2} dot={false} connectNulls />
                   <Line type="monotone" dataKey="expense"   stroke="#C0392B" name="Expense"   strokeWidth={2} dot={false} connectNulls />
                 </LineChart>

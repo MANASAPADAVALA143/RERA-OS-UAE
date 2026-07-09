@@ -151,7 +151,7 @@ export default function RentalPortfolioUpload() {
           </div>
           <div>
             <div className="text-sm font-semibold text-gray-800">Rent Receivable Sync</div>
-            <div className="text-xs text-gray-400">Upload EstateCFO_Rent_Template_ByCompany.xlsx</div>
+            <div className="text-xs text-gray-400">Upload RERA_OS_Rent_Template_ByCompany.xlsx</div>
           </div>
         </div>
 
@@ -202,7 +202,7 @@ export default function RentalPortfolioUpload() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6 max-w-2xl">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-            style={{ background: 'rgba(212,175,55,0.15)' }}>
+            style={{ background: 'rgba(99,102,241,0.15)' }}>
             <span className="text-xl">📋</span>
           </div>
           <div>
@@ -231,7 +231,7 @@ export default function RentalPortfolioUpload() {
 
       {/* What gets updated */}
       <div className="rounded-xl p-4 max-w-2xl mb-6"
-        style={{ background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.25)' }}>
+        style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)' }}>
         <div className="text-xs font-semibold mb-2" style={{ color: '#92400E' }}>
           ✅ After upload, these sections update automatically:
         </div>
@@ -250,7 +250,7 @@ export default function RentalPortfolioUpload() {
             'Income vs Expense — 6-month trend chart',
           ].map(item => (
             <div key={item} className="text-xs flex items-center gap-1.5" style={{ color: '#92400E' }}>
-              <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#D4AF37' }} />
+              <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#6366F1' }} />
               {item}
             </div>
           ))}

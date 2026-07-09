@@ -201,12 +201,12 @@ function computeUnitLtm(unit: UnitRow, months: string[]): UnitLtm {
 
 // Dark-theme tooltip style shared across charts
 const TOOLTIP_STYLE = {
-  contentStyle: { background: '#F7F5F0', border: '1px solid #DDD8CC', color: '#1C1917', borderRadius: 8 },
+  contentStyle: { background: '#F8FAFC', border: '1px solid #CBD5E1', color: '#1C1917', borderRadius: 8 },
   labelStyle: { color: '#92400E' },
 };
 const TICK = { fill: '#92400E', fontSize: 11 };
 const SEL_STYLE: React.CSSProperties = {
-  background: '#F7F5F0', border: '1px solid #DDD8CC', color: '#1C1917',
+  background: '#F8FAFC', border: '1px solid #CBD5E1', color: '#1C1917',
   borderRadius: '0.5rem', padding: '0.375rem 0.75rem', fontSize: '0.875rem',
 };
 
@@ -239,7 +239,7 @@ function StatusHistoryTab() {
   if (units.length === 0) {
     return (
       <div className="rounded-xl p-6 text-center" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)' }}>
-        <p className="font-medium mb-1" style={{ color: '#D4AF37' }}>No rent history available yet</p>
+        <p className="font-medium mb-1" style={{ color: '#6366F1' }}>No rent history available yet</p>
         <p className="text-sm" style={{ color: '#A8A29E' }}>
           Upload your Rent Receivable Excel file via <strong>Sync Rent Data</strong> to populate month-by-month status history for each unit.
         </p>
@@ -258,7 +258,7 @@ function StatusHistoryTab() {
         <label className="text-sm font-medium" style={{ color: '#92400E' }}>Select Unit:</label>
         <select value={selId} onChange={e => setSelId(e.target.value)} style={SEL_STYLE}>
           {units.map(u => (
-            <option key={u.id} value={u.id} style={{ background: '#F7F5F0' }}>
+            <option key={u.id} value={u.id} style={{ background: '#F8FAFC' }}>
               {u.unit_number} — {u.company_name}
             </option>
           ))}
@@ -308,8 +308,8 @@ function StatusHistoryTab() {
 
       {/* Timeline table */}
       {unit && ltm && (
-        <div className="rounded-xl overflow-hidden" style={{ background: '#F7F5F0', border: '1px solid #DDD8CC' }}>
-          <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid #DDD8CC' }}>
+        <div className="rounded-xl overflow-hidden" style={{ background: '#F8FAFC', border: '1px solid #CBD5E1' }}>
+          <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid #CBD5E1' }}>
             <p className="font-semibold text-sm" style={{ color: '#1C1917' }}>
               {unit.unit_number} — {unit.company_name} · Status Timeline
             </p>
@@ -386,19 +386,19 @@ function StatusHistoryTab() {
 const LTM_C = {
   teal:  '#0F766E',
   green: '#15803D',
-  amber: '#B8860B',
+  amber: '#7C3AED',
   warn:  '#92400E',
-  gold:  '#D4AF37',
+  gold:  '#6366F1',
 };
 const LTM_CARD: React.CSSProperties = {
-  background: '#FBF6EE',
-  border: '1px solid #E8DEC8',
+  background: '#F1F5F9',
+  border: '1px solid #E2E8F0',
   borderRadius: 12,
   padding: '16px 18px',
 };
 const LTM_TICK = { fill: '#78716C', fontSize: 12 };
 const LTM_TT = {
-  contentStyle: { background: '#FBF6EE', border: '1px solid #E8DEC8', color: '#1C1917', borderRadius: 8, fontSize: 13 },
+  contentStyle: { background: '#F1F5F9', border: '1px solid #E2E8F0', color: '#1C1917', borderRadius: 8, fontSize: 13 },
   labelStyle:   { color: '#78716C', fontWeight: 600 },
 };
 
@@ -635,12 +635,12 @@ function LTMPerformanceTab() {
       {/* Filters */}
       <div className="flex flex-wrap gap-2 items-center">
         <select value={filterCo} onChange={e => { setFilterCo(e.target.value); setFilterBuilding(''); }} style={SEL_STYLE}>
-          <option value="" style={{ background: '#F7F5F0' }}>All Companies</option>
-          {companies.map(c => <option key={c} value={c} style={{ background: '#F7F5F0' }}>{c}</option>)}
+          <option value="" style={{ background: '#F8FAFC' }}>All Companies</option>
+          {companies.map(c => <option key={c} value={c} style={{ background: '#F8FAFC' }}>{c}</option>)}
         </select>
         <select value={filterBuilding} onChange={e => setFilterBuilding(e.target.value)} style={SEL_STYLE}>
-          <option value="" style={{ background: '#F7F5F0' }}>All Buildings</option>
-          {buildings.map(b => <option key={b} value={b} style={{ background: '#F7F5F0' }}>{b}</option>)}
+          <option value="" style={{ background: '#F8FAFC' }}>All Buildings</option>
+          {buildings.map(b => <option key={b} value={b} style={{ background: '#F8FAFC' }}>{b}</option>)}
         </select>
         <span className="text-xs" style={{ color: '#A8A29E' }}>Period ending</span>
         <select
@@ -649,7 +649,7 @@ function LTMPerformanceTab() {
           style={SEL_STYLE}
         >
           {yearOptions.map(y => (
-            <option key={y} value={y} style={{ background: '#F7F5F0' }}>{y}</option>
+            <option key={y} value={y} style={{ background: '#F8FAFC' }}>{y}</option>
           ))}
         </select>
         <select
@@ -658,7 +658,7 @@ function LTMPerformanceTab() {
           style={SEL_STYLE}
         >
           {MONTH_DROPDOWN.filter(m => m.value <= maxSelectableMonth).map(m => (
-            <option key={m.value} value={m.value} style={{ background: '#F7F5F0' }}>{m.label}</option>
+            <option key={m.value} value={m.value} style={{ background: '#F8FAFC' }}>{m.label}</option>
           ))}
         </select>
         <span className="text-sm" style={{ color: '#A8A29E' }}>{periodLabel}</span>
@@ -666,7 +666,7 @@ function LTMPerformanceTab() {
 
       {dataMonths.length === 0 && (
         <div className="rounded-xl p-5 text-center" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)' }}>
-          <p className="font-medium mb-1" style={{ color: '#D4AF37' }}>No rent history data yet</p>
+          <p className="font-medium mb-1" style={{ color: '#6366F1' }}>No rent history data yet</p>
           <p className="text-sm" style={{ color: '#A8A29E' }}>Use <strong>Sync Rent Data</strong> to upload the Rent Receivable Excel.</p>
         </div>
       )}
@@ -742,7 +742,7 @@ function LTMPerformanceTab() {
                       formatter={(v: number, name: string) => [fmtN(v), name]}
                     />
                     <Legend wrapperStyle={{ fontSize: 12, color: '#78716C' }} />
-                    <Area type="monotone" dataKey="lost" name="Lost" fill="rgba(212,175,55,0.18)" stroke="none" legendType="none" />
+                    <Area type="monotone" dataKey="lost" name="Lost" fill="rgba(99,102,241,0.18)" stroke="none" legendType="none" />
                     <Line type="monotone" dataKey="expected"  name="Expected"  stroke={LTM_C.gold}  strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
                     <Line type="monotone" dataKey="collected" name="Collected" stroke={LTM_C.teal}  strokeWidth={2.5} dot={{ r: 3, fill: LTM_C.teal }} />
                   </ComposedChart>
@@ -820,7 +820,7 @@ function LTMPerformanceTab() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
             {/* Top Risk table */}
             <div style={{ ...LTM_CARD, padding: 0, overflow: 'hidden' }} className="lg:col-span-2">
-              <div style={{ padding: '12px 16px', borderBottom: '1px solid #E8DEC8' }}>
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid #E2E8F0' }}>
                 <h3 style={{ fontSize: 16, fontWeight: 600, color: '#1C1917', margin: 0 }}>Top Risk Units</h3>
                 <p style={{ fontSize: 12, color: '#A8A29E', margin: '4px 0 0' }}>Ranked by occupancy risk + vacancy loss · {topRisk.length} shown</p>
               </div>
@@ -829,7 +829,7 @@ function LTMPerformanceTab() {
                   <thead>
                     <tr style={{ background: '#F0EDE5' }}>
                       {['Unit', 'Building', 'Occ Mo', 'Vac Mo', 'Collected', 'Expected', 'Lost', 'Occ %', 'Avg Rent', 'Trend', 'Action', 'Score'].map(h => (
-                        <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', borderBottom: '1px solid #E8DEC8' }}>{h}</th>
+                        <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', borderBottom: '1px solid #E2E8F0' }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -842,7 +842,7 @@ function LTMPerformanceTab() {
                           ? <span style={{ color: LTM_C.warn, fontWeight: 700 }}>↓</span>
                           : <span style={{ color: '#A8A29E' }}>→</span>;
                       const scoreBg    = score >= 60 ? 'rgba(146,64,14,0.12)' : score >= 30 ? 'rgba(184,134,11,0.15)' : 'rgba(21,128,61,0.12)';
-                      const scoreColor = score >= 60 ? '#92400E' : score >= 30 ? '#B8860B' : '#065F46';
+                      const scoreColor = score >= 60 ? '#92400E' : score >= 30 ? '#7C3AED' : '#065F46';
                       const actionStyle = {
                         'Offer discount': { bg: '#FEF3C7', color: '#92400E' },
                         'Review rent':    { bg: 'rgba(184,134,11,0.15)', color: '#92400E' },
@@ -850,7 +850,7 @@ function LTMPerformanceTab() {
                         'Monitor':        { bg: 'rgba(168,162,158,0.15)', color: '#57534E' },
                       }[ltm.action] ?? { bg: 'rgba(168,162,158,0.15)', color: '#57534E' };
                       return (
-                        <tr key={unit.id} style={{ background: i % 2 === 0 ? '#F7F1E6' : '#FBF6EE', borderBottom: '1px solid rgba(232,222,200,0.5)' }}>
+                        <tr key={unit.id} style={{ background: i % 2 === 0 ? '#F7F1E6' : '#F1F5F9', borderBottom: '1px solid rgba(232,222,200,0.5)' }}>
                           <td style={{ padding: '8px 10px', fontWeight: 500, color: '#1C1917', whiteSpace: 'nowrap' }}>{unit.unit_number}</td>
                           <td style={{ padding: '8px 10px', color: '#57534E', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{unit.property_name || '—'}</td>
                           <td style={{ padding: '8px 10px', textAlign: 'center', color: LTM_C.green, fontWeight: 600 }}>{ltm.occMonths}</td>
@@ -903,7 +903,7 @@ function LTMPerformanceTab() {
                   🟢 No urgent issues — portfolio within normal range.
                 </div>
               )}
-              <div style={{ marginTop: 14, padding: '10px 12px', background: '#F7F1E6', borderRadius: 8, border: '1px solid #E8DEC8' }}>
+              <div style={{ marginTop: 14, padding: '10px 12px', background: '#F7F1E6', borderRadius: 8, border: '1px solid #E2E8F0' }}>
                 <p style={{ fontSize: 12, color: '#78716C', margin: 0, lineHeight: 1.6 }}>
                   Rules: Occ &lt;50% + loss &gt;$3K → discount review · High rent + low occ → pricing review · Collection rate &lt;70% → collections flag
                 </p>
@@ -995,7 +995,7 @@ export default function RentalUnits() {
           <button key={t.id} onClick={() => setActiveTab(t.id)}
             className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors"
             style={activeTab === t.id
-              ? { background: '#F7F5F0', color: '#1C1917' }
+              ? { background: '#F8FAFC', color: '#1C1917' }
               : { color: '#A8A29E' }
             }
           >{t.label}</button>
@@ -1007,16 +1007,16 @@ export default function RentalUnits() {
         <>
           <div className="flex flex-wrap gap-3">
             <select value={filterCompany} onChange={e => setFilterCompany(e.target.value)} style={SEL_STYLE}>
-              <option value="" style={{ background: '#F7F5F0' }}>All Companies</option>
-              {companies.map(c => <option key={c.id} value={c.id} style={{ background: '#F7F5F0' }}>{c.company_name}</option>)}
+              <option value="" style={{ background: '#F8FAFC' }}>All Companies</option>
+              {companies.map(c => <option key={c.id} value={c.id} style={{ background: '#F8FAFC' }}>{c.company_name}</option>)}
             </select>
             <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={SEL_STYLE}>
-              <option value="" style={{ background: '#F7F5F0' }}>All Statuses</option>
-              <option value="occupied"         style={{ background: '#F7F5F0' }}>Occupied</option>
-              <option value="vacant"           style={{ background: '#F7F5F0' }}>Vacant</option>
-              <option value="notice"           style={{ background: '#F7F5F0' }}>Notice</option>
-              <option value="reserved"         style={{ background: '#F7F5F0' }}>Reserved</option>
-              <option value="maintenance_hold" style={{ background: '#F7F5F0' }}>Maintenance Hold</option>
+              <option value="" style={{ background: '#F8FAFC' }}>All Statuses</option>
+              <option value="occupied"         style={{ background: '#F8FAFC' }}>Occupied</option>
+              <option value="vacant"           style={{ background: '#F8FAFC' }}>Vacant</option>
+              <option value="notice"           style={{ background: '#F8FAFC' }}>Notice</option>
+              <option value="reserved"         style={{ background: '#F8FAFC' }}>Reserved</option>
+              <option value="maintenance_hold" style={{ background: '#F8FAFC' }}>Maintenance Hold</option>
             </select>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

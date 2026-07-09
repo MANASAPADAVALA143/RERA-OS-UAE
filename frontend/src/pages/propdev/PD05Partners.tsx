@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { usePropDev } from '../../contexts/PropertyDevContext';
 import type { Partner, CapitalCall, CompanyData } from '../../contexts/PropertyDevContext';
 import {
@@ -12,7 +12,7 @@ const fmt = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const fmtK = (n: number) => n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(2)}M` : n >= 1000 ? `$${(n / 1000).toFixed(0)}K` : fmt(n);
 const pct = (n: number) => `${n.toFixed(1)}%`;
 
-// ── Types & aggregation ───────────────────────────────────────────────────────
+// -- Types & aggregation -------------------------------------------------------
 
 interface PartnerSummary {
   name: string;
@@ -97,7 +97,7 @@ function roiFill(roi: number, overdue: number): string {
   return '#F59E0B';
 }
 
-// ── History builders (unchanged logic) ─────────────────────────────────────────
+// -- History builders (unchanged logic) -----------------------------------------
 
 function buildOwnershipHistory(
   instances: Partner[], allCalls: CapitalCall[], companiesMap: Record<string, CompanyData>,
@@ -107,7 +107,7 @@ function buildOwnershipHistory(
   instances.forEach(p => {
     const companyName = companiesMap[p.companyId]?.name ?? p.companyId;
     cumulative += p.capitalContributed;
-    events.push({ date: '2024-01-15', event: 'Initial Contribution', sharePct: p.sharePercent, capital: p.capitalContributed, cumulative, notes: `Initial equity · ${companyName}` });
+    events.push({ date: '2024-01-15', event: 'Initial Contribution', sharePct: p.sharePercent, capital: p.capitalContributed, cumulative, notes: `Initial equity � ${companyName}` });
     allCalls.filter(c => c.partnerId === p.id && c.received > 0).forEach(c => {
       cumulative += c.received;
       events.push({ date: c.receivedDate ?? '2025-02-10', event: 'Capital Call Payment', sharePct: p.sharePercent, capital: c.received, cumulative, notes: `${c.period}${c.status === 'Partial' ? ' (partial)' : ''}` });
@@ -128,7 +128,7 @@ function buildHistory(instances: Partner[], allCalls: CapitalCall[], companiesMa
     txns.push({ date: '2024-01-15', type: 'Capital Contribution', company: companyName, amount: p.capitalContributed, cumulativeCapital: cumulative, profitShare: 0, status: 'Completed', notes: 'Initial equity contribution' });
     allCalls.filter(c => c.partnerId === p.id && c.received > 0).forEach(c => {
       cumulative += c.received;
-      txns.push({ date: c.receivedDate ?? '2025-02-10', type: 'Capital Call Payment', company: companyName, amount: c.received, cumulativeCapital: cumulative, profitShare: 0, status: c.status === 'Paid' ? 'Completed' : 'Partial', notes: `Capital call · ${c.period}` });
+      txns.push({ date: c.receivedDate ?? '2025-02-10', type: 'Capital Call Payment', company: companyName, amount: c.received, cumulativeCapital: cumulative, profitShare: 0, status: c.status === 'Paid' ? 'Completed' : 'Partial', notes: `Capital call � ${c.period}` });
     });
     if (p.distributionsReceived > 0) {
       const prefAmount = Math.round(p.capitalContributed * (p.preferredReturn / 100));
@@ -155,7 +155,7 @@ function buildTimelineData(history: TxRecord[]) {
   return Object.values(byMonth).sort((a, b) => a.month.localeCompare(b.month));
 }
 
-// ── Treemap custom content ─────────────────────────────────────────────────────
+// -- Treemap custom content -----------------------------------------------------
 
 interface TreemapNode {
   x: number; y: number; width: number; height: number;
@@ -165,18 +165,18 @@ interface TreemapNode {
 function TreemapContent(props: Partial<TreemapNode> & { onSelect?: (name: string) => void; depth?: number }) {
   const { x = 0, y = 0, width = 0, height = 0, name, size = 0, roi = 0, fill = '#92400E', avgEquity = 0, onSelect } = props;
   if (!name || width < 50 || height < 40) return null;
-  const short = name.length > 14 ? `${name.slice(0, 12)}…` : name;
+  const short = name.length > 14 ? `${name.slice(0, 12)}�` : name;
   return (
     <g onClick={() => onSelect?.(name)} style={{ cursor: 'pointer' }}>
       <rect x={x} y={y} width={width} height={height} fill={fill} stroke="#fff" strokeWidth={2} rx={4} />
       <text x={x + 6} y={y + 16} fill="#fff" fontSize={12} fontWeight={600}>{short}</text>
-      <text x={x + 6} y={y + 30} fill="#ffffffcc" fontSize={11}>{(avgEquity / 100).toFixed(2)}% · {fmtK(size)}</text>
+      <text x={x + 6} y={y + 30} fill="#ffffffcc" fontSize={11}>{(avgEquity / 100).toFixed(2)}% � {fmtK(size)}</text>
       <text x={x + 6} y={y + 44} fill="#ffffffaa" fontSize={11}>ROI {roi.toFixed(1)}%</text>
     </g>
   );
 }
 
-// ── Left panel ─────────────────────────────────────────────────────────────────
+// -- Left panel -----------------------------------------------------------------
 
 function PartnerListPanel({
   summaries, selected, search, sortKey, onSearch, onSort, onSelect,
@@ -209,7 +209,7 @@ function PartnerListPanel({
           <input
             value={search}
             onChange={e => onSearch(e.target.value)}
-            placeholder="Search partners…"
+            placeholder="Search partners�"
             className="w-full pl-8 pr-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500"
           />
         </div>
@@ -247,7 +247,7 @@ function PartnerListPanel({
                 </span>
                 <div className="min-w-0">
                   <p className="sidebar-name truncate">{s.name}</p>
-                  <p className="sidebar-meta truncate">{(s.avgEquity / 100).toFixed(2)}% · {s.primaryCompany}</p>
+                  <p className="sidebar-meta truncate">{(s.avgEquity / 100).toFixed(2)}% � {s.primaryCompany}</p>
                 </div>
               </div>
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${s.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{s.status}</span>
@@ -255,9 +255,9 @@ function PartnerListPanel({
             <p className="text-[10px] text-gray-600 mt-1.5 font-mono">{fmtK(s.totalCapital)} contributed</p>
             <div className="flex items-center justify-between mt-1">
               <span className={`text-[10px] font-semibold ${s.roi >= 15 ? 'text-green-700' : 'text-amber-600'}`}>ROI {pct(s.roi)}</span>
-              {s.indicator === 'overdue' && <span className="text-[10px] text-red-600">🔴 {fmtK(s.overdue)} overdue</span>}
-              {s.indicator === 'good' && <span className="text-[10px] text-green-600">✅</span>}
-              {s.indicator === 'nodist' && <span className="text-[10px] text-gray-400">📋 No distributions</span>}
+              {s.indicator === 'overdue' && <span className="text-[10px] text-red-600">?? {fmtK(s.overdue)} overdue</span>}
+              {s.indicator === 'good' && <span className="text-[10px] text-green-600">?</span>}
+              {s.indicator === 'nodist' && <span className="text-[10px] text-gray-400">?? No distributions</span>}
             </div>
           </button>
         ))}
@@ -266,7 +266,7 @@ function PartnerListPanel({
   );
 }
 
-// ── Center: all partners ───────────────────────────────────────────────────────
+// -- Center: all partners -------------------------------------------------------
 
 function CenterAllView({
   summaries, onSelectPartner, showAllBars, onToggleBars,
@@ -288,7 +288,7 @@ function CenterAllView({
 
   const barSource = [...summaries].sort((a, b) => b.totalCapital - a.totalCapital);
   const barData = (showAllBars ? barSource : barSource.slice(0, 10)).map(s => ({
-    name: s.name.length > 12 ? `${s.name.slice(0, 10)}…` : s.name,
+    name: s.name.length > 12 ? `${s.name.slice(0, 10)}�` : s.name,
     fullName: s.name,
     contributed: s.totalCapital,
     distributed: s.totalDistributed,
@@ -298,8 +298,8 @@ function CenterAllView({
   return (
     <div className="space-y-5 p-4">
       <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-        <h3 className="section-header">Capital Contribution — All Partners</h3>
-        <p className="body-text mb-3">Size = capital · Color = ROI performance · Click to select partner</p>
+        <h3 className="section-header">Capital Contribution � All Partners</h3>
+        <p className="body-text mb-3">Size = capital � Color = ROI performance � Click to select partner</p>
         <ResponsiveContainer width="100%" height={280}>
           {treemapData.length > 0 ? (
             <Treemap
@@ -312,7 +312,7 @@ function CenterAllView({
               )}
             >
               <Tooltip formatter={(v: number, _n: string, p: { payload?: { name: string; roi: number } }) => [
-                `${fmt(v)} · ROI ${p.payload?.roi?.toFixed(1) ?? 0}%`, p.payload?.name ?? '',
+                `${fmt(v)} � ROI ${p.payload?.roi?.toFixed(1) ?? 0}%`, p.payload?.name ?? '',
               ]} />
             </Treemap>
           ) : (
@@ -340,7 +340,7 @@ function CenterAllView({
             <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10 }} />
             <Tooltip formatter={(v: number) => fmt(v)} labelFormatter={(_l, payload) => (payload?.[0]?.payload as { fullName?: string })?.fullName ?? _l} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Bar dataKey="contributed" name="Contributed" fill="#D4AF37" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="contributed" name="Contributed" fill="#6366F1" radius={[3, 3, 0, 0]} />
             <Bar dataKey="distributed" name="Distributed" fill="#16A34A" radius={[3, 3, 0, 0]} />
             <Bar dataKey="pending" name="Pending" fill="#D97706" radius={[3, 3, 0, 0]} />
           </BarChart>
@@ -350,7 +350,7 @@ function CenterAllView({
   );
 }
 
-// ── Center: single partner ─────────────────────────────────────────────────────
+// -- Center: single partner -----------------------------------------------------
 
 function CenterPartnerView({
   summary, allCalls, companiesMap,
@@ -411,7 +411,7 @@ function CenterPartnerView({
               <h2 className="page-title">{name}</h2>
               <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">{summary.status}</span>
             </div>
-            <p className="text-sm text-gray-500">{summary.partnerType} · {pct(summary.avgEquity / 100)} equity · {summary.avgPref.toFixed(0)}% pref</p>
+            <p className="text-sm text-gray-500">{summary.partnerType} � {pct(summary.avgEquity / 100)} equity � {summary.avgPref.toFixed(0)}% pref</p>
             {primaryCompany && <p className="text-sm text-gray-600">{primaryCompany}</p>}
           </div>
         </div>
@@ -439,7 +439,7 @@ function CenterPartnerView({
             <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10 }} />
             <Tooltip formatter={(v: number) => fmt(v)} />
             <Legend wrapperStyle={{ fontSize: 10 }} />
-            <Bar dataKey="capitalIn" name="Capital In" fill="#D4AF37" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="capitalIn" name="Capital In" fill="#6366F1" radius={[3, 3, 0, 0]} />
             <Bar dataKey="distributed" name="Distributed" fill="#16A34A" radius={[3, 3, 0, 0]} />
             <Line type="monotone" dataKey="balance" name="Balance" stroke="#7C3AED" strokeWidth={2} dot={false} />
           </ComposedChart>
@@ -529,7 +529,7 @@ function CenterPartnerView({
                     <td className="px-3 py-2 text-right">{remaining} lots</td>
                     <td className="px-3 py-2 text-right font-mono">{fmt(prop.saleConsideration)}</td>
                     <td className="px-3 py-2 text-right font-mono text-blue-700">
-                      {remaining > 0 ? `If ${remaining} @ ${fmtK(avgPrice)} → ${fmt(partnerShareVal)}` : '—'}
+                      {remaining > 0 ? `If ${remaining} @ ${fmtK(avgPrice)} ? ${fmt(partnerShareVal)}` : '�'}
                     </td>
                     <td className="px-3 py-2 text-right text-gray-500">{sold}/{prop.totalLots} sold</td>
                   </tr>
@@ -569,7 +569,7 @@ function CenterPartnerView({
   );
 }
 
-// ── Right panel ────────────────────────────────────────────────────────────────
+// -- Right panel ----------------------------------------------------------------
 
 function RightPanel({
   summaries, allPartners, allCalls,
@@ -630,7 +630,7 @@ function RightPanel({
           <div className="space-y-2">
             {attention.slice(0, 3).map(s => (
               <div key={s.name} className="bg-red-50 border border-red-100 rounded-lg p-2.5">
-                <p className="text-xs font-semibold text-red-800">🔴 {s.name}</p>
+                <p className="text-xs font-semibold text-red-800">?? {s.name}</p>
                 <p className="text-[10px] text-red-600 mt-0.5">Overdue: {fmt(s.overdue)}</p>
                 <button className="text-[10px] text-red-700 underline mt-1">Send Reminder</button>
               </div>
@@ -656,7 +656,7 @@ function RightPanel({
             {calcResult.perPartner.slice(0, 8).map((p, i) => (
               <div key={i} className="flex justify-between text-[10px]">
                 <span className="text-gray-600 truncate max-w-[120px]">{p.name}</span>
-                <span className="font-mono font-semibold">{(p.pct / 100).toFixed(2)}% · {fmtK(p.amount)}</span>
+                <span className="font-mono font-semibold">{(p.pct / 100).toFixed(2)}% � {fmtK(p.amount)}</span>
               </div>
             ))}
             {calcResult.perPartner.length > 8 && <p className="text-[10px] text-gray-400">+ {calcResult.perPartner.length - 8} more</p>}
@@ -670,7 +670,7 @@ function RightPanel({
         <div className="space-y-2">
           {topPerformers.map((s, i) => (
             <div key={s.name} className="flex items-center gap-2 text-xs">
-              <span>{['🥇', '🥈', '🥉'][i]}</span>
+              <span>{['??', '??', '??'][i]}</span>
               <span className="font-medium text-gray-800 flex-1 truncate">{s.name}</span>
               <span className="text-green-700 font-mono font-semibold">{pct(s.roi)}</span>
             </div>
@@ -681,7 +681,7 @@ function RightPanel({
   );
 }
 
-// ── Main ─────────────────────────────────────────────────────────────────────
+// -- Main ---------------------------------------------------------------------
 
 export default function PD05Partners() {
   const { companies } = usePropDev();
@@ -727,7 +727,7 @@ export default function PD05Partners() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="page-title">Partners / JV Ledger</h2>
-            <p className="body-text">Equity · contributions · distributions · settlement</p>
+            <p className="body-text">Equity � contributions � distributions � settlement</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <select value={localCompanyId} onChange={e => handleCompanyChange(e.target.value)}
@@ -770,7 +770,7 @@ export default function PD05Partners() {
 
       {/* 3-panel layout */}
       <div className="flex flex-1 min-h-0 flex-col lg:flex-row border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
-        {/* Left — hidden on mobile, use partner dropdown instead */}
+        {/* Left � hidden on mobile, use partner dropdown instead */}
         <div className="hidden lg:block w-[240px] shrink-0 min-h-0">
           <PartnerListPanel
             summaries={summaries}
@@ -801,13 +801,13 @@ export default function PD05Partners() {
           )}
         </div>
 
-        {/* Right — desktop */}
+        {/* Right � desktop */}
         <div className="hidden xl:block w-[280px] shrink-0 min-h-0">
           <RightPanel summaries={summaries} allPartners={allPartners} allCalls={allCalls} />
         </div>
       </div>
 
-      {/* Right panel — mobile/tablet collapsible */}
+      {/* Right panel � mobile/tablet collapsible */}
       <details className="xl:hidden mt-3 bg-white border border-gray-200 rounded-xl shadow-sm">
         <summary className="px-4 py-3 text-xs font-semibold text-gray-700 cursor-pointer select-none">
           Portfolio Summary &amp; Distribution Calculator

@@ -1,4 +1,4 @@
-﻿import { usePropDev } from '../../contexts/PropertyDevContext';
+import { usePropDev } from '../../contexts/PropertyDevContext';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 const fmt = (n: number) => `$${Math.round(n).toLocaleString()}`;
@@ -18,7 +18,7 @@ export default function PD09Performance() {
     + p.propertyTax + p.loanProcessing + p.professionalCharges + p.legalFees + p.interestOnLoan;
   // Management fee: 9% of Land Cost per Note 4 (NOT of revenue)
   const managementFee = p.landCost * p.managementFeeRate;
-  // Commission: use explicit amount if set, otherwise rate × sale consideration
+  // Commission: use explicit amount if set, otherwise rate � sale consideration
   const commission = p.commission ?? (p.saleConsideration * p.commissionRate);
   const netProfit = p.saleConsideration - totalCost - managementFee - commission;
 
@@ -91,14 +91,14 @@ export default function PD09Performance() {
               <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={v => `$${(v/1000).toFixed(0)}K`} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} />
               <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, 'Per Lot']} />
-              <Bar dataKey="perLot" fill="#D4AF37" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="perLot" fill="#6366F1" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
         {/* Revenue vs Cost Waterfall */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="font-semibold text-gray-800 mb-4">Revenue → Profit Waterfall</h3>
+          <h3 className="font-semibold text-gray-800 mb-4">Revenue ? Profit Waterfall</h3>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart
               data={[
@@ -133,7 +133,7 @@ export default function PD09Performance() {
               {[
                 { label: 'Total Equity Invested', value: fmt(totalCapital), sub: 'All partner contributions' },
                 { label: 'Total Project Cost', value: fmt(totalCost), sub: 'Land + Dev + All charges' },
-                { label: 'Projected Revenue', value: fmt(projectedRevenue), sub: `27 lots × avg ${fmt(projectedRevenue/lots.length)}` },
+                { label: 'Projected Revenue', value: fmt(projectedRevenue), sub: `27 lots � avg ${fmt(projectedRevenue/lots.length)}` },
                 { label: 'Revenue Collected (Sold)', value: fmt(revenueToDate), sub: `${soldLots.length} lots closed` },
                 { label: 'Gross Profit', value: fmt(projectedRevenue - totalCost), sub: 'Before Mgmt fee & Commission' },
                 { label: 'Management Fee', value: fmt(managementFee), sub: `${(p.managementFeeRate*100).toFixed(0)}% of land cost (Note 4)` },

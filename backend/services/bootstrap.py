@@ -44,10 +44,5 @@ def ensure_local_demo(db: Session) -> None:
     )
     db.commit()
 
-    # Skip heavy demo seeding on PostgreSQL — too slow over network
-    if is_sqlite:
-        from scripts.seed_demo_tenant import seed
-        seed(tenant.id, skip_if_seeded=True)
-
-        from scripts.seed_rentals import seed as seed_rentals
-        seed_rentals()
+    from scripts.seed_rentals import seed as seed_rentals
+    seed_rentals()

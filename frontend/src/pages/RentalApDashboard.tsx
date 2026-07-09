@@ -275,7 +275,7 @@ export default function RentalApDashboard() {
 
       {/* ── Page header ───────────────────────────────────────────────────── */}
       <div>
-        <p className="text-xs uppercase tracking-wider font-sans" style={{ color: '#B8860B' }}>AP Dashboard</p>
+        <p className="text-xs uppercase tracking-wider font-sans" style={{ color: '#7C3AED' }}>AP Dashboard</p>
         <h1 className="text-3xl font-bold text-gray-900 mt-1">Accounts Payable</h1>
         <p className="text-sm text-gray-400 font-sans mt-1">Aging, payment planning, and vendor relationship management</p>
       </div>

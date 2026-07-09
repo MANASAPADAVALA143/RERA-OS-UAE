@@ -59,7 +59,7 @@ export default function RentalCompliance() {
   return (
     <div className="space-y-8 max-w-5xl" style={{ fontFamily: 'Georgia, serif' }}>
       <div>
-        <p className="text-xs uppercase tracking-wider font-sans" style={{ color: '#B8860B' }}>Compliance</p>
+        <p className="text-xs uppercase tracking-wider font-sans" style={{ color: '#7C3AED' }}>Compliance</p>
         <h1 className="text-3xl font-bold text-gray-900 mt-1">Texas Rental Portfolio</h1>
         <p className="text-sm text-gray-400 font-sans mt-1">Annual compliance obligations — update status as items are completed</p>
       </div>

@@ -296,7 +296,7 @@ export default function RentalVendorManagement() {
       {/* ── Page header ───────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <p className="text-xs uppercase tracking-wider font-sans" style={{ color: '#B8860B' }}>Vendor Management</p>
+          <p className="text-xs uppercase tracking-wider font-sans" style={{ color: '#7C3AED' }}>Vendor Management</p>
           <h1 className="text-3xl font-bold text-gray-900 mt-1">Vendor Directory</h1>
           <p className="text-sm text-gray-400 font-sans mt-1">1099 compliance, payment history, and risk assessment</p>
         </div>
@@ -673,7 +673,7 @@ export default function RentalVendorManagement() {
                 <XAxis dataKey="name" tick={{ fontSize: 11, fontFamily: 'sans-serif' }} />
                 <YAxis tick={{ fontSize: 10, fontFamily: 'monospace' }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v: number) => [$$(v)]} />
-                <Bar dataKey="AP" fill="#B8860B" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="AP" fill="#7C3AED" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </>

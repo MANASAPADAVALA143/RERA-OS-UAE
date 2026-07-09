@@ -18,10 +18,10 @@ export default function AnalyticsExceptionView({
         All companies — KPIs in Review, Monitor, N/A, or negative margin. Worst status rows first.
       </p>
 
-      <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, overflow: 'auto' }}>
+      <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 720 }}>
           <thead>
-            <tr style={{ background: '#F5EFE0', borderBottom: '1px solid #E8DEC8', textAlign: 'left' }}>
+            <tr style={{ background: '#F5EFE0', borderBottom: '1px solid #E2E8F0', textAlign: 'left' }}>
               {['Company', 'KPI', 'Value', 'Status', 'Benchmark Target'].map(h => (
                 <th key={h} style={{ padding: '12px 16px', fontSize: 11, fontWeight: 600, color: '#78716C', textTransform: 'uppercase' }}>{h}</th>
               ))}

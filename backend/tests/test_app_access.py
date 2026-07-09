@@ -9,9 +9,8 @@ PRIMARY = settings.primary_user_email
 
 
 def test_is_primary_app_user():
-    assert is_primary_app_user("consulting.akk@gmail.com")
-    assert is_primary_app_user("consultingakk@gmail.com")
-    assert is_primary_app_user("CONSULTINGAKK@GMAIL.COM")
+    assert is_primary_app_user(PRIMARY)
+    assert is_primary_app_user(PRIMARY.upper())
     assert not is_primary_app_user("other@example.com")
     assert not is_primary_app_user(None)
 

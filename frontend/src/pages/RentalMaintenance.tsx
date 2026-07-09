@@ -19,15 +19,15 @@ interface CompanyOption { id: string; company_name: string; }
 const fmt = (n: number) => '$' + Math.round(n).toLocaleString('en-US');
 
 const PARCH_CARD: React.CSSProperties = {
-  background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, overflow: 'hidden',
+  background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden',
 };
 
 const SEL: React.CSSProperties = {
-  padding: '6px 10px', border: '1px solid #E8DEC8', borderRadius: 8,
-  fontSize: 13, background: '#FBF6EE', color: '#1C1917', outline: 'none',
+  padding: '6px 10px', border: '1px solid #E2E8F0', borderRadius: 8,
+  fontSize: 13, background: '#F1F5F9', color: '#1C1917', outline: 'none',
 };
 
-const TT = { contentStyle: { background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 } };
+const TT = { contentStyle: { background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13 } };
 
 function PlCompanyCard({ company, rows }: { company: string; rows: MaintPlRow[] }) {
   const total = rows.reduce((s, r) => s + r.amount, 0);
@@ -38,8 +38,8 @@ function PlCompanyCard({ company, rows }: { company: string; rows: MaintPlRow[] 
 
   return (
     <div style={PARCH_CARD}>
-      <div style={{ padding: '14px 20px', borderBottom: '1px solid #E8DEC8', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(212,175,55,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <div style={{ padding: '14px 20px', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(99,102,241,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <Building2 size={16} style={{ color: '#92400E' }} />
         </div>
         <div>
@@ -53,7 +53,7 @@ function PlCompanyCard({ company, rows }: { company: string; rows: MaintPlRow[] 
           {accounts.map(([account, amount], i) => (
             <div key={account} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <p style={{ fontSize: 13, color: '#1C1917', width: 140, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={account}>{account}</p>
-              <div style={{ flex: 1, height: 8, background: '#E8DEC8', borderRadius: 99, overflow: 'hidden' }}>
+              <div style={{ flex: 1, height: 8, background: '#E2E8F0', borderRadius: 99, overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${(amount / maxAmt) * 100}%`, background: EXP_PALETTE[i % EXP_PALETTE.length], borderRadius: 99 }} />
               </div>
               <span style={{ fontSize: 13, fontWeight: 600, color: '#1C1917', width: 72, textAlign: 'right', flexShrink: 0 }}>{fmt(amount)}</span>
@@ -197,10 +197,10 @@ export default function RentalMaintenance() {
             return <option key={m} value={month}>{m}</option>;
           })}
         </select>
-        <button onClick={() => loadFinancials(companies)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13, background: '#FBF6EE', color: '#78716C', cursor: 'pointer' }}>
+        <button onClick={() => loadFinancials(companies)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, background: '#F1F5F9', color: '#78716C', cursor: 'pointer' }}>
           <RefreshCw size={13} /> Refresh
         </button>
-        <span style={{ fontSize: 11, color: '#78716C', background: '#F7F1E6', border: '1px solid #E8DEC8', borderRadius: 20, padding: '3px 12px' }}>
+        <span style={{ fontSize: 11, color: '#78716C', background: '#F7F1E6', border: '1px solid #E2E8F0', borderRadius: 20, padding: '3px 12px' }}>
           {periodLabel}
         </span>
       </div>
@@ -226,7 +226,7 @@ export default function RentalMaintenance() {
               { label: 'P&L Accounts', value: String(summary.accounts) },
               { label: 'Line Items', value: String(summary.lineItems) },
             ].map(t => (
-              <div key={t.label} style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '12px 16px', textAlign: 'center' }}>
+              <div key={t.label} style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: '12px 16px', textAlign: 'center' }}>
                 <p style={{ fontSize: 28, fontWeight: 700, color: '#1C1917', lineHeight: 1.1 }}>{t.value}</p>
                 <p style={{ fontSize: 13, color: '#78716C', marginTop: 4 }}>{t.label}</p>
               </div>
@@ -251,13 +251,13 @@ export default function RentalMaintenance() {
 
           {/* Detail table */}
           <div style={{ ...PARCH_CARD, padding: 0 }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid #E8DEC8' }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid #E2E8F0' }}>
               <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917' }}>Maintenance P&amp;L Detail</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid #E8DEC8', color: '#78716C', textAlign: 'left' }}>
+                  <tr style={{ borderBottom: '1px solid #E2E8F0', color: '#78716C', textAlign: 'left' }}>
                     <th className="py-2 px-4 font-medium">Company</th>
                     <th className="py-2 px-4 font-medium">P&amp;L Account</th>
                     <th className="py-2 px-4 font-medium">Month</th>

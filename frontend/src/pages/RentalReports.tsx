@@ -75,7 +75,7 @@ export default function RentalReports() {
     try {
       const response = await api.get('/api/rentals/export/cfo-dashboard', { responseType: 'blob' });
       const today = new Date().toISOString().split('T')[0];
-      const filename = `EstateCFO_Dashboard_${today}.xlsx`;
+      const filename = `RERA_OS_Dashboard_${today}.xlsx`;
       const url = window.URL.createObjectURL(new Blob([response.data as BlobPart]));
       const link = document.createElement('a');
       link.href = url;

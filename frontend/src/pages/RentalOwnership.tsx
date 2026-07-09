@@ -1215,7 +1215,7 @@ export default function RentalOwnership() {
                     ]}
                     labelFormatter={(_, payload) => payload?.[0]?.payload?.name ?? ''}
                   />
-                  <Scatter data={scatterPoints} fill="#B8860B" fillOpacity={0.75} />
+                  <Scatter data={scatterPoints} fill="#7C3AED" fillOpacity={0.75} />
                 </ScatterChart>
               </ResponsiveContainer>
             ) : (

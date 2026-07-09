@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { usePropDev } from '../../contexts/PropertyDevContext';
 import type { Loan, CompanyData } from '../../contexts/PropertyDevContext';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
@@ -39,7 +39,7 @@ function loanDscrBadge(dscr: number): keyof typeof DSCR_BADGE_STYLE {
   return 'red';
 }
 
-// ── DSCR Gauge ───────────────────────────────────────────────────────────────
+// -- DSCR Gauge ---------------------------------------------------------------
 
 function DscrGauge({ dscr }: { dscr: number }) {
   const label = dscr >= 1.25 ? 'Strong' : dscr >= 1.0 ? 'Adequate' : 'Below Min';
@@ -51,7 +51,7 @@ function DscrGauge({ dscr }: { dscr: number }) {
     <div className="bg-gray-50 rounded-xl p-4">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs text-gray-500 uppercase tracking-wide">DSCR</span>
-        <span className={`text-lg font-bold ${color}`}>{dscr.toFixed(2)}x · {label}</span>
+        <span className={`text-lg font-bold ${color}`}>{dscr.toFixed(2)}x � {label}</span>
       </div>
       <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
         <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${barWidth}%` }} />
@@ -61,16 +61,16 @@ function DscrGauge({ dscr }: { dscr: number }) {
       </div>
       <p className="text-xs text-gray-500 mt-2">
         {dscr < 1.0
-          ? '⚠️ Debt service NOT covered by NOI — immediate refinancing or capital injection needed.'
+          ? '?? Debt service NOT covered by NOI � immediate refinancing or capital injection needed.'
           : dscr < 1.25
-            ? 'Marginal coverage — monitor closely and boost collections.'
-            : 'Healthy coverage — loan well-serviced from operating income.'}
+            ? 'Marginal coverage � monitor closely and boost collections.'
+            : 'Healthy coverage � loan well-serviced from operating income.'}
       </p>
     </div>
   );
 }
 
-// ── Refinancing Recommendation ───────────────────────────────────────────────
+// -- Refinancing Recommendation -----------------------------------------------
 
 function RefinancingRecommendation({ loans }: { loans: Loan[] }) {
   const MARKET_RATE = 6.5;
@@ -88,7 +88,7 @@ function RefinancingRecommendation({ loans }: { loans: Loan[] }) {
     return (
       <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl text-sm text-green-800">
         <CheckCircle2 size={16} className="shrink-0" />
-        No refinancing needed — all active loans are at or below market rate ({MARKET_RATE}%).
+        No refinancing needed � all active loans are at or below market rate ({MARKET_RATE}%).
       </div>
     );
   }
@@ -120,7 +120,7 @@ function RefinancingRecommendation({ loans }: { loans: Loan[] }) {
             </div>
           </div>
           <p className="text-xs text-amber-600 mt-2">
-            Annual savings potential: <strong>{fmt(monthlySavings * 12)}</strong>. Initiate refinancing conversations now — allow 60–90 days for processing.
+            Annual savings potential: <strong>{fmt(monthlySavings * 12)}</strong>. Initiate refinancing conversations now � allow 60�90 days for processing.
           </p>
         </div>
       </div>
@@ -128,7 +128,7 @@ function RefinancingRecommendation({ loans }: { loans: Loan[] }) {
   );
 }
 
-// ── EMI Tracker (This Month) ─────────────────────────────────────────────────
+// -- EMI Tracker (This Month) -------------------------------------------------
 
 function EmiTracker({ loans }: { loans: Loan[] }) {
   const today = new Date();
@@ -137,7 +137,7 @@ function EmiTracker({ loans }: { loans: Loan[] }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200">
       <div className="p-4 border-b border-gray-100">
-        <h3 className="font-semibold text-gray-800">EMI Tracker — This Month</h3>
+        <h3 className="font-semibold text-gray-800">EMI Tracker � This Month</h3>
         <p className="text-xs text-gray-400 mt-0.5">Today is the {dayOfMonth}{dayOfMonth === 1 ? 'st' : dayOfMonth === 2 ? 'nd' : dayOfMonth === 3 ? 'rd' : 'th'}</p>
       </div>
       <div className="divide-y divide-gray-100">
@@ -149,7 +149,7 @@ function EmiTracker({ loans }: { loans: Loan[] }) {
             <div key={loan.id} className={`flex items-center justify-between px-4 py-3 ${isDue ? 'bg-amber-50' : ''}`}>
               <div>
                 <p className="text-sm font-medium text-gray-900">{loan.bank}</p>
-                <p className="text-xs text-gray-400">Due on {loan.emiDate}{loan.emiDate === 1 ? 'st' : 'th'} · A/c {loan.accountNo.slice(-4)}</p>
+                <p className="text-xs text-gray-400">Due on {loan.emiDate}{loan.emiDate === 1 ? 'st' : 'th'} � A/c {loan.accountNo.slice(-4)}</p>
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-sm font-bold text-gray-900">{fmt(loan.emi)}</span>
@@ -173,7 +173,7 @@ function EmiTracker({ loans }: { loans: Loan[] }) {
   );
 }
 
-// ── Loan Register ─────────────────────────────────────────────────────────────
+// -- Loan Register -------------------------------------------------------------
 
 function LoanRegister({ loans, monthlyCollections }: { loans: Loan[]; monthlyCollections: number }) {
   const loanCount = Math.max(1, loans.length);
@@ -204,7 +204,7 @@ function LoanRegister({ loans, monthlyCollections }: { loans: Loan[]; monthlyCol
                   <td className="px-3 py-2.5 text-right font-mono">{fmt(loan.balance)}</td>
                   <td className="px-3 py-2.5 text-right text-xs">{loan.maturityDate}</td>
                   <td className="px-3 py-2.5 text-right">{loan.emiDate}</td>
-                  <td className="px-3 py-2.5 text-right font-mono">{loanDscr > 50 ? '∞' : `${loanDscr.toFixed(2)}x`}</td>
+                  <td className="px-3 py-2.5 text-right font-mono">{loanDscr > 50 ? '8' : `${loanDscr.toFixed(2)}x`}</td>
                   <td className="px-3 py-2.5 text-right">
                     <span className={`px-2 py-0.5 rounded-full text-xs ${DSCR_BADGE_STYLE[st]}`}>{st}</span>
                   </td>
@@ -219,7 +219,7 @@ function LoanRegister({ loans, monthlyCollections }: { loans: Loan[]; monthlyCol
   );
 }
 
-// ── Section 1: Company-wise Loan KPI Cards ────────────────────────────────────
+// -- Section 1: Company-wise Loan KPI Cards ------------------------------------
 
 function CompanyLoanCards({ companies, marketRate }: { companies: CompanyData[]; marketRate: number }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -227,7 +227,7 @@ function CompanyLoanCards({ companies, marketRate }: { companies: CompanyData[];
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-lg font-bold text-gray-900">Loan Position — By Company</h3>
+        <h3 className="text-lg font-bold text-gray-900">Loan Position � By Company</h3>
         <p className="text-sm text-gray-500 mt-0.5">Click any card to expand loan details</p>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -261,7 +261,7 @@ function CompanyLoanCards({ companies, marketRate }: { companies: CompanyData[];
               >
                 <div className="flex items-center justify-between mb-3">
                   <p className="font-semibold text-gray-900 text-sm leading-tight">{company.name}</p>
-                  <span className="text-gray-400 text-xs">{isExpanded ? '▲' : '▼'}</span>
+                  <span className="text-gray-400 text-xs">{isExpanded ? '?' : '?'}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-y-1.5 gap-x-3 text-xs mb-3">
                   {[
@@ -270,7 +270,7 @@ function CompanyLoanCards({ companies, marketRate }: { companies: CompanyData[];
                     ['Avg Rate',    `${weightedRate.toFixed(2)}%`],
                     ['Monthly EMI', fmt(totalEMI)],
                     ['Next EMI',    `${nextEmiDate}th`],
-                    ['Matures',     earliestMaturity ?? '—'],
+                    ['Matures',     earliestMaturity ?? '�'],
                   ].map(([k, v]) => (
                     <div key={k}><span className="text-gray-400">{k}: </span><span className="font-medium text-gray-700">{v}</span></div>
                   ))}
@@ -278,14 +278,14 @@ function CompanyLoanCards({ companies, marketRate }: { companies: CompanyData[];
                 <div className="flex items-center justify-between py-2 border-t border-gray-100">
                   <span className="text-xs text-gray-400">DSCR</span>
                   <span className={`text-sm font-bold ${dscr >= 1.25 ? 'text-green-700' : dscr >= 1.0 ? 'text-amber-700' : 'text-red-700'}`}>
-                    {dscr > 50 ? '∞' : dscr.toFixed(2)}x {dscr >= 1.25 ? '✅' : dscr >= 1.0 ? '⚠️' : '🔴'}
+                    {dscr > 50 ? '8' : dscr.toFixed(2)}x {dscr >= 1.25 ? '?' : dscr >= 1.0 ? '??' : '??'}
                   </span>
                 </div>
                 <div className="space-y-1 mt-1">
-                  {isLowDscr      && <p className="text-xs text-red-700 bg-red-50 rounded px-2 py-1">🔴 DSCR below 1.0 — debt not covered by income</p>}
-                  {isAboveMarket  && <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1">🟠 Rate {weightedRate.toFixed(1)}% &gt; market {marketRate}% — saves {fmt(annualSaving)}/yr</p>}
-                  {isMaturingSoon && <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1">🟡 Loan matures in {daysToMaturity} days — begin refinancing</p>}
-                  {!isLowDscr && !isAboveMarket && !isMaturingSoon && <p className="text-xs text-green-700 bg-green-50 rounded px-2 py-1">🟢 All metrics healthy</p>}
+                  {isLowDscr      && <p className="text-xs text-red-700 bg-red-50 rounded px-2 py-1">?? DSCR below 1.0 � debt not covered by income</p>}
+                  {isAboveMarket  && <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1">?? Rate {weightedRate.toFixed(1)}% &gt; market {marketRate}% � saves {fmt(annualSaving)}/yr</p>}
+                  {isMaturingSoon && <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1">?? Loan matures in {daysToMaturity} days � begin refinancing</p>}
+                  {!isLowDscr && !isAboveMarket && !isMaturingSoon && <p className="text-xs text-green-700 bg-green-50 rounded px-2 py-1">?? All metrics healthy</p>}
                 </div>
               </button>
               {isExpanded && (
@@ -321,7 +321,7 @@ function CompanyLoanCards({ companies, marketRate }: { companies: CompanyData[];
   );
 }
 
-// ── Section 2: Daily EMI Calendar ─────────────────────────────────────────────
+// -- Section 2: Daily EMI Calendar ---------------------------------------------
 
 function EmiCalendar({ companies }: { companies: CompanyData[] }) {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
@@ -365,7 +365,7 @@ function EmiCalendar({ companies }: { companies: CompanyData[] }) {
   return (
     <div className="space-y-5">
       <div>
-        <h3 className="text-lg font-bold text-gray-900">Daily EMI Calendar — All Companies</h3>
+        <h3 className="text-lg font-bold text-gray-900">Daily EMI Calendar � All Companies</h3>
         <p className="text-sm text-gray-500 mt-0.5">Bank-wise EMI deductions across portfolio</p>
       </div>
       <div className="grid grid-cols-3 gap-4">
@@ -427,7 +427,7 @@ function EmiCalendar({ companies }: { companies: CompanyData[] }) {
           {selectedDay !== null && (emiByDay[selectedDay] ?? []).length > 0 && (
             <div className="mt-4 border border-blue-200 rounded-xl overflow-hidden">
               <div className="px-4 py-2 bg-blue-900 text-white text-sm font-medium">
-                EMI Due — {selectedDay}{[,'st','nd','rd'][selectedDay] ?? 'th'} {monthName}
+                EMI Due � {selectedDay}{[,'st','nd','rd'][selectedDay] ?? 'th'} {monthName}
               </div>
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-gray-400 text-xs uppercase">
@@ -437,7 +437,7 @@ function EmiCalendar({ companies }: { companies: CompanyData[] }) {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {(emiByDay[selectedDay] ?? []).map((item, i) => {
-                    const status = selectedDay < todayDay ? '✅ Paid' : selectedDay === todayDay ? '⏳ Due Today' : '📅 Upcoming';
+                    const status = selectedDay < todayDay ? '? Paid' : selectedDay === todayDay ? '? Due Today' : '?? Upcoming';
                     return (
                       <tr key={i} className="hover:bg-gray-50">
                         <td className="px-3 py-2 font-medium text-gray-900">{item.company}</td>
@@ -503,7 +503,7 @@ function EmiCalendar({ companies }: { companies: CompanyData[] }) {
   );
 }
 
-// ── Section 3: Bank Rate Intelligence ─────────────────────────────────────────
+// -- Section 3: Bank Rate Intelligence -----------------------------------------
 
 function BankRateIntelligence({ companies }: { companies: CompanyData[] }) {
   const [marketRate, setMarketRate] = useState(6.5);
@@ -547,7 +547,7 @@ function BankRateIntelligence({ companies }: { companies: CompanyData[] }) {
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h3 className="text-lg font-bold text-gray-900">🏦 Bank Rate Intelligence</h3>
+          <h3 className="text-lg font-bold text-gray-900">?? Bank Rate Intelligence</h3>
           <p className="text-sm text-gray-500 mt-0.5">Strategic insights on refinancing opportunities</p>
         </div>
         <div className="flex items-center gap-2">
@@ -580,11 +580,11 @@ function BankRateIntelligence({ companies }: { companies: CompanyData[] }) {
                     <td className="px-4 py-3 text-right">{fmt(row.totalDebt)}</td>
                     <td className={`px-4 py-3 text-right font-semibold ${above ? 'text-red-600' : 'text-green-700'}`}>{row.weightedRate.toFixed(2)}%</td>
                     <td className="px-4 py-3 text-right text-gray-500">{marketRate.toFixed(1)}%</td>
-                    <td className="px-4 py-3 text-right">{above ? <span className="text-red-600 font-medium">+{(row.weightedRate-marketRate).toFixed(2)}%</span> : <span className="text-green-600">✓</span>}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-green-700">{annSave > 0 ? fmt(annSave) : '—'}</td>
+                    <td className="px-4 py-3 text-right">{above ? <span className="text-red-600 font-medium">+{(row.weightedRate-marketRate).toFixed(2)}%</span> : <span className="text-green-600">?</span>}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-green-700">{annSave > 0 ? fmt(annSave) : '�'}</td>
                     <td className="px-4 py-3 text-right">
                       <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${above ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                        {above ? '↓ REFINANCE' : '✓ OPTIMAL'}
+                        {above ? '? REFINANCE' : '? OPTIMAL'}
                       </span>
                     </td>
                   </tr>
@@ -598,12 +598,12 @@ function BankRateIntelligence({ companies }: { companies: CompanyData[] }) {
       <div className="space-y-3">
         {bestRateBank && (
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-            <p className="text-sm font-bold text-blue-900 mb-1">💡 INSIGHT 1 — BEST RATE BANK</p>
+            <p className="text-sm font-bold text-blue-900 mb-1">?? INSIGHT 1 � BEST RATE BANK</p>
             <p className="text-sm text-blue-800"><strong>{bestRateBank.bank}</strong> offers the lowest weighted rate at <strong>{bestRateBank.weightedRate.toFixed(2)}%</strong> across <strong>{bestRateBank.loans.length} loan{bestRateBank.loans.length>1?'s':''}</strong> totaling <strong>{fmt(bestRateBank.totalDebt)}</strong>. Consider consolidating higher-rate loans here.</p>
           </div>
         )}
         <div className={`border rounded-xl p-4 space-y-3 ${highRateLoans.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
-          <p className={`text-sm font-bold mb-1 ${highRateLoans.length > 0 ? 'text-amber-900' : 'text-green-900'}`}>💡 INSIGHT 2 — REFINANCING OPPORTUNITY</p>
+          <p className={`text-sm font-bold mb-1 ${highRateLoans.length > 0 ? 'text-amber-900' : 'text-green-900'}`}>?? INSIGHT 2 � REFINANCING OPPORTUNITY</p>
           {highRateLoans.length > 0 ? (
             <>
               <p className="text-sm text-amber-800"><strong>{highRateLoans.length} loan{highRateLoans.length>1?'s':''}</strong> above market rate ({marketRate}%) totaling <strong>{fmt(highRateLoans.reduce((s,l)=>s+l.balance,0))}</strong>. Refinancing saves <strong>{fmt(monthlySavingTotal)}/month</strong> | <strong>{fmt(monthlySavingTotal*12)}/year</strong>.</p>
@@ -636,23 +636,23 @@ function BankRateIntelligence({ companies }: { companies: CompanyData[] }) {
           )}
         </div>
         <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-          <p className="text-sm font-bold text-gray-900 mb-2">💡 INSIGHT 3 — RATE TREND</p>
+          <p className="text-sm font-bold text-gray-900 mb-2">?? INSIGHT 3 � RATE TREND</p>
           <p className="text-sm text-gray-700 mb-2">Weighted avg portfolio rate is <strong>{weightedAvgRate.toFixed(2)}%</strong> vs market <strong>{marketRate}%</strong>. {refLoans.length > 0 ? 'Priority refinancing order (by annual saving):' : 'All loans at or below market rate.'}</p>
           {refLoans.length > 0 && (
             <ol className="space-y-1">{refLoans.map((l, i) => (
               <li key={l.id} className="text-sm text-gray-700">
-                <strong>{i+1}.</strong> {l.company} · {l.bank} @ <span className="text-red-600 font-medium">{l.interestRate}%</span> — saves <strong>{fmt(Math.round(l.balance*(l.interestRate-marketRate)/100))}/yr</strong>
+                <strong>{i+1}.</strong> {l.company} � {l.bank} @ <span className="text-red-600 font-medium">{l.interestRate}%</span> � saves <strong>{fmt(Math.round(l.balance*(l.interestRate-marketRate)/100))}/yr</strong>
               </li>
             ))}</ol>
           )}
         </div>
         <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-          <p className="text-sm font-bold text-green-900 mb-2">💡 INSIGHT 4 — BEST BANK TO APPROACH</p>
+          <p className="text-sm font-bold text-green-900 mb-2">?? INSIGHT 4 � BEST BANK TO APPROACH</p>
           <div className="space-y-1 text-sm text-green-800">
             {bankRows.slice(0,3).map((b,i) => (
-              <p key={b.bank}><strong>{b.bank}</strong> — {b.weightedRate.toFixed(2)}% avg rate · {fmt(b.totalDebt)} total · {b.loans.length} loan{b.loans.length>1?'s':''}{i===0?' (largest lender)':''}</p>
+              <p key={b.bank}><strong>{b.bank}</strong> � {b.weightedRate.toFixed(2)}% avg rate � {fmt(b.totalDebt)} total � {b.loans.length} loan{b.loans.length>1?'s':''}{i===0?' (largest lender)':''}</p>
             ))}
-            {bestRateBank && <p className="mt-1 font-medium">Best rate: <strong>{bestRateBank.bank}</strong> @ {bestRateBank.weightedRate.toFixed(2)}% — ideal for consolidation.</p>}
+            {bestRateBank && <p className="mt-1 font-medium">Best rate: <strong>{bestRateBank.bank}</strong> @ {bestRateBank.weightedRate.toFixed(2)}% � ideal for consolidation.</p>}
           </div>
         </div>
       </div>
@@ -691,7 +691,7 @@ function BankRateIntelligence({ companies }: { companies: CompanyData[] }) {
   );
 }
 
-// ── Section 4: Cash Position + EMI Alerts ─────────────────────────────────────
+// -- Section 4: Cash Position + EMI Alerts -------------------------------------
 
 function CashPositionAlerts({ companies }: { companies: CompanyData[] }) {
   const [cashPositions, setCashPositions] = useState<Record<string, { amount: number; date: string; bank: string }>>(() =>
@@ -725,14 +725,14 @@ function CashPositionAlerts({ companies }: { companies: CompanyData[] }) {
   });
 
   const sevCfg = {
-    critical: { bg:'bg-red-50',    border:'border-l-red-500',    icon:'🔴', color:'text-red-700'    },
-    warning:  { bg:'bg-amber-50',  border:'border-l-amber-500',  icon:'🟠', color:'text-amber-700'  },
-    watch:    { bg:'bg-yellow-50', border:'border-l-yellow-400', icon:'🟡', color:'text-yellow-700' },
+    critical: { bg:'bg-red-50',    border:'border-l-red-500',    icon:'??', color:'text-red-700'    },
+    warning:  { bg:'bg-amber-50',  border:'border-l-amber-500',  icon:'??', color:'text-amber-700'  },
+    watch:    { bg:'bg-yellow-50', border:'border-l-yellow-400', icon:'??', color:'text-yellow-700' },
   };
 
   return (
     <div className="space-y-5">
-      <div><h3 className="text-lg font-bold text-gray-900">💵 Cash Position & EMI Alert System</h3></div>
+      <div><h3 className="text-lg font-bold text-gray-900">?? Cash Position & EMI Alert System</h3></div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h4 className="font-semibold text-gray-800 mb-4">Update Cash Position</h4>
@@ -761,7 +761,7 @@ function CashPositionAlerts({ companies }: { companies: CompanyData[] }) {
 
       {alerts.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-5 py-3 bg-red-900 text-white"><h4 className="font-semibold">🔔 ACTIVE ALERTS ({alerts.length})</h4></div>
+          <div className="px-5 py-3 bg-red-900 text-white"><h4 className="font-semibold">?? ACTIVE ALERTS ({alerts.length})</h4></div>
           <div className="divide-y divide-gray-100">
             {alerts.map(alert => {
               const cfg = sevCfg[alert.severity];
@@ -769,7 +769,7 @@ function CashPositionAlerts({ companies }: { companies: CompanyData[] }) {
                 <div key={alert.id} className={`p-4 ${cfg.bg} border-l-4 ${cfg.border}`}>
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <p className={`text-sm font-bold ${cfg.color}`}>{cfg.icon} {alert.company} — {alert.message}</p>
+                      <p className={`text-sm font-bold ${cfg.color}`}>{cfg.icon} {alert.company} � {alert.message}</p>
                       <p className={`text-xs mt-0.5 ${cfg.color} opacity-80`}>{alert.detail}</p>
                     </div>
                     <div className="flex gap-2 ml-4">
@@ -802,16 +802,16 @@ function CashPositionAlerts({ companies }: { companies: CompanyData[] }) {
                 const ratio = monthlyEMI > 0 ? cash/monthlyEMI : 99;
                 const daysSince = pos?.date ? Math.round((new Date().getTime()-new Date(pos.date).getTime())/86400000) : 0;
                 const sc = ratio > 6 ? 'bg-green-100 text-green-700' : ratio > 3 ? 'bg-amber-100 text-amber-700' : ratio > 1 ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700';
-                const sl = ratio > 6 ? '🟢 Safe' : ratio > 3 ? '🟡 Monitor' : ratio > 1 ? '🟠 Warning' : '🔴 Critical';
+                const sl = ratio > 6 ? '?? Safe' : ratio > 3 ? '?? Monitor' : ratio > 1 ? '?? Warning' : '?? Critical';
                 return (
                   <tr key={c.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-gray-900">{c.name}</td>
                     <td className="px-4 py-3 text-right font-mono">{fmt(cash)}</td>
                     <td className="px-4 py-3 text-right font-mono">{fmt(monthlyEMI)}</td>
-                    <td className="px-4 py-3 text-right font-semibold">{ratio > 50 ? '∞' : ratio.toFixed(1)}x</td>
-                    <td className="px-4 py-3 text-right">{ratio > 50 ? '∞' : ratio.toFixed(1)} mo</td>
+                    <td className="px-4 py-3 text-right font-semibold">{ratio > 50 ? '8' : ratio.toFixed(1)}x</td>
+                    <td className="px-4 py-3 text-right">{ratio > 50 ? '8' : ratio.toFixed(1)} mo</td>
                     <td className="px-4 py-3 text-right text-xs text-gray-400">
-                      {daysSince === 0 ? 'Today' : `${daysSince}d ago`}{daysSince >= 7 && <span className="text-amber-600 ml-1">⚠️</span>}
+                      {daysSince === 0 ? 'Today' : `${daysSince}d ago`}{daysSince >= 7 && <span className="text-amber-600 ml-1">??</span>}
                     </td>
                     <td className="px-4 py-3 text-right"><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${sc}`}>{sl}</span></td>
                   </tr>
@@ -825,7 +825,7 @@ function CashPositionAlerts({ companies }: { companies: CompanyData[] }) {
   );
 }
 
-// ── Section 5: 90-Day Cash Flow Forecast ─────────────────────────────────────
+// -- Section 5: 90-Day Cash Flow Forecast -------------------------------------
 
 function CashFlowForecast({ companies }: { companies: CompanyData[] }) {
   const today = new Date();
@@ -886,7 +886,7 @@ function CashFlowForecast({ companies }: { companies: CompanyData[] }) {
                 <td className={`px-4 py-2 text-right font-bold font-mono ${row.isNegative ? 'text-red-700' : 'text-gray-900'}`}>{fmt(row.closingCash)}</td>
                 <td className="px-4 py-2 text-right">
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${row.isNegative ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                    {row.isNegative ? '🔴 Shortfall' : '🟢 OK'}
+                    {row.isNegative ? '?? Shortfall' : '?? OK'}
                   </span>
                 </td>
               </tr>
@@ -906,7 +906,7 @@ function CashFlowForecast({ companies }: { companies: CompanyData[] }) {
 
       {negForecast && (
         <div className="bg-red-50 border border-red-300 rounded-xl p-4">
-          <p className="text-sm font-bold text-red-700">🔴 Cash shortfall projected for {negForecast.rows.find(r=>r.isNegative)?.month}:</p>
+          <p className="text-sm font-bold text-red-700">?? Cash shortfall projected for {negForecast.rows.find(r=>r.isNegative)?.month}:</p>
           <p className="text-sm text-red-600 mt-1">
             {negForecast.company} needs additional {fmt(Math.abs(negForecast.rows.find(r=>r.isNegative)?.closingCash??0))}.
             Options: <strong>Capital call</strong> | <strong>Lot sale</strong> | <strong>Bridge loan</strong> | <strong>Defer distribution</strong>
@@ -915,7 +915,7 @@ function CashFlowForecast({ companies }: { companies: CompanyData[] }) {
       )}
 
       <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h4 className="font-semibold text-gray-700 text-sm mb-3">Portfolio Cash vs EMI — 3 Month View</h4>
+        <h4 className="font-semibold text-gray-700 text-sm mb-3">Portfolio Cash vs EMI � 3 Month View</h4>
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={chartData} barGap={4}>
             <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
@@ -925,7 +925,7 @@ function CashFlowForecast({ companies }: { companies: CompanyData[] }) {
             <Legend />
             <Bar dataKey="cash"        fill="#16A34A" name="Closing Cash"  radius={[4,4,0,0]} />
             <Bar dataKey="emi"         fill="#DC2626" name="EMI Due"       radius={[4,4,0,0]} />
-            <Bar dataKey="collections" fill="#D4AF37" name="Collections"   radius={[4,4,0,0]} />
+            <Bar dataKey="collections" fill="#6366F1" name="Collections"   radius={[4,4,0,0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -936,7 +936,7 @@ function CashFlowForecast({ companies }: { companies: CompanyData[] }) {
   );
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
+// -- Main Component ------------------------------------------------------------
 
 export default function PD07Loans() {
   const { loans, properties, customers, companies } = usePropDev();
@@ -993,11 +993,11 @@ export default function PD07Loans() {
       {/* EMI Tracker */}
       <EmiTracker loans={loans} />
 
-      {/* ── Per-Loan Cards ── */}
+      {/* -- Per-Loan Cards -- */}
       {loans.map(loan => {
         const schedule = buildAmortizationSchedule(loan, 12);
         const totalInterest = schedule.reduce((s, r) => s + r.interest, 0);
-        const ltv = loan.amount > 0 ? ((loan.balance / loan.amount) * 100).toFixed(1) : '—';
+        const ltv = loan.amount > 0 ? ((loan.balance / loan.amount) * 100).toFixed(1) : '�';
         const loanNoi = monthlyCollections * 12 / Math.max(1, loans.length);
         const loanDscr = (loan.emi * 12) > 0 ? loanNoi / (loan.emi * 12) : 99;
 
@@ -1010,7 +1010,7 @@ export default function PD07Loans() {
                   <Landmark size={20} className="text-blue-300" />
                   <div>
                     <h3 className="font-bold text-lg">{loan.bank}</h3>
-                    <p className="text-sm text-blue-200">{loan.property} · A/c: {loan.accountNo}</p>
+                    <p className="text-sm text-blue-200">{loan.property} � A/c: {loan.accountNo}</p>
                   </div>
                 </div>
                 <span className={`px-3 py-1 rounded-full text-xs font-semibold ${STATUS_COLORS[loan.status]}`}>
@@ -1067,7 +1067,7 @@ export default function PD07Loans() {
                 {loan.interestRate > 6.5 && (
                   <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
                     <AlertTriangle size={12} className="inline mr-1" />
-                    Rate {loan.interestRate}% above market 6.5% — est. saving {fmt((loan.balance * (loan.interestRate - 6.5) / 100) / 12)}/month if refinanced.
+                    Rate {loan.interestRate}% above market 6.5% � est. saving {fmt((loan.balance * (loan.interestRate - 6.5) / 100) / 12)}/month if refinanced.
                   </div>
                 )}
               </div>
@@ -1081,7 +1081,7 @@ export default function PD07Loans() {
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${(v/1000).toFixed(0)}K`} />
                     <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, '']} />
-                    <Line type="monotone" dataKey="balance" stroke="#D4AF37" strokeWidth={2} dot={false} name="Balance" />
+                    <Line type="monotone" dataKey="balance" stroke="#6366F1" strokeWidth={2} dot={false} name="Balance" />
                     <Line type="monotone" dataKey="interest" stroke="#DC2626" strokeWidth={1.5} dot={false} name="Interest" />
                   </LineChart>
                 </ResponsiveContainer>
@@ -1118,9 +1118,9 @@ export default function PD07Loans() {
         );
       })}
 
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* NEW SECTIONS — added below existing Active Loans content      */}
-      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* --------------------------------------------------------------- */}
+      {/* NEW SECTIONS � added below existing Active Loans content      */}
+      {/* --------------------------------------------------------------- */}
       <BankRateIntelligence companies={companies} />
       <CashPositionAlerts   companies={companies} />
       <CashFlowForecast     companies={companies} />

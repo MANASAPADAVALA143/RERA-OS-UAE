@@ -11,12 +11,12 @@ import {
 } from '../../utils/cfoMultiYearTrendData';
 
 const CFO_TT = {
-  contentStyle: { background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13, color: '#1C1917' },
+  contentStyle: { background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, color: '#1C1917' },
   labelStyle: { color: '#57534E', fontWeight: 600, fontSize: 13 },
   itemStyle: { color: '#1C1917', fontSize: 13 },
 };
 
-const PIE_COLORS = ['#D4AF37', '#C0392B', '#166534', '#F2994A', '#8B6914', '#A8A29E', '#C08B40', '#78716C'];
+const PIE_COLORS = ['#6366F1', '#C0392B', '#166534', '#F2994A', '#8B6914', '#A8A29E', '#C08B40', '#78716C'];
 
 const OPEX_LINE_PATTERNS: Record<string, RegExp> = {
   'Management Fee': /management\s+fee/i,
@@ -76,7 +76,7 @@ function DrillPanel({
     <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '14px 16px', marginTop: 12 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
         <p style={{ fontSize: 14, fontWeight: 700, color: '#92400E', margin: 0 }}>{title}</p>
-        <button type="button" onClick={onClear} style={{ fontSize: 12, color: '#D4AF37', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline', padding: 0 }}>
+        <button type="button" onClick={onClear} style={{ fontSize: 12, color: '#6366F1', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline', padding: 0 }}>
           × clear drill-down
         </button>
       </div>
@@ -141,7 +141,7 @@ export default function CfoMultiYearTrendCharts({
 
   if (!snapshots.length) {
     return (
-      <div style={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 12, padding: '32px 24px', textAlign: 'center', color: '#78716C', fontSize: 13 }}>
+      <div style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 12, padding: '32px 24px', textAlign: 'center', color: '#78716C', fontSize: 13 }}>
         Upload P&amp;L financials to see multi-year income statement trends.
       </div>
     );
@@ -156,7 +156,7 @@ export default function CfoMultiYearTrendCharts({
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+        <div style={{ background: '#F1F5F9', border: '0.5px solid #E2E8F0', borderRadius: 8, padding: 16 }}>
           <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 4 }}>Net Income Trajectory</p>
           {onYearSelect && <p className="cfo-chart-hint" style={{ fontSize: 11, color: '#A8A29E', margin: '0 0 8px' }}>Click a point to jump to that year</p>}
           <ResponsiveContainer width="100%" height={210}>
@@ -169,7 +169,7 @@ export default function CfoMultiYearTrendCharts({
               }}
               style={{ cursor: onYearSelect ? 'pointer' : 'default' }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
               <XAxis dataKey="year" tick={{ fontSize: 11, fill: '#78716C' }} />
               <YAxis tick={{ fontSize: 11, fill: '#78716C' }} tickFormatter={v => fmt(v as number)} />
               <Tooltip formatter={(v: number) => [fmtFull(v), 'Net Income']} {...CFO_TT} />
@@ -178,11 +178,11 @@ export default function CfoMultiYearTrendCharts({
           </ResponsiveContainer>
         </div>
 
-        <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+        <div style={{ background: '#F1F5F9', border: '0.5px solid #E2E8F0', borderRadius: 8, padding: 16 }}>
           <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>Expense Ratio Trend</p>
           <ResponsiveContainer width="100%" height={210}>
             <LineChart data={expRatioTrend} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
               <XAxis dataKey="year" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 9 }} tickFormatter={v => `${(v as number).toFixed(0)}%`} />
               <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} />
@@ -191,11 +191,11 @@ export default function CfoMultiYearTrendCharts({
           </ResponsiveContainer>
         </div>
 
-        <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+        <div style={{ background: '#F1F5F9', border: '0.5px solid #E2E8F0', borderRadius: 8, padding: 16 }}>
           <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>Revenue vs Expenses</p>
           <ResponsiveContainer width="100%" height={210}>
             <BarChart data={revExpCombo} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
               <XAxis dataKey="year" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 9 }} tickFormatter={v => fmt(v as number)} />
               <Tooltip formatter={(v: number) => fmtFull(v)} />
@@ -206,11 +206,11 @@ export default function CfoMultiYearTrendCharts({
           </ResponsiveContainer>
         </div>
 
-        <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+        <div style={{ background: '#F1F5F9', border: '0.5px solid #E2E8F0', borderRadius: 8, padding: 16 }}>
           <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>Cash Balance Trend (Bank Accounts)</p>
           <ResponsiveContainer width="100%" height={210}>
             <LineChart data={cashTrend} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
               <XAxis dataKey="year" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 9 }} tickFormatter={v => fmt(v as number)} />
               <Tooltip formatter={(v: number) => fmtFull(v)} />
@@ -221,28 +221,28 @@ export default function CfoMultiYearTrendCharts({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+        <div style={{ background: '#F1F5F9', border: '0.5px solid #E2E8F0', borderRadius: 8, padding: 16 }}>
           <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>Revenue Breakdown by Year</p>
           <ResponsiveContainer width="100%" height={210}>
             <BarChart data={revChart} margin={{ left: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E8DEC8" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
               <XAxis dataKey="year" tick={{ fontSize: 11 }} />
               <YAxis tickFormatter={v => fmt(v as number)} tick={{ fontSize: 10 }} />
-              <Tooltip formatter={(v: number) => fmtFull(v)} contentStyle={{ background: '#FBF6EE', border: '1px solid #E8DEC8', borderRadius: 8, fontSize: 13 }} />
+              <Tooltip formatter={(v: number) => fmtFull(v)} contentStyle={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13 }} />
               <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="Rental Income" stackId="a" fill="#D4AF37" />
-              <Bar dataKey="Other Income" stackId="a" fill="#B8860B" />
+              <Bar dataKey="Rental Income" stackId="a" fill="#6366F1" />
+              <Bar dataKey="Other Income" stackId="a" fill="#7C3AED" />
               <Bar dataKey="Services" stackId="a" fill="#8B6914" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        <div style={{ background: '#FBF6EE', border: '0.5px solid #E8DEC8', borderRadius: 8, padding: 16 }}>
+        <div style={{ background: '#F1F5F9', border: '0.5px solid #E2E8F0', borderRadius: 8, padding: 16 }}>
           <p style={{ fontSize: 15, fontWeight: 600, color: '#1C1917', marginBottom: 12 }}>Expense Breakdown ({selectedYear})</p>
           {enableDrill && <p className="cfo-chart-hint" style={{ fontSize: 11, color: '#A8A29E', margin: '0 0 8px' }}>Click a segment to drill into P&amp;L expense lines</p>}
           {drillAnnualCat && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 10px', borderRadius: 20, background: '#D4AF37', color: '#fff' }}>{drillAnnualCat}</span>
+              <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 10px', borderRadius: 20, background: '#6366F1', color: '#fff' }}>{drillAnnualCat}</span>
               <button type="button" onClick={() => setDrillAnnualCat(null)} style={{ fontSize: 12, color: '#A8A29E', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>× clear</button>
             </div>
           )}

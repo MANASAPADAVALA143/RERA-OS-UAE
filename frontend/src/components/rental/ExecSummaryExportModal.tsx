@@ -6,8 +6,8 @@ import { gatherCeoBoardExportPayload } from '../../utils/gatherExecutiveExportDa
 import { generateCeoBoardReviewPpt } from '../../utils/executiveSummaryPpt';
 
 const P = {
-  pageBg: '#F7F1E6', cardBg: '#FBF6EE', border: '#E8DEC8',
-  gold: '#D4AF37', text: '#1C1917', muted: '#78716C',
+  pageBg: '#F7F1E6', cardBg: '#F1F5F9', border: '#E2E8F0',
+  gold: '#6366F1', text: '#1C1917', muted: '#78716C',
 };
 
 interface ArMonth { month: string; billed: number; collected: number; }
@@ -166,7 +166,7 @@ export default function ExecSummaryExportModal({
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '8px 18px', borderRadius: 8, border: 'none',
-              background: `linear-gradient(135deg, ${P.gold}, #B8860B)`,
+              background: `linear-gradient(135deg, ${P.gold}, #7C3AED)`,
               fontSize: 13, fontWeight: 700, color: '#fff', cursor: exporting ? 'wait' : 'pointer',
               opacity: exporting ? 0.7 : 1,
             }}

@@ -13,8 +13,8 @@ import CfoMultiYearTrendCharts from './CfoMultiYearTrendCharts';
 interface ArMonth { month: string; billed: number; collected: number; }
 
 const P = {
-  pageBg: '#F7F1E6', cardBg: '#FBF6EE', border: '#E8DEC8',
-  gold: '#D4AF37', text: '#1C1917', muted: '#78716C',
+  pageBg: '#F7F1E6', cardBg: '#F1F5F9', border: '#E2E8F0',
+  gold: '#6366F1', text: '#1C1917', muted: '#78716C',
   green: '#15803D', amber: '#F2C14E', red: '#C0392B', teal: '#0F766E',
 } as const;
 

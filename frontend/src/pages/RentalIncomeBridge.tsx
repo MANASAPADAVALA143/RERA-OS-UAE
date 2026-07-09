@@ -92,7 +92,7 @@ export default function RentalIncomeBridge() {
   return (
     <div className="space-y-8" style={{ fontFamily: 'Georgia, serif' }}>
       <div>
-        <p className="text-xs uppercase tracking-wider font-sans" style={{ color: '#B8860B' }}>02</p>
+        <p className="text-xs uppercase tracking-wider font-sans" style={{ color: '#7C3AED' }}>02</p>
         <h1 className="text-3xl font-bold text-gray-900 mt-1">Rent to Cash Flow</h1>
       </div>
 
@@ -124,7 +124,7 @@ export default function RentalIncomeBridge() {
               <Tooltip formatter={(v: number) => [$(v)]} />
               <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                 <LabelList dataKey="value" position="top" formatter={(v: number) => `$${(v/1000).toFixed(0)}k`} style={{ fontSize: 10, fontFamily: 'monospace' }} />
-                {bridgeData.map((d, i) => <Cell key={i} fill={d.value < 0 ? '#dc2626' : '#B8860B'} />)}
+                {bridgeData.map((d, i) => <Cell key={i} fill={d.value < 0 ? '#dc2626' : '#7C3AED'} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -146,7 +146,7 @@ export default function RentalIncomeBridge() {
                 <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full"
-                    style={{ width: pct(c.amount, port.total_opex), backgroundColor: '#B8860B' }}
+                    style={{ width: pct(c.amount, port.total_opex), backgroundColor: '#7C3AED' }}
                   />
                 </div>
               </div>

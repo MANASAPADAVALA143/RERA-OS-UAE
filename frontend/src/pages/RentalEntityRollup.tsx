@@ -52,7 +52,7 @@ export default function RentalEntityRollup() {
   return (
     <div className="space-y-8" style={{ fontFamily: 'Georgia, serif' }}>
       <div>
-        <p className="text-xs uppercase tracking-wider font-sans" style={{ color: '#B8860B' }}>Entity Roll-up</p>
+        <p className="text-xs uppercase tracking-wider font-sans" style={{ color: '#7C3AED' }}>Entity Roll-up</p>
         <h1 className="text-3xl font-bold text-gray-900 mt-1">One Row per EIN</h1>
         <p className="text-sm text-gray-400 font-sans mt-1">Each row is a separate EIN — figures editable in Upload</p>
       </div>

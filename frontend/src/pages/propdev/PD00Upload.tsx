@@ -595,11 +595,11 @@ export default function PD00Upload() {
       )}
 
       {/* ── QuickBooks Multi-File Upload ────────────────────────────────────── */}
-      <div className="rounded-2xl border-2 overflow-hidden" style={{ borderColor: 'rgba(212,175,55,0.40)', background: '#FDFCF8' }}>
+      <div className="rounded-2xl border-2 overflow-hidden" style={{ borderColor: 'rgba(99,102,241,0.40)', background: '#FDFCF8' }}>
         {/* Header */}
-        <div className="px-5 py-4 border-b flex items-center gap-3" style={{ borderColor: 'rgba(212,175,55,0.20)', background: 'rgba(212,175,55,0.08)' }}>
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#D4AF37' }}>
-            <Zap size={16} color="#161310" />
+        <div className="px-5 py-4 border-b flex items-center gap-3" style={{ borderColor: 'rgba(99,102,241,0.20)', background: 'rgba(99,102,241,0.08)' }}>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#6366F1' }}>
+            <Zap size={16} color="#1E1B4B" />
           </div>
           <div>
             <p className="font-bold text-sm" style={{ color: '#78350F' }}>Upload QuickBooks Export Files</p>
@@ -668,7 +668,7 @@ export default function PD00Upload() {
                   onClick={handleQbUpload}
                   disabled={qbUploading}
                   className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold disabled:opacity-50"
-                  style={{ background: '#D4AF37', color: '#161310' }}
+                  style={{ background: '#6366F1', color: '#1E1B4B' }}
                 >
                   <Upload size={14} />
                   {qbUploading ? 'Parsing & importing…' : `Parse & Import ${qbFiles.length} file${qbFiles.length !== 1 ? 's' : ''}`}
@@ -740,31 +740,7 @@ export default function PD00Upload() {
         </div>
       </div>
 
-      {/* WWBG Quick Seed */}
-      <div className="rounded-xl border p-4 max-w-2xl" style={{ background: 'rgba(212,175,55,0.06)', borderColor: 'rgba(212,175,55,0.30)' }}>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-sm font-semibold" style={{ color: '#92400E' }}>WWBG Land Dev — Quick Load</div>
-            <div className="text-xs text-gray-500 mt-0.5">
-              Loads WWBG data from 4 pre-parsed Excel files (BS, P&L, Loans, Cash Flows) directly into the database.
-              Populates CFO Dashboard, Deal P&L, Loan Tracker, and Cash Flow sections.
-            </div>
-            {seedResult && (
-              <div className={`text-xs mt-2 font-medium ${seedResult.startsWith('✅') ? 'text-green-700' : 'text-red-700'}`}>
-                {seedResult}
-              </div>
-            )}
-          </div>
-          <button
-            onClick={handleSeedWWBG}
-            disabled={seeding}
-            className="flex-shrink-0 text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50"
-            style={{ background: '#D4AF37', color: '#161310' }}
-          >
-            {seeding ? 'Loading...' : '⚡ Load WWBG Data'}
-          </button>
-        </div>
-      </div>
+      {/* WWBG quick-seed removed in public demo — use Excel upload or synthetic rental seed only */}
 
       {/* Expected format guide */}
       <div className="bg-white rounded-xl border border-gray-200">
@@ -788,7 +764,7 @@ export default function PD00Upload() {
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center justify-between">
         <div>
           <p className="font-semibold text-blue-800 text-sm">Need a template?</p>
-          <p className="text-xs text-blue-600 mt-0.5">Download the EstateCFO Excel template with all required sheets pre-formatted.</p>
+          <p className="text-xs text-blue-600 mt-0.5">Download the RERA OS Excel template with all required sheets pre-formatted.</p>
         </div>
         <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
           <Upload size={14} /> Download Template

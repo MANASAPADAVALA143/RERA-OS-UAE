@@ -12,7 +12,7 @@ export function KpiBreakdownPanel({ row, compact }: Props) {
       className="rounded-lg border text-base leading-relaxed"
       style={{
         background: '#FFFBF5',
-        borderColor: '#E8DEC8',
+        borderColor: '#E2E8F0',
         padding: compact ? '10px 12px' : '14px 16px',
         marginTop: 8,
       }}
@@ -51,7 +51,7 @@ export function KpiBreakdownPanel({ row, compact }: Props) {
       {row.substitution && (
         <pre
           className="text-sm whitespace-pre-wrap rounded-md p-3 mb-3 font-mono"
-          style={{ background: '#F7F5F0', border: '1px solid #E8DEC8', color: '#44403C' }}
+          style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#44403C' }}
         >
           {row.substitution}
         </pre>
