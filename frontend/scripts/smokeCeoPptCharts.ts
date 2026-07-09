@@ -7,6 +7,27 @@ import path from 'node:path';
 import { generateCeoBoardReviewPpt, type CeoBoardExportPayload } from '../src/utils/executiveSummaryPpt';
 import { generateSlideNarratives } from '../src/utils/executiveSummaryNarrative';
 
+const mockK = {
+  totalRevenue: 180000, totalExpenses: 100000, netIncome: 37000, noi: 55000,
+  rentalIncome: 155000, otherIncome: 25000, interestExpense: 18000,
+  propertyTax: 0, managementFee: 0, hoaFees: 0, legalFees: 0, utilities: 0, repairs: 0,
+  totalAssets: 5_000_000, totalLiabilities: 3_000_000, equity: 2_000_000, cash: 220000, buildings: 4_000_000,
+  accumDep: 0, longTermLoans: 0, securityDeposits: 0, hoa: 0, insurance: 0, otherOpex: 0, depreciation: 0, legalFees: 0,
+};
+const mockKPrev = { ...mockK, noi: 50000, totalRevenue: 170000 };
+
+const monthlyTrend = [
+  { month: 'Mar', revenue: 170000, expenses: 100000, noi: 50000 },
+  { month: 'Aug', revenue: 180000, expenses: 100000, noi: 55000 },
+];
+const cashTrend = [
+  { month: 'Mar', cash: 180000 }, { month: 'Aug', cash: 220000 },
+];
+const gprTrend = [
+  { month: 'Mar', gpr: 170000, collected: 150000, occupancy: 78 },
+  { month: 'Aug', gpr: 180000, collected: 155000, occupancy: 79.7 },
+];
+
 const sampleBase: Omit<CeoBoardExportPayload, 'slideNarratives'> = {
   entityLabel: 'Portfolio_Total',
   periodLabel: 'MoM · Aug 2026',
@@ -98,7 +119,8 @@ const sampleBase: Omit<CeoBoardExportPayload, 'slideNarratives'> = {
   },
   ownership: {
     available: true,
-    totalPartners: '3', totalCapital: '$4,000,000', totalEquity: '$9,000,000', avgRoi: '18.5%',
+    totalPartners: '3', totalCapital: '$4,000,000', portfolioMarketValue: '$12,400,000',
+    totalEquity: '$9,000,000', avgRoi: '18.5%',
     partnerSlices: [
       { name: 'Alice', value: 4_000_000 }, { name: 'Bob', value: 3_000_000 }, { name: 'Cara', value: 2_000_000 },
     ],
@@ -116,17 +138,50 @@ const sampleBase: Omit<CeoBoardExportPayload, 'slideNarratives'> = {
     ],
   },
   riskActionTable: [],
+  actionPlanCommentary: 'No critical flags — portfolio within normal parameters.',
   strategicRecommendations: ['Prioritize refinancing on properties with DSCR below covenant.'],
+  incomeStatement: {
+    available: true,
+    sourceNote: 'Financials P&L',
+    latestRevenue: '$180,000', latestExpenses: '$100,000', latestNoi: '$55,000',
+    monthlyTrend,
+    expenseCategories: [{ name: 'Interest', value: 18000 }, { name: 'Repairs', value: 12000 }],
+    yearSnapshots: [
+      { year: 2024, revenue: 1.7e6, expenses: 1.0e6, netIncome: 350000, noi: 500000, cash: 180000, margin: 20, rentalIncome: 1.5e6, otherIncome: 100000, services: 100000, kpi: mockK },
+      { year: 2025, revenue: 1.8e6, expenses: 1.05e6, netIncome: 370000, noi: 550000, cash: 200000, margin: 20.5, rentalIncome: 1.55e6, otherIncome: 120000, services: 130000, kpi: mockK },
+    ],
+  },
+  balanceSheet: {
+    available: true, sourceNote: 'Financials BS',
+    totalAssets: '$5.0M', totalLiabilities: '$3.0M', equity: '$2.0M', cashBalance: '$220,000',
+    debtToEquity: '1.0x', debtToAsset: '40.0%',
+    assetComposition: [{ name: 'Buildings', value: 4_000_000 }, { name: 'Cash', value: 220_000 }],
+    capitalStructure: [{ name: 'Total Debt', value: 3_336_447 }, { name: 'Equity', value: 2_000_000 }],
+  },
+  cashFlow: {
+    available: true, sourceNote: 'CF statement',
+    operatingCf: '$155,000', financingCf: '($37,200)', investingCf: 'Not tracked',
+    cashTrend,
+    operatingVsFinancing: [{ month: 'Aug', operating: 155000, financing: -37200 }],
+  },
+  rentalPortfolio: {
+    available: true, sourceNote: 'Rental Portfolio Overview',
+    occupancy: '79.7%', collected: '$155,000', collectionRate: '86.1%',
+    vacancyLoss: '$25,000', arOutstanding: '$42,000', noiMargin: '30.6%',
+    gprTrend,
+  },
+  expenses: {
+    available: true, sourceNote: 'Expenses page',
+    trendEndLabel: 'Aug 2026',
+    trend6Mo: [{ month: 'Mar', amount: 95000 }, { month: 'Aug', amount: 100000 }],
+    breakdown: [{ name: 'Interest', value: 18000 }, { name: 'Repairs', value: 12000 }],
+  },
+  arDashboard: {
+    available: true, sourceNote: 'AR Dashboard',
+    dso: '32 days', overdue30: '$12,000', overdue60: '$5,000', overdue90: '$3,000',
+    creditBalance: '$500', agingChart: [{ label: 'Current', amount: 30000 }, { label: '1-30', amount: 12000 }],
+  },
 };
-
-const mockK = {
-  totalRevenue: 180000, totalExpenses: 100000, netIncome: 37000, noi: 55000,
-  rentalIncome: 155000, otherIncome: 25000, interestExpense: 18000,
-  propertyTax: 0, managementFee: 0, hoaFees: 0, legalFees: 0, utilities: 0, repairs: 0,
-  totalAssets: 0, totalLiabilities: 0, equity: 0, cash: 220000, buildings: 0,
-  accumDep: 0, longTermLoans: 0, securityDeposits: 0,
-};
-const mockKPrev = { ...mockK, noi: 50000, totalRevenue: 170000 };
 
 const sample: CeoBoardExportPayload = {
   ...sampleBase,

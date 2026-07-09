@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, CartesianGrid, Legend, ReferenceLine, Cell,
@@ -13,6 +13,7 @@ import { useKpiAdminAccess } from '../../hooks/useKpiAdminAccess';
 import { useCompanyKpiAudit } from '../../hooks/useCompanyKpiAudit';
 import { KpiBreakdownPanel } from '../../components/admin/KpiBreakdownPanel';
 import type { KpiAuditRow } from '../../types/kpiAudit';
+import { debtRatiosFromLoanTracker, ebitdaMarginPct } from '../../utils/rentalKpiEngine';
 
 /** Maps Financial Ratios page card names → kpi_sanity_check KPI names */
 const CARD_TO_AUDIT_KPI: Record<string, string> = {
@@ -65,7 +66,7 @@ function sumI(items: FinItem[], pat: RegExp, year: number): number {
 }
 function fmtV(n: number) { if (n === 0) return '—'; const a = Math.abs(n); const s = a >= 1_000_000 ? `$${(a/1_000_000).toFixed(2)}M` : a >= 1_000 ? `$${(a/1_000).toFixed(0)}K` : `$${a.toFixed(0)}`; return n < 0 ? `(${s})` : s; }
 
-function LiveDataPanel({ fin, activeYear }: { fin: LiveFin; activeYear?: number }) {
+function LiveDataPanel({ fin, activeYear, totalDebt }: { fin: LiveFin; activeYear?: number; totalDebt?: number | null }) {
   const lastY = activeYear && fin.years.includes(activeYear) ? activeYear : fin.years[fin.years.length - 1];
   const lastYIdx = fin.years.indexOf(lastY);
   const prevY = lastYIdx > 0 ? fin.years[lastYIdx - 1] : null;
@@ -87,10 +88,16 @@ function LiveDataPanel({ fin, activeYear }: { fin: LiveFin; activeYear?: number 
     getYV(bs,/^real\s+estate/i,lastY)
   );
   const loans = Math.abs(getYV(bs,/^total\s+for\s+long.term/i,lastY) || sumI(bs,/long.term.*loan/i,lastY));
+  const kLike = {
+    noi, totalRevenue, netIncome, totalExpenses, interestExpense, equity, totalAssets,
+    totalLiabilities, rentalIncome: 0, managementFee: 0, repairs: 0, cash, buildings,
+    longTermLoans: loans, depreciation: 0, securityDeposits: 0, legalFees: 0,
+    utilities: 0, hoa: 0, propertyTax: 0, insurance: 0, accumDep: 0, otherOpex: 0,
+  };
   const noiM = totalRevenue > 0 ? noi / totalRevenue * 100 : 0;
   const netM = totalRevenue > 0 ? netIncome / totalRevenue * 100 : 0;
   const ltv = buildings > 0 ? loans / buildings * 100 : 0;
-  const dte = equity > 0 ? totalLiabilities / equity : 0;
+  const { debtToEquity: dte } = debtRatiosFromLoanTracker(totalDebt ?? null, kLike);
   const iCov = interestExpense > 0 ? noi / interestExpense : 0;
   const expR = totalRevenue > 0 ? totalExpenses / totalRevenue * 100 : 0;
 
@@ -113,7 +120,7 @@ function LiveDataPanel({ fin, activeYear }: { fin: LiveFin; activeYear?: number 
     { label: 'NOI', value: fmtV(noi), warn: noi < 0 },
     { label: 'LTV', value: ltv > 0 ? `${ltv.toFixed(1)}%` : buildings === 0 ? 'No bldg value' : '—', warn: ltv > 85 },
     { label: 'Int. Coverage', value: iCov > 0 ? `${iCov.toFixed(2)}x` : '—', warn: iCov > 0 && iCov < 1.2 },
-    { label: 'D/E Ratio', value: dte > 0 ? `${dte.toFixed(1)}x` : '—', warn: dte > 6 },
+    { label: 'D/E Ratio', value: dte != null ? `${dte.toFixed(1)}x` : '— no loan data', warn: dte != null && dte > 6 },
     { label: 'Expense Ratio', value: expR > 0 ? `${expR.toFixed(1)}%` : '—', warn: expR > 70 },
     { label: 'Cash', value: fmtV(cash), warn: cash <= 0 },
     { label: 'Total Assets', value: fmtV(totalAssets) },
@@ -245,7 +252,7 @@ function buildTrendFromLive(fin: LiveFin): { profTrend: ProfPt[]; retTrend: RetP
       return {
         label:  String(y),
         npm:    rev > 0 ? +(ni / rev * 100).toFixed(1) : null,
-        ebitda: rev > 0 ? +((noi + dep) / rev * 100).toFixed(1) : null,
+        ebitda: rev > 0 ? +(noi / rev * 100).toFixed(1) : null,
         noi:    rev > 0 ? +(noi / rev * 100).toFixed(1) : null,
       };
     }),
@@ -475,7 +482,11 @@ function fmtDollar(n: number) {
   return n < 0 ? `(${s})` : s;
 }
 
-function calcAllRatios(fin: LiveFin, activeYear?: number): { profitability: RatioCard[]; liquidity: RatioCard[]; solvency: RatioCard[] } {
+function calcAllRatios(
+  fin: LiveFin,
+  activeYear?: number,
+  totalDebt?: number | null,
+): { profitability: RatioCard[]; liquidity: RatioCard[]; solvency: RatioCard[] } {
   const pl = fin.pl; const bs = fin.bs; const cf = fin.cf;
   const lastY = activeYear && fin.years.includes(activeYear) ? activeYear : fin.years[fin.years.length - 1];
 
@@ -496,7 +507,6 @@ function calcAllRatios(fin: LiveFin, activeYear?: number): { profitability: Rati
   // it as post-interest (revenue − ALL expenses including interest = $88.56K), which produces
   // a different NOI than the real-estate convention (pre-interest = $161K).
   const noi   = rev - exp + intEx;
-  const ebitda = noi + depAm;
 
   // BS figures
   const totalAssets = yv(bs,/^total\s+(for\s+)?assets$/i,lastY);
@@ -521,10 +531,17 @@ function calcAllRatios(fin: LiveFin, activeYear?: number): { profitability: Rati
   const spark = (fn: (y: number) => number) => fin.years.slice(-4).map(fn);
 
   // Ratios
+  const kLike = {
+    noi, totalRevenue: rev, netIncome: ni, totalExpenses: exp, interestExpense: intEx,
+    equity, totalAssets, totalLiabilities: totalLiab, rentalIncome: 0, managementFee: 0,
+    repairs: 0, cash, buildings, longTermLoans: loans, depreciation: depAm,
+    securityDeposits: 0, legalFees: 0, utilities: 0, hoa: 0, propertyTax: 0,
+    insurance: 0, accumDep: 0, otherOpex: 0,
+  };
   const noiM   = rev > 0 ? noi / rev * 100 : 0;
   const netM   = rev > 0 ? ni / rev * 100 : 0;
   const expR   = rev > 0 ? exp / rev * 100 : 0;
-  const ebitdaM = rev > 0 ? ebitda / rev * 100 : 0;
+  const ebitdaM = ebitdaMarginPct(kLike) ?? 0;
   const roa    = totalAssets > 0 ? ni / totalAssets * 100 : 0;
   const roe    = equity > 0 ? ni / equity * 100 : 0;
   const grm    = rev > 0 ? (totalAssets > 0 ? totalAssets / rev : 0) : 0;
@@ -535,8 +552,7 @@ function calcAllRatios(fin: LiveFin, activeYear?: number): { profitability: Rati
   const wc     = currAssets - currLiab;
   const daysOp = exp > 0 ? (cash / (exp / 365)) : 0;
 
-  const dte    = equity > 0 ? totalLiab / equity : 0;
-  const dta    = totalAssets > 0 ? totalLiab / totalAssets * 100 : 0;
+  const { debtToEquity: dte, debtToAsset: dta } = debtRatiosFromLoanTracker(totalDebt ?? null, kLike);
   const equR   = totalAssets > 0 ? equity / totalAssets * 100 : 0;
   const iCov   = intEx > 0 ? noi / intEx : 0;
   const ltv    = buildings > 0 ? loans / buildings * 100 : 0;
@@ -552,7 +568,7 @@ function calcAllRatios(fin: LiveFin, activeYear?: number): { profitability: Rati
     { name: 'NOI Margin',              formula: 'NOI / Revenue',             value: noiM ? fmtPct(noiM) : '—',    benchmark: '>35%',   ...pill(noiM>=35, noiM>=20),   spark: spark(y => { const r = yv(pl,/^total\s+(for\s+)?income$/i,y)||si(pl,/income|revenue|rent/i,y); const e = yv(pl,/^total\s+(for\s+)?expenses?$/i,y); const ie = Math.abs(si(pl,/interest/i,y)); const n = r-e+ie; return r>0?n/r*100:0; }) },
     { name: 'Net Profit Margin',       formula: 'Net Income / Revenue',      value: rev>0 ? fmtPct(netM) : '—',   benchmark: '>10%',   ...pill(netM>=10, netM>=0) },
     { name: 'Operating Expense Ratio', formula: 'Total OpEx / Revenue',      value: rev>0 ? fmtPct(expR) : '—',   benchmark: '<60%',   ...pill(expR<=60, expR<=85) },
-    { name: 'EBITDA Margin',           formula: 'EBITDA / Revenue',          value: rev>0 ? fmtPct(ebitdaM) : '—',benchmark: '>45%',   ...pill(ebitdaM>=45, ebitdaM>=30) },
+    { name: 'EBITDA Margin',           formula: 'NOI / Revenue (EBITDA ≡ NOI)', value: rev>0 ? fmtPct(ebitdaM) : '—',benchmark: '>45%',   ...pill(ebitdaM>=45, ebitdaM>=30) },
     { name: 'Return on Assets',        formula: 'Net Income / Total Assets', value: totalAssets>0 ? fmtPct(roa) : '—', benchmark: '>4%', ...pill(roa>=4, roa>=2) },
     { name: 'Return on Equity',        formula: 'Net Income / Equity',       value: equity>0 ? fmtPct(roe) : '—', benchmark: '>8%',   ...pill(roe>=8, roe>=4) },
     { name: 'Revenue',                 formula: 'Total Income',              value: fmtDollar(rev),                benchmark: 'Trend',  status: 'info', statusLabel: 'ℹ Info', spark: spark(y => yv(pl,/^total\s+(for\s+)?income$/i,y)||si(pl,/income|revenue|rent/i,y)) },
@@ -570,8 +586,8 @@ function calcAllRatios(fin: LiveFin, activeYear?: number): { profitability: Rati
   ];
 
   const solvency: RatioCard[] = [
-    { name: 'Debt-to-Equity',     formula: 'Total Liabilities / Equity',    value: equity>0 ? fmtX(dte,1) : '—',  benchmark: '<5x RE',  ...pill(dte<=3, dte<=6), spark: spark(y => { const tl = yv(bs,/^total\s+(for\s+)?liabilities$/i,y); const eq = yv(bs,/^total\s+(for\s+)?equity$/i,y); return eq>0?tl/eq:0; }) },
-    { name: 'Debt-to-Asset',      formula: 'Total Liabilities / Assets',    value: totalAssets>0 ? fmtPct(dta) : '—', benchmark: '<80%', ...pill(dta<=70, dta<=85) },
+    { name: 'Debt-to-Equity',     formula: 'Total Debt (Loan Tracker) / Equity', value: dte != null ? fmtX(dte, 1) : '— no loan data', benchmark: '<5x RE', ...pill(dte != null && dte <= 3, dte != null && dte <= 6) },
+    { name: 'Debt-to-Asset',      formula: 'Total Debt / Total Assets',    value: dta != null ? fmtPct(dta) : '— no loan data', benchmark: '<80%', ...pill(dta != null && dta <= 70, dta != null && dta <= 85) },
     { name: 'Equity Ratio',       formula: 'Equity / Total Assets',         value: totalAssets>0 ? fmtPct(equR) : '—', benchmark: '>20%', ...pill(equR>=20, equR>=10) },
     { name: 'Interest Coverage',  formula: 'NOI / Interest Expense',        value: intEx>0 ? fmtX(iCov) : '—',    benchmark: '>1.5x',   ...pill(iCov>=1.5, iCov>=1.0), spark: spark(y => { const r = yv(pl,/^total\s+(for\s+)?income$/i,y)||si(pl,/income|revenue|rent/i,y); const e = yv(pl,/^total\s+(for\s+)?expenses?$/i,y); const ie = Math.abs(si(pl,/interest/i,y)); return ie>0?(r-e+ie)/ie:0; }) },
     { name: 'LTV',                formula: 'Mortgage / Property Value',     value: buildings>0 ? fmtPct(ltv) : 'No bldg value', benchmark: '<80%',  ...pill(ltv<=70, ltv<=85), spark: spark(y => { const b = Math.abs(yv(bs,/^buildings$/i,y)||yv(bs,/^property\s*(and|&)?\s*equipment/i,y)||yv(bs,/^fixed\s*assets/i,y)||yv(bs,/^land\s*(and|&)?\s*buildings/i,y)||yv(bs,/^real\s+estate/i,y)); const l = Math.abs(yv(bs,/^total\s+for\s+long.term/i,y)||si(bs,/long.term.*loan|loan\s+from|independent\s+bank/i,y)); return b>0?l/b*100:0; }) },
@@ -1105,6 +1121,14 @@ export default function RentalFinancialRatios() {
       .finally(() => setLoadingLive(false));
   }, [selectedId]);
 
+  const selectedCompanyName = companies.find(c => c.id === selectedId)?.company_name;
+  const selectedTotalDebt = useMemo(() => {
+    if (!selectedCompanyName) return null;
+    const scoped = loanData.filter(l => l.company === selectedCompanyName);
+    if (scoped.length === 0) return null;
+    return scoped.reduce((s, l) => s + (l.balance ?? 0), 0);
+  }, [loanData, selectedCompanyName]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -1157,7 +1181,7 @@ export default function RentalFinancialRatios() {
       </div>
 
       {/* Live data panel — shown when company has uploaded financials */}
-      {liveData && <LiveDataPanel fin={liveData} activeYear={selectedYear} />}
+      {liveData && <LiveDataPanel fin={liveData} activeYear={selectedYear} totalDebt={selectedTotalDebt} />}
 
       {/* Live data badge */}
       {liveData && (
@@ -1197,7 +1221,7 @@ export default function RentalFinancialRatios() {
 
       {/* Tab content */}
       {(() => {
-        const liveRatios = liveData ? calcAllRatios(liveData, selectedYear) : null;
+        const liveRatios = liveData ? calcAllRatios(liveData, selectedYear, selectedTotalDebt) : null;
         return (
           <div>
             {activeTab === 'Profitability'   && <ProfitabilityTab coData={coData} trendData={trendData} liveCards={liveRatios?.profitability} liveFin={liveData ?? undefined} auditProps={auditProps} />}

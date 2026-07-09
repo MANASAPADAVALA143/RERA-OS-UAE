@@ -20,8 +20,16 @@ import {
 } from './executiveSummaryPortfolio';
 import { buildEmiStatusRows, EMI_STATUS_DISCLAIMER } from './executiveSummaryEmi';
 import { buildRiskActionRows } from './executiveSummaryActionRules';
-import { generateExecutiveNarrative, generateStrategicRecommendations, generateSlideNarratives } from './executiveSummaryNarrative';
+import { generateExecutiveNarrative, generateStrategicRecommendations, generateSlideNarratives, generateActionPlanCommentary } from './executiveSummaryNarrative';
 import { aggregateRegistryOps, buildRegistryTrend } from './executiveSummaryRegistry';
+import {
+  buildArDashboardSection,
+  buildBalanceSheetSection,
+  buildCashFlowSection,
+  buildExpensesSection,
+  buildIncomeStatementSection,
+  buildRentalPortfolioSection,
+} from './executiveSummaryPptSections';
 
 const CAP_RATE = 0.055;
 
@@ -132,6 +140,7 @@ function buildOwnershipKpis(ownership: OwnerRow[], companies: CompanyRow[], tota
       available: false,
       totalPartners: '—',
       totalCapital: '—',
+      portfolioMarketValue: '—',
       totalEquity: '—',
       avgRoi: '—',
       partnerSlices: [] as { name: string; value: number }[],
@@ -169,6 +178,7 @@ function buildOwnershipKpis(ownership: OwnerRow[], companies: CompanyRow[], tota
     available: true,
     totalPartners: String(ownership.length),
     totalCapital: fmtUsd(totalCapital),
+    portfolioMarketValue: marketValue > 0 ? fmtUsd(marketValue) : 'Data not available',
     totalEquity: totalEquity > 0 ? fmtUsd(totalEquity) : 'Data not available',
     avgRoi,
     partnerSlices: partnerSlices.filter(s => s.value > 0),
@@ -269,7 +279,7 @@ export interface GatherExportOptions {
 }
 
 export async function gatherCeoBoardExportPayload(opts: GatherExportOptions): Promise<CeoBoardExportPayload> {
-  const { entityId, entityLabel, period, month, year, companies, portfolio, loans, arData, units } = opts;
+  const { entityId, entityLabel, period, month, year, companies, portfolio, loans, arData, units, finRows } = opts;
 
   const periodLabel = period ? periodChipText(period, month, year) : `Latest · ${year}`;
 
@@ -322,7 +332,9 @@ export async function gatherCeoBoardExportPayload(opts: GatherExportOptions): Pr
     totalUnits: registryOps.totalUnits || scopedPortfolio?.total_units,
   };
 
-  const kpiSets = k ? buildExportKpiSets(k, kPrev, ops) : {
+  const totalDebt = scopedLoans.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0);
+
+  const kpiSets = k ? buildExportKpiSets(k, kPrev, { ...ops, totalDebt: scopedLoans.length > 0 ? totalDebt : null }) : {
     profitability: [] as ExportKpiItem[], balanceSheet: [] as ExportKpiItem[],
     occupancy: [] as ExportKpiItem[], pricing: [] as ExportKpiItem[], returns: [] as ExportKpiItem[],
   };
@@ -337,7 +349,6 @@ export async function gatherCeoBoardExportPayload(opts: GatherExportOptions): Pr
     ownership,
     portfolioGpr,
   });
-  const totalDebt = scopedLoans.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0);
   const cash = k?.cash ?? 0;
 
   const flaggedCount = scopedLoans.filter(l => {
@@ -406,6 +417,28 @@ export async function gatherCeoBoardExportPayload(opts: GatherExportOptions): Pr
   const ownershipKpis = buildOwnershipKpis(ownership, scopedCompanies, totalDebt, mvResult.value);
 
   const propertyRows = buildPropertyRows(scopedCompanies, scopedLoans, ownership);
+
+  const cashTrend = buildCashTrend(fins, month, year);
+  const incomeStatement = buildIncomeStatementSection(fins, month, year);
+  const balanceSheet = buildBalanceSheetSection(
+    k,
+    scopedLoans.length > 0 ? totalDebt : null,
+    scopedLoans,
+  );
+  const cashFlow = buildCashFlowSection(fins, arData, scopedLoans, month, year, cashTrend);
+  const rentalPortfolio = buildRentalPortfolioSection(
+    {
+      occupancyPct: registryOps.occupancyPct,
+      collected: registryOps.collected,
+      vacancyLoss: registryOps.vacancyLoss,
+      arrears: registryOps.arrears ?? scopedPortfolio?.arrears_total,
+    },
+    collectionRate,
+    k,
+    gprTrend,
+  );
+  const expenses = buildExpensesSection(finRows, k, month, year);
+  const arDashboard = buildArDashboardSection(qbAr, entityId, scopedCompanies);
 
   const portfolioSnapshot = {
     totalUnits: registryOps.totalUnits > 0 ? String(registryOps.totalUnits) : 'Data not available — see Company Registry',
@@ -482,10 +515,24 @@ export async function gatherCeoBoardExportPayload(opts: GatherExportOptions): Pr
       ownership: ownershipKpis,
       propertyProfitability,
       riskActionTable: riskRows,
+      incomeStatement,
+      balanceSheet,
+      cashFlow,
+      rentalPortfolio,
+      expenses,
+      arDashboard,
     },
     k,
     kPrev,
     loans: scopedLoans,
+  });
+
+  const strategicRecommendations = generateStrategicRecommendations({
+    riskRows, loans: scopedLoans, portfolio: scopedPortfolio, collectionRate, arOverdue90, k,
+    incomeStatement,
+    rentalPortfolio,
+    arDashboard,
+    debtRisk,
   });
 
   return {
@@ -502,6 +549,13 @@ export async function gatherCeoBoardExportPayload(opts: GatherExportOptions): Pr
 
     rentalPerformance,
 
+    incomeStatement,
+    balanceSheet,
+    cashFlow,
+    rentalPortfolio,
+    expenses,
+    arDashboard,
+
     financialPerformance,
 
     cashPosition,
@@ -516,11 +570,11 @@ export async function gatherCeoBoardExportPayload(opts: GatherExportOptions): Pr
 
     riskActionTable: riskRows,
 
+    actionPlanCommentary: generateActionPlanCommentary(riskRows),
+
     slideNarratives,
 
-    strategicRecommendations: generateStrategicRecommendations({
-      riskRows, loans: scopedLoans, portfolio: scopedPortfolio, collectionRate, arOverdue90, k,
-    }),
+    strategicRecommendations,
   };
 }
 

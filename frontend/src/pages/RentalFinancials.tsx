@@ -18,6 +18,7 @@ import { CompanyKpiAuditTab } from '../components/admin/CompanyKpiAuditTab';
 import type { KpiAuditRow } from '../types/kpiAudit';
 import CfoMultiYearTrendCharts from '../components/rental/CfoMultiYearTrendCharts';
 import type { ParsedFinancials as EngineParsedFinancials } from '../utils/rentalKpiEngine';
+import { debtRatiosFromLoanTracker, ebitdaMarginPct } from '../utils/rentalKpiEngine';
 import { fetchRentalFinancialsPool } from '../utils/fetchRentalFinancialsPool';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -1047,6 +1048,27 @@ function KPITab({
   expandedKpi?: string | null;
   onToggleKpi?: (name: string) => void;
 }) {
+  const [totalDebt, setTotalDebt] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get<{ items: Array<{ company_name: string; loan_balance_as_of?: number | null; context_type?: string }> }>(
+      '/api/real-estate/loans',
+      { params: { context_type: 'rental' } },
+    )
+      .then(res => {
+        if (cancelled) return;
+        const loans = (res.data.items ?? []).filter(l => l.company_name === fin.companyName);
+        if (loans.length === 0) {
+          setTotalDebt(null);
+          return;
+        }
+        setTotalDebt(loans.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0));
+      })
+      .catch(() => { if (!cancelled) setTotalDebt(null); });
+    return () => { cancelled = true; };
+  }, [fin.companyName]);
+
   const { k, kPrev: kP, label, compareLabel } = period && pMonth && pYear
     ? resolveKpiViewForPeriod(fin, period, pMonth, pYear)
     : resolveKpiView(fin, kpiYear, kpiMonth);
@@ -1063,14 +1085,6 @@ function KPITab({
     };
   };
 
-  const depreciation = (() => {
-    if (kpiMonth) {
-      const key = `${_MNAMES[kpiMonth - 1]} ${kpiYear}`;
-      return Math.abs(calcMonthlyKpis(fin.pl, key).depreciation);
-    }
-    return Math.abs(sumI(fin.pl, /depreciation|amortization/i, kpiYear));
-  })();
-
   const noiM  = k.totalRevenue > 0 ? k.noi / k.totalRevenue * 100 : 0;
   const netM  = k.totalRevenue > 0 ? k.netIncome / k.totalRevenue * 100 : 0;
   const expR  = k.totalRevenue > 0 ? k.totalExpenses / k.totalRevenue * 100 : 0;
@@ -1081,8 +1095,8 @@ function KPITab({
   const repP  = k.totalRevenue > 0 ? k.repairs / k.totalRevenue * 100 : 0;
   const ltv   = k.buildings > 0 ? k.longTermLoans / k.buildings * 100 : 0;
   const alR   = k.totalLiabilities > 0 ? k.totalAssets / k.totalLiabilities : 0;
-  const dte   = k.equity !== 0 ? k.totalLiabilities / k.equity : null;
-  const ebitdaM = k.totalRevenue > 0 ? (k.noi + depreciation) / k.totalRevenue * 100 : 0;
+  const { debtToEquity: dte } = debtRatiosFromLoanTracker(totalDebt, k);
+  const ebitdaM = ebitdaMarginPct(k) ?? 0;
   const dscr  = k.interestExpense > 0 ? k.noi / (k.interestExpense * 1.2) : 0;
   const roa   = k.totalAssets > 0 ? k.netIncome / k.totalAssets * 100 : 0;
   const roe   = k.equity > 0 ? k.netIncome / k.equity * 100 : 0;
@@ -1128,7 +1142,7 @@ function KPITab({
   const balanceBulletCards: BulletCard[] = [
     { name: 'LTV',                 value: ltv > 0 ? `${ltv.toFixed(1)}%` : 'No bldg value',  status: ltv > 0 ? toBS(ltv<=75?'good':ltv<=85?'warn':'bad') : 'info' },
     { name: 'Asset/Liability',     value: `${alR.toFixed(2)}x`,                               status: toBS(alR>=1.5?'good':alR>=1?'warn':'bad') },
-    { name: 'Debt-to-Equity',      value: dte != null ? `${dte.toFixed(2)}x` : 'N/A',          status: toBS(dte!=null&&dte>0&&dte<=2?'good':dte!=null&&dte<=4?'warn':'bad') },
+    { name: 'Debt-to-Equity',      value: dte != null ? `${dte.toFixed(2)}x` : 'N/A — no loan data', status: toBS(dte!=null&&dte>0&&dte<=2?'good':dte!=null&&dte<=4?'warn':'bad') },
   ];
 
   const PROF_BULLET_DEFS: BulletDef[] = [
@@ -1158,7 +1172,7 @@ function KPITab({
     { kpi: 'NOI Margin', current: noiM, previous: kP.totalRevenue > 0 ? kP.noi / kP.totalRevenue * 100 : 0 },
     { kpi: 'Net Margin', current: netM, previous: kP.totalRevenue > 0 ? kP.netIncome / kP.totalRevenue * 100 : 0 },
     { kpi: 'Expense Ratio', current: expR, previous: kP.totalRevenue > 0 ? kP.totalExpenses / kP.totalRevenue * 100 : 0 },
-    { kpi: 'D/E Ratio', current: dte ?? 0, previous: kP.equity !== 0 ? kP.totalLiabilities / kP.equity : 0 },
+    { kpi: 'D/E Ratio', current: dte ?? 0, previous: kP.equity !== 0 && totalDebt != null ? totalDebt / kP.equity : 0 },
   ] : [];
 
   return (
@@ -1190,7 +1204,7 @@ function KPITab({
         <div className="grid grid-cols-4 gap-4">
           <KCard label="LTV (Loans / Building)" value={ltv>0?`${ltv.toFixed(1)}%`:'Not available'} sub={ltv>0?`Loans: ${fmt(k.longTermLoans)}`:'Property value not found in balance sheet'} status={ltv>0&&ltv<=75?'good':ltv>0&&ltv<=85?'warn':ltv>0?'bad':'info'} {...kpiCardProps('LTV')} />
           <KCard label="Asset / Liability Ratio" value={alR>0?`${alR.toFixed(2)}x`:'N/A'} sub={`Assets: ${fmt(k.totalAssets)}`} status={alR>=1.5?'good':alR>=1?'warn':'bad'} {...kpiCardProps('Asset/Liability Ratio')} />
-          <KCard label="Debt-to-Equity" value={dte != null ? `${dte.toFixed(2)}x` : 'N/A'} sub={`Equity: ${fmt(k.equity)}`} status={dte!=null&&dte>0&&dte<=2?'good':dte!=null&&dte<=4?'warn':'bad'} {...kpiCardProps('Debt-to-Equity')} />
+          <KCard label="Debt-to-Equity" value={dte != null ? `${dte.toFixed(2)}x` : 'N/A — no loan data'} sub={totalDebt != null ? `Loan debt: ${fmt(totalDebt)} · Equity: ${fmt(k.equity)}` : `Equity: ${fmt(k.equity)}`} status={dte!=null&&dte>0&&dte<=2?'good':dte!=null&&dte<=4?'warn':'bad'} {...kpiCardProps('Debt-to-Equity')} />
           <KCard label="Cash Balance" value={fmt(k.cash)} sub={`As of ${label}`} status={k.cash>10000?'good':k.cash>0?'warn':'bad'} trendData={cashTrend} {...kpiCardProps('Cash Balance')} />
         </div>
       </div>
@@ -1199,7 +1213,7 @@ function KPITab({
         <p style={{ fontSize: 13, fontWeight: 600, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Financial Ratios</p>
         <div className="grid grid-cols-4 gap-4">
           <KCard label="DSCR (Est.)" value={dscr>0?`${dscr.toFixed(2)}x`:'N/A'} sub={`NOI ÷ (Interest × 1.2)`} status={dscr>=1.25?'good':dscr>=1?'warn':'bad'} {...kpiCardProps('DSCR (Est.)')} />
-          <KCard label="EBITDA Margin" value={`${ebitdaM.toFixed(1)}%`} sub={`Depreciation: ${fmt(depreciation)}`} status={ebitdaM>=30?'good':ebitdaM>=15?'warn':'bad'} {...kpiCardProps('EBITDA Margin')} />
+          <KCard label="EBITDA Margin" value={`${ebitdaM.toFixed(1)}%`} sub="EBITDA = NOI (depreciation excluded from NOI)" status={ebitdaM>=30?'good':ebitdaM>=15?'warn':'bad'} {...kpiCardProps('EBITDA Margin')} />
           <KCard label="ROA" value={roa!==0?`${roa.toFixed(1)}%`:'N/A'} sub={`Net Income / Assets`} status={roa>=5?'good':roa>=0?'warn':'bad'} {...kpiCardProps('ROA')} />
           <KCard label="ROE" value={roe!==0?`${roe.toFixed(1)}%`:'N/A'} sub={`Net Income / Equity`} status={roe>=10?'good':roe>=0?'warn':'bad'} {...kpiCardProps('ROE')} />
         </div>

@@ -170,8 +170,12 @@ export function useExecutiveSummaryKpis(
     if (!kpiView) {
       return { profitability: [], balanceSheet: [], occupancy: [], pricing: [], returns: [] as ExportKpiItem[] };
     }
-    return buildExportKpiSets(kpiView.k, kpiView.kPrev, ops);
-  }, [kpiView, ops]);
+    const debtTotal = scopedLoans.length > 0
+      ? scopedLoans.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0)
+      : null;
+
+    return buildExportKpiSets(kpiView.k, kpiView.kPrev, { ...ops, totalDebt: debtTotal });
+  }, [kpiView, ops, scopedLoans]);
 
   const loanSchedule = useMemo(() => buildLoanScheduleKpis(scopedLoans), [scopedLoans]);
 

@@ -476,6 +476,37 @@ export function aggregateKpiDataList(items: KpiData[]): KpiData {
   };
 }
 
+/** EBITDA ≡ NOI in this system (depreciation excluded from NOI; no add-back). */
+export function ebitdaMarginPct(k: KpiData): number | null {
+  return k.totalRevenue > 0 ? (k.noi / k.totalRevenue) * 100 : null;
+}
+
+/** Interest-bearing debt from Loan Tracker — Σ loan_balance_as_of. Null when no loan rows. */
+export function totalDebtFromLoans(
+  loans: { company_name?: string; loan_balance_as_of?: number | null }[],
+  companyName?: string,
+): number | null {
+  const scoped = companyName
+    ? loans.filter(l => l.company_name === companyName)
+    : loans;
+  if (scoped.length === 0) return null;
+  return scoped.reduce((s, l) => s + (l.loan_balance_as_of ?? 0), 0);
+}
+
+/** Debt-to-Equity and Debt-to-Asset using Loan Tracker total debt only (no BS liabilities fallback). */
+export function debtRatiosFromLoanTracker(
+  totalDebt: number | null | undefined,
+  k: KpiData,
+): { debtToEquity: number | null; debtToAsset: number | null } {
+  if (totalDebt == null) {
+    return { debtToEquity: null, debtToAsset: null };
+  }
+  return {
+    debtToEquity: k.equity !== 0 ? totalDebt / k.equity : null,
+    debtToAsset: k.totalAssets > 0 ? (totalDebt / k.totalAssets) * 100 : null,
+  };
+}
+
 /** Solvency metrics — same formulas as Financial Ratios / buildExportKpiSets. */
 export function solvencyMetricsFromKpi(k: KpiData): { ltvPct: number | null; dscr: number | null } {
   const ltvPct = k.buildings > 0 ? (k.longTermLoans / k.buildings) * 100 : null;
@@ -530,7 +561,15 @@ function pctVal(num: number, den: number): number | null {
 export function buildExportKpiSets(
   k: KpiData,
   kPrev: KpiData | null,
-  ops?: { occupancyPct?: number; collectionRate?: number; vacancyRate?: number; avgDaysVacant?: number; totalUnits?: number },
+  ops?: {
+    occupancyPct?: number;
+    collectionRate?: number;
+    vacancyRate?: number;
+    avgDaysVacant?: number;
+    totalUnits?: number;
+    /** Σ loan_balance_as_of from Loan Tracker; null → D/E and D/A show N/A */
+    totalDebt?: number | null;
+  },
 ): {
   profitability: ExportKpiItem[];
   balanceSheet: ExportKpiItem[];
@@ -550,8 +589,7 @@ export function buildExportKpiSets(
   const repP = pctVal(k.repairs, k.totalRevenue);
   const ltv = k.buildings > 0 ? (k.longTermLoans / k.buildings) * 100 : null;
   const alR = k.totalLiabilities > 0 ? k.totalAssets / k.totalLiabilities : null;
-  const dte = k.equity !== 0 ? k.totalLiabilities / k.equity : null;
-  const dta = k.totalAssets > 0 ? (k.totalLiabilities / k.totalAssets) * 100 : null;
+  const { debtToEquity: dte, debtToAsset: dta } = debtRatiosFromLoanTracker(ops?.totalDebt, k);
   const equR = k.totalAssets > 0 ? (k.equity / k.totalAssets) * 100 : null;
   const netDebt = k.longTermLoans - k.cash;
   const dscr = k.interestExpense > 0 ? k.noi / (k.interestExpense * 1.2) : null;

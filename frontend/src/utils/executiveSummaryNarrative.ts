@@ -3,6 +3,14 @@ import type { KpiData } from './rentalKpiEngine';
 import type { RiskActionRow } from './executiveSummaryActionRules';
 import { buildEmiStatusRows } from './executiveSummaryEmi';
 import type { CeoBoardExportPayload } from './executiveSummaryPpt';
+import type {
+  ArDashboardSection,
+  BalanceSheetSection,
+  CashFlowSection,
+  ExpensesSection,
+  IncomeStatementSection,
+  RentalPortfolioSection,
+} from './executiveSummaryPptSections';
 
 function fmtUsd(n: number): string {
   if (!Number.isFinite(n) || n === 0) return '$0';
@@ -28,12 +36,22 @@ function parsePct(s: string | undefined): number | null {
 export interface SlideNarratives {
   portfolioSnapshot: string;
   rentalPerformance: string;
-  financialPerformance: string;
-  cashPosition: string;
+  incomeStatement: string;
+  balanceSheet: string;
+  cashFlow: string;
+  rentalPortfolio: string;
+  expenses: string;
+  arDashboard: string;
   loanPortfolio: string;
   debtRisk: string;
   ownership: string;
+  /** @deprecated */
+  financialPerformance: string;
+  /** @deprecated */
+  cashPosition: string;
+  /** @deprecated */
   propertyProfitability: string;
+  /** @deprecated */
   riskActionItems: string;
 }
 
@@ -49,6 +67,12 @@ export function generateSlideNarratives(params: {
     | 'ownership'
     | 'propertyProfitability'
     | 'riskActionTable'
+    | 'incomeStatement'
+    | 'balanceSheet'
+    | 'cashFlow'
+    | 'rentalPortfolio'
+    | 'expenses'
+    | 'arDashboard'
   >;
   k: KpiData | null;
   kPrev: KpiData | null;
@@ -58,14 +82,81 @@ export function generateSlideNarratives(params: {
   return {
     portfolioSnapshot: narratePortfolioSnapshot(payload.portfolioSnapshot),
     rentalPerformance: narrateRentalPerformance(payload.rentalPerformance),
-    financialPerformance: narrateFinancialPerformance(payload.financialPerformance, k, kPrev),
-    cashPosition: narrateCashPosition(payload.cashPosition, k),
+    incomeStatement: narrateIncomeStatement(payload.incomeStatement, k, kPrev),
+    balanceSheet: narrateBalanceSheet(payload.balanceSheet),
+    cashFlow: narrateCashFlow(payload.cashFlow),
+    rentalPortfolio: narrateRentalPortfolio(payload.rentalPortfolio),
+    expenses: narrateExpenses(payload.expenses),
+    arDashboard: narrateArDashboard(payload.arDashboard),
     loanPortfolio: narrateLoanPortfolio(payload.loanPortfolio),
     debtRisk: narrateDebtRisk(payload.debtRisk, loans),
     ownership: narrateOwnership(payload.ownership),
+    financialPerformance: narrateFinancialPerformance(payload.financialPerformance, k, kPrev),
+    cashPosition: narrateCashPosition(payload.cashPosition, k),
     propertyProfitability: narratePropertyProfitability(payload.propertyProfitability),
     riskActionItems: narrateRiskActionItems(payload.riskActionTable),
   };
+}
+
+export function generateActionPlanCommentary(rows: RiskActionRow[]): string {
+  return narrateRiskActionItems(rows);
+}
+
+function narrateIncomeStatement(isec: IncomeStatementSection, k: KpiData | null, kPrev: KpiData | null): string {
+  const parts: string[] = [];
+  if (isec.available) {
+    parts.push(`Latest period shows revenue of ${isec.latestRevenue}, expenses of ${isec.latestExpenses}, and NOI of ${isec.latestNoi} (P&L with interest add-back).`);
+    if (k && kPrev && k.totalRevenue > 0 && kPrev.totalRevenue > 0) {
+      const m = (k.noi / k.totalRevenue) * 100;
+      const pm = (kPrev.noi / kPrev.totalRevenue) * 100;
+      parts.push(`NOI margin moved to ${pct(m)} from ${pct(pm)} vs prior period.`);
+    }
+  } else {
+    parts.push('Upload P&L on Rentals → Financials to populate income statement metrics.');
+  }
+  return parts.slice(0, 2).join(' ');
+}
+
+function narrateBalanceSheet(bs: BalanceSheetSection): string {
+  if (!bs.available) return 'Balance sheet data not available — upload BS on Rentals → Financials.';
+  const parts = [
+    `Assets ${bs.totalAssets}, liabilities ${bs.totalLiabilities}, equity ${bs.equity}, cash ${bs.cashBalance}.`,
+    `Leverage: D/E ${bs.debtToEquity}, D/A ${bs.debtToAsset} (debt numerator from Loan Tracker, not total liabilities).`,
+  ];
+  return parts.join(' ');
+}
+
+function narrateCashFlow(cf: CashFlowSection): string {
+  if (!cf.available) return 'Cash flow not available — upload CF statement or AR/Loan Tracker for proxies.';
+  return `Operating CF ${cf.operatingCf}, financing CF ${cf.financingCf}, investing ${cf.investingCf}. ${cf.sourceNote}`;
+}
+
+function narrateRentalPortfolio(rp: RentalPortfolioSection): string {
+  const parts: string[] = [];
+  if (rp.occupancy !== 'Data not available') {
+    parts.push(`Occupancy ${rp.occupancy} with ${rp.collected} collected (${rp.collectionRate} collection rate).`);
+  }
+  if (rp.noiMargin !== 'Data not available — upload Financials P&L') {
+    parts.push(`NOI margin ${rp.noiMargin} from Financials P&L — not rent-receivable derived.`);
+  }
+  if (parseUsd(rp.arOutstanding) != null && parseUsd(rp.arOutstanding)! > 0) {
+    parts.push(`Outstanding AR ${rp.arOutstanding} warrants collection follow-up.`);
+  }
+  return parts.slice(0, 3).join(' ') || 'See Rentals → Rental Portfolio Overview.';
+}
+
+function narrateExpenses(ex: ExpensesSection): string {
+  if (!ex.available) return 'Expense trend not available — see Rentals → Expenses.';
+  const total = ex.trend6Mo.reduce((s, t) => s + t.amount, 0);
+  const avg = ex.trend6Mo.length ? total / ex.trend6Mo.length : 0;
+  return `Six-month expense window ending ${ex.trendEndLabel} averages ${fmtUsd(avg)} per month from P&L line detail.`;
+}
+
+function narrateArDashboard(ar: ArDashboardSection): string {
+  if (!ar.available) return 'Upload QB AR Aging on Rentals → AR Dashboard for DSO and aging metrics.';
+  const parts = [`DSO ${ar.dso}`, `30+ overdue ${ar.overdue30}`, `90+ overdue ${ar.overdue90}`];
+  if (ar.creditBalance !== '$0') parts.push(`credit balance ${ar.creditBalance} excluded from DSO`);
+  return parts.join(' · ') + '.';
 }
 
 function narratePortfolioSnapshot(ps: CeoBoardExportPayload['portfolioSnapshot']): string {
@@ -498,8 +589,15 @@ export function generateStrategicRecommendations(params: {
   collectionRate: number;
   arOverdue90: number;
   k: KpiData | null;
+  incomeStatement?: IncomeStatementSection;
+  rentalPortfolio?: RentalPortfolioSection;
+  arDashboard?: ArDashboardSection;
+  debtRisk?: CeoBoardExportPayload['debtRisk'];
 }): string[] {
-  const { riskRows, loans, portfolio, collectionRate, arOverdue90, k } = params;
+  const {
+    riskRows, loans, portfolio, collectionRate, arOverdue90, k,
+    incomeStatement, rentalPortfolio, arDashboard, debtRisk,
+  } = params;
   const bullets: string[] = [];
   const critical = riskRows.filter(r => r.severity === 'critical');
 
@@ -508,25 +606,34 @@ export function generateStrategicRecommendations(params: {
     return d != null && d < 1.2;
   });
   if (lowDscr.length > 0) {
+    const names = lowDscr.slice(0, 2).map(l => (l.property_name || l.company_name).split(' ')[0]).join(', ');
+    const worst = Math.min(...lowDscr.map(l => l.dscr ?? 99));
     bullets.push(
-      `Prioritize refinancing or NOI improvement on ${lowDscr.length} propert${lowDscr.length === 1 ? 'y' : 'ies'} with DSCR below the 1.2× covenant threshold.`,
+      `Refinance or raise NOI on ${lowDscr.length} propert${lowDscr.length === 1 ? 'y' : 'ies'} (${names}${lowDscr.length > 2 ? ', …' : ''}) — DSCR as low as ${worst.toFixed(2)}× vs 1.2× covenant.`,
     );
   }
 
   if (portfolio && portfolio.occupancy_pct * 100 < 95) {
     const vac = portfolio.vacant_units;
+    const occ = portfolio.occupancy_pct * 100;
     bullets.push(
-      `Address vacancy on ${vac} unit${vac !== 1 ? 's' : ''} — occupancy at ${pct(portfolio.occupancy_pct * 100)} vs 95% target; review pricing and lease-up pipeline.`,
+      `Lease-up ${vac} vacant unit${vac !== 1 ? 's' : ''} — occupancy ${pct(occ)} vs 95% target; vacancy loss on Rental Portfolio slide drives revenue gap.`,
     );
   }
 
   if (collectionRate > 0 && collectionRate < 95) {
     bullets.push(
-      `Review collection process — collection rate at ${pct(collectionRate)}. ${arOverdue90 > 0 ? `AR aging shows ${fmtUsd(arOverdue90)} in 90+ day arrears (excluding credit balances).` : 'Accelerate follow-up on outstanding tenant balances.'}`,
+      `Accelerate collections — rate ${pct(collectionRate)} vs 95% target${arOverdue90 > 0 ? `; AR Dashboard shows ${fmtUsd(arOverdue90)} in 90+ day balances` : ''}.`,
     );
   } else if (arOverdue90 > 0) {
     bullets.push(
-      `Review collection process — AR aging shows ${fmtUsd(arOverdue90)} in 90+ day arrears (credit balances excluded).`,
+      `AR Dashboard: ${fmtUsd(arOverdue90)} in 90+ day arrears (credit balances excluded) — assign owner follow-up this cycle.`,
+    );
+  }
+
+  if (rentalPortfolio?.noiMargin && parsePct(rentalPortfolio.noiMargin) != null && parsePct(rentalPortfolio.noiMargin)! < 20) {
+    bullets.push(
+      `NOI margin ${rentalPortfolio.noiMargin} (Financials P&L) is below 20% target — align operating expense review with Expenses slide trend.`,
     );
   }
 
@@ -549,7 +656,7 @@ export function generateStrategicRecommendations(params: {
   }
 
   if (k && k.totalRevenue > 0 && (k.noi / k.totalRevenue) * 100 < 20) {
-    bullets.push('Conduct operating expense review — NOI margin below 20% target; align with Expenses page P&L totals.');
+    bullets.push(`Income Statement NOI margin ${pct((k.noi / k.totalRevenue) * 100)} below 20% — expense lines on Expenses slide warrant board review.`);
   }
 
   const maturing = loans.filter(l => {
@@ -566,7 +673,15 @@ export function generateStrategicRecommendations(params: {
   }
 
   if (critical.length > 0 && bullets.length < 5) {
-    bullets.push(`${critical.length} critical action item${critical.length !== 1 ? 's' : ''} require board attention this cycle — see Risk & Action Items slide.`);
+    const top = critical[0];
+    bullets.push(
+      `Immediate priority: ${top.property} — ${top.issue} (${top.kpi}); ${critical.length} critical item${critical.length !== 1 ? 's' : ''} on Action Plan slide.`,
+    );
+  }
+
+  if (debtRisk?.maturityBuckets?.some(b => b.label === '≤12 mo' && b.count > 0) && bullets.length < 5) {
+    const b = debtRisk.maturityBuckets.find(x => x.label === '≤12 mo')!;
+    bullets.push(`Debt Risk slide: ${fmtUsd(b.amount)} across ${b.count} loan${b.count !== 1 ? 's' : ''} maturing ≤12 months — initiate refinance planning.`);
   }
 
   if (!bullets.length) {

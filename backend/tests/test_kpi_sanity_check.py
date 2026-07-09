@@ -144,6 +144,7 @@ def test_debt_to_equity_negative_equity():
     }
     result = audit_company_financials(
         fin, company_id="co", company_name="Co", month=3, year=2026,
+        total_debt=606_600,
     )
     dte_row = next(r for r in result.rows if r.kpi == "Debt-to-Equity")
     assert dte_row.canonical_value is not None
@@ -249,3 +250,56 @@ def test_cfo_dashboard_merged_into_financial_audit():
     merged = _merge_audit_rows(fin_result, cfo_rows)
     assert any(r.kpi == "Net Income Trajectory" for r in merged.rows)
     assert merged.has_data
+
+
+def test_ebitda_margin_equals_noi_margin():
+    fin = _sample_fin()
+    fin["pl"].append({
+        "label": "Depreciation", "values": {2026: 80_000}, "monthlyValues": {"Jun 2026": 80_000},
+        "indent": 1, "isTotal": False, "isSectionHeader": False, "isNetIncome": False,
+    })
+    result = audit_company_financials(
+        fin, company_id="co", company_name="Co", month=6, year=2026,
+    )
+    noi_row = next(r for r in result.rows if r.kpi == "NOI Margin")
+    ebitda_row = next(r for r in result.rows if r.kpi == "EBITDA Margin")
+    assert noi_row.canonical_value == 25.0
+    assert ebitda_row.canonical_value == 25.0
+    assert abs(noi_row.canonical_value - ebitda_row.canonical_value) < 0.01
+
+    cross = next(r for r in result.rows if r.kpi == "EBITDA = NOI Margin (cross-check)")
+    assert cross.status == "MATCH"
+
+
+def test_debt_ratios_use_loan_tracker_not_total_liabilities():
+    fin = _sample_fin()
+    total_liab = 3_000_000
+    total_debt = 2_000_000
+    equity = 2_000_000
+    assets = 5_000_000
+
+    result_old_style = total_liab / equity
+    result_new = total_debt / equity
+    assert result_new < result_old_style
+
+    result = audit_company_financials(
+        fin, company_id="co", company_name="Co", month=6, year=2026,
+        total_debt=total_debt,
+    )
+    dte_row = next(r for r in result.rows if r.kpi == "Debt-to-Equity")
+    dta_row = next(r for r in result.rows if r.kpi == "Debt-to-Asset")
+    assert abs(dte_row.canonical_value - 1.0) < 0.01
+    assert abs(dta_row.canonical_value - 40.0) < 0.01
+    assert "Total Debt (Loan Tracker)" in dte_row.inputs_detail
+
+
+def test_debt_ratios_na_without_loan_data():
+    result = audit_company_financials(
+        _sample_fin(), company_id="co", company_name="Co", month=6, year=2026,
+        total_debt=None,
+    )
+    dte_row = next(r for r in result.rows if r.kpi == "Debt-to-Equity")
+    dta_row = next(r for r in result.rows if r.kpi == "Debt-to-Asset")
+    assert dte_row.canonical_value is None
+    assert dta_row.canonical_value is None
+    assert dte_row.canonical_display == "N/A"

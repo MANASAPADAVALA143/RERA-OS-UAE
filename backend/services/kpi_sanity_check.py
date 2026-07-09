@@ -47,11 +47,22 @@ def _fmt_x(n: float | None, d: int = 2) -> str:
     return f"{n:.{d}f}x"
 
 
-def _debt_to_equity(k: KpiData) -> float | None:
-    """Liabilities / Equity; negative when equity is negative; N/A only when equity = 0."""
+def _debt_to_equity(total_debt: float | None, k: KpiData) -> float | None:
+    """Interest-bearing debt / Equity from Loan Tracker; N/A when no loan data or equity = 0."""
+    if total_debt is None:
+        return None
     if k.equity == 0:
         return None
-    return k.total_liabilities / k.equity
+    return total_debt / k.equity
+
+
+def _debt_to_asset(total_debt: float | None, k: KpiData) -> float | None:
+    """Total Debt / Total Assets × 100 from Loan Tracker; N/A when no loan data."""
+    if total_debt is None:
+        return None
+    if k.total_assets <= 0:
+        return None
+    return (total_debt / k.total_assets) * 100
 
 
 def _pct(num: float, den: float) -> float | None:
@@ -88,8 +99,8 @@ def _status_compare(
     return "MATCH" if pct <= tolerance_pct else "MISMATCH"
 
 
-def _raw_inputs(k: KpiData, k_prev: KpiData | None) -> dict[str, Any]:
-    return {
+def _raw_inputs(k: KpiData, k_prev: KpiData | None, total_debt: float | None = None) -> dict[str, Any]:
+    raw = {
         "Total Revenue": _fmt_currency(k.total_revenue),
         "Total Expenses": _fmt_currency(k.total_expenses),
         "Net Income": _fmt_currency(k.net_income),
@@ -108,6 +119,11 @@ def _raw_inputs(k: KpiData, k_prev: KpiData | None) -> dict[str, Any]:
         "Cash": _fmt_currency(k.cash),
         "Prior Period Revenue": _fmt_currency(k_prev.total_revenue) if k_prev else "N/A",
     }
+    if total_debt is not None:
+        raw["Total Debt (Loan Tracker)"] = _fmt_currency(total_debt)
+    else:
+        raw["Total Debt (Loan Tracker)"] = "N/A — no loan data"
+    return raw
 
 
 FIELD_SOURCES: dict[str, str] = {
@@ -121,6 +137,7 @@ FIELD_SOURCES: dict[str, str] = {
     "Repairs": "r_financial_uploads.pl_data → repairs / maintenance lines",
     "Buildings / Property Value": "r_financial_uploads.bs_data → Buildings / Property & Equipment row",
     "Long-term Loans": "r_financial_uploads.bs_data → 'Total for Long-term Liabilities' row",
+    "Total Debt (Loan Tracker)": "loans table → Σ loan_balance_as_of (Loan Tracker portfolio total)",
     "Total Assets": "r_financial_uploads.bs_data → 'Total for Assets' row",
     "Total Liabilities": "r_financial_uploads.bs_data → 'Total for Liabilities' row",
     "Equity": "r_financial_uploads.bs_data → 'Total for Equity' row",
@@ -142,12 +159,12 @@ def _kpi_field_keys(name: str) -> list[str]:
         "Repair % of Revenue": ["Repairs", "Total Revenue"],
         "LTV": ["Long-term Loans", "Buildings / Property Value"],
         "Asset/Liability Ratio": ["Total Assets", "Total Liabilities"],
-        "Debt-to-Equity": ["Total Liabilities", "Equity"],
+        "Debt-to-Equity": ["Total Debt (Loan Tracker)", "Equity"],
         "Cash Balance": ["Cash"],
-        "Debt-to-Asset": ["Total Liabilities", "Total Assets"],
+        "Debt-to-Asset": ["Total Debt (Loan Tracker)", "Total Assets"],
         "Equity Ratio": ["Equity", "Total Assets"],
         "DSCR (Est.)": ["NOI", "Interest Paid"],
-        "EBITDA Margin": ["NOI", "Depreciation", "Total Revenue"],
+        "EBITDA Margin": ["NOI", "Total Revenue"],
         "ROA": ["Net Income", "Total Assets"],
         "ROE": ["Net Income", "Equity"],
         "Cap Rate": ["NOI", "Buildings / Property Value"],
@@ -167,13 +184,15 @@ def _kpi_sources(name: str) -> list[dict[str, str]]:
     return rows
 
 
-def _substitution_steps(name: str, k: KpiData, k_prev: KpiData | None, c_val: float | None) -> str:
+def _substitution_steps(
+    name: str, k: KpiData, k_prev: KpiData | None, c_val: float | None,
+    *, total_debt: float | None = None,
+) -> str:
     rev = _fmt_currency(k.total_revenue)
     exp = _fmt_currency(k.total_expenses)
     intr = _fmt_currency(k.interest_expense)
     noi = _fmt_currency(k.noi)
     ni = _fmt_currency(k.net_income)
-    ebitda = _fmt_currency(k.noi + k.depreciation)
 
     if name == "NOI Margin":
         return (
@@ -219,23 +238,33 @@ def _substitution_steps(name: str, k: KpiData, k_prev: KpiData | None, c_val: fl
         liab = _fmt_currency(k.total_liabilities)
         return f"Asset/Liability Ratio = Total Assets / Total Liabilities\n= {assets} / {liab} = {_fmt_x(c_val)}"
     if name == "Debt-to-Equity":
-        liab = _fmt_currency(k.total_liabilities)
+        debt = _fmt_currency(total_debt) if total_debt is not None else "N/A — no loan data"
         eq = _fmt_currency(k.equity)
+        if total_debt is None:
+            return (
+                "Debt-to-Equity = Total Debt (Loan Tracker) / Equity\n"
+                f"Total Debt = {debt} — ratio is N/A (do not fall back to Total Liabilities)"
+            )
         if k.equity == 0:
-            return f"Debt-to-Equity = N/A because Equity = $0\nLiabilities = {liab}"
+            return f"Debt-to-Equity = N/A because Equity = $0\nTotal Debt = {debt}"
         if k.equity < 0:
             return (
-                f"Debt-to-Equity = Total Liabilities / Equity\n"
-                f"= {liab} / {eq} = {_fmt_x(c_val, 1)}\n"
+                f"Debt-to-Equity = Total Debt / Equity\n"
+                f"= {debt} / {eq} = {_fmt_x(c_val, 1)}\n"
                 f"(negative equity — ratio is negative; balance sheet is underwater)"
             )
-        return f"Debt-to-Equity = Total Liabilities / Equity\n= {liab} / {eq} = {_fmt_x(c_val, 1)}"
+        return f"Debt-to-Equity = Total Debt / Equity\n= {debt} / {eq} = {_fmt_x(c_val, 1)}"
     if name == "Cash Balance":
         return f"Cash Balance = sum of bank / cash accounts on balance sheet\n= {_fmt_currency(k.cash)}"
     if name == "Debt-to-Asset":
-        liab = _fmt_currency(k.total_liabilities)
+        debt = _fmt_currency(total_debt) if total_debt is not None else "N/A — no loan data"
         assets = _fmt_currency(k.total_assets)
-        return f"Debt-to-Asset = Total Liabilities / Total Assets × 100\n= {liab} / {assets} × 100 = {_fmt_pct(c_val)}"
+        if total_debt is None:
+            return (
+                "Debt-to-Asset = Total Debt / Total Assets × 100\n"
+                f"Total Debt = {debt} — ratio is N/A (do not fall back to Total Liabilities)"
+            )
+        return f"Debt-to-Asset = Total Debt / Total Assets × 100\n= {debt} / {assets} × 100 = {_fmt_pct(c_val)}"
     if name == "Equity Ratio":
         eq = _fmt_currency(k.equity)
         assets = _fmt_currency(k.total_assets)
@@ -246,10 +275,9 @@ def _substitution_steps(name: str, k: KpiData, k_prev: KpiData | None, c_val: fl
         debt_svc = _fmt_currency(k.interest_expense * 1.2)
         return f"DSCR (Est.) = NOI / (Interest Paid × 1.2)\n= {noi} / {debt_svc} = {_fmt_x(c_val)}"
     if name == "EBITDA Margin":
-        dep = _fmt_currency(k.depreciation)
         return (
-            f"EBITDA = NOI + Depreciation = {noi} + {dep} = {ebitda}\n"
-            f"EBITDA Margin = EBITDA / Total Revenue × 100 = {ebitda} / {rev} × 100 = {_fmt_pct(c_val)}"
+            "EBITDA ≡ NOI in this system (depreciation is below the NOI line and excluded)\n"
+            f"EBITDA Margin = NOI / Total Revenue × 100 = {noi} / {rev} × 100 = {_fmt_pct(c_val)}"
         )
     if name == "ROA":
         assets = _fmt_currency(k.total_assets)
@@ -265,11 +293,10 @@ def _substitution_steps(name: str, k: KpiData, k_prev: KpiData | None, c_val: fl
     return ""
 
 
-def _canonical_metrics(k: KpiData, k_prev: KpiData | None) -> dict[str, float | None]:
+def _canonical_metrics(k: KpiData, k_prev: KpiData | None, *, total_debt: float | None = None) -> dict[str, float | None]:
     rev_g = None
     if k_prev and k_prev.total_revenue > 0:
         rev_g = ((k.total_revenue - k_prev.total_revenue) / k_prev.total_revenue) * 100
-    ebitda = k.noi + k.depreciation
     return {
         "NOI Margin": _pct(k.noi, k.total_revenue),
         "Net Income Margin": _pct(k.net_income, k.total_revenue),
@@ -281,19 +308,21 @@ def _canonical_metrics(k: KpiData, k_prev: KpiData | None) -> dict[str, float | 
         "Repair % of Revenue": _pct(k.repairs, k.total_revenue),
         "LTV": (k.long_term_loans / k.buildings) * 100 if k.buildings > 0 else None,
         "Asset/Liability Ratio": (k.total_assets / k.total_liabilities) if k.total_liabilities > 0 else None,
-        "Debt-to-Equity": _debt_to_equity(k),
+        "Debt-to-Equity": _debt_to_equity(total_debt, k),
         "Cash Balance": k.cash,
-        "Debt-to-Asset": (k.total_liabilities / k.total_assets) * 100 if k.total_assets > 0 else None,
+        "Debt-to-Asset": _debt_to_asset(total_debt, k),
         "Equity Ratio": (k.equity / k.total_assets) * 100 if k.total_assets > 0 else None,
         "DSCR (Est.)": (k.noi / (k.interest_expense * 1.2)) if k.interest_expense > 0 else None,
-        "EBITDA Margin": _pct(ebitda, k.total_revenue),
+        "EBITDA Margin": _pct(k.noi, k.total_revenue),
         "ROA": _pct(k.net_income, k.total_assets),
         "ROE": _pct(k.net_income, k.equity),
         "Cap Rate": _pct(k.noi, k.buildings),
     }
 
 
-def _displayed_metrics_kpi_tab(k: KpiData, k_prev: KpiData | None) -> dict[str, float | None]:
+def _displayed_metrics_kpi_tab(
+    k: KpiData, k_prev: KpiData | None, *, total_debt: float | None = None,
+) -> dict[str, float | None]:
     """Simulates RentalFinancials.tsx KPITab — known divergences from canonical engine."""
     rev_g = None
     if k_prev and k_prev.total_revenue > 0:
@@ -310,12 +339,12 @@ def _displayed_metrics_kpi_tab(k: KpiData, k_prev: KpiData | None) -> dict[str, 
         "Repair % of Revenue": (k.repairs / k.total_revenue * 100) if k.total_revenue > 0 else 0.0,
         "LTV": (k.long_term_loans / k.buildings * 100) if k.buildings > 0 else 0.0,
         "Asset/Liability Ratio": (k.total_assets / k.total_liabilities) if k.total_liabilities > 0 else 0.0,
-        "Debt-to-Equity": _debt_to_equity(k),
+        "Debt-to-Equity": _debt_to_equity(total_debt, k),
         "Cash Balance": k.cash,
-        "Debt-to-Asset": (k.total_liabilities / k.total_assets * 100) if k.total_assets > 0 else 0.0,
+        "Debt-to-Asset": _debt_to_asset(total_debt, k),
         "Equity Ratio": (k.equity / k.total_assets * 100) if k.total_assets > 0 else 0.0,
         "DSCR (Est.)": (k.noi / (k.interest_expense * 1.2)) if k.interest_expense > 0 else 0.0,
-        "EBITDA Margin": _pct(k.noi + k.depreciation, k.total_revenue),
+        "EBITDA Margin": _pct(k.noi, k.total_revenue),
         "ROA": _pct(k.net_income, k.total_assets),
         "ROE": _pct(k.net_income, k.equity),
         "Cap Rate": _pct(k.noi, k.buildings),
@@ -338,14 +367,15 @@ KPI_META: list[dict[str, Any]] = [
      "formula": "Long-term Loans / Buildings × 100 — N/A when building value missing"},
     {"kpi": "Asset/Liability Ratio", "section": "Balance Sheet", "formula": "Total Assets / Total Liabilities"},
     {"kpi": "Debt-to-Equity", "section": "Balance Sheet",
-     "formula": "Total Liabilities / Equity — N/A when Equity = $0; negative when equity < 0"},
+     "formula": "Total Debt (Loan Tracker) / Equity — N/A when no loan data or Equity = $0"},
     {"kpi": "Cash Balance", "section": "Balance Sheet", "formula": "Sum of bank account balances (BS)", "exact": True},
-    {"kpi": "Debt-to-Asset", "section": "Balance Sheet", "formula": "Total Liabilities / Total Assets × 100"},
+    {"kpi": "Debt-to-Asset", "section": "Balance Sheet",
+     "formula": "Total Debt (Loan Tracker) / Total Assets × 100 — N/A when no loan data"},
     {"kpi": "Equity Ratio", "section": "Balance Sheet", "formula": "Equity / Total Assets × 100"},
     {"kpi": "DSCR (Est.)", "section": "Financial Ratios",
      "formula": "NOI / (Interest Paid × 1.2) — N/A when interest = $0"},
     {"kpi": "EBITDA Margin", "section": "Financial Ratios",
-     "formula": "(NOI + Depreciation) / Total Revenue × 100"},
+     "formula": "NOI / Total Revenue × 100 (EBITDA ≡ NOI — no depreciation add-back)"},
     {"kpi": "ROA", "section": "Financial Ratios", "formula": "Net Income / Total Assets × 100"},
     {"kpi": "ROE", "section": "Financial Ratios", "formula": "Net Income / Equity × 100"},
     {"kpi": "Cap Rate", "section": "Financial Ratios", "formula": "NOI / Buildings × 100"},
@@ -362,6 +392,93 @@ def _format_kpi_value(name: str, value: float | None) -> str:
     return _fmt_pct(value)
 
 
+def _load_company_total_debt(
+    db: Session,
+    tenant_id,
+    company_name: str,
+    *,
+    month: int,
+    year: int,
+) -> float | None:
+    """Σ loan_balance_as_of — same source as Loan Tracker 'Total Loan Portfolio'."""
+    from services.loan_tracker_kpi_audit import compute_loan_tracker_kpis, load_registry_rental_loan_dicts
+
+    balance_period = f"{year}-{month:02d}"
+    loans = load_registry_rental_loan_dicts(
+        db, tenant_id, balance_period=balance_period, company_names={company_name},
+    )
+    if not loans:
+        return None
+    return compute_loan_tracker_kpis(loans)["total_outstanding"]
+
+
+def _append_ebitda_noi_cross_check(
+    rows: list[KpiCheckRow],
+    canonical: dict[str, float | None],
+    displayed: dict[str, float | None],
+    k: KpiData,
+) -> None:
+    """Flag CHECK_LOGIC if EBITDA Margin ever diverges from NOI Margin."""
+    noi_m = canonical.get("NOI Margin")
+    ebitda_m = canonical.get("EBITDA Margin")
+    d_noi = displayed.get("NOI Margin")
+    d_ebitda = displayed.get("EBITDA Margin")
+
+    def _aligned(a: float | None, b: float | None) -> bool:
+        if a is None and b is None:
+            return True
+        if a is None or b is None:
+            return False
+        return abs(a - b) < 0.01
+
+    canonical_ok = _aligned(noi_m, ebitda_m)
+    displayed_ok = _aligned(d_noi, d_ebitda)
+    status: Status = "MATCH" if canonical_ok and displayed_ok else "CHECK_LOGIC"
+    notes = ""
+    if not canonical_ok:
+        notes = (
+            f"Canonical NOI Margin ({_fmt_pct(noi_m)}) ≠ EBITDA Margin ({_fmt_pct(ebitda_m)}) — "
+            "EBITDA should equal NOI in this system"
+        )
+    elif not displayed_ok:
+        notes = (
+            f"Displayed NOI Margin ({_fmt_pct(d_noi)}) ≠ EBITDA Margin ({_fmt_pct(d_ebitda)})"
+        )
+
+    rows.append(KpiCheckRow(
+        kpi="EBITDA = NOI Margin (cross-check)",
+        section="Financial Ratios",
+        formula="EBITDA Margin must equal NOI Margin (EBITDA ≡ NOI; no depreciation add-back)",
+        raw_inputs={
+            "NOI Margin": _fmt_pct(noi_m),
+            "EBITDA Margin": _fmt_pct(ebitda_m),
+            "NOI": _fmt_currency(k.noi),
+            "Total Revenue": _fmt_currency(k.total_revenue),
+        },
+        inputs_detail={
+            "NOI Margin": _fmt_pct(noi_m),
+            "EBITDA Margin": _fmt_pct(ebitda_m),
+        },
+        substitution=(
+            f"NOI Margin = {_fmt_pct(noi_m)}\n"
+            f"EBITDA Margin = {_fmt_pct(ebitda_m)}\n"
+            "These must match because depreciation is excluded from NOI and must not be added back."
+        ),
+        sources=[
+            {"field": "NOI Margin", "source": "derived: NOI / Total Revenue"},
+            {"field": "EBITDA Margin", "source": "derived: NOI / Total Revenue (same as NOI Margin)"},
+        ],
+        canonical_value=noi_m,
+        canonical_display=_fmt_pct(noi_m),
+        displayed_value=d_ebitda,
+        displayed_display=_fmt_pct(d_ebitda),
+        difference=abs(noi_m - ebitda_m) if noi_m is not None and ebitda_m is not None else None,
+        difference_pct=0.0 if canonical_ok else 100.0,
+        status=status,
+        notes=notes,
+    ))
+
+
 def audit_company_financials(
     fin: dict,
     *,
@@ -370,6 +487,7 @@ def audit_company_financials(
     period: str | None = None,
     month: int = 6,
     year: int = 2026,
+    total_debt: float | None = None,
 ) -> CompanyAuditResult:
     available = get_available_keys(fin)
     pl = fin.get("pl") or []
@@ -387,9 +505,9 @@ def audit_company_financials(
     else:
         k, k_prev, label = resolve_kpi_view(fin, year, month if available else None)
 
-    canonical = _canonical_metrics(k, k_prev)
-    displayed = _displayed_metrics_kpi_tab(k, k_prev)
-    raw = _raw_inputs(k, k_prev)
+    canonical = _canonical_metrics(k, k_prev, total_debt=total_debt)
+    displayed = _displayed_metrics_kpi_tab(k, k_prev, total_debt=total_debt)
+    raw = _raw_inputs(k, k_prev, total_debt)
     rows: list[KpiCheckRow] = []
 
     for meta in KPI_META:
@@ -416,6 +534,14 @@ def audit_company_financials(
             if d_val == 0.0 and c_val is None:
                 check_logic = True
                 notes = "Revenue Growth should be N/A when no prior period exists"
+        if name == "Debt-to-Equity" and total_debt is None:
+            if d_val not in (None, 0.0) and c_val is None:
+                check_logic = True
+                notes = "Debt-to-Equity should be N/A when Loan Tracker has no loan data (not Total Liabilities)"
+        if name == "Debt-to-Asset" and total_debt is None:
+            if d_val not in (None, 0.0) and c_val is None:
+                check_logic = True
+                notes = "Debt-to-Asset should be N/A when Loan Tracker has no loan data"
         if name == "Debt-to-Equity" and k.equity < 0 and c_val is not None:
             check_logic = True
             notes = (
@@ -434,7 +560,7 @@ def audit_company_financials(
             formula=meta["formula"],
             raw_inputs=raw,
             inputs_detail=_kpi_inputs_detail(name, raw),
-            substitution=_substitution_steps(name, k, k_prev, c_val),
+            substitution=_substitution_steps(name, k, k_prev, c_val, total_debt=total_debt),
             sources=_kpi_sources(name),
             canonical_value=c_val,
             canonical_display=_format_kpi_value(name, c_val),
@@ -445,6 +571,8 @@ def audit_company_financials(
             status=status,
             notes=notes,
         ))
+
+    _append_ebitda_noi_cross_check(rows, canonical, displayed, k)
 
     mismatch_count = sum(1 for r in rows if r.status == "MISMATCH")
     check_logic_count = sum(1 for r in rows if r.status == "CHECK_LOGIC")
@@ -569,6 +697,9 @@ def run_tenant_audit(
             )
         else:
             fin = fin_upload_to_dict(upload)
+            total_debt = _load_company_total_debt(
+                db, tenant_id, co.company_name, month=month, year=year,
+            )
             fin_result = audit_company_financials(
                 fin,
                 company_id=str(co.id),
@@ -576,6 +707,7 @@ def run_tenant_audit(
                 period=period,
                 month=month,
                 year=year,
+                total_debt=total_debt,
             )
         ops_rows = audit_company_rental_ops(
             db, tenant_id, co, month=month, year=year, qb_by_company=qb_by_company,
@@ -701,6 +833,9 @@ def get_company_audit_from_db(
         )
     else:
         fin = fin_upload_to_dict(upload)
+        total_debt = _load_company_total_debt(
+            db, tenant_id, co.company_name, month=month, year=year,
+        )
         result = audit_company_financials(
             fin,
             company_id=str(co.id),
@@ -708,6 +843,7 @@ def get_company_audit_from_db(
             period=period,
             month=month,
             year=year,
+            total_debt=total_debt,
         )
     qb_by_company = load_qb_aging_by_company(db, tenant_id)
     ops_rows = audit_company_rental_ops(
