@@ -26,6 +26,9 @@ engine_kwargs: dict = {"pool_pre_ping": True}
 if is_sqlite:
     engine_kwargs["connect_args"] = {"check_same_thread": False}
 else:
+    # Supabase requires TLS; Render → direct db.* host is IPv6-only and often
+    # unreachable — use Session/Transaction pooler (IPv4) in DATABASE_URL.
+    engine_kwargs["connect_args"] = {"sslmode": "require", "connect_timeout": 30}
     engine_kwargs["pool_size"] = 5
     engine_kwargs["max_overflow"] = 10
 
