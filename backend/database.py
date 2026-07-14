@@ -1,10 +1,26 @@
 from sqlalchemy import create_engine, event, text as sqla_text
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 from config import settings
 
-_db_url = settings.effective_database_url
+_db_url = (settings.effective_database_url or "").strip().strip('"').strip("'")
+# Common Render paste mistake: key duplicated into the value
+if _db_url.upper().startswith("DATABASE_URL="):
+    _db_url = _db_url.split("=", 1)[1].strip().strip('"').strip("'")
+
 is_sqlite = _db_url.startswith("sqlite")  # exported — used by middleware/auth.py for RLS guard
+
+try:
+    make_url(_db_url)
+except Exception as exc:
+    preview = _db_url[:32] + ("…" if len(_db_url) > 32 else "")
+    raise RuntimeError(
+        "Invalid DATABASE_URL (SQLAlchemy could not parse it). "
+        "On Render → Environment, set DATABASE_URL to a full URI starting with "
+        "postgresql+psycopg2://… (no quotes). "
+        f"Got preview={preview!r}. Original error: {exc}"
+    ) from exc
 
 engine_kwargs: dict = {"pool_pre_ping": True}
 if is_sqlite:
