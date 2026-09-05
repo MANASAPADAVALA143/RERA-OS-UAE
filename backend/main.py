@@ -71,6 +71,17 @@ import models.propdev.partner  # noqa: F401
 import models.propdev.loan  # noqa: F401
 import models.propdev.capital_call  # noqa: F401
 import models.propdev.expense  # noqa: F401
+import models.propdev.financial_upload  # noqa: F401
+import models.propdev.alert_action  # noqa: F401
+import models.propdev.property_tax  # noqa: F401
+import models.propdev.distribution  # noqa: F401
+import models.propdev.lot_reinvestment  # noqa: F401
+import models.propdev.partner_capital_contribution  # noqa: F401
+import models.propdev.expense_category_map  # noqa: F401
+import models.propdev.property_improvement  # noqa: F401
+import models.consultancy.company  # noqa: F401
+import models.consultancy.financial_upload  # noqa: F401
+import models.consultancy.invoice  # noqa: F401
 
 app = FastAPI(title="RERA OS API", version="1.0.0-demo")
 
@@ -160,22 +171,45 @@ app.include_router(rentals_ai_router)
 
 from routers.propdev.deal_advisor import router as deal_advisor_router  # noqa: E402
 from routers.propdev.companies import router as propdev_companies_router  # noqa: E402
+from routers.propdev.financials import router as propdev_financials_router  # noqa: E402
 from routers.propdev.excel_import import router as propdev_excel_router  # noqa: E402
 from routers.propdev.capital_import import router as propdev_capital_router  # noqa: E402
 from routers.propdev.seed_wwbg import router as propdev_seed_wwbg_router  # noqa: E402
 from routers.propdev.qb_import import router as propdev_qb_router  # noqa: E402
+from routers.propdev.partner_import import router as propdev_partner_import_router  # noqa: E402
+from routers.propdev.loan_import import router as propdev_loan_import_router  # noqa: E402
+from routers.propdev.property_tax import router as propdev_property_tax_router  # noqa: E402
+from routers.propdev.distributions import router as propdev_distributions_router  # noqa: E402
+from routers.propdev.lot_reinvestments import router as propdev_lot_reinvestments_router  # noqa: E402
+from routers.propdev.capital_call_triggers import router as propdev_capital_call_triggers_router  # noqa: E402
+from routers.propdev.sale_pnl import router as propdev_sale_pnl_router  # noqa: E402
 from routers.reit.companies import router as reit_companies_router  # noqa: E402
 from routers.real_estate.construction_companies import router as construction_companies_router  # noqa: E402
 from routers.kpi_audit import router as kpi_audit_router  # noqa: E402
 app.include_router(deal_advisor_router)
 app.include_router(propdev_companies_router)
+app.include_router(propdev_financials_router)
 app.include_router(propdev_excel_router)
 app.include_router(propdev_capital_router)
 app.include_router(propdev_seed_wwbg_router)
 app.include_router(propdev_qb_router)
+app.include_router(propdev_partner_import_router)
+app.include_router(propdev_loan_import_router)
+app.include_router(propdev_property_tax_router)
+app.include_router(propdev_distributions_router)
+app.include_router(propdev_lot_reinvestments_router)
+app.include_router(propdev_capital_call_triggers_router)
+app.include_router(propdev_sale_pnl_router)
 app.include_router(reit_companies_router)
 app.include_router(construction_companies_router)
 app.include_router(kpi_audit_router)
+
+from routers.consultancy.companies import router as consultancy_companies_router  # noqa: E402
+from routers.consultancy.financials import router as consultancy_financials_router  # noqa: E402
+from routers.consultancy.billing import router as consultancy_billing_router  # noqa: E402
+app.include_router(consultancy_companies_router)
+app.include_router(consultancy_financials_router)
+app.include_router(consultancy_billing_router)
 
 # Serve uploaded files from local disk only when S3 is not configured (local dev).
 # In production, files are served via S3 pre-signed URLs — no static mount needed.
@@ -192,6 +226,11 @@ def startup():
     try:
         from routers.rentals.router import _ensure_fin_uploads_table
         _ensure_fin_uploads_table(engine)
+    except Exception:
+        pass
+    try:
+        from routers.propdev.financials import _ensure_fin_uploads_table as _ensure_propdev_fin_uploads_table
+        _ensure_propdev_fin_uploads_table()
     except Exception:
         pass
     db = SessionLocal()

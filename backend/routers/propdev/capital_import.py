@@ -5,9 +5,11 @@ Each sheet = one company. Two sections per sheet:
   2. Partner capital call table (Partner, % Share, Old Dues, New Call, Total, Received, Balance)
 """
 import uuid
+from datetime import date
 from io import BytesIO
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 import openpyxl
 
@@ -16,7 +18,14 @@ from middleware.auth import CurrentUser, require_write_access
 from models.propdev.company import PropDevCompany
 from models.propdev.capital_call import PropDevCapitalCall
 from models.propdev.expense import PropDevExpense
+from models.propdev.financial_upload import PropDevFinancialUpload
 from models.propdev.partner import PropDevPartner
+from services.propdev_capital_call_parser import (
+    CompanyCandidate,
+    block_to_dict,
+    call_status,
+    parse_workbook,
+)
 
 router = APIRouter(prefix="/api/propdev", tags=["propdev"])
 
@@ -166,121 +175,347 @@ def parse_company_sheet(sheet_name: str, ws) -> dict:
     return result
 
 
-@router.post("/import-capital-contributions")
-async def import_capital_contributions(
+def _company_candidates(db: Session, tenant_id) -> list[CompanyCandidate]:
+    return [
+        CompanyCandidate(
+            id=str(company.id),
+            name=company.name,
+            property_name=company.property_name or "",
+            address=company.address or "",
+        )
+        for company in db.query(PropDevCompany).filter(
+            PropDevCompany.tenant_id == tenant_id
+        ).all()
+    ]
+
+
+def _get_or_create_company(db: Session, tenant_id, block) -> PropDevCompany | None:
+    if block.company_id:
+        return db.query(PropDevCompany).filter(
+            PropDevCompany.id == uuid.UUID(block.company_id),
+            PropDevCompany.tenant_id == tenant_id,
+        ).first()
+    if block.company_name and block.attribution_confidence in {"high", "medium"}:
+        existing = db.query(PropDevCompany).filter(
+            PropDevCompany.tenant_id == tenant_id,
+            PropDevCompany.name == block.company_name,
+        ).first()
+        if existing:
+            return existing
+        company = PropDevCompany(
+            tenant_id=tenant_id,
+            name=block.company_name,
+            property_name=block.property_name or block.company_name,
+            address="",
+            total_lots=0,
+            sale_consideration=0,
+            land_cost=0,
+            hard_cost=0,
+            soft_cost=0,
+            title_charges=0,
+            other_charges=0,
+            property_tax=0,
+            loan_processing=0,
+            professional_charges=0,
+            legal_fees=0,
+            interest_on_loan=0,
+            cash_available=0,
+        )
+        db.add(company)
+        db.flush()
+        block.company_id = str(company.id)
+        return company
+    return None
+
+
+def _fit_share_pct(value: float) -> float:
+    """Numeric(6,4) on partners/calls allows at most 99.9999 — clamp 100% + round."""
+    try:
+        n = float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    return round(min(max(n, 0.0), 99.9999), 4)
+
+
+def _upsert_partner(db: Session, tenant_id, company: PropDevCompany, row) -> PropDevPartner:
+    share = _fit_share_pct(row.share_percent)
+    partner = db.query(PropDevPartner).filter(
+        PropDevPartner.company_id == company.id,
+        PropDevPartner.name == row.partner_name,
+    ).first()
+    if not partner:
+        partner = PropDevPartner(
+            tenant_id=tenant_id,
+            company_id=company.id,
+            name=row.partner_name,
+            partner_type="Class A",
+            share_percent=share,
+            capital_contributed=row.amount_received,
+            distributions_received=0,
+            preferred_return=0,
+            status="Active",
+        )
+        db.add(partner)
+        db.flush()
+    else:
+        if share:
+            partner.share_percent = share
+        partner.capital_contributed = float(partner.capital_contributed or 0) + row.amount_received
+    return partner
+
+
+def _route_property_pl(db: Session, tenant_id, block, filename: str, uploaded_by: str) -> bool:
+    company = _get_or_create_company(db, tenant_id, block)
+    if not company or not block.pl_rows:
+        return False
+    year = block.call_date.year if block.call_date else date.today().year
+    pl_data = []
+    for row in block.pl_rows:
+        total = sum(float(v or 0) for v in row["values"].values())
+        label = row["label"]
+        pl_data.append({
+            "label": label,
+            "values": {str(year): total},
+            "monthlyValues": {},
+            "indent": 0,
+            "isTotal": _norm_label(label).startswith("total"),
+            "isSectionHeader": False,
+            "isNetIncome": "net profit" in _norm_label(label) or "net income" in _norm_label(label),
+            "sourcePropertyValues": row["values"],
+        })
+    existing = db.query(PropDevFinancialUpload).filter(
+        PropDevFinancialUpload.tenant_id == tenant_id,
+        PropDevFinancialUpload.company_id == company.id,
+    ).first()
+    if existing:
+        existing.company_name = company.name
+        existing.filename = filename
+        existing.date_range = f"Property P&L routed from {block.sheet_name}"
+        existing.years = sorted(set((existing.years or []) + [year]))
+        existing.pl_data = pl_data
+        existing.uploaded_by = uploaded_by
+    else:
+        db.add(PropDevFinancialUpload(
+            tenant_id=tenant_id,
+            company_id=company.id,
+            company_name=company.name,
+            filename=filename,
+            date_range=f"Property P&L routed from {block.sheet_name}",
+            years=[year],
+            periods=[],
+            pl_data=pl_data,
+            bs_data=[],
+            cf_data=[],
+            uploaded_by=uploaded_by,
+        ))
+    return True
+
+
+def _norm_label(value: str) -> str:
+    return " ".join(str(value or "").lower().replace("_", " ").split())
+
+
+def _parse_report(result) -> dict:
+    called = sum(
+        block.computed_totals.get("called", 0)
+        for block in result.capital_call_blocks
+        if block.company_id or block.attribution_confidence in {"high", "medium"}
+    )
+    received = sum(
+        block.computed_totals.get("received", 0)
+        for block in result.capital_call_blocks
+        if block.company_id or block.attribution_confidence in {"high", "medium"}
+    )
+    balance = sum(
+        block.computed_totals.get("balance", 0)
+        for block in result.capital_call_blocks
+        if block.company_id or block.attribution_confidence in {"high", "medium"}
+    )
+    return {
+        "detected_blocks": len(result.blocks),
+        "capital_call_blocks": len(result.capital_call_blocks),
+        "expense_builder_blocks": len(result.expense_builder_blocks),
+        "property_pl_blocks": len(result.property_pl_blocks),
+        "unknown_blocks": len(result.unknown_blocks),
+        "totals": {
+            "called": round(called, 2),
+            "received": round(received, 2),
+            "outstanding": round(balance, 2),
+            "called_minus_received": round(called - received, 2),
+        },
+        "manual_review": result.manual_review,
+        "company_preview": result.company_preview,
+        "blocks": [block_to_dict(block) for block in result.blocks],
+    }
+
+
+@router.post("/import-capital-contributions/preview")
+async def preview_capital_contributions(
     file: UploadFile = File(...),
     current_user: CurrentUser = Depends(require_write_access()),
     db: Session = Depends(get_db),
 ):
+    """Parse only — never writes. Use company_preview to verify sheet ↔ company ↔ latest period."""
     content = await file.read()
-    wb = openpyxl.load_workbook(BytesIO(content), data_only=True)
+    result = parse_workbook(
+        content,
+        _company_candidates(db, current_user.tenant_id),
+    )
+    return {
+        "status": "preview",
+        "message": (
+            "Preview only — existing Capital Call records were NOT modified. "
+            "Review company_preview, then POST /import-capital-contributions with confirm=true."
+        ),
+        **_parse_report(result),
+    }
 
-    results = []
-    errors = []
 
-    for sheet_name in wb.sheetnames:
-        if sheet_name.upper() in SKIP_SHEETS:
-            continue
+@router.post("/import-capital-contributions")
+async def import_capital_contributions(
+    file: UploadFile = File(...),
+    confirm: bool = Form(False),
+    current_user: CurrentUser = Depends(require_write_access()),
+    db: Session = Depends(get_db),
+):
+    content = await file.read()
+    parsed = parse_workbook(
+        content,
+        _company_candidates(db, current_user.tenant_id),
+    )
+    report = _parse_report(parsed)
 
-        print(f"[CAPITAL IMPORT] Processing sheet: {sheet_name}")
-        try:
-            ws = wb[sheet_name]
-            data = parse_company_sheet(sheet_name, ws)
+    if not confirm:
+        # Safety gate: never delete/overwrite until explicit confirmation.
+        return {
+            "status": "preview_required",
+            "message": (
+                "Import blocked — pass confirm=true after reviewing the Preview summary. "
+                "Existing Capital Call records were NOT deleted or overwritten."
+            ),
+            **report,
+        }
 
-            # Find or create company
-            company = db.query(PropDevCompany).filter(
-                PropDevCompany.tenant_id == current_user.tenant_id,
-                PropDevCompany.name == sheet_name,
-            ).first()
+    affected_companies: dict[uuid.UUID, PropDevCompany] = {}
+    imported_calls = 0
+    imported_expenses = 0
+    routed_pl_blocks = 0
 
-            if not company:
-                company = PropDevCompany(
-                    tenant_id=current_user.tenant_id,
-                    name=sheet_name,
-                    property_name=sheet_name,
-                    address='', total_lots=0,
-                    sale_consideration=0, land_cost=0, hard_cost=0, soft_cost=0,
-                    title_charges=0, other_charges=0, property_tax=0,
-                    loan_processing=0, professional_charges=0, legal_fees=0,
-                    interest_on_loan=0, cash_available=0,
-                )
-                db.add(company)
-                db.flush()
-                print(f"[CAPITAL IMPORT] Created new company: {sheet_name}")
+    try:
+        # Resolve attribution before deleting anything. Ambiguous blocks stay in
+        # the report and are never silently assigned.
+        for block in parsed.capital_call_blocks + parsed.expense_builder_blocks:
+            company = _get_or_create_company(db, current_user.tenant_id, block)
+            if company:
+                affected_companies[company.id] = company
 
-            # Clear old capital calls and expenses for this company
+        # Idempotent re-import: replace only capital-call rows for companies
+        # confidently represented in this workbook.
+        for company_id in affected_companies:
             db.query(PropDevCapitalCall).filter(
-                PropDevCapitalCall.company_id == company.id
-            ).delete()
+                PropDevCapitalCall.tenant_id == current_user.tenant_id,
+                PropDevCapitalCall.company_id == company_id,
+            ).delete(synchronize_session=False)
             db.query(PropDevExpense).filter(
-                PropDevExpense.company_id == company.id
-            ).delete()
+                PropDevExpense.tenant_id == current_user.tenant_id,
+                PropDevExpense.company_id == company_id,
+                PropDevExpense.category == "Capital Call Justification",
+            ).delete(synchronize_session=False)
 
-            # Find or create a placeholder partner for each capital call
-            for cc in data['capital_calls']:
-                partner = db.query(PropDevPartner).filter(
-                    PropDevPartner.company_id == company.id,
-                    PropDevPartner.name == cc['partner_name'],
-                ).first()
-                if not partner:
-                    partner = PropDevPartner(
-                        tenant_id=current_user.tenant_id,
-                        company_id=company.id,
-                        name=cc['partner_name'],
-                        partner_type='Class A',
-                        share_percent=cc['share_percent'],
-                        capital_contributed=cc['amount_received'],
-                        distributions_received=0,
-                        preferred_return=0,
-                        status='Active',
-                    )
-                    db.add(partner)
-                    db.flush()
-
+        for block in parsed.capital_call_blocks:
+            company = _get_or_create_company(db, current_user.tenant_id, block)
+            if not company:
+                continue
+            block_total = block.computed_totals.get("called", 0)
+            period_label = (
+                (block.period_label or block.title or "Imported Capital Call")[:100]
+            )
+            for row in block.rows:
+                partner = _upsert_partner(
+                    db, current_user.tenant_id, company, row
+                )
+                status, due_date = call_status(
+                    row.amount_called,
+                    row.amount_received,
+                    row.balance,
+                    block.call_date,
+                    row.received_date,
+                )
                 db.add(PropDevCapitalCall(
                     tenant_id=current_user.tenant_id,
                     company_id=company.id,
                     partner_id=partner.id,
-                    period=data['period'] or 'Current Period',
-                    share_percent=cc['share_percent'],
-                    total_call_amount=cc['total_due'],
-                    partner_share=cc['total_due'],
-                    old_dues=cc['old_dues'],
-                    total_due=cc['total_due'],
-                    amount_received=cc['amount_received'],
-                    status=cc['status'],
+                    period=period_label,
+                    share_percent=_fit_share_pct(row.share_percent),
+                    total_call_amount=block_total,
+                    partner_share=row.amount_called,
+                    old_dues=row.old_dues,
+                    total_due=(
+                        row.total_due
+                        if getattr(row, "total_due", 0) and row.total_due > 0
+                        else (row.old_dues + row.amount_called)
+                    ),
+                    amount_received=row.amount_received,
+                    received_date=row.received_date,
+                    due_date=due_date,
+                    status=status,
                 ))
+                imported_calls += 1
 
-            # Import expenses
-            for exp in data['expenses']:
+        for block in parsed.expense_builder_blocks:
+            company = _get_or_create_company(db, current_user.tenant_id, block)
+            if not company:
+                continue
+            # expense_date is NOT NULL on propdev_expenses — use call date or today
+            expense_date = block.call_date or date.today()
+            for expense in block.expense_rows:
                 db.add(PropDevExpense(
                     tenant_id=current_user.tenant_id,
                     company_id=company.id,
-                    expense_type=exp['particulars'],
-                    category='Operating',
-                    vendor='',
-                    amount=exp['amount'],
-                    status='Paid',
+                    expense_date=expense_date,
+                    expense_type=(expense.get("category") or "Other")[:255],
+                    category="Capital Call Justification",
+                    vendor=(block.linked_call_title or block.title or company.name)[:255],
+                    amount=expense["amount"],
+                    status="Planned",
                 ))
+                imported_expenses += 1
 
-            db.commit()
-            results.append({
-                'company': sheet_name,
-                'period': data['period'],
-                'partners': len(data['capital_calls']),
-                'expenses': len(data['expenses']),
-            })
-            print(f"[CAPITAL IMPORT] Done: {sheet_name} — {len(data['capital_calls'])} partners, {len(data['expenses'])} expenses")
+        for block in parsed.property_pl_blocks:
+            if _route_property_pl(
+                db,
+                current_user.tenant_id,
+                block,
+                file.filename or "capital-calls.xlsx",
+                current_user.email,
+            ):
+                routed_pl_blocks += 1
 
-        except Exception as e:
-            print(f"[CAPITAL IMPORT] ERROR on {sheet_name}: {e}")
-            db.rollback()
-            errors.append({'company': sheet_name, 'error': str(e)})
-            continue
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Import failed due to invalid/missing required fields "
+                "(often expense date or share %). Check company sheet names match Company Registry, then retry."
+            ),
+        ) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database error while importing capital calls: {exc.__class__.__name__}",
+        ) from exc
+    except Exception:
+        db.rollback()
+        raise
 
     return {
-        'status': 'success',
-        'imported': len(results),
-        'results': results,
-        'errors': errors,
+        "status": "success",
+        "imported": len(affected_companies),
+        "capital_call_rows_imported": imported_calls,
+        "expense_rows_imported": imported_expenses,
+        "property_pl_blocks_routed": routed_pl_blocks,
+        **report,
     }

@@ -1,6 +1,10 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import type { Period } from '../utils/periodWindow';
 import api from '../services/api';
+import { PROPDEV_COMPANIES_REFRESH } from '../utils/propDevSync';
+import { normalizeInterestRatePercent } from '../utils/propDevLoanMetrics';
+import { partnerShareOfProfitFromAnnualPL } from '../utils/propDevPartnerProfit';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -16,7 +20,19 @@ export interface Lot {
 export interface Partner {
   id: string; companyId: string; name: string; type: 'Class A' | 'Class B';
   sharePercent: number; capitalContributed: number; distributionsReceived: number;
+  /** True when import estimated capital as Cost Basis − Existing Debt. */
+  capitalContributedEstimated?: boolean;
+  /** Total committed capital (uncalled = committedCapital − capitalContributed). Optional — not yet in API. */
+  committedCapital?: number;
   shareOfProfit: number; preferredReturn: number; status: 'Active' | 'Exited';
+  entityName?: string;
+  propertyName?: string;
+  propertyAddress?: string;
+  entityLine?: string;
+  costBasis?: number;
+  bookValue?: number;
+  fairMarketValue?: number;
+  existingDebt?: number;
 }
 export interface Loan {
   id: string; companyId: string; company: string; property: string;
@@ -25,6 +41,11 @@ export interface Loan {
   maturityDate: string; emiDate: number;
   lenderName: string; lenderEmail: string; lenderPhone: string;
   status: 'Active' | 'Paid Off' | 'In Default';
+  insuranceExpiryDate?: string | null;
+  refinancingStatus?: string | null;
+  refinancingNotes?: string | null;
+  loanPurpose?: string | null;
+  maturityChecklist?: Record<string, boolean> | null;
 }
 export interface CapitalCall {
   id: string; companyId: string; period: string; partnerId: string; partnerName: string;
@@ -32,6 +53,11 @@ export interface CapitalCall {
   oldDues: number; totalDue: number; received: number;
   receivedDate: string | null; dueDate?: string;
   status: 'Paid' | 'Partial' | 'Outstanding' | 'Overdue';
+  /** 'manual' (Excel import / hand-entered), 'lot_reinvestment', or 'unrealised_loss' (both auto-generated). */
+  sourceType: 'manual' | 'lot_reinvestment' | 'unrealised_loss';
+  /** propdev_lot_reinvestments id when sourceType is 'lot_reinvestment'; null for 'unrealised_loss' (no source row, just the entity + reason text). */
+  sourceId: string | null;
+  reason: string | null;
 }
 export interface Customer {
   id: string; companyId: string; name: string; lotNo: string;
@@ -45,7 +71,13 @@ export interface ComplianceDoc {
   fileUrl: string | null;
 }
 export interface DevExpense { particulars: string; amount: number; category: string; }
-export interface YearlyPL  { net_income: number; total_expenses: number; revenue: number; other_income?: number; }
+export interface YearlyPL {
+  net_income: number;
+  total_expenses: number;
+  revenue: number;
+  other_income?: number;
+  expenses_by_category?: Record<string, number>;
+}
 export interface YearlyBS  { cash: number; land: number; improvements: number; interest_capitalised: number; total_assets: number; loan_balance: number; total_liabilities: number; }
 export interface YearlyCF  { operating: number; investing: number; financing: number; net_change: number; partner_investments?: number; }
 
@@ -64,12 +96,31 @@ export interface Property {
   yearlyBS?: Record<string, YearlyBS>;
   yearlyCF?: Record<string, YearlyCF>;
   monthlyData: { month: string; lotsSold: number; revenue: number }[];
+  // Property Profile — identity
+  city?: string | null; state?: string | null; zipCode?: string | null;
+  county?: string | null; legalDescription?: string | null;
+  // Property Profile — land details
+  landUseType?: string | null; zoning?: string | null; currentStatus?: string | null;
+  // Property Profile — ownership history
+  previousOwnerName?: string | null; previousOwnerEntity?: string | null;
+  acquisitionDate?: string | null; acquisitionPrice?: number | null;
+  acquisitionType?: string | null; titleCompany?: string | null; deedReference?: string | null;
+  // Property Profile — tax information
+  taxParcelId?: string | null; propertyTaxAnnual?: number | null;
+  taxAssessmentYear?: number | null; taxAssessedValue?: number | null;
+  taxExemptions?: string | null; taxDueDate?: string | null;
+}
+export interface PropertyImprovement {
+  id: string; companyId: string;
+  improvementType: string; improvementCost: number;
+  improvementDate: string | null; contractorName: string | null; notes: string | null;
 }
 export interface CompanyData {
   id: string; name: string;
   property: Property; lots: Lot[]; partners: Partner[]; loans: Loan[];
   capitalCalls: CapitalCall[]; customers: Customer[];
   docs: ComplianceDoc[]; expenses: DevExpense[];
+  propertyImprovements: PropertyImprovement[];
 }
 
 // ── Data Factory ───────────────────────────────────────────────────────────────
@@ -78,35 +129,24 @@ const BUYERS: string[] = [];
 const MONTHS = ['Jan 25','Feb 25','Mar 25','Apr 25','May 25','Jun 25'];
 
 function makeLots(companyId: string, cfg: CompanyCfg): Lot[] {
-  const { totalLots: n, landCost, saleConsideration, soldCount, contractedCount } = cfg;
-  const reservedCount = Math.floor(n * 0.1);
-  const avgPrice = saleConsideration / n;
-  const statuses: Lot['status'][] = [
-    ...Array(soldCount).fill('sold'),
-    ...Array(contractedCount).fill('contracted'),
-    ...Array(reservedCount).fill('reserved'),
-    ...Array(Math.max(0, n - soldCount - contractedCount - reservedCount - 1)).fill('available'),
-    'legal_pending',
-  ];
-  return statuses.map((status, i) => {
-    const listPrice = Math.round(avgPrice * (0.9 + (i % 5) * 0.05));
-    const salePrice = (status === 'available' || status === 'reserved' || status === 'cancelled')
-      ? null : listPrice - (i % 3) * 4000;
-    const hasBuyer = status === 'sold' || status === 'contracted';
-    return {
-      id: `${companyId}-lot-${i + 1}`, companyId,
-      lotNo: `L-${String(i + 1).padStart(2, '0')}`,
-      block: `Block ${String.fromCharCode(65 + Math.floor(i / 9))}`,
-      sizeSqft: 7800 + (i * 200) % 2400,
-      sizeAcres: +((7800 + (i * 200) % 2400) / 43560).toFixed(3),
-      listPrice, salePrice, status,
-      buyerName: hasBuyer ? BUYERS[i % BUYERS.length] : null,
-      contractDate: hasBuyer ? '2025-03-15' : null,
-      closeDate: status === 'sold' ? '2025-05-20' : null,
-      landCost: landCost / n,
-      devCost: (landCost * 0.15) / n,
-    };
-  });
+  const { landCost, saleConsideration, soldCount, contractedCount } = cfg;
+  const status: Lot['status'] = soldCount > 0 ? 'sold' : contractedCount > 0 ? 'contracted' : 'available';
+  const listPrice = Math.round(saleConsideration || landCost);
+  const salePrice = status === 'sold' ? listPrice : status === 'contracted' ? listPrice : null;
+  const hasBuyer = status === 'sold' || status === 'contracted';
+  return [{
+    id: `${companyId}-lot-1`, companyId,
+    lotNo: 'Property',
+    block: '—',
+    sizeSqft: Math.round((cfg.totalAcres || 1) * 43560),
+    sizeAcres: cfg.totalAcres || 1,
+    listPrice, salePrice, status,
+    buyerName: hasBuyer ? BUYERS[0] ?? null : null,
+    contractDate: hasBuyer ? '2025-03-15' : null,
+    closeDate: status === 'sold' ? '2025-05-20' : null,
+    landCost,
+    devCost: landCost * 0.15,
+  }];
 }
 
 function makePartners(companyId: string, configs: { name: string; pct: number; capital: number }[]): Partner[] {
@@ -242,6 +282,7 @@ export function createEmptyCompany(id: string, name: string): CompanyData {
   return {
     id, name, property,
     lots: [], partners: [], loans: [], capitalCalls: [], customers: [], docs: [], expenses: [],
+    propertyImprovements: [],
   };
 }
 
@@ -295,6 +336,32 @@ const ALL_COMPANIES: CompanyData[] = COMPANY_CONFIGS.map(buildCompanySafe);
 
 // ── Aggregation helpers ────────────────────────────────────────────────────────
 
+function aggregateYearly<K extends string>(
+  companies: CompanyData[],
+  propKey: 'yearlyBS' | 'yearlyPL' | 'yearlyCF',
+  keys: K[],
+): Record<string, Record<K, number>> | undefined {
+  const years = new Set<string>();
+  companies.forEach(c => {
+    const data = c.property[propKey];
+    if (data) Object.keys(data).forEach(y => years.add(y));
+  });
+  if (years.size === 0) return undefined;
+
+  const out: Record<string, Record<K, number>> = {};
+  [...years].sort().forEach(year => {
+    const row = {} as Record<K, number>;
+    keys.forEach(key => {
+      row[key] = companies.reduce((sum, c) => {
+        const yr = c.property[propKey]?.[year] as Record<string, number> | undefined;
+        return sum + (Number(yr?.[key]) || 0);
+      }, 0);
+    });
+    out[year] = row;
+  });
+  return out;
+}
+
 function aggregateProperty(companies: CompanyData[]): Property {
   if (companies.length === 0) {
     return createEmptyCompany('consolidated', 'All Companies (Portfolio)').property;
@@ -317,11 +384,14 @@ function aggregateProperty(companies: CompanyData[]): Property {
         legalFees: acc.legalFees + p.legalFees,
         interestOnLoan: acc.interestOnLoan + p.interestOnLoan,
         cashAvailable: acc.cashAvailable + p.cashAvailable,
+        improvements: acc.improvements + (p.improvements ?? 0),
+        interestCapitalised: acc.interestCapitalised + (p.interestCapitalised ?? 0),
       };
     },
     { totalLots: 0, totalAcres: 0, saleConsideration: 0, landCost: 0, hardCost: 0, softCost: 0,
       titleCharges: 0, otherCharges: 0, propertyTax: 0, loanProcessing: 0,
-      professionalCharges: 0, legalFees: 0, interestOnLoan: 0, cashAvailable: 0 }
+      professionalCharges: 0, legalFees: 0, interestOnLoan: 0, cashAvailable: 0,
+      improvements: 0, interestCapitalised: 0 }
   );
 
   const monthlyMap: Record<string, { lotsSold: number; revenue: number }> = {};
@@ -336,6 +406,15 @@ function aggregateProperty(companies: CompanyData[]): Property {
     name: 'All Companies (Portfolio)', address: 'Texas, USA',
     managementFeeRate: 0.09, commissionRate: 0.045,
     monthlyData: Object.entries(monthlyMap).map(([month, v]) => ({ month, ...v })),
+    yearlyBS: aggregateYearly(companies, 'yearlyBS', [
+      'cash', 'land', 'improvements', 'interest_capitalised', 'total_assets', 'loan_balance', 'total_liabilities',
+    ]) as Record<string, YearlyBS> | undefined,
+    yearlyPL: aggregateYearly(companies, 'yearlyPL', [
+      'net_income', 'total_expenses', 'revenue', 'other_income',
+    ]) as Record<string, YearlyPL> | undefined,
+    yearlyCF: aggregateYearly(companies, 'yearlyCF', [
+      'operating', 'investing', 'financing', 'net_change',
+    ]) as Record<string, YearlyCF> | undefined,
     ...total,
   };
 }
@@ -381,166 +460,314 @@ interface PropertyDevState {
   setPartners: (partners: Partner[]) => void;
   setProperty: (property: Property) => void;
   setCompanies: (companies: CompanyData[]) => void;
+  refetchCompanies: () => Promise<void>;
+  /** Load yearly_pl/bs/cf for one company (omitted from the default list for speed). */
+  ensureCompanyYearly: (companyId: string) => Promise<'cached' | 'loaded' | 'empty' | 'error'>;
+
+  /** Shared Month / YTD / YoY anchor — Command Strip + Financials. */
+  financialPeriod: Period | null;
+  financialMonth: number;
+  financialYear: number;
+  financialSelectedYear: number;
+  setFinancialPeriodAnchor: (period: Period | null, month: number, year: number) => void;
+  setFinancialSelectedYear: (year: number) => void;
 }
 
 const Ctx = createContext<PropertyDevState | null>(null);
 
 const STORAGE_KEY = 'estatecfo_propdev_v1';
 
-function loadPersisted(): { companies: CompanyData[]; uploadHistory: UploadRecord[] } {
+function loadPersisted(): { uploadHistory: UploadRecord[] } {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as { companies?: CompanyData[]; uploadHistory?: UploadRecord[] };
+      const parsed = JSON.parse(raw) as { uploadHistory?: UploadRecord[] };
       return {
-        companies: Array.isArray(parsed.companies) ? parsed.companies : ALL_COMPANIES,
         uploadHistory: Array.isArray(parsed.uploadHistory) ? parsed.uploadHistory : [],
       };
     }
   } catch { /* ignore corrupt storage */ }
-  return { companies: ALL_COMPANIES, uploadHistory: [] };
+  return { uploadHistory: [] };
+}
+
+function mapApiCompanies(data: { companies: unknown[] }): CompanyData[] {
+  return data.companies.map((c: any) => {
+    const yearlyPL = c.yearly_pl as Record<string, YearlyPL> | undefined;
+    const property: Property = {
+      id: c.id + '-prop',
+      companyId: c.id,
+      name: c.property_name,
+      address: c.address,
+      totalLots: Math.min(1, c.total_lots || (c.lots?.length ? 1 : 0)),
+      totalAcres: c.total_acres,
+      saleConsideration: c.sale_consideration,
+      landCost: c.land_cost,
+      hardCost: c.hard_cost,
+      softCost: c.soft_cost,
+      titleCharges: c.title_charges,
+      otherCharges: c.other_charges,
+      propertyTax: c.property_tax,
+      loanProcessing: c.loan_processing,
+      professionalCharges: c.professional_charges,
+      legalFees: c.legal_fees,
+      interestOnLoan: c.interest_on_loan,
+      managementFeeRate: c.management_fee_rate,
+      commissionRate: c.commission_rate,
+      commission: c.commission,
+      cashAvailable: c.cash_available,
+      interestCapitalised: c.interest_capitalised ?? 0,
+      improvements: c.improvements ?? 0,
+      city: c.city ?? null,
+      state: c.state ?? null,
+      zipCode: c.zip_code ?? null,
+      county: c.county ?? null,
+      legalDescription: c.legal_description ?? null,
+      landUseType: c.land_use_type ?? null,
+      zoning: c.zoning ?? null,
+      currentStatus: c.current_status ?? null,
+      previousOwnerName: c.previous_owner_name ?? null,
+      previousOwnerEntity: c.previous_owner_entity ?? null,
+      acquisitionDate: c.acquisition_date ?? null,
+      acquisitionPrice: c.acquisition_price ?? null,
+      acquisitionType: c.acquisition_type ?? null,
+      titleCompany: c.title_company ?? null,
+      deedReference: c.deed_reference ?? null,
+      taxParcelId: c.tax_parcel_id ?? null,
+      propertyTaxAnnual: c.property_tax_annual ?? null,
+      taxAssessmentYear: c.tax_assessment_year ?? null,
+      taxAssessedValue: c.tax_assessed_value ?? null,
+      taxExemptions: c.tax_exemptions ?? null,
+      taxDueDate: c.tax_due_date ?? null,
+      yearlyPL: yearlyPL ?? undefined,
+      yearlyBS: c.yearly_bs ?? undefined,
+      yearlyCF: c.yearly_cf ?? undefined,
+      monthlyData: (() => {
+        const map: Record<string, { lotsSold: number; revenue: number }> = {};
+        (c.lots || []).forEach((l: any) => {
+          if (l.close_date && l.sale_price) {
+            const d = new Date(l.close_date);
+            const key = d.toLocaleString('default', { month: 'short' }) + ' ' + String(d.getFullYear()).slice(2);
+            if (!map[key]) map[key] = { lotsSold: 0, revenue: 0 };
+            map[key].lotsSold += 1;
+            map[key].revenue += l.sale_price;
+          }
+        });
+        return Object.entries(map)
+          .sort((a, b) => new Date('1 ' + a[0]).getTime() - new Date('1 ' + b[0]).getTime())
+          .map(([month, v]) => ({ month, ...v }));
+      })(),
+    };
+    const companyForProfit: CompanyData = {
+      id: c.id,
+      name: c.name,
+      property,
+      lots: [],
+      partners: [],
+      loans: [],
+      capitalCalls: [],
+      customers: [],
+      docs: [],
+      expenses: [],
+      propertyImprovements: [],
+    };
+    return {
+    id: c.id,
+    name: c.name,
+    property,
+    lots: (c.lots || []).slice(0, 1).map((l: any) => ({
+      id: l.id,
+      companyId: c.id,
+      lotNo: l.lot_no,
+      block: l.block,
+      sizeSqft: l.size_sqft,
+      sizeAcres: l.size_sqft / 43560,
+      listPrice: l.list_price,
+      salePrice: l.sale_price,
+      status: l.status,
+      buyerName: l.buyer_name,
+      contractDate: l.contract_date,
+      closeDate: l.close_date,
+      landCost: 0,
+      devCost: 0,
+    })),
+    partners: (c.partners || []).map((p: any) => {
+      const sharePercent = Number(p.share_percent) > 1 ? Number(p.share_percent) : Number(p.share_percent) * 100;
+      return {
+      id: p.id,
+      companyId: c.id,
+      name: p.name,
+      type: p.type,
+      sharePercent,
+      capitalContributed: p.capital_contributed,
+      capitalContributedEstimated: Boolean(p.capital_contributed_estimated),
+      committedCapital: p.committed_capital != null ? Number(p.committed_capital) : undefined,
+      distributionsReceived: p.distributions_received,
+      shareOfProfit: Math.round(partnerShareOfProfitFromAnnualPL(companyForProfit, sharePercent)),
+      preferredReturn: Number(p.preferred_return) > 1 ? Number(p.preferred_return) : Number(p.preferred_return) * 100,
+      status: p.status,
+      entityName: p.entity_name ?? undefined,
+      propertyName: p.property_name ?? undefined,
+      propertyAddress: p.property_address ?? undefined,
+      entityLine: p.entity_line ?? undefined,
+      costBasis: p.cost_basis != null ? Number(p.cost_basis) : undefined,
+      bookValue: p.book_value != null ? Number(p.book_value) : undefined,
+      fairMarketValue: p.fair_market_value != null ? Number(p.fair_market_value) : undefined,
+      existingDebt: p.existing_debt != null ? Number(p.existing_debt) : undefined,
+    };
+    }),
+    loans: (c.loans || []).map((ln: any) => ({
+      id: ln.id,
+      companyId: c.id,
+      company: c.name,
+      // Prefer per-loan Property Name from Bank Loan Information Excel; fall back to company registry.
+      property: (ln.property_name || c.property_name || c.name || '').trim(),
+      bank: ln.bank,
+      loanDate: ln.loan_date || '2023-01-15',
+      accountNo: ln.account_no || '',
+      amount: ln.loan_amount,
+      balance: ln.balance,
+      interestRate: normalizeInterestRatePercent(ln.interest_rate),
+      emi: ln.emi,
+      maturityDate: ln.maturity_date,
+      emiDate: ln.emi_day || 15,
+      lenderName: ln.lender_name || '',
+      lenderEmail: ln.lender_email || '',
+      lenderPhone: ln.lender_phone || '',
+      status: (ln.emi_status === 'Paid Off' ? 'Paid Off' : ln.emi_status === 'In Default' ? 'In Default' : 'Active') as 'Active' | 'Paid Off' | 'In Default',
+      insuranceExpiryDate: ln.insurance_expiry_date ?? null,
+      refinancingStatus: ln.refinancing_status ?? 'Not Started',
+      refinancingNotes: ln.refinancing_notes ?? null,
+      loanPurpose: ln.loan_purpose ?? null,
+      maturityChecklist: ln.maturity_checklist ?? null,
+    })),
+    capitalCalls: (c.capital_calls || []).map((cc: any) => ({
+      id: cc.id,
+      companyId: c.id,
+      period: cc.period || 'Imported Capital Call',
+      partnerId: cc.partner_id || '',
+      partnerName: cc.partner_name,
+      sharePercent: cc.share_percent > 1 ? cc.share_percent : cc.share_percent * 100,
+      totalCallAmount: cc.total_call_amount,
+      partnerShare: cc.partner_share,
+      oldDues: cc.old_dues ?? 0,
+      totalDue: cc.total_due ?? cc.partner_share,
+      received: cc.amount_received,
+      receivedDate: cc.received_date ?? null,
+      dueDate: cc.due_date ?? undefined,
+      status: cc.status,
+      sourceType: cc.source_type ?? 'manual',
+      sourceId: cc.source_id ?? null,
+      reason: cc.reason ?? null,
+    })),
+    customers: [],
+    docs: [],
+    expenses: (c.expenses || []).map((e: any) => ({
+      particulars: e.expense_type,
+      amount: e.amount,
+      category: e.category,
+    })),
+    propertyImprovements: (c.property_improvements || []).map((i: any) => ({
+      id: i.id,
+      companyId: c.id,
+      improvementType: i.improvement_type,
+      improvementCost: i.improvement_cost ?? 0,
+      improvementDate: i.improvement_date ?? null,
+      contractorName: i.contractor_name ?? null,
+      notes: i.notes ?? null,
+    })),
+  };
+  });
 }
 
 export function PropertyDevProvider({ children }: { children: ReactNode }) {
+  const now = new Date();
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>('all');
-  const [companiesState, setCompaniesState] = useState<CompanyData[]>(() => loadPersisted().companies);
+  const [financialPeriod, setFinancialPeriod] = useState<Period | null>(null);
+  const [financialMonth, setFinancialMonth] = useState(now.getMonth() + 1);
+  const [financialYear, setFinancialYear] = useState(now.getFullYear());
+  const [financialSelectedYear, setFinancialSelectedYear] = useState(now.getFullYear());
+  const [companiesState, setCompaniesState] = useState<CompanyData[]>([]);
+  const companiesRef = useRef(companiesState);
+  companiesRef.current = companiesState;
   const [uploadHistory, setUploadHistory] = useState<UploadRecord[]>(() => loadPersisted().uploadHistory);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ companies: companiesState, uploadHistory }));
-  }, [companiesState, uploadHistory]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ uploadHistory }));
+  }, [uploadHistory]);
 
-  // Fetch companies from API on mount
-  useEffect(() => {
-    const fetchCompanies = async () => {
-      try {
-        const res = await api.get('/api/propdev/companies');
-        if (res.status === 200) {
-          const data = res.data;
-          const transformed = data.companies.map((c: any) => ({
-            id: c.id,
-            name: c.name,
-            property: {
-              id: c.id + '-prop',
-              companyId: c.id,
-              name: c.property_name,
-              address: c.address,
-              totalLots: c.total_lots,
-              totalAcres: c.total_acres,
-              saleConsideration: c.sale_consideration,
-              landCost: c.land_cost,
-              hardCost: c.hard_cost,
-              softCost: c.soft_cost,
-              titleCharges: c.title_charges,
-              otherCharges: c.other_charges,
-              propertyTax: c.property_tax,
-              loanProcessing: c.loan_processing,
-              professionalCharges: c.professional_charges,
-              legalFees: c.legal_fees,
-              interestOnLoan: c.interest_on_loan,
-              managementFeeRate: c.management_fee_rate,
-              commissionRate: c.commission_rate,
-              commission: c.commission,
-              cashAvailable: c.cash_available,
-              interestCapitalised: c.interest_capitalised ?? 0,
-              improvements: c.improvements ?? 0,
-              yearlyPL: c.yearly_pl ?? undefined,
-              yearlyBS: c.yearly_bs ?? undefined,
-              yearlyCF: c.yearly_cf ?? undefined,
-              monthlyData: (() => {
-                const map: Record<string, { lotsSold: number; revenue: number }> = {};
-                (c.lots || []).forEach((l: any) => {
-                  if (l.close_date && l.sale_price) {
-                    const d = new Date(l.close_date);
-                    const key = d.toLocaleString('default', { month: 'short' }) + ' ' + String(d.getFullYear()).slice(2);
-                    if (!map[key]) map[key] = { lotsSold: 0, revenue: 0 };
-                    map[key].lotsSold += 1;
-                    map[key].revenue += l.sale_price;
-                  }
-                });
-                return Object.entries(map)
-                  .sort((a, b) => new Date('1 ' + a[0]).getTime() - new Date('1 ' + b[0]).getTime())
-                  .map(([month, v]) => ({ month, ...v }));
-              })(),
-            },
-            lots: (c.lots || []).map((l: any) => ({
-              id: l.id,
-              companyId: c.id,
-              lotNo: l.lot_no,
-              block: l.block,
-              sizeSqft: l.size_sqft,
-              sizeAcres: l.size_sqft / 43560,
-              listPrice: l.list_price,
-              salePrice: l.sale_price,
-              status: l.status,
-              buyerName: l.buyer_name,
-              contractDate: l.contract_date,
-              closeDate: l.close_date,
-              landCost: 0,
-              devCost: 0,
-            })),
-            partners: (c.partners || []).map((p: any) => ({
-              id: p.id,
-              companyId: c.id,
-              name: p.name,
-              type: p.type,
-              sharePercent: p.share_percent * 100,
-              capitalContributed: p.capital_contributed,
-              distributionsReceived: p.distributions_received,
-              shareOfProfit: 0,
-              preferredReturn: p.preferred_return * 100,
-              status: p.status,
-            })),
-            loans: (c.loans || []).map((ln: any) => ({
-              id: ln.id,
-              companyId: c.id,
-              company: c.name,
-              property: c.property_name,
-              bank: ln.bank,
-              loanDate: ln.loan_date || '2023-01-15',
-              accountNo: ln.account_no || '',
-              amount: ln.loan_amount,
-              balance: ln.balance,
-              interestRate: ln.interest_rate * 100,
-              emi: ln.emi,
-              maturityDate: ln.maturity_date,
-              emiDate: ln.emi_day || 15,
-              lenderName: ln.lender_name || '',
-              lenderEmail: ln.lender_email || '',
-              lenderPhone: ln.lender_phone || '',
-              status: (ln.emi_status === 'Paid Off' ? 'Paid Off' : ln.emi_status === 'In Default' ? 'In Default' : 'Active') as 'Active' | 'Paid Off' | 'In Default',
-            })),
-            capitalCalls: (c.capital_calls || []).map((cc: any) => ({
-              id: cc.id,
-              companyId: c.id,
-              period: 'Jan–Jun 2025',
-              partnerId: '',
-              partnerName: cc.partner_name,
-              sharePercent: cc.share_percent * 100,
-              totalCallAmount: cc.total_call_amount,
-              partnerShare: cc.partner_share,
-              oldDues: 0,
-              totalDue: cc.partner_share,
-              received: cc.amount_received,
-              receivedDate: null,
-              status: cc.status,
-            })),
-            customers: [],
-            docs: [],
-            expenses: (c.expenses || []).map((e: any) => ({
-              particulars: e.expense_type,
-              amount: e.amount,
-              category: e.category,
-            })),
-          }));
-          setCompaniesState(transformed);
-        }
-      } catch (e) {
-        console.error('Failed to fetch companies:', e);
+  const refetchCompanies = useCallback(async () => {
+    try {
+      const res = await api.get('/api/propdev/companies', {
+        params: { include_financials: false },
+        timeout: 45_000,
+      });
+      if (res.status === 200 && res.data?.companies) {
+        setCompaniesState(mapApiCompanies(res.data));
       }
-    };
-    fetchCompanies();
+    } catch (e) {
+      console.error('Failed to fetch companies:', e);
+    }
   }, []);
+
+  const ensureCompanyYearly = useCallback(async (companyId: string): Promise<'cached' | 'loaded' | 'empty' | 'error'> => {
+    const existing = companiesRef.current.find(x => x.id === companyId);
+    if (
+      existing?.property.yearlyPL && Object.keys(existing.property.yearlyPL).length
+      || existing?.property.yearlyBS && Object.keys(existing.property.yearlyBS).length
+      || existing?.property.yearlyCF && Object.keys(existing.property.yearlyCF).length
+    ) {
+      return 'cached';
+    }
+
+    try {
+      const res = await api.get(`/api/propdev/companies/${companyId}/yearly`, { timeout: 60_000 });
+      const { yearly_pl, yearly_bs, yearly_cf } = res.data as {
+        yearly_pl?: Record<string, YearlyPL>;
+        yearly_bs?: Record<string, YearlyBS>;
+        yearly_cf?: Record<string, YearlyCF>;
+      };
+      const hasData = Boolean(
+        (yearly_pl && Object.keys(yearly_pl).length)
+        || (yearly_bs && Object.keys(yearly_bs).length)
+        || (yearly_cf && Object.keys(yearly_cf).length),
+      );
+
+      if (!hasData) return 'empty';
+
+      setCompaniesState(prev => {
+        const c = prev.find(x => x.id === companyId);
+        if (!c) return prev;
+        const property = {
+          ...c.property,
+          yearlyPL: yearly_pl ?? c.property.yearlyPL,
+          yearlyBS: yearly_bs ?? c.property.yearlyBS,
+          yearlyCF: yearly_cf ?? c.property.yearlyCF,
+        };
+        const companyForProfit: CompanyData = { ...c, property };
+        return prev.map(co => co.id !== companyId ? co : {
+          ...co,
+          property,
+          partners: co.partners.map(p => ({
+            ...p,
+            shareOfProfit: Math.round(partnerShareOfProfitFromAnnualPL(companyForProfit, p.sharePercent)),
+          })),
+        });
+      });
+      return 'loaded';
+    } catch (e) {
+      console.error('Failed to fetch yearly financials:', e);
+      return 'error';
+    }
+  }, []);
+
+  useEffect(() => {
+    refetchCompanies();
+    const onRefresh = () => { refetchCompanies(); };
+    window.addEventListener(PROPDEV_COMPANIES_REFRESH, onRefresh);
+    return () => {
+      window.removeEventListener(PROPDEV_COMPANIES_REFRESH, onRefresh);
+    };
+  }, [refetchCompanies]);
 
   const derived = useMemo(() => {
     const empty = {
@@ -622,11 +849,21 @@ export function PropertyDevProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const setFinancialPeriodAnchor = useCallback((period: Period | null, month: number, year: number) => {
+    setFinancialPeriod(period);
+    setFinancialMonth(month);
+    setFinancialYear(year);
+    setFinancialSelectedYear(year);
+  }, []);
+
   return (
     <Ctx.Provider value={{
       companies: companiesState, selectedCompanyId, setSelectedCompanyId,
       ...derived, uploadHistory, addUploadRecord,
       setLots, setDocs, setCapitalCalls, setLoans, setPartners, setProperty, setCompanies,
+      refetchCompanies, ensureCompanyYearly,
+      financialPeriod, financialMonth, financialYear, financialSelectedYear,
+      setFinancialPeriodAnchor, setFinancialSelectedYear,
     }}>
       {children}
     </Ctx.Provider>

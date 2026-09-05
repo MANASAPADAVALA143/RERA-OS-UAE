@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Building2, Plus, Trash2, Check, X, AlertCircle, Upload, Pencil } from 'lucide-react';
+import PropDevPageHeader from '../../components/propdev/PropDevPageHeader';
 import { usePropDevNav } from '../../contexts/PropDevNavContext';
 import api from '../../services/api';
+import { notifyPropDevCompaniesRefresh } from '../../utils/propDevSync';
 
 interface CompanyRow {
   id: string;
@@ -57,6 +59,7 @@ export default function PDCompanySetup() {
       setSuccess('Company added');
       setTimeout(() => setSuccess(''), 2000);
       await loadCompanies();
+      notifyPropDevCompaniesRefresh();
     } catch {
       setError('Failed to add company');
     } finally {
@@ -73,6 +76,7 @@ export default function PDCompanySetup() {
       setSuccess('Company renamed');
       setTimeout(() => setSuccess(''), 2000);
       await loadCompanies();
+      notifyPropDevCompaniesRefresh();
     } catch {
       setError('Failed to rename company');
     } finally {
@@ -88,6 +92,7 @@ export default function PDCompanySetup() {
       setSuccess('Deleted');
       setTimeout(() => setSuccess(''), 2000);
       await loadCompanies();
+      notifyPropDevCompaniesRefresh();
     } catch {
       setError('Failed to delete company');
     }
@@ -97,7 +102,7 @@ export default function PDCompanySetup() {
     <div className="space-y-6 max-w-4xl">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Company Registry</h2>
+          <PropDevPageHeader title="Company Registry" />
           <p className="text-sm text-gray-500 mt-0.5">
             Add all your company names here first, then upload the master Excel to link financial data.
           </p>
@@ -131,7 +136,7 @@ export default function PDCompanySetup() {
             value={newName}
             onChange={e => setNewName(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') setAdding(false); }}
-            placeholder="Company name (e.g. Summit Land Group LLC)"
+            placeholder="Company name (e.g. WWBG Land Group LLC)"
             className="flex-1 px-3 py-2 border border-blue-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
           />
           <input
@@ -165,7 +170,7 @@ export default function PDCompanySetup() {
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-10">#</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Company Name</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Property</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Lots</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Sale Status</th>
               <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Data Status</th>
               <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide w-28">Actions</th>
             </tr>
@@ -221,7 +226,7 @@ export default function PDCompanySetup() {
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-500">{c.propertyName || <span className="text-gray-300">—</span>}</td>
                   <td className="px-4 py-3 text-sm text-right text-gray-700 font-medium">
-                    {c.totalLots > 0 ? c.totalLots.toLocaleString() : <span className="text-gray-300">—</span>}
+                    {c.hasData ? <span className="text-green-700">Active</span> : <span className="text-gray-300">—</span>}
                   </td>
                   <td className="px-4 py-3 text-center">
                     {c.hasData ? (
@@ -263,7 +268,7 @@ export default function PDCompanySetup() {
                   {companies.length} compan{companies.length === 1 ? 'y' : 'ies'} registered
                 </td>
                 <td className="px-4 py-2 text-xs text-right font-medium text-gray-600">
-                  {companies.reduce((s, c) => s + c.totalLots, 0).toLocaleString()} total lots
+                  {companies.length} propert{companies.length === 1 ? 'y' : 'ies'}
                 </td>
                 <td colSpan={2} className="px-4 py-2 text-xs text-right text-gray-400">
                   {companies.filter(c => c.hasData).length} linked · {companies.filter(c => !c.hasData).length} pending

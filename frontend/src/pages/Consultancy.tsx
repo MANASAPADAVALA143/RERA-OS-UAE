@@ -1,23 +1,41 @@
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { ConsultancyProvider } from '../contexts/ConsultancyContext';
 import { useConsultancyNav } from '../contexts/ConsultancyNavContext';
-import CN01Dashboard from './consultancy/CN01Dashboard';
-import CN02Revenue from './consultancy/CN02Revenue';
-import CN03PL from './consultancy/CN03PL';
-import CN04Payroll from './consultancy/CN04Payroll';
-import CN05Receivables from './consultancy/CN05Receivables';
-import CN06Financials from './consultancy/CN06Financials';
+import ConsultancyOverview from './consultancy/ConsultancyOverview';
+import ConsultancyExecutiveSummary from './consultancy/ConsultancyExecutiveSummary';
+import ConsultancyFinancials from './consultancy/ConsultancyFinancials';
+import ConsultancyBillingCollections from './consultancy/ConsultancyBillingCollections';
+import ConsultancyClients from './consultancy/ConsultancyClients';
+import ConsultancyComingSoon from '../components/consultancy/ConsultancyComingSoon';
+import { parchmentStyles } from '../theme/parchmentTheme';
+
+const COMING_SOON_LABEL: Partial<Record<string, string>> = {
+  workforce: 'Workforce',
+  deployments: 'Deployments',
+  'payroll-compliance': 'Payroll & Compliance',
+  'bench-utilization': 'Bench & Utilization',
+};
 
 function ConsultancyInner() {
   const { tab } = useConsultancyNav();
+
   return (
-    <div className="space-y-6">
-      {tab === 'dashboard'   && <ErrorBoundary><CN01Dashboard /></ErrorBoundary>}
-      {tab === 'revenue'     && <ErrorBoundary><CN02Revenue /></ErrorBoundary>}
-      {tab === 'pnl'         && <ErrorBoundary><CN03PL /></ErrorBoundary>}
-      {tab === 'payroll'     && <ErrorBoundary><CN04Payroll /></ErrorBoundary>}
-      {tab === 'receivables' && <ErrorBoundary><CN05Receivables /></ErrorBoundary>}
-      {tab === 'financials'  && <ErrorBoundary><CN06Financials /></ErrorBoundary>}
+    <div
+      id="consultancy-section-root"
+      className="dark-app space-y-4 -mx-4 lg:-mx-6"
+      style={parchmentStyles.page}
+    >
+      <div className="px-4 lg:px-6">
+        {tab === 'executive-summary' && <ErrorBoundary><ConsultancyExecutiveSummary /></ErrorBoundary>}
+        {tab === 'overview'          && <ErrorBoundary><ConsultancyOverview /></ErrorBoundary>}
+        {tab === 'financials'        && <ErrorBoundary><ConsultancyFinancials initialTab="P&L Statement" /></ErrorBoundary>}
+        {tab === 'cfo-view'          && <ErrorBoundary><ConsultancyFinancials initialTab="CFO Dashboard" /></ErrorBoundary>}
+        {tab === 'billing-collections' && <ErrorBoundary><ConsultancyBillingCollections /></ErrorBoundary>}
+        {tab === 'clients'           && <ErrorBoundary><ConsultancyClients /></ErrorBoundary>}
+        {tab in COMING_SOON_LABEL && (
+          <ErrorBoundary><ConsultancyComingSoon label={COMING_SOON_LABEL[tab] ?? tab} /></ErrorBoundary>
+        )}
+      </div>
     </div>
   );
 }

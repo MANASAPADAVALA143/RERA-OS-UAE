@@ -141,7 +141,7 @@ export default function PD02DealPL() {
 
   if (!p) return <div className="p-4 text-gray-500">No data</div>;
 
-  const totalLots = companyLots.length || p.totalLots;
+  const totalLots = 1;
   const soldLots = companyLots.filter(l => l.status === 'sold' || l.status === 'contracted');
   const soldCount = soldLots.length;
   const actualRevenue = soldLots.reduce((s, l) => s + (l.salePrice ?? l.listPrice), 0);
@@ -217,17 +217,17 @@ export default function PD02DealPL() {
       color: marginOk ? 'border-green-500' : 'border-amber-500',
       title: marginOk ? `Strong margin at ${fmtPct(forecast.grossMarginPct)}` : `Margin pressure — ${fmtPct(forecast.grossMarginPct)}`,
       body: marginOk
-        ? `Net profit of ${fmt(forecast.netProfit)} across ${totalLots} lots. Consider banking profit on early lots and selectively holding premium blocks.`
-        : `Margin below 30% threshold. Review commission structure or target price uplift of ${fmt(forecast.breakEvenRevenuePerLot - provPricePerLot)} per lot.`,
+        ? `Net profit of ${fmt(forecast.netProfit)} on this property. Review sale timing and pricing strategy.`
+        : `Margin below 30% threshold. Review commission structure or target price uplift of ${fmt(forecast.breakEvenRevenuePerLot - provPricePerLot)}.`,
     });
 
     cards.push({
       icon: <TrendingUp size={16} className="text-blue-600" />,
       color: 'border-blue-500',
-      title: `Break-even at ${forecast.breakEvenLots} lots sold`,
-      body: beLotsLeft > 0
-        ? `Need ${beLotsLeft} more lot${beLotsLeft !== 1 ? 's' : ''} to break even. At current pace, ~${forecast.salesVelocityMonthsToComplete.toFixed(0)} months to clear remaining ${forecast.remainingLots} lots.`
-        : `Break-even already achieved. Every additional lot sold at current price adds ${fmt(provPricePerLot * (1 - p.commissionRate))} to profit.`,
+      title: `Break-even sale price: ${fmt(forecast.breakEvenRevenuePerLot)}`,
+      body: forecast.remainingLots > 0
+        ? `Property not yet sold. Target sale price of ${fmt(forecast.breakEvenRevenuePerLot)} to break even.`
+        : `Break-even achieved. Net profit on sale: ${fmt(provPricePerLot * (1 - p.commissionRate))}.`,
     });
 
     cards.push({
@@ -246,14 +246,14 @@ export default function PD02DealPL() {
       icon: <AlertTriangle size={16} className={forecast.annualInterest > forecast.netProfit * 0.3 ? 'text-red-500' : 'text-gray-400'} />,
       color: forecast.annualInterest > forecast.netProfit * 0.3 ? 'border-red-500' : 'border-gray-300',
       title: `Annual interest: ${fmt(forecast.annualInterest)}`,
-      body: `Loan interest represents ${forecast.netProfit > 0 ? fmtPct(forecast.annualInterest / forecast.netProfit * 100) : 'N/A'} of projected net profit. ${forecast.annualInterest > forecast.netProfit * 0.3 ? 'Consider accelerating lot sales to reduce carrying cost.' : 'Interest load is manageable relative to project returns.'}`,
+      body: `Loan interest represents ${forecast.netProfit > 0 ? fmtPct(forecast.annualInterest / forecast.netProfit * 100) : 'N/A'} of projected net profit. ${forecast.annualInterest > forecast.netProfit * 0.3 ? 'Consider accelerating property sale to reduce carrying cost.' : 'Interest load is manageable relative to project returns.'}`,
     });
 
     cards.push({
       icon: <Zap size={16} className="text-indigo-600" />,
       color: 'border-indigo-500',
-      title: `Price lever: +5% adds ${fmt(forecast.remainingLots * provPricePerLot * 0.05)}`,
-      body: `Raising lot price by 5% on ${forecast.remainingLots} unsold lots adds ~${fmt(forecast.remainingLots * provPricePerLot * 0.05)} in revenue. Net margin would improve to ~${fmtPct(forecast.grossMarginPct + 3.5)} assuming fixed costs unchanged.`,
+      title: `Price lever: +5% adds ${fmt(provPricePerLot * 0.05)}`,
+      body: `Raising sale price by 5% adds ~${fmt(provPricePerLot * 0.05)} in revenue. Net margin would improve to ~${fmtPct(forecast.grossMarginPct + 3.5)} assuming fixed costs unchanged.`,
     });
 
     return cards;
@@ -333,7 +333,7 @@ export default function PD02DealPL() {
 
       {/* Pre-sale / Development Phase banner for single-lot land dev */}
       {p.totalLots <= 1 && p.saleConsideration === 0 && (
-        <div className="rounded-xl border px-4 py-3" style={{ background: 'rgba(99,102,241,0.08)', borderColor: 'rgba(99,102,241,0.35)' }}>
+        <div className="rounded-xl border px-4 py-3" style={{ background: 'rgba(212,175,55,0.08)', borderColor: 'rgba(212,175,55,0.35)' }}>
           <div className="flex items-center gap-3 flex-wrap">
             <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#92400E' }}>Pre-sale · Development Phase</span>
             <span className="text-xs text-gray-500">Land not yet sold — showing cost basis only.</span>
@@ -341,7 +341,7 @@ export default function PD02DealPL() {
               <span>Land: <strong>${p.landCost.toLocaleString('en-US',{maximumFractionDigits:0})}</strong></span>
               <span>Improvements: <strong>${(p.hardCost).toLocaleString('en-US',{maximumFractionDigits:0})}</strong></span>
               {p.interestCapitalised ? <span>Int. Cap.: <strong>${p.interestCapitalised.toLocaleString('en-US',{maximumFractionDigits:0})}</strong></span> : null}
-              <span className="font-bold" style={{ color: '#6366F1' }}>
+              <span className="font-bold" style={{ color: '#5B5FEF' }}>
                 Total: ${(p.landCost + p.hardCost + (p.interestCapitalised ?? 0)).toLocaleString('en-US',{maximumFractionDigits:0})}
               </span>
             </div>
@@ -354,7 +354,7 @@ export default function PD02DealPL() {
         <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5">
           <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
           <span className="text-sm text-blue-700 font-medium">Provisional Forecast Active</span>
-          <span className="text-xs text-blue-500 ml-1">— {forecast.remainingLots} of {totalLots} lots unsold · provisional figures in <em>blue italic</em></span>
+          <span className="text-xs text-blue-500 ml-1">— property {forecast.remainingLots > 0 ? 'not yet sold' : 'sold'} · provisional figures in <em>blue italic</em></span>
         </div>
       )}
 
@@ -362,8 +362,8 @@ export default function PD02DealPL() {
       {viewMode !== 'actual' && (
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-semibold text-gray-700">Provisional Lot Price</span>
-            <span className="text-sm font-bold text-blue-700">{fmt(provPricePerLot)} / lot</span>
+            <span className="text-sm font-semibold text-gray-700">Target Sale Price</span>
+            <span className="text-sm font-bold text-blue-700">{fmt(provPricePerLot)}</span>
           </div>
           <input
             type="range"
@@ -402,10 +402,10 @@ export default function PD02DealPL() {
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Actual Revenue', value: fmt(actualRevenue), sub: `${soldCount} lots sold`, color: 'text-green-700' },
-          { label: viewMode === 'actual' ? 'Total Revenue' : 'Projected Revenue', value: fmt(viewMode === 'actual' ? p.saleConsideration : forecast.totalRevenue), sub: viewMode === 'actual' ? `${totalLots} lots` : `${forecast.remainingLots} lots remaining`, color: 'text-blue-700' },
+          { label: 'Actual Revenue', value: fmt(actualRevenue), sub: soldCount > 0 ? 'property sold' : 'not sold', color: 'text-green-700' },
+          { label: viewMode === 'actual' ? 'Total Revenue' : 'Projected Revenue', value: fmt(viewMode === 'actual' ? p.saleConsideration : forecast.totalRevenue), sub: viewMode === 'actual' ? '1 property' : forecast.remainingLots > 0 ? 'not sold' : 'sold', color: 'text-blue-700' },
           { label: 'Net Profit (Projected)', value: fmt(forecast.netProfit), sub: fmtPct(forecast.grossMarginPct) + ' margin', color: forecast.netProfit >= 0 ? 'text-green-700' : 'text-red-700' },
-          { label: 'Break-even at', value: `${forecast.breakEvenLots} lots`, sub: `${fmt(forecast.breakEvenRevenuePerLot)}/lot`, color: soldCount >= forecast.breakEvenLots ? 'text-green-700' : 'text-amber-700' },
+          { label: 'Break-even Price', value: fmt(forecast.breakEvenRevenuePerLot), sub: soldCount > 0 ? 'sale complete' : 'target to break even', color: soldCount > 0 ? 'text-green-700' : 'text-amber-700' },
         ].map(({ label, value, sub, color }) => (
           <div key={label} className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{label}</p>
@@ -425,7 +425,7 @@ export default function PD02DealPL() {
                 <th className="px-5 py-3 text-right text-xs uppercase text-green-600">Actual</th>
                 {showProv && <th className="px-5 py-3 text-right text-xs uppercase text-blue-600 italic">Provisional</th>}
                 <th className="px-5 py-3 text-right text-xs uppercase text-gray-700 font-bold">Total</th>
-                <th className="px-5 py-3 text-right text-xs uppercase text-gray-500">Per Lot</th>
+                <th className="px-5 py-3 text-right text-xs uppercase text-gray-500">Per Property</th>
                 <th className="px-5 py-3 text-right text-xs uppercase text-gray-500">% of Sale</th>
               </tr>
             </thead>
@@ -433,7 +433,7 @@ export default function PD02DealPL() {
               {/* A. INCOME */}
               <tr className="bg-blue-900 text-white"><td className="px-5 py-2.5 font-bold" colSpan={colSpanDetails}>A. INCOME</td></tr>
               <FixedRow
-                label={`Sale Consideration (all lots) · ${soldCount} sold / ${totalLots} total`}
+                label={`Sale Consideration · ${soldCount > 0 ? 'sold' : 'not sold'}`}
                 value={actualRevenue || p.saleConsideration}
                 provisional={forecast.provisionalRevenue}
                 indent
@@ -588,18 +588,18 @@ export default function PD02DealPL() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {[
           {
-            label: 'Break-even Lots',
-            value: `${forecast.breakEvenLots} / ${totalLots}`,
-            sub: soldCount >= forecast.breakEvenLots ? '✓ Already achieved' : `${forecast.breakEvenLots - soldCount} more lots needed`,
-            color: soldCount >= forecast.breakEvenLots ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200',
-            textColor: soldCount >= forecast.breakEvenLots ? 'text-green-700' : 'text-amber-700',
+            label: 'Break-even Price',
+            value: fmt(forecast.breakEvenRevenuePerLot),
+            sub: soldCount > 0 ? '✓ Sale complete' : 'target to break even',
+            color: soldCount > 0 ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200',
+            textColor: soldCount > 0 ? 'text-green-700' : 'text-amber-700',
           },
           {
-            label: 'Break-even Price / Lot',
+            label: 'Break-even Price',
             value: fmt(forecast.breakEvenRevenuePerLot),
             sub: provPricePerLot >= forecast.breakEvenRevenuePerLot
               ? `Current ${fmt(provPricePerLot)} is above B/E`
-              : `Need ${fmt(forecast.breakEvenRevenuePerLot - provPricePerLot)} more / lot`,
+              : `Need ${fmt(forecast.breakEvenRevenuePerLot - provPricePerLot)} more`,
             color: provPricePerLot >= forecast.breakEvenRevenuePerLot ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200',
             textColor: provPricePerLot >= forecast.breakEvenRevenuePerLot ? 'text-green-700' : 'text-red-700',
           },
@@ -608,7 +608,7 @@ export default function PD02DealPL() {
             value: forecast.salesVelocityMonthsToComplete > 0
               ? `~${Math.ceil(forecast.salesVelocityMonthsToComplete)} months`
               : 'Fully sold',
-            sub: `At ~${(soldCount / 6).toFixed(1)} lots/month pace`,
+            sub: soldCount > 0 ? 'Property sold' : 'Not yet sold',
             color: 'bg-blue-50 border-blue-200',
             textColor: 'text-blue-700',
           },
@@ -652,7 +652,7 @@ export default function PD02DealPL() {
       {/* Scenario Comparison */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="p-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-800">Scenario Analysis — Lot Price Sensitivity</h3>
+          <h3 className="font-semibold text-gray-800">Scenario Analysis — Sale Price Sensitivity</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -680,10 +680,10 @@ export default function PD02DealPL() {
       {/* Per-unit metrics */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Net Profit / Lot', value: fmt(forecast.netProfit / totalLots) },
+          { label: 'Net Profit', value: fmt(forecast.netProfit) },
           { label: 'Net Profit / Acre', value: p.totalAcres > 0 ? fmt(forecast.netProfit / p.totalAcres) : '—' },
           { label: 'Net Profit / Sq Ft', value: companyLots.length > 0 ? `$${(forecast.netProfit / companyLots.reduce((s,l) => s+l.sizeSqft,0)).toFixed(2)}` : '—' },
-          { label: 'Land Cost / Lot', value: fmt(p.landCost / totalLots) },
+          { label: 'Land Cost', value: fmt(p.landCost) },
         ].map(({ label, value }) => (
           <div key={label} className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="text-xs text-gray-500 mb-1">{label}</p>

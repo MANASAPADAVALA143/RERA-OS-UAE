@@ -528,6 +528,7 @@ async def import_excel(
                         tenant_id=current_user.tenant_id,
                         company_id=company.id,
                         bank=loan.get('bank', ''),
+                        property_name=loan.get('property_name') or summary.get('property_name') or company.property_name or '',
                         loan_date=loan.get('loan_date'),
                         account_no=loan.get('account_no'),
                         loan_amount=loan.get('loan_amount', 0),

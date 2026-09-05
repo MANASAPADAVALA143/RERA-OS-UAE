@@ -2,7 +2,7 @@
  * Shared rental KPI engine — single source of truth for Financials KPI Dashboard
  * and Executive Summary PPT export. Keep in sync with KPI card / benchmark logic.
  */
-import { type Period, getPeriodKeys } from './periodWindow';
+import { type Period, getPeriodKeys, getPeriodFilterKeys } from './periodWindow';
 import { normalizeMonthKey } from './executiveSummaryFormatters';
 
 export interface FinItem {
@@ -340,6 +340,23 @@ function periodAggregateToKpiData(fin: ParsedFinancials, agg: PeriodAggregate, b
   };
 }
 
+/**
+ * P&L summed YTD through a calendar month; balance sheet / cash as of that month (point-in-time).
+ * Used by multi-year CFO trend charts (Property Dev / Consultancy) to anchor the current year
+ * to "as of" a selected month instead of the full calendar year.
+ */
+export function calcKpisYtdThroughMonth(
+  fin: ParsedFinancials,
+  year: number,
+  throughMonth: number,
+): KpiData | null {
+  const available = new Set(getAvailableKeys(fin));
+  const keys = getPeriodFilterKeys('YTD', throughMonth, year).filter(k => available.has(k));
+  if (!keys.length) return null;
+  const agg = sumKpisOverKeys(fin.pl, keys);
+  return periodAggregateToKpiData(fin, agg, keys[keys.length - 1]);
+}
+
 export function resolveKpiView(
   fin: ParsedFinancials,
   kpiYear: number,
@@ -540,6 +557,13 @@ export function fmtKpiCurrency(n: number): string {
 
 export function fmtKpiPct(n: number, d = 1): string {
   return Number.isFinite(n) ? `${n.toFixed(d)}%` : NA;
+}
+
+/** Same as fmtKpiPct but caps very negative margins (e.g. NOI Margin) at "-100%+". */
+export function fmtMarginPctCapped(n: number, d = 1): string {
+  if (!Number.isFinite(n)) return NA;
+  if (n < -100) return '-100%+';
+  return `${n.toFixed(d)}%`;
 }
 
 export function fmtKpiX(n: number, d = 2): string {

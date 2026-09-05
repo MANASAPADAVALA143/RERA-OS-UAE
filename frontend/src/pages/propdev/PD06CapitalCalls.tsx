@@ -1,13 +1,21 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { usePropDev } from '../../contexts/PropertyDevContext';
 import type { CapitalCall } from '../../contexts/PropertyDevContext';
-import { Plus, X, AlertTriangle, CheckCircle2, Bell, Trash2, Calculator } from 'lucide-react';
+import { usePropDevNav } from '../../contexts/PropDevNavContext';
+import { Plus, X, AlertTriangle, CheckCircle2, Bell, Trash2, Calculator, Upload, Download } from 'lucide-react';
+import PropDevPageHeader from '../../components/propdev/PropDevPageHeader';
+import CapitalCallsCharts from '../../components/propdev/CapitalCallsCharts';
+import { ParchmentKpiTile } from '../../components/ui/ParchmentKpiTile';
+import { PT, PT_FONT, PT_CARD } from '../../utils/parchmentTypography';
+import { parchmentStyles } from '../../theme/parchmentTheme';
+import { exportPropDevCapitalCallsPdf } from '../../utils/propDevSectionPdfExport';
+import { PROPDEV_EXPORT_PDF_EVENT } from '../../utils/propDevExportEvents';
 
-const STATUS_COLORS: Record<CapitalCall['status'], string> = {
-  Paid:        'bg-green-100 text-green-700',
-  Partial:     'bg-amber-100 text-amber-700',
-  Outstanding: 'bg-blue-100 text-blue-700',
-  Overdue:     'bg-red-100 text-red-700',
+const STATUS_BADGE: Record<CapitalCall['status'], { background: string; color: string }> = {
+  Paid:        { background: '#DCFCE7', color: PT.green },
+  Partial:     { background: '#FFFBEB', color: PT.amber },
+  Outstanding: { background: '#EFF6FF', color: PT.blue },
+  Overdue:     { background: '#FEF2F2', color: PT.red },
 };
 
 const fmt = (n: number) => `$${Math.round(n).toLocaleString()}`;
@@ -33,25 +41,46 @@ function newExpenseRow(): ExpenseRow {
 
 // ── Decision Header ───────────────────────────────────────────────────────────
 
-function DecisionHeader({ capitalCalls, totalExpenseNeed, monthlyEmi, cashAvailable }: {
+function DecisionHeader({ capitalCalls, totalExpenseNeed, monthlyEmi, cashAvailable, companyLabel, onUploadClick }: {
   capitalCalls: CapitalCall[];
   totalExpenseNeed: number;
   monthlyEmi: number;
   cashAvailable: number;
+  companyLabel: string;
+  onUploadClick: () => void;
 }) {
   const overdue      = capitalCalls.filter(c => c.status === 'Overdue');
   const outstanding  = capitalCalls.filter(c => c.status !== 'Paid');
+  const outstandingAmount = capitalCalls.reduce((sum, call) => sum + Math.max(0, call.totalDue - call.received), 0);
   const cashShortfall = totalExpenseNeed > cashAvailable;
-  const urgency = overdue.length > 0 ? 'high' : cashShortfall ? 'medium' : 'low';
+  const urgency = capitalCalls.length === 0
+    ? 'unknown'
+    : overdue.length > 0
+      ? 'high'
+      : outstandingAmount > 0 || cashShortfall
+        ? 'medium'
+        : 'low';
 
   const config = {
-    high:   { bg: 'bg-red-50 border-red-300',    icon: <AlertTriangle size={20} className="text-red-500" />,   title: 'CALL NOW — Overdue Obligations',       color: 'text-red-700'   },
-    medium: { bg: 'bg-amber-50 border-amber-300', icon: <AlertTriangle size={20} className="text-amber-500" />, title: 'CALL SOON — Cash Shortfall Ahead',     color: 'text-amber-700' },
-    low:    { bg: 'bg-green-50 border-green-300', icon: <CheckCircle2  size={20} className="text-green-500" />, title: 'NO CALL NEEDED — Position Adequate',    color: 'text-green-700' },
+    high:   { bg: '#FEF2F2', border: '#FECACA', iconColor: PT.red,   title: 'CALL NOW — Overdue Obligations',       color: PT.red   },
+    medium: { bg: '#FFFBEB', border: '#FDE68A', iconColor: PT.amber, title: 'ACTION NEEDED — Capital Outstanding',  color: '#92400E' },
+    low:    { bg: '#F0FDF4', border: '#BBF7D0', iconColor: PT.green, title: 'NO CALL NEEDED — Position Adequate',    color: PT.green },
+    unknown:{ bg: PT.pageBg, border: PT.border, iconColor: PT.muted, title: 'NO CAPITAL CALL DATA PARSED',           color: PT.muted },
   }[urgency];
 
+  const urgencyIcon = urgency === 'low'
+    ? <CheckCircle2 size={20} style={{ color: config.iconColor }} />
+    : <AlertTriangle size={20} style={{ color: config.iconColor }} />;
+
   const bullets =
-    urgency === 'high'
+    urgency === 'unknown'
+      ? [
+          `No capital-call records were found for ${companyLabel}.`,
+          'This is not treated as a $0 outstanding position.',
+          'Upload your single Excel file via Data Import → Upload Data (all companies in one workbook).',
+          'Tab names should match Company Registry (LLC / Group suffix optional). Annexure / Loan tabs in the same file are OK.',
+        ]
+      : urgency === 'high'
       ? [
           `${overdue.length} capital call${overdue.length > 1 ? 's' : ''} overdue — total $${overdue.reduce((s, c) => s + c.totalDue - c.received, 0).toLocaleString()} unpaid.`,
           'Send formal demand notices immediately to avoid default provisions.',
@@ -59,9 +88,11 @@ function DecisionHeader({ capitalCalls, totalExpenseNeed, monthlyEmi, cashAvaila
         ]
       : urgency === 'medium'
         ? [
-            `Expense pipeline ($${totalExpenseNeed.toLocaleString()}) exceeds current cash ($${cashAvailable.toLocaleString()}).`,
-            `Projected shortfall in ${Math.ceil((totalExpenseNeed - cashAvailable) / (monthlyEmi || 1))} months if collections don't materialize.`,
-            'Issue capital call now — allow 30 days for partner funding before shortfall.',
+            `$${outstandingAmount.toLocaleString()} remains outstanding across ${outstanding.length} active capital call record${outstanding.length === 1 ? '' : 's'}.`,
+            cashShortfall
+              ? `Expense pipeline ($${totalExpenseNeed.toLocaleString()}) exceeds current cash ($${cashAvailable.toLocaleString()}).`
+              : 'Follow up on unpaid or partially paid partner balances.',
+            'Review due dates and send reminders before balances become overdue.',
           ]
         : [
             `Cash ($${cashAvailable.toLocaleString()}) covers ${monthlyEmi > 0 ? (cashAvailable / monthlyEmi).toFixed(1) : '∞'} months of obligations.`,
@@ -70,18 +101,27 @@ function DecisionHeader({ capitalCalls, totalExpenseNeed, monthlyEmi, cashAvaila
           ];
 
   return (
-    <div className={`rounded-xl border-2 p-5 ${config.bg}`}>
+    <div className="rounded-xl p-5" style={{ background: config.bg, border: `1px solid ${config.border}` }}>
       <div className="flex items-start gap-3">
-        {config.icon}
+        {urgencyIcon}
         <div className="flex-1">
-          <h3 className={`font-bold text-base ${config.color}`}>{config.title}</h3>
+          <h3 style={{ ...PT_FONT.sectionTitle, color: config.color }}>{config.title}</h3>
           <ul className="mt-2 space-y-1">
             {bullets.map((b, i) => (
-              <li key={i} className={`text-sm flex gap-2 ${config.color}`}>
+              <li key={i} className="flex gap-2" style={{ ...PT_FONT.body, color: config.color }}>
                 <span className="font-bold shrink-0">·</span>{b}
               </li>
             ))}
           </ul>
+          {urgency === 'unknown' && (
+            <button
+              type="button"
+              onClick={onUploadClick}
+              style={{ ...parchmentStyles.btnPrimary, marginTop: 16, padding: '8px 16px' }}
+            >
+              <Upload size={15} /> Upload Capital Call Data
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -91,14 +131,16 @@ function DecisionHeader({ capitalCalls, totalExpenseNeed, monthlyEmi, cashAvaila
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function PD06CapitalCalls() {
-  const { companies, capitalCalls: allCtxCalls, partners: allCtxPartners, loans, properties } = usePropDev();
+  const { companies, capitalCalls: allCtxCalls, partners: allCtxPartners, loans, properties,
+          selectedCompanyId, setSelectedCompanyId } = usePropDev();
+  const { setTab } = usePropDevNav();
 
-  const [localCompanyId,    setLocalCompanyId]    = useState('all');
   const [localPartnerName,  setLocalPartnerName]  = useState('all');
   const [showModal,         setShowModal]         = useState(false);
   const [form,              setForm]              = useState({ period: '', totalCallAmount: '', dueDate: '', notes: '' });
   const [expenses,          setExpenses]          = useState<ExpenseRow[]>([newExpenseRow()]);
   const [showExpenses,      setShowExpenses]      = useState(true);
+  const [exportingPdf,      setExportingPdf]      = useState(false);
 
   // ── All data from all companies (for local filters) ────────────────────────
   const allCompaniesData = useMemo(() => companies, [companies]);
@@ -112,8 +154,8 @@ export default function PD06CapitalCalls() {
 
   // All capital calls + partners scoped to local company filter
   const scopedCompanies = useMemo(
-    () => localCompanyId === 'all' ? allCompaniesData : allCompaniesData.filter(c => c.id === localCompanyId),
-    [allCompaniesData, localCompanyId],
+    () => selectedCompanyId === 'all' ? allCompaniesData : allCompaniesData.filter(c => c.id === selectedCompanyId),
+    [allCompaniesData, selectedCompanyId],
   );
 
   const scopedCalls    = useMemo(() => scopedCompanies.flatMap(c => c.capitalCalls), [scopedCompanies]);
@@ -134,16 +176,30 @@ export default function PD06CapitalCalls() {
   // Partner-wise mode: one partner selected → show aggregated partner view
   const isPartnerView = localPartnerName !== 'all';
 
-  const handleCompanyChange = (id: string) => {
-    setLocalCompanyId(id);
+  useEffect(() => {
     setLocalPartnerName('all');
-  };
+  }, [selectedCompanyId]);
 
-  // Company name lookup
   const companyNameMap = useMemo(
     () => Object.fromEntries(allCompaniesData.map(c => [c.id, c.name])),
     [allCompaniesData],
   );
+
+  const companyLabel = selectedCompanyId === 'all'
+    ? 'the selected filter (all companies)'
+    : (companyNameMap[selectedCompanyId] ?? 'this company');
+
+  const companiesMissingCalls = useMemo(
+    () => allCompaniesData.filter(c => c.capitalCalls.length === 0).map(c => c.name),
+    [allCompaniesData],
+  );
+
+  function goToCapitalCallUpload() {
+    if (selectedCompanyId !== 'all') {
+      setSelectedCompanyId(selectedCompanyId);
+    }
+    setTab('upload');
+  }
 
   // ── KPIs (based on filtered calls) ────────────────────────────────────────
   const totalCalled      = filteredCalls.reduce((s, c) => s + c.totalDue, 0);
@@ -153,6 +209,43 @@ export default function PD06CapitalCalls() {
 
   const monthlyEmi    = loans.reduce((s, l) => s + l.emi, 0);
   const cashAvailable = properties[0]?.cashAvailable ?? 0;
+
+  const handleExportPdf = useCallback(async () => {
+    setExportingPdf(true);
+    try {
+      const entityLabel = selectedCompanyId === 'all'
+        ? 'All Companies'
+        : (companyNameMap[selectedCompanyId] ?? 'Property Dev Entity');
+      await exportPropDevCapitalCallsPdf({
+        entityLabel,
+        periodLabel: 'All Time',
+        partnerFilterLabel: localPartnerName === 'all' ? 'All Partners' : localPartnerName,
+        calls: filteredCalls,
+        partnerTypeMap,
+        companyNameMap,
+        cashAvailable,
+        monthlyEmi,
+      });
+    } catch (e: unknown) {
+      window.alert(`PDF export failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setExportingPdf(false);
+    }
+  }, [
+    selectedCompanyId, companyNameMap, localPartnerName, filteredCalls,
+    partnerTypeMap, cashAvailable, monthlyEmi,
+  ]);
+
+  // Top Command Strip "Export PDF" while on Capital Calls
+  useEffect(() => {
+    const onExport = (e: Event) => {
+      const detail = (e as CustomEvent<{ scope?: string }>).detail ?? {};
+      if (detail.scope && detail.scope !== 'capital-calls') return;
+      void handleExportPdf();
+    };
+    window.addEventListener(PROPDEV_EXPORT_PDF_EVENT, onExport);
+    return () => window.removeEventListener(PROPDEV_EXPORT_PDF_EVENT, onExport);
+  }, [handleExportPdf]);
 
   const totalExpenseNeed = useMemo(
     () => expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0),
@@ -194,6 +287,9 @@ export default function PD06CapitalCalls() {
       receivedDate: null,
       dueDate: form.dueDate || undefined,
       status: 'Outstanding' as const,
+      sourceType: 'manual' as const,
+      sourceId: null,
+      reason: null,
     }));
     // Append to all companies' capitalCalls in state (handled by context)
     // Since setCapitalCalls is per-selected-company, we just close modal here
@@ -203,24 +299,13 @@ export default function PD06CapitalCalls() {
 
   // ── Dropdowns ──────────────────────────────────────────────────────────────
   const dropdowns = (
-    <div className="flex flex-wrap gap-3">
+    <div className="flex flex-wrap gap-3 px-4 py-3 rounded-xl" style={{ background: '#EEF0FF', border: `1px solid ${PT.border}` }}>
       <div>
-        <label className="text-xs font-medium text-gray-500 mb-1 block">Company</label>
-        <select
-          value={localCompanyId}
-          onChange={e => handleCompanyChange(e.target.value)}
-          className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white min-w-[200px]"
-        >
-          <option value="all">All Companies</option>
-          {allCompaniesData.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-      </div>
-      <div>
-        <label className="text-xs font-medium text-gray-500 mb-1 block">Partner</label>
+        <label style={{ ...PT_FONT.tableHeader, display: 'block', marginBottom: 4 }}>Partner</label>
         <select
           value={localPartnerName}
           onChange={e => setLocalPartnerName(e.target.value)}
-          className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white min-w-[220px]"
+          style={{ ...parchmentStyles.select, padding: '8px 12px', minWidth: 220 }}
         >
           <option value="all">All Partners</option>
           {partnerNames.map(n => <option key={n} value={n}>{n}</option>)}
@@ -234,97 +319,123 @@ export default function PD06CapitalCalls() {
     const partnerInstance = scopedPartners.find(p => p.name === localPartnerName);
     const partnerType     = partnerInstance?.type ?? 'Class A';
     const typeLabel       = partnerType === 'Class A' ? 'Type A' : 'Type B';
-    const typeBadge       = partnerType === 'Class A'
-      ? 'bg-green-100 text-green-700'
-      : 'bg-blue-100 text-blue-700';
+    const typeBadge = partnerType === 'Class A'
+      ? { background: '#DCFCE7', color: PT.green }
+      : { background: '#EFF6FF', color: PT.blue };
 
     return (
-      <div className="space-y-6">
+      <div className="space-y-6" style={{ fontSize: 13, color: PT.text }}>
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Capital Calls</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Decision support for partner capital contributions</p>
+            <PropDevPageHeader title="Capital Calls" subtitle="Decision support for partner capital contributions" />
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
-          >
-            <Plus size={15} /> Issue Capital Call
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleExportPdf()}
+              disabled={exportingPdf}
+              style={{ ...parchmentStyles.btnSecondary, opacity: exportingPdf ? 0.7 : 1 }}
+            >
+              <Download size={15} /> {exportingPdf ? 'Exporting…' : 'Export PDF'}
+            </button>
+            <button
+              onClick={() => setShowModal(true)}
+              style={parchmentStyles.btnPrimary}
+            >
+              <Plus size={15} /> Issue Capital Call
+            </button>
+          </div>
         </div>
 
         {dropdowns}
 
         {/* Partner summary cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            { label: 'Total Called',   value: fmt(totalCalled),      color: 'text-gray-900'  },
-            { label: 'Total Received', value: fmt(totalReceived),    color: 'text-green-700' },
-            { label: 'Outstanding',    value: fmt(totalOutstanding), color: totalOutstanding > 0 ? 'text-red-600' : 'text-gray-400' },
-            { label: 'Overdue',        value: String(overdueCount),  color: overdueCount > 0 ? 'text-red-700' : 'text-green-600' },
-          ].map(({ label, value, color }) => (
-            <div key={label} className="bg-white rounded-xl border border-gray-200 p-4">
-              <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{label}</p>
-              <p className={`text-xl font-bold ${color}`}>{value}</p>
-            </div>
-          ))}
+          <ParchmentKpiTile label="Total Called" value={fmt(totalCalled)} />
+          <ParchmentKpiTile label="Total Received" value={fmt(totalReceived)} accent />
+          <ParchmentKpiTile label="Outstanding" value={fmt(totalOutstanding)} warn={totalOutstanding > 0} />
+          <ParchmentKpiTile label="Overdue" value={String(overdueCount)} warn={overdueCount > 0} />
         </div>
 
         {/* Partner-wise history table */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-5 py-3 bg-purple-900 text-white flex items-center justify-between">
+        <div style={{ ...PT_CARD, padding: 0, overflow: 'hidden' }}>
+          <div className="px-5 py-3 flex items-center justify-between" style={{ background: '#EEF0FF', borderBottom: `1px solid ${PT.border}` }}>
             <div>
-              <h3 className="font-semibold">
+              <h3 style={PT_FONT.sectionTitle}>
                 Capital Call History — {localPartnerName}
-                <span className={`ml-2 px-2 py-0.5 rounded text-xs font-medium ${typeBadge}`}>{typeLabel}</span>
+                <span className="ml-2 px-2 py-0.5 rounded text-xs font-medium" style={typeBadge}>{typeLabel}</span>
               </h3>
             </div>
-            <span className="text-xs text-purple-300">{filteredCalls.length} call records</span>
+            <span style={PT_FONT.caption}>{filteredCalls.length} call records</span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+            <table className="w-full" style={PT_FONT.table}>
+              <thead style={{ background: PT.pageBg }}>
                 <tr>
-                  {['Period', 'Company', 'Type', 'Called', 'Received', 'Balance', 'Status'].map(h => (
-                    <th key={h} className="px-4 py-2 text-right first:text-left whitespace-nowrap">{h}</th>
+                  {['Period', 'Company', 'Source', 'Type', 'Called', 'Received', 'Balance', 'Status'].map(h => (
+                    <th key={h} className="px-4 py-2 text-right first:text-left whitespace-nowrap" style={PT_FONT.tableHeader}>{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody>
                 {filteredCalls.map(c => {
                   const balance = c.totalDue - c.received;
                   const pType   = partnerTypeMap[c.partnerId] ?? 'Class A';
+                  const typeStyle = pType === 'Class A'
+                    ? { background: '#DCFCE7', color: PT.green }
+                    : { background: '#EFF6FF', color: PT.blue };
                   return (
-                    <tr key={c.id} className={`hover:bg-gray-50 ${c.status === 'Overdue' ? 'bg-red-50' : ''}`}>
-                      <td className="px-4 py-2.5 font-medium text-gray-900">{c.period}</td>
-                      <td className="px-4 py-2.5 text-gray-600">{companyNameMap[c.companyId] ?? c.companyId}</td>
+                    <tr key={c.id} style={{ borderTop: `1px solid ${PT.border}`, background: c.status === 'Overdue' ? '#FEF2F2' : undefined }}>
+                      <td className="px-4 py-2.5 font-medium" style={PT_FONT.tableCell}>{c.period}</td>
+                      <td className="px-4 py-2.5" style={{ ...PT_FONT.tableCell, color: PT.muted }}>{companyNameMap[c.companyId] ?? c.companyId}</td>
                       <td className="px-4 py-2.5 text-right">
-                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                          pType === 'Class A' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
-                        }`}>{pType === 'Class A' ? 'Type A' : 'Type B'}</span>
-                      </td>
-                      <td className="px-4 py-2.5 text-right">{fmt(c.totalDue)}</td>
-                      <td className="px-4 py-2.5 text-right text-green-700">{fmt(c.received)}</td>
-                      <td className="px-4 py-2.5 text-right">
-                        {balance > 0 ? (
-                          <span className="text-red-600 font-semibold">{fmt(balance)} 🔴</span>
+                        {c.sourceType === 'lot_reinvestment' ? (
+                          <span
+                            className="px-2 py-0.5 rounded-full text-xs font-medium cursor-help"
+                            style={{ background: '#E8EFF8', color: 'var(--navy)' }}
+                            title={c.reason ?? 'Auto-generated from a lot reinvestment round'}
+                          >
+                            Auto: Lot Reinvestment
+                          </span>
+                        ) : c.sourceType === 'unrealised_loss' ? (
+                          <span
+                            className="px-2 py-0.5 rounded-full text-xs font-medium cursor-help"
+                            style={{ background: '#FEF3E2', color: 'var(--warning)' }}
+                            title={c.reason ?? 'Auto-generated from an unrealised loss on this entity'}
+                          >
+                            Auto: Unrealised Loss
+                          </span>
                         ) : (
-                          <span className="text-green-600">$0 ✅</span>
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: 'var(--gold-light)', color: 'var(--gold)' }}>
+                            Manual
+                          </span>
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-right">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[c.status]}`}>{c.status}</span>
+                        <span className="px-2 py-0.5 rounded text-xs font-medium" style={typeStyle}>{pType === 'Class A' ? 'Type A' : 'Type B'}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right" style={PT_FONT.tableCell}>{fmt(c.totalDue)}</td>
+                      <td className="px-4 py-2.5 text-right" style={{ ...PT_FONT.tableCell, color: PT.green }}>{fmt(c.received)}</td>
+                      <td className="px-4 py-2.5 text-right">
+                        {balance > 0 ? (
+                          <span style={{ color: PT.red, fontWeight: 600 }}>{fmt(balance)}</span>
+                        ) : (
+                          <span style={{ color: PT.green }}>$0</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={STATUS_BADGE[c.status]}>{c.status}</span>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
               <tfoot>
-                <tr className="bg-gray-900 text-white">
-                  <td className="px-4 py-2 font-bold" colSpan={3}>TOTAL</td>
+                <tr style={{ background: '#44403C', color: '#fff', ...PT_FONT.tableCell }}>
+                  <td className="px-4 py-2 font-bold" colSpan={4}>TOTAL</td>
                   <td className="px-4 py-2 text-right font-bold">{fmt(totalCalled)}</td>
-                  <td className="px-4 py-2 text-right font-bold text-green-300">{fmt(totalReceived)}</td>
-                  <td className="px-4 py-2 text-right font-bold text-red-300">{fmt(totalOutstanding)}</td>
+                  <td className="px-4 py-2 text-right font-bold" style={{ color: '#86EFAC' }}>{fmt(totalReceived)}</td>
+                  <td className="px-4 py-2 text-right font-bold" style={{ color: '#FCA5A5' }}>{fmt(totalOutstanding)}</td>
                   <td />
                 </tr>
               </tfoot>
@@ -341,60 +452,66 @@ export default function PD06CapitalCalls() {
   const periods = [...new Set(filteredCalls.map(c => c.period))];
 
   function renderModal() {
+    const inputStyle = { ...parchmentStyles.select, width: '100%', padding: '8px 12px' };
     return (
       <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
-          <div className="flex items-center justify-between p-5 border-b">
-            <h3 className="font-bold text-gray-900">Issue Capital Call</h3>
-            <button onClick={() => setShowModal(false)}><X size={18} className="text-gray-400 hover:text-gray-600" /></button>
+        <div className="w-full max-w-lg rounded-xl shadow-xl" style={{ background: PT.cardBg, border: `1px solid ${PT.border}` }}>
+          <div className="flex items-center justify-between p-5" style={{ borderBottom: `1px solid ${PT.border}` }}>
+            <h3 style={PT_FONT.sectionTitle}>Issue Capital Call</h3>
+            <button onClick={() => setShowModal(false)}><X size={18} style={{ color: PT.mutedLight }} /></button>
           </div>
           <div className="p-5 space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Period</label>
-                <input className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                <label style={{ ...PT_FONT.button, display: 'block', marginBottom: 4, color: PT.text }}>Period</label>
+                <input className="focus:outline-none focus:ring-2 focus:ring-amber-300"
+                  style={inputStyle}
                   placeholder="e.g. Jan–Jun 2026" value={form.period} onChange={e => setForm({ ...form, period: e.target.value })} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
-                <input type="date" className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                <label style={{ ...PT_FONT.button, display: 'block', marginBottom: 4, color: PT.text }}>Due Date</label>
+                <input type="date" className="focus:outline-none focus:ring-2 focus:ring-amber-300"
+                  style={inputStyle}
                   value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} />
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Total Call Amount ($)</label>
+              <label style={{ ...PT_FONT.button, display: 'block', marginBottom: 4, color: PT.text }}>Total Call Amount ($)</label>
               <div className="flex gap-2">
-                <input className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                <input className="flex-1 focus:outline-none focus:ring-2 focus:ring-amber-300"
+                  style={inputStyle}
                   placeholder="e.g. 145000" value={form.totalCallAmount} onChange={e => setForm({ ...form, totalCallAmount: e.target.value })} />
                 {totalExpenseNeed > 0 && (
-                  <button onClick={applyExpensesToCall} className="px-3 py-2 text-xs bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 whitespace-nowrap">
+                  <button onClick={applyExpensesToCall}
+                    style={{ ...parchmentStyles.btnSecondary, padding: '8px 12px', whiteSpace: 'nowrap', color: PT.gold, borderColor: PT.gold }}>
                     Use {fmt(totalExpenseNeed)}
                   </button>
                 )}
               </div>
             </div>
             {parseFloat(form.totalCallAmount || '0') > 0 && (
-              <div className="bg-blue-50 rounded-xl p-3">
-                <p className="text-xs font-semibold text-blue-800 mb-2 uppercase tracking-wide">Auto-Calculated Partner Splits</p>
+              <div className="rounded-xl p-3" style={{ background: '#FFFBEB', border: '1px solid #FDE68A' }}>
+                <p style={{ ...PT_FONT.tableHeader, color: '#92400E', marginBottom: 8 }}>Auto-Calculated Partner Splits</p>
                 <div className="space-y-1">
                   {partnerSplits.map(p => (
-                    <div key={p.id} className="flex justify-between text-sm">
-                      <span className="text-gray-700">{p.name} ({p.sharePercent}%)</span>
-                      <span className="font-semibold text-blue-800">{fmt(p.callShare)}</span>
+                    <div key={p.id} className="flex justify-between" style={PT_FONT.body}>
+                      <span style={{ color: PT.muted }}>{p.name} ({p.sharePercent}%)</span>
+                      <span style={{ fontWeight: 600, color: '#92400E' }}>{fmt(p.callShare)}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
-              <textarea rows={2} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              <label style={{ ...PT_FONT.button, display: 'block', marginBottom: 4, color: PT.text }}>Notes (optional)</label>
+              <textarea rows={2} className="w-full focus:outline-none focus:ring-2 focus:ring-amber-300"
+                style={{ ...inputStyle, resize: 'vertical' }}
                 placeholder="Reason for this capital call…" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
             </div>
           </div>
-          <div className="flex justify-end gap-3 p-5 border-t">
-            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50">Cancel</button>
-            <button onClick={addCall} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+          <div className="flex justify-end gap-3 p-5" style={{ borderTop: `1px solid ${PT.border}` }}>
+            <button onClick={() => setShowModal(false)} style={parchmentStyles.btnSecondary}>Cancel</button>
+            <button onClick={addCall} style={parchmentStyles.btnPrimary}>
               Issue Call to All Partners
             </button>
           </div>
@@ -404,21 +521,63 @@ export default function PD06CapitalCalls() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" style={{ fontSize: 13, color: PT.text }}>
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Capital Calls</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Decision support for partner capital contributions</p>
+          <PropDevPageHeader title="Capital Calls" subtitle="Partner capital contribution schedule" />
+          <p style={PT_FONT.pageSubtitle}>Decision support for partner capital contributions</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
-        >
-          <Plus size={15} /> Issue Capital Call
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void handleExportPdf()}
+            disabled={exportingPdf}
+            style={{ ...parchmentStyles.btnSecondary, opacity: exportingPdf ? 0.7 : 1 }}
+          >
+            <Download size={15} /> {exportingPdf ? 'Exporting…' : 'Export PDF'}
+          </button>
+          <button
+            onClick={() => setShowModal(true)}
+            style={parchmentStyles.btnPrimary}
+          >
+            <Plus size={15} /> Issue Capital Call
+          </button>
+        </div>
       </div>
 
       {dropdowns}
+
+      {/* Data as of — verifies which contribution period was imported per company */}
+      {scopedCompanies.some(c => c.capitalCalls.length > 0) && (
+        <div className="rounded-xl px-4 py-3" style={{ background: PT.cardBg, border: `1px solid ${PT.border}` }}>
+          <p style={{ ...PT_FONT.tableHeader, marginBottom: 8 }}>Data as of</p>
+          <div className="flex flex-wrap gap-2">
+            {scopedCompanies
+              .filter(c => c.capitalCalls.length > 0)
+              .map(c => {
+                const periodsForCo = [...new Set(c.capitalCalls.map(cc => cc.period).filter(Boolean))];
+                const label = periodsForCo[0] ?? 'Imported Capital Call';
+                return (
+                  <div
+                    key={c.id}
+                    className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5"
+                    style={{ background: '#FFFBEB', border: '1px solid #FDE68A' }}
+                  >
+                    {selectedCompanyId === 'all' && (
+                      <span style={{ ...PT_FONT.body, fontWeight: 500 }}>{c.name}</span>
+                    )}
+                    <span style={{ ...PT_FONT.button, color: '#92400E' }}>
+                      Data as of: {label}
+                    </span>
+                    {periodsForCo.length > 1 && (
+                      <span style={PT_FONT.caption}>(+{periodsForCo.length - 1} older)</span>
+                    )}
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
 
       {/* Decision Header */}
       <DecisionHeader
@@ -426,60 +585,97 @@ export default function PD06CapitalCalls() {
         totalExpenseNeed={totalExpenseNeed}
         monthlyEmi={monthlyEmi}
         cashAvailable={cashAvailable}
+        companyLabel={companyLabel}
+        onUploadClick={goToCapitalCallUpload}
       />
+
+      {filteredCalls.length === 0 && selectedCompanyId === 'all' && companiesMissingCalls.length > 0 && (
+        <div className="rounded-xl p-4" style={{ background: '#EEF0FF', border: `1px solid ${PT.border}` }}>
+          <p style={{ ...PT_FONT.sectionTitle, marginBottom: 8 }}>Companies without imported capital-call data</p>
+          <p style={{ ...PT_FONT.bodyMuted, marginBottom: 8 }}>
+            One Excel file, one tab per company. Tab names must match <strong>Company Registry</strong> names
+            (e.g. tab &quot;JKL LLC&quot; = registry &quot;JKL LLC&quot;).
+          </p>
+          <ul className="list-disc list-inside space-y-0.5" style={PT_FONT.bodyMuted}>
+            {companiesMissingCalls.map(name => <li key={name}>{name}</li>)}
+          </ul>
+        </div>
+      )}
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: 'Total Called',   value: fmt(totalCalled),      sub: `${filteredCalls.length} calls`,                                                                  color: 'text-gray-900'   },
-          { label: 'Total Received', value: fmt(totalReceived),    sub: `${((totalReceived / Math.max(1, totalCalled)) * 100).toFixed(0)}% collected`,                    color: 'text-green-700'  },
-          { label: 'Outstanding',    value: fmt(totalOutstanding), sub: `${filteredCalls.filter(c => c.status !== 'Paid').length} active`,                                 color: totalOutstanding > 0 ? 'text-red-600' : 'text-gray-400' },
-          { label: 'Overdue Calls',  value: String(overdueCount),  sub: 'need immediate action',                                                                           color: overdueCount > 0 ? 'text-red-700' : 'text-green-600' },
-        ].map(({ label, value, sub, color }) => (
-          <div key={label} className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{label}</p>
-            <p className={`text-xl font-bold ${color}`}>{value}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
-          </div>
-        ))}
+        <ParchmentKpiTile
+          label="Total Called"
+          value={fmt(totalCalled)}
+          sub={`${filteredCalls.length} calls`}
+        />
+        <ParchmentKpiTile
+          label="Total Received"
+          value={fmt(totalReceived)}
+          sub={`${((totalReceived / Math.max(1, totalCalled)) * 100).toFixed(0)}% collected`}
+          accent
+        />
+        <ParchmentKpiTile
+          label="Outstanding"
+          value={fmt(totalOutstanding)}
+          sub={`${filteredCalls.filter(c => c.status !== 'Paid').length} active`}
+          warn={totalOutstanding > 0}
+        />
+        <ParchmentKpiTile
+          label="Overdue Calls"
+          value={String(overdueCount)}
+          sub="need immediate action"
+          warn={overdueCount > 0}
+        />
       </div>
 
+      {filteredCalls.length > 0 && (
+        <CapitalCallsCharts
+          calls={filteredCalls}
+          companyNameMap={companyNameMap}
+          selectedCompanyId={selectedCompanyId}
+          onViewAllPartners={() => {
+            document.getElementById('capital-calls-partner-tables')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }}
+        />
+      )}
+
       {/* Expense Builder */}
-      <div className="bg-white rounded-xl border border-gray-200">
+      <div style={{ ...PT_CARD, padding: 0 }}>
         <button
-          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 rounded-xl"
+          className="w-full flex items-center justify-between p-4 rounded-xl"
+          style={{ background: PT.cardBg }}
           onClick={() => setShowExpenses(e => !e)}
         >
           <div className="flex items-center gap-2">
-            <Calculator size={16} className="text-blue-600" />
-            <h3 className="font-semibold text-gray-800">Expense Builder — Calculate Call Amount</h3>
+            <Calculator size={16} style={{ color: PT.gold }} />
+            <h3 style={PT_FONT.sectionTitle}>Expense Builder — Calculate Call Amount</h3>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm font-bold text-blue-700">{fmt(totalExpenseNeed)}</span>
-            <span className="text-xs text-gray-400">{showExpenses ? '▲' : '▼'}</span>
+            <span style={{ ...PT_FONT.button, color: '#92400E' }}>{fmt(totalExpenseNeed)}</span>
+            <span style={PT_FONT.caption}>{showExpenses ? '▲' : '▼'}</span>
           </div>
         </button>
 
         {showExpenses && (
-          <div className="border-t border-gray-100 p-4 space-y-3">
+          <div className="p-4 space-y-3" style={{ borderTop: `1px solid ${PT.border}` }}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-xs text-gray-500 uppercase bg-gray-50">
+              <table className="w-full" style={PT_FONT.table}>
+                <thead style={{ background: PT.pageBg }}>
                   <tr>
-                    <th className="px-3 py-2 text-left">Category</th>
-                    <th className="px-3 py-2 text-left">Description</th>
-                    <th className="px-3 py-2 text-right w-40">Amount ($)</th>
-                    <th className="w-8" />
+                    {['Category', 'Description', 'Amount ($)', ''].map(h => (
+                      <th key={h || 'actions'} className={`px-3 py-2 ${h === 'Amount ($)' ? 'text-right w-40' : 'text-left'}`} style={PT_FONT.tableHeader}>{h}</th>
+                    ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
+                <tbody>
                   {expenses.map(row => (
-                    <tr key={row.id}>
+                    <tr key={row.id} style={{ borderTop: `1px solid ${PT.border}` }}>
                       <td className="px-3 py-2">
                         <select
                           value={row.category}
                           onChange={e => updateExpenseRow(row.id, 'category', e.target.value)}
-                          className="w-full border rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          style={{ ...parchmentStyles.select, width: '100%', padding: '4px 8px', fontSize: 12 }}
                         >
                           {DEFAULT_CATEGORIES.map(c => <option key={c}>{c}</option>)}
                         </select>
@@ -489,7 +685,7 @@ export default function PD06CapitalCalls() {
                           value={row.description}
                           onChange={e => updateExpenseRow(row.id, 'description', e.target.value)}
                           placeholder="Optional description"
-                          className="w-full border rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          style={{ ...parchmentStyles.select, width: '100%', padding: '4px 8px', fontSize: 12 }}
                         />
                       </td>
                       <td className="px-3 py-2">
@@ -498,11 +694,11 @@ export default function PD06CapitalCalls() {
                           value={row.amount || ''}
                           onChange={e => updateExpenseRow(row.id, 'amount', parseFloat(e.target.value) || 0)}
                           placeholder="0"
-                          className="w-full border rounded-lg px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          style={{ ...parchmentStyles.select, width: '100%', padding: '4px 8px', fontSize: 12, textAlign: 'right' }}
                         />
                       </td>
                       <td className="px-3 py-2">
-                        <button onClick={() => removeExpenseRow(row.id)} className="text-gray-300 hover:text-red-500">
+                        <button onClick={() => removeExpenseRow(row.id)} style={{ color: PT.mutedLight, background: 'none', border: 'none', cursor: 'pointer' }}>
                           <Trash2 size={13} />
                         </button>
                       </td>
@@ -510,21 +706,21 @@ export default function PD06CapitalCalls() {
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="bg-blue-50">
-                    <td className="px-3 py-2 font-bold text-blue-800 text-sm" colSpan={2}>TOTAL EXPENSE NEED</td>
-                    <td className="px-3 py-2 text-right font-bold text-blue-800 text-sm">{fmt(totalExpenseNeed)}</td>
+                  <tr style={{ background: '#FFFBEB', borderTop: `1px solid #FDE68A` }}>
+                    <td className="px-3 py-2 font-bold" colSpan={2} style={{ ...PT_FONT.body, color: '#92400E' }}>TOTAL EXPENSE NEED</td>
+                    <td className="px-3 py-2 text-right font-bold" style={{ ...PT_FONT.body, color: '#92400E' }}>{fmt(totalExpenseNeed)}</td>
                     <td />
                   </tr>
                 </tfoot>
               </table>
             </div>
             <div className="flex items-center gap-3">
-              <button onClick={addExpenseRow} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800">
+              <button onClick={addExpenseRow} style={{ ...parchmentStyles.btnSecondary, fontSize: 12, color: PT.gold, border: 'none', background: 'transparent', padding: 0 }}>
                 <Plus size={13} /> Add Row
               </button>
               <button
                 onClick={applyExpensesToCall}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700"
+                style={{ ...parchmentStyles.btnPrimary, fontSize: 12 }}
               >
                 <Calculator size={13} /> Use as Call Amount
               </button>
@@ -534,58 +730,67 @@ export default function PD06CapitalCalls() {
       </div>
 
       {/* Per-period tables */}
+      <div id="capital-calls-partner-tables" className="space-y-6">
       {periods.map(period => {
         const periodCalls = filteredCalls.filter(c => c.period === period);
         const pTotal    = periodCalls.reduce((s, c) => s + c.totalDue, 0);
         const pReceived = periodCalls.reduce((s, c) => s + c.received, 0);
         const hasOverdue = periodCalls.some(c => c.status === 'Overdue');
         return (
-          <div key={period} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className={`px-5 py-3 flex justify-between items-center ${hasOverdue ? 'bg-red-900' : 'bg-blue-900'} text-white`}>
-              <h3 className="font-semibold">Capital Call — {period}</h3>
-              <div className="flex items-center gap-4 text-sm text-blue-200">
-                <span>Called: {fmt(pTotal)}</span>
-                <span className="text-green-300">Received: {fmt(pReceived)}</span>
-                <span className="text-red-300">Outstanding: {fmt(pTotal - pReceived)}</span>
+          <div key={period} style={{ ...PT_CARD, padding: 0, overflow: 'hidden' }}>
+            <div className="px-5 py-3 flex justify-between items-center"
+              style={{
+                background: hasOverdue ? '#FEF2F2' : '#EEF0FF',
+                borderBottom: `1px solid ${hasOverdue ? '#FECACA' : PT.border}`,
+              }}>
+              <div>
+                <h3 style={{ ...PT_FONT.sectionTitle, color: hasOverdue ? PT.red : PT.text }}>Capital Call — {period}</h3>
+                <p style={PT_FONT.caption}>Data as of: {period}</p>
+              </div>
+              <div className="flex items-center gap-4" style={PT_FONT.body}>
+                <span style={{ color: PT.muted }}>Called: {fmt(pTotal)}</span>
+                <span style={{ color: PT.green }}>Received: {fmt(pReceived)}</span>
+                <span style={{ color: PT.red }}>Outstanding: {fmt(pTotal - pReceived)}</span>
               </div>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+              <table className="w-full" style={PT_FONT.table}>
+                <thead style={{ background: PT.pageBg }}>
                   <tr>
-                    {['Partner', 'Type', 'Share %', 'Total Call', 'Partner Share', 'Old Dues', 'Total Due', 'Received', 'Due Date', 'Balance', 'Status', ''].map(h => (
-                      <th key={h} className="px-3 py-3 text-right first:text-left whitespace-nowrap">{h}</th>
+                    {['Partner', 'Type', 'Share %', 'Partner Share', 'Old Dues', 'Total Due', 'Received', 'Due Date', 'Balance', 'Status', ''].map(h => (
+                      <th key={h || 'actions'} className="px-3 py-3 text-right first:text-left whitespace-nowrap" style={PT_FONT.tableHeader}>{h}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody>
                   {periodCalls.map(c => {
                     const balance = c.totalDue - c.received;
                     const pType   = partnerTypeMap[c.partnerId] ?? 'Class A';
+                    const typeStyle = pType === 'Class A'
+                      ? { background: '#DCFCE7', color: PT.green }
+                      : { background: '#EFF6FF', color: PT.blue };
                     return (
-                      <tr key={c.id} className={`hover:bg-gray-50 ${c.status === 'Overdue' ? 'bg-red-50' : ''}`}>
-                        <td className="px-3 py-3 font-medium text-gray-900">{c.partnerName}</td>
+                      <tr key={c.id} style={{ borderTop: `1px solid ${PT.border}`, background: c.status === 'Overdue' ? '#FEF2F2' : undefined }}>
+                        <td className="px-3 py-3 font-medium" style={PT_FONT.tableCell}>{c.partnerName}</td>
                         <td className="px-3 py-3 text-right">
-                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                            pType === 'Class A' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
-                          }`}>{pType === 'Class A' ? 'Type A' : 'Type B'}</span>
+                          <span className="px-2 py-0.5 rounded text-xs font-medium" style={typeStyle}>{pType === 'Class A' ? 'Type A' : 'Type B'}</span>
                         </td>
-                        <td className="px-3 py-3 text-right">{c.sharePercent}%</td>
-                        <td className="px-3 py-3 text-right">{fmt(c.totalCallAmount)}</td>
-                        <td className="px-3 py-3 text-right">{fmt(c.partnerShare)}</td>
-                        <td className="px-3 py-3 text-right text-orange-600">{c.oldDues > 0 ? fmt(c.oldDues) : '—'}</td>
-                        <td className="px-3 py-3 text-right font-semibold">{fmt(c.totalDue)}</td>
-                        <td className="px-3 py-3 text-right text-green-700">{fmt(c.received)}</td>
-                        <td className="px-3 py-3 text-right text-gray-500">{c.dueDate ?? c.receivedDate ?? '—'}</td>
-                        <td className="px-3 py-3 text-right font-semibold text-red-600">{balance > 0 ? fmt(balance) : '—'}</td>
+                        <td className="px-3 py-3 text-right" style={PT_FONT.tableCell}>{c.sharePercent}%</td>
+                        <td className="px-3 py-3 text-right" style={PT_FONT.tableCell}>{fmt(c.partnerShare)}</td>
+                        <td className="px-3 py-3 text-right" style={{ ...PT_FONT.tableCell, color: PT.amber }}>{c.oldDues > 0 ? fmt(c.oldDues) : '—'}</td>
+                        <td className="px-3 py-3 text-right font-semibold" style={PT_FONT.tableCell}>{fmt(c.totalDue)}</td>
+                        <td className="px-3 py-3 text-right" style={{ ...PT_FONT.tableCell, color: PT.green }}>{fmt(c.received)}</td>
+                        <td className="px-3 py-3 text-right" style={{ ...PT_FONT.tableCell, color: PT.muted }}>{c.dueDate ?? c.receivedDate ?? '—'}</td>
+                        <td className="px-3 py-3 text-right font-semibold" style={{ ...PT_FONT.tableCell, color: balance > 0 ? PT.red : PT.muted }}>{balance > 0 ? fmt(balance) : '—'}</td>
                         <td className="px-3 py-3 text-right">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[c.status]}`}>
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={STATUS_BADGE[c.status]}>
                             {c.status}
                           </span>
                         </td>
                         <td className="px-3 py-3">
                           {(c.status === 'Overdue' || c.status === 'Outstanding') && (
-                            <button className="flex items-center gap-1 text-xs text-blue-600 whitespace-nowrap hover:text-blue-800 border border-blue-200 px-2 py-0.5 rounded-lg">
+                            <button className="flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-lg"
+                              style={{ ...PT_FONT.caption, color: PT.gold, border: `1px solid ${PT.border}`, background: PT.cardBg }}>
                               <Bell size={11} /> Remind
                             </button>
                           )}
@@ -595,12 +800,12 @@ export default function PD06CapitalCalls() {
                   })}
                 </tbody>
                 <tfoot>
-                  <tr className="bg-gray-900 text-white">
-                    <td className="px-3 py-3 font-bold" colSpan={6}>TOTAL</td>
+                  <tr style={{ background: '#44403C', color: '#fff', ...PT_FONT.tableCell }}>
+                    <td className="px-3 py-3 font-bold" colSpan={5}>TOTAL</td>
                     <td className="px-3 py-3 text-right font-bold">{fmt(pTotal)}</td>
-                    <td className="px-3 py-3 text-right font-bold text-green-300">{fmt(pReceived)}</td>
+                    <td className="px-3 py-3 text-right font-bold" style={{ color: '#86EFAC' }}>{fmt(pReceived)}</td>
                     <td />
-                    <td className="px-3 py-3 text-right font-bold text-red-300">{fmt(pTotal - pReceived)}</td>
+                    <td className="px-3 py-3 text-right font-bold" style={{ color: '#FCA5A5' }}>{fmt(pTotal - pReceived)}</td>
                     <td /><td />
                   </tr>
                 </tfoot>
@@ -609,6 +814,7 @@ export default function PD06CapitalCalls() {
           </div>
         );
       })}
+      </div>
 
       {showModal && renderModal()}
     </div>

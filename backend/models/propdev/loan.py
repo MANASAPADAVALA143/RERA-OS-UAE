@@ -1,7 +1,8 @@
 import uuid
 from datetime import date, datetime
+from typing import Any, Optional
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, Numeric, String, Uuid, func
+from sqlalchemy import Date, DateTime, ForeignKey, Index, JSON, Numeric, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -15,6 +16,8 @@ class PropDevLoan(Base):
     company_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("propdev_companies.id"), nullable=False, index=True)
 
     bank: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Property / Building name from Bank Loan Information Excel (per loan).
+    property_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     loan_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     account_no: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
@@ -32,6 +35,13 @@ class PropDevLoan(Base):
 
     bank_account: Mapped[str | None] = mapped_column(String(255), nullable=True)
     emi_status: Mapped[str] = mapped_column(String(50), default="Current", nullable=False)
+
+    # Loan Management (Tab 2)
+    insurance_expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    refinancing_status: Mapped[str | None] = mapped_column(String(50), default="Not Started", nullable=True)
+    refinancing_notes: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    loan_purpose: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    maturity_checklist: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(

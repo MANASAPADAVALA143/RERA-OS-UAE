@@ -4,7 +4,7 @@ import { CheckCircle2, DollarSign, Home } from 'lucide-react';
 const fmt = (n: number) => `$${Math.round(n).toLocaleString()}`;
 
 export default function PD08Sales() {
-  const { lots, properties } = usePropDev();
+  const { lots, properties, companies } = usePropDev();
   const p = properties[0];
 
   const soldLots = lots.filter(l => l.status === 'sold');
@@ -17,13 +17,13 @@ export default function PD08Sales() {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-gray-900">Sale of Property</h2>
-        <p className="text-sm text-gray-500 mt-0.5">Closed lot sales and profit attribution</p>
+        <p className="text-sm text-gray-500 mt-0.5">Closed property sales and profit attribution</p>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Lots Closed', value: `${soldLots.length}`, icon: Home, color: 'text-blue-700' },
+          { label: 'Properties Sold', value: `${soldLots.length}`, icon: Home, color: 'text-blue-700' },
           { label: 'Total Sale Value', value: fmt(totalSaleValue), icon: DollarSign, color: 'text-green-700' },
           { label: 'Commission Paid', value: fmt(commission), icon: DollarSign, color: 'text-amber-700' },
           { label: 'Gross Profit (Sold)', value: fmt(grossProfit), icon: CheckCircle2, color: grossProfit >= 0 ? 'text-green-700' : 'text-red-700' },
@@ -47,7 +47,7 @@ export default function PD08Sales() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
               <tr>
-                {['#', 'Lot No', 'Block', 'Buyer', 'Size (sqft)', 'List Price', 'Sale Price', 'Discount', 'Land Cost', 'Commission', 'Net Gain', 'Close Date'].map(h => (
+                {['#', 'Company', 'Buyer', 'Size (sqft)', 'List Price', 'Sale Price', 'Discount', 'Land Cost', 'Commission', 'Net Gain', 'Close Date'].map(h => (
                   <th key={h} className="px-4 py-3 text-right first:text-left whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -57,11 +57,11 @@ export default function PD08Sales() {
                 const discount = lot.listPrice - (lot.salePrice ?? 0);
                 const lotCommission = (lot.salePrice ?? 0) * p.commissionRate;
                 const netGain = (lot.salePrice ?? 0) - lot.landCost - lotCommission;
+                const companyName = companies.find(c => c.id === lot.companyId)?.name ?? p.name;
                 return (
                   <tr key={lot.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-gray-400">{idx + 1}</td>
-                    <td className="px-4 py-3 font-medium text-gray-900">{lot.lotNo}</td>
-                    <td className="px-4 py-3 text-right text-gray-600">{lot.block}</td>
+                    <td className="px-4 py-3 font-medium text-gray-900">{companyName}</td>
                     <td className="px-4 py-3 text-right">{lot.buyerName}</td>
                     <td className="px-4 py-3 text-right">{lot.sizeSqft.toLocaleString()}</td>
                     <td className="px-4 py-3 text-right">{fmt(lot.listPrice)}</td>
@@ -75,13 +75,13 @@ export default function PD08Sales() {
                 );
               })}
               {soldLots.length === 0 && (
-                <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-400">No closed sales yet.</td></tr>
+                <tr><td colSpan={11} className="px-4 py-8 text-center text-gray-400">No closed sales yet.</td></tr>
               )}
             </tbody>
             {soldLots.length > 0 && (
               <tfoot>
                 <tr className="bg-gray-900 text-white">
-                  <td className="px-4 py-3 font-bold" colSpan={4}>TOTAL ({soldLots.length} lots)</td>
+                  <td colSpan={4}>TOTAL ({soldLots.length} propert{soldLots.length !== 1 ? 'ies' : 'y'})</td>
                   <td className="px-4 py-3 text-right font-bold">{soldLots.reduce((s,l) => s + l.sizeSqft, 0).toLocaleString()}</td>
                   <td className="px-4 py-3 text-right font-bold">{fmt(soldLots.reduce((s,l) => s + l.listPrice, 0))}</td>
                   <td className="px-4 py-3 text-right font-bold text-green-300">{fmt(totalSaleValue)}</td>

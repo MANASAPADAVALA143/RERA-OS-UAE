@@ -36,7 +36,7 @@ const NAV = [
   { to: '/development',       label: 'Development',       icon: Building2       },
   { to: '/reit',              label: 'REIT',              icon: Landmark        },
   { to: '/property-dev',      label: 'Property Dev',      icon: HardDriveUpload },
-  { to: '/consultancy',       label: 'Consultancy',       icon: Briefcase      },
+  { to: '/consultancy',       label: 'Consultancy & Outsourcing', icon: Briefcase },
   { to: '/rental',            label: 'Rental & Lease',    icon: Home            },
   { to: '/capital-risk',      label: 'Capital & Risk',    icon: ShieldAlert     },
   { to: '/pipeline-market',   label: 'Pipeline & Market', icon: Map             },
@@ -181,7 +181,7 @@ function SidebarInner() {
               {/* Consultancy sub-nav */}
               {to === '/consultancy' && onConsultancy && (
                 <div className="mt-1 mb-1">
-                  {CONSULTANCY_TABS.map(({ id, label: itemLabel, Icon: ItemIcon, groupLabel }) => (
+                  {CONSULTANCY_TABS.map(({ id, label: itemLabel, Icon: ItemIcon, groupLabel, comingSoon }) => (
                     <div key={id}>
                       {groupLabel && (
                         <p className="pl-7 pr-3 pt-2 pb-0.5 text-sm uppercase tracking-wider font-medium"
@@ -196,6 +196,7 @@ function SidebarInner() {
                       >
                         <ItemIcon size={15} className="shrink-0" />
                         {itemLabel}
+                        {comingSoon && <span className="ml-auto text-[11px] opacity-60">soon</span>}
                       </button>
                     </div>
                   ))}

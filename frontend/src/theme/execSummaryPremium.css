@@ -1,0 +1,161 @@
+/*
+ * Premium Executive Summary theme — scoped to .esp-scope only.
+ * Used by the Daily Pulse and Ownership tabs in RentalExecutiveSummary.
+ * Do NOT reference these variables outside .esp-scope; other Rental pages
+ * use the separate parchment theme (parchmentTypography.ts) and must not change.
+ */
+.esp-scope {
+  --ivory: #F7F8FA;
+  --ivory-dark: #EEF0F6;
+  --card: #FFFFFF;
+  --gold: #5B5FEF;
+  --gold-light: #EEF0FF;
+  --gold-border: #C7D2FE;
+  --navy: #1A1D29;
+  --navy-text: #0D1B2A;
+  --slate: #64748B;
+  --border: #E2E8F0;
+
+  /* Status colours — NO red, NO green anywhere in this scope. */
+  --active: #1B3A6B;
+  --active-bg: #E8EFF8;
+  --pending: #F5A623;
+  --pending-dark: #B45309;
+  --pending-bg: #FEF3E2;
+  --overdue: #7C3AED;
+  --overdue-bg: #F5F3FF;
+  --growth: #5BB5A2;
+  --neutral-pill: #E8EDF2;
+
+  /* Alert-card background tints (distinct from pill backgrounds above). */
+  --overdue-card-bg: #FDFBFF;
+  --pending-card-bg: #FFFEF5;
+  --active-card-bg: #F0F4F9;
+
+  /* Back-compat aliases so existing components using the old semantic names
+     keep working — mapped onto the new no-red/no-green palette. */
+  --positive: var(--active);
+  --positive-bg: var(--active-bg);
+  --warning: var(--pending);
+  --warning-bg: var(--pending-bg);
+  --critical: var(--overdue);
+  --critical-bg: var(--overdue-bg);
+  --indigo: var(--overdue);
+
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--ivory);
+  color: var(--navy-text);
+}
+
+.esp-scope * { box-sizing: border-box; }
+
+.esp-label {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--slate);
+}
+.esp-value { font-size: 28px; font-weight: 800; color: var(--navy-text); }
+.esp-body { font-size: 14px; font-weight: 500; color: var(--navy-text); }
+.esp-sub { font-size: 12px; font-weight: 400; color: var(--slate); }
+
+.esp-card {
+  background: var(--card);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+  padding: 24px;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.esp-card:hover {
+  box-shadow: 0 4px 20px rgba(199,154,43,0.12);
+  border-color: var(--gold-border);
+}
+
+.esp-section-title {
+  border-left: 4px solid var(--gold);
+  padding-left: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--navy-text);
+  margin-bottom: 20px;
+}
+
+.esp-tabbar {
+  display: flex; gap: 4px; flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+.esp-tab {
+  padding: 12px 20px; font-size: 13px; font-weight: 500; color: var(--slate);
+  background: none; border: none; border-bottom: 2px solid transparent;
+  cursor: pointer; transition: color 0.15s ease, border-color 0.15s ease;
+  font-family: inherit;
+}
+.esp-tab:hover { color: var(--navy-text); }
+.esp-tab.active { color: var(--gold); font-weight: 700; border-bottom-color: var(--gold); }
+
+.esp-pill {
+  display: inline-flex; align-items: center; border-radius: 9999px;
+  padding: 3px 12px; font-size: 12px; font-weight: 600;
+}
+
+.esp-btn-primary {
+  background: var(--gold); color: var(--navy); font-weight: 700;
+  border: none; border-radius: 8px; padding: 8px 16px; cursor: pointer;
+  font-family: inherit; font-size: 13px; transition: filter 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+.esp-btn-primary:hover { filter: brightness(1.05); box-shadow: 0 0 0 3px rgba(199,154,43,0.2); }
+.esp-btn-primary:active { transform: scale(0.97); }
+
+.esp-btn-ghost {
+  background: transparent; border: 1.5px solid var(--gold); color: var(--gold);
+  font-weight: 600; border-radius: 8px; padding: 8px 16px; cursor: pointer;
+  font-family: inherit; font-size: 13px; transition: background 0.15s ease;
+}
+.esp-btn-ghost:hover { background: var(--gold-light); }
+
+.esp-row-hover { transition: border-left-color 150ms ease, background 150ms ease; border-left: 3px solid transparent; }
+.esp-row-hover:hover { border-left-color: var(--gold); background: #FAFAFA; }
+
+@keyframes esp-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+.esp-pulse { animation: esp-pulse 2s infinite; }
+
+@keyframes esp-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.esp-fade-in { animation: esp-fade-in 200ms ease; }
+
+@keyframes esp-slide-in-right { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
+.esp-slide-in { animation: esp-slide-in-right 260ms ease both; }
+
+@keyframes esp-toast-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: translateX(0); } }
+.esp-toast { animation: esp-toast-in 300ms ease; }
+
+.esp-bar-track { height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; }
+.esp-bar-fill { height: 100%; border-radius: 4px; transition: width 800ms ease-out; }
+
+.esp-mini-bar-track { height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; margin-top: 4px; }
+.esp-mini-bar-fill { height: 100%; border-radius: 2px; transition: width 800ms ease-out; }
+
+.esp-avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--gold); color: var(--navy); font-size: 14px; font-weight: 700;
+  flex-shrink: 0;
+}
+
+.esp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.esp-table thead th {
+  background: var(--navy); color: #fff; font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em; text-align: left;
+  padding: 10px 14px; position: sticky; top: 0;
+}
+.esp-table tbody td { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.esp-table tbody tr:nth-child(even) { background: #F8FAFC; }
+.esp-table tbody tr.esp-total-row {
+  background: var(--gold-light); font-weight: 700;
+  border-top: 2px solid var(--gold); border-bottom: 2px solid var(--gold);
+}
+
+.esp-empty {
+  text-align: center; padding: 40px 24px; color: var(--slate);
+}
+.esp-empty .esp-empty-title { font-size: 14px; margin: 8px 0; }
+.esp-empty .esp-empty-note { font-size: 12px; font-style: italic; margin-top: 6px; }

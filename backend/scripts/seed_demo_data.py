@@ -8,8 +8,8 @@ database shows realistic numbers everywhere (no $0, no blank charts):
   * Construction/Dev  — scripts/seed_scottsdale_project.seed_scottsdale()
                         + pay applications, expenses, loans, task schedule
   * Property Dev      — routers/propdev/seed_wwbg.seed_wwbg()  (WWBG land deal)
-  * Consultancy       — no DB seed needed; the Consultancy module ships with
-                        deterministic in-app demo data (frontend context).
+  * Consultancy       — scripts/seed_consultancy.seed() (company + 3-year
+                        financials + client invoice book)
 
 Usage (from backend/):
     python scripts/seed_demo_data.py
@@ -92,7 +92,12 @@ def main_seed() -> None:
     finally:
         db.close()
 
-    print("\nDone. Consultancy needs no DB seed — it ships with in-app demo data.")
+    # ── Consultancy & Outsourcing ───────────────────────────────────────────
+    print("\nConsultancy & Outsourcing ...")
+    from scripts.seed_consultancy import seed as seed_consultancy
+    seed_consultancy(tenant_id)
+
+    print("\nDone.")
 
 
 if __name__ == "__main__":
