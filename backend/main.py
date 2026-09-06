@@ -112,7 +112,9 @@ _cors_kwargs = {
 if _cors_extra_origins:
     _cors_kwargs["allow_origins"] = list(dict.fromkeys(_cors_extra_origins))
 _cors_kwargs["allow_origin_regex"] = (
-    r"https?://(localhost|127\.0\.0\.1)(:\d+)?|https://[a-zA-Z0-9][a-zA-Z0-9-]*\.onrender\.com"
+    r"https?://(localhost|127\.0\.0\.1)(:\d+)?"
+    r"|https://[a-zA-Z0-9][a-zA-Z0-9-]*\.onrender\.com"
+    r"|https://[a-zA-Z0-9][a-zA-Z0-9-]*\.vercel\.app"
 )
 
 app.add_middleware(CORSMiddleware, **_cors_kwargs)
