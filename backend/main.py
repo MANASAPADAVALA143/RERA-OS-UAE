@@ -215,16 +215,26 @@ app.include_router(consultancy_billing_router)
 
 # Serve uploaded files from local disk only when S3 is not configured (local dev).
 # In production, files are served via S3 pre-signed URLs — no static mount needed.
+# On read-only serverless filesystems (Vercel) this is skipped gracefully.
 if not settings.s3_bucket:
-    _uploads_dir = Path(__file__).resolve().parent / "uploads"
-    _uploads_dir.mkdir(parents=True, exist_ok=True)
-    app.mount("/uploads", StaticFiles(directory=str(_uploads_dir)), name="uploads")
+    try:
+        _uploads_dir = Path(__file__).resolve().parent / "uploads"
+        _uploads_dir.mkdir(parents=True, exist_ok=True)
+        app.mount("/uploads", StaticFiles(directory=str(_uploads_dir)), name="uploads")
+    except OSError:
+        import logging
+        logging.getLogger(__name__).warning("uploads dir not writable — /uploads mount skipped")
 
 
 @app.on_event("startup")
 def startup():
-    apply_schema_patches(engine)
-    Base.metadata.create_all(bind=engine)
+    import logging
+    _log = logging.getLogger(__name__)
+    try:
+        apply_schema_patches(engine)
+        Base.metadata.create_all(bind=engine)
+    except Exception:
+        _log.exception("Startup schema init failed — /health still available")
     try:
         from routers.rentals.router import _ensure_fin_uploads_table
         _ensure_fin_uploads_table(engine)
