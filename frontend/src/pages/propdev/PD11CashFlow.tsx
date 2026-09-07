@@ -3,6 +3,7 @@ import { usePropDev } from '../../contexts/PropertyDevContext';
 import { usePropDevNav } from '../../contexts/PropDevNavContext';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 import { AlertTriangle, CheckCircle2, TrendingUp, Phone, ChevronDown, ChevronUp } from 'lucide-react';
+import PropDevPageHeader from '../../components/propdev/PropDevPageHeader';
 
 const fmt = (n: number) => n < 0 ? `($${Math.abs(Math.round(n)).toLocaleString()})` : `$${Math.round(n).toLocaleString()}`;
 const fmtAbs = (n: number) => `$${Math.abs(Math.round(n)).toLocaleString()}`;
@@ -326,10 +327,7 @@ export default function PD11CashFlow() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-gray-900">Cash Flow</h2>
-        <p className="text-sm text-gray-500 mt-0.5">30/60/90-day forward view + runway indicator</p>
-      </div>
+      <PropDevPageHeader title="Cash Flow" subtitle="30/60/90-day forward view + runway indicator" />
 
       {/* CEO Cash Today */}
       <CashTodayBox cash={p.cashAvailable} monthlyEmi={monthlyEmi} nextOutflow={nextOutflow} />
@@ -579,14 +577,14 @@ export default function PD11CashFlow() {
       {p?.yearlyCF && (() => {
         const cfYears = Object.keys(p.yearlyCF).sort();
         return (
-          <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'rgba(99,102,241,0.25)' }}>
-            <div className="px-4 py-2 flex items-center gap-2 border-b" style={{ background: '#F0EDE5', borderColor: 'rgba(99,102,241,0.20)' }}>
+          <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'rgba(212,175,55,0.25)' }}>
+            <div className="px-4 py-2 flex items-center gap-2 border-b" style={{ background: '#EEF0FF', borderColor: 'rgba(212,175,55,0.20)' }}>
               <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Historical Cash Flow Statement · {p.name} · {cfYears[0]}–{cfYears[cfYears.length - 1]}</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr style={{ background: '#F8FAFC' }}>
+                  <tr style={{ background: '#F7F5F0' }}>
                     <th className="px-4 py-2 text-left text-gray-500 font-medium">Activity</th>
                     {cfYears.map(y => <th key={y} className="px-3 py-2 text-right text-gray-500 font-medium">{y}</th>)}
                     <th className="px-3 py-2 text-right text-gray-500 font-medium">Total</th>
@@ -601,7 +599,7 @@ export default function PD11CashFlow() {
                   ] as const).map(({ label, key, bold }) => {
                     const total = cfYears.reduce((s, y) => s + (p.yearlyCF![y]?.[key] ?? 0), 0);
                     return (
-                      <tr key={label} className={bold ? 'font-bold' : ''} style={bold ? { background: '#F0EDE5' } : {}}>
+                      <tr key={label} className={bold ? 'font-bold' : ''} style={bold ? { background: '#EEF0FF' } : {}}>
                         <td className="px-4 py-1.5 text-gray-700">{label}</td>
                         {cfYears.map(y => {
                           const v = p.yearlyCF![y]?.[key] ?? 0;
@@ -622,7 +620,7 @@ export default function PD11CashFlow() {
             </div>
 
             {/* CF Waterfall Chart */}
-            <div className="p-4 border-t" style={{ borderColor: 'rgba(99,102,241,0.15)' }}>
+            <div className="p-4 border-t" style={{ borderColor: 'rgba(212,175,55,0.15)' }}>
               <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Annual Cash Flows</p>
               <ResponsiveContainer width="100%" height={160}>
                 <BarChart data={cfYears.map(y => ({
@@ -664,7 +662,7 @@ export default function PD11CashFlow() {
                 <td className="px-5 py-2.5 font-bold" colSpan={3}>A. OPERATING ACTIVITIES</td>
               </tr>
               {[
-                { label: 'Lot Sale Receipts',                amount: totalRevenue,          note: `${lots.filter(l=>l.status==='sold').length} lots closed` },
+                { label: 'Property Sale Receipts',                amount: totalRevenue,          note: `${lots.filter(l=>l.status==='sold').length} propert${lots.filter(l=>l.status==='sold').length !== 1 ? 'ies' : 'y'} sold` },
                 { label: 'Customer Installments Collected', amount: customerCollections,   note: 'Per installment schedule'  },
                 { label: 'Operating Expenses',              amount: -totalExpenses,         note: '6 months admin + tax'      },
               ].map(({ label, amount, note }) => (

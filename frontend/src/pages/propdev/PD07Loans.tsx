@@ -1,10 +1,54 @@
-import { useMemo, useState } from 'react';
-import { usePropDev } from '../../contexts/PropertyDevContext';
+﻿import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import type { Loan, CompanyData } from '../../contexts/PropertyDevContext';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
-import { Landmark, Mail, Phone, Calendar, TrendingDown, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import {
+  Landmark, Mail, Phone, Calendar, TrendingDown, AlertTriangle, CheckCircle2, Upload,
+  Download, Zap, AlertCircle, FileSpreadsheet,
+} from 'lucide-react';
+import {
+  cashEmiStatus,
+  computeCapitalCallCoverage,
+  computeLtlv,
+  computePortfolioCapitalCallCoverage,
+  coverageStatusColors,
+  formatCoverageRatio,
+  isActivePropDevLoan,
+  pickNextUpcomingMaturity,
+  resolveCompanyMonthlyEmi,
+  resolveLandValue,
+  portfolioLtlvPercent,
+  sumActivePropDevLoanBalances,
+  type CoverageStatusLabel,
+} from '../../utils/propDevLoanMetrics';
+import { usePropDevLoanTrackerData, PROPDEV_MARKET_RATE } from '../../hooks/usePropDevLoanTrackerData';
+import PropDevLoanPortfolioCharts from '../../components/propdev/PropDevLoanPortfolioCharts';
+import PropDevLoanUpload from '../../components/propdev/PropDevLoanUpload';
+import { usePropDev } from '../../contexts/PropertyDevContext';
+import { usePropDevNav } from '../../contexts/PropDevNavContext';
+import { fmtUSD } from '../../components/ProtectedRoute';
+import { PT as TypographyPT, PT_FONT } from '../../utils/parchmentTypography';
+import PropDevPageHeader from '../../components/propdev/PropDevPageHeader';
+import { exportPropDevLoansPdf } from '../../utils/propDevSectionPdfExport';
+import { PROPDEV_EXPORT_PDF_EVENT } from '../../utils/propDevExportEvents';
+import { parchmentStyles } from '../../theme/parchmentTheme';
+import PDLoanManagementTab from './PDLoanManagementTab';
+import PDLoanCalculationsTab from './PDLoanCalculationsTab';
 
 const fmt = (n: number) => `$${Math.round(n).toLocaleString()}`;
+
+/** Same cream tokens as Rentals Ownership / Loan Tracker */
+const PT = {
+  pageBg: TypographyPT.pageBg,
+  cardBg: TypographyPT.cardBg,
+  border: TypographyPT.border,
+  text: TypographyPT.text,
+  muted: TypographyPT.muted,
+};
+const LT_KPI_CARD: CSSProperties = { borderRadius: 10, padding: '8px 10px', minWidth: 0, overflow: 'hidden' };
+const LT_KPI_LABEL: CSSProperties = { fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2, lineHeight: 1.2 };
+const LT_KPI_VALUE: CSSProperties = { fontSize: 17, fontWeight: 700, lineHeight: 1.15, fontVariantNumeric: 'tabular-nums lining-nums' };
+const LT_KPI_SUB: CSSProperties = { fontSize: 10, marginTop: 2, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
+const LT_KPI_NA: CSSProperties = { fontSize: 13, fontWeight: 600, color: PT.muted, lineHeight: 1.2 };
 
 function buildAmortizationSchedule(loan: Loan, months = 12) {
   const monthlyRate = loan.interestRate / 100 / 12;
@@ -26,55 +70,100 @@ const STATUS_COLORS: Record<Loan['status'], string> = {
   'In Default': 'bg-red-100 text-red-700',
 };
 
-const DSCR_BADGE_STYLE = {
-  green: 'bg-green-100 text-green-800',
-  amber: 'bg-amber-100 text-amber-800',
-  red: 'bg-red-100 text-red-800',
-  grey: 'bg-gray-100 text-gray-600',
-} as const;
+const COVERAGE_BADGE_STYLE: Record<CoverageStatusLabel, string> = {
+  Healthy: 'bg-green-100 text-green-800',
+  Monitor: 'bg-amber-100 text-amber-800',
+  Review:  'bg-red-100 text-red-800',
+  'N/A':   'bg-gray-100 text-gray-600',
+};
 
-function loanDscrBadge(dscr: number): keyof typeof DSCR_BADGE_STYLE {
-  if (dscr >= 1.25) return 'green';
-  if (dscr >= 1.0) return 'amber';
-  return 'red';
-}
+const COVERAGE_WINDOW_MONTHS = 3;
 
-// -- DSCR Gauge ---------------------------------------------------------------
+// ── Capital Call Coverage Gauge (development entities — replaces DSCR) ────────
 
-function DscrGauge({ dscr }: { dscr: number }) {
-  const label = dscr >= 1.25 ? 'Strong' : dscr >= 1.0 ? 'Adequate' : 'Below Min';
-  const color = dscr >= 1.25 ? 'text-green-700' : dscr >= 1.0 ? 'text-amber-700' : 'text-red-700';
-  const barWidth = Math.min(100, (dscr / 2) * 100);
-  const barColor = dscr >= 1.25 ? 'bg-green-500' : dscr >= 1.0 ? 'bg-amber-500' : 'bg-red-500';
+function CapitalCallCoverageGauge({
+  ratio,
+  status,
+  dataGap,
+  obligations,
+  uncalled,
+}: {
+  ratio: number | null;
+  status: CoverageStatusLabel;
+  dataGap: boolean;
+  obligations: number;
+  uncalled: number | null;
+}) {
+  const colors = coverageStatusColors(status);
+  const barWidth = ratio != null ? Math.min(100, (ratio / 3) * 100) : 0;
+  const barColor = status === 'Healthy' ? 'bg-green-500' : status === 'Monitor' ? 'bg-amber-500' : status === 'Review' ? 'bg-red-500' : 'bg-gray-300';
+
+  if (dataGap) {
+    return (
+      <div className="bg-gray-50 rounded-xl p-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-gray-500 uppercase tracking-wide">Capital Call Coverage</span>
+          <span className="text-lg font-bold text-gray-600">N/A — insufficient data</span>
+        </div>
+        <p className="text-xs text-gray-500 mt-2">
+          Partner committed capital is not tracked yet. Add <strong>committed capital</strong> amounts to partners
+          (uncalled = committed − contributed) to calculate coverage against upcoming EMI obligations.
+        </p>
+        {obligations > 0 && (
+          <p className="text-xs text-gray-400 mt-1">
+            Upcoming EMI ({COVERAGE_WINDOW_MONTHS} mo): ${Math.round(obligations).toLocaleString()}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (ratio == null) {
+    return (
+      <div className="bg-gray-50 rounded-xl p-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-gray-500 uppercase tracking-wide">Capital Call Coverage</span>
+          <span className="text-lg font-bold text-gray-600">N/A — no loan data</span>
+        </div>
+        <p className="text-xs text-gray-500 mt-2">
+          {obligations <= 0
+            ? 'No active debt service — coverage ratio not applicable during pre-revenue holding.'
+            : 'Unable to compute coverage with current partner and loan data.'}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-gray-50 rounded-xl p-4">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs text-gray-500 uppercase tracking-wide">DSCR</span>
-        <span className={`text-lg font-bold ${color}`}>{dscr.toFixed(2)}x � {label}</span>
+        <span className="text-xs text-gray-500 uppercase tracking-wide">Capital Call Coverage</span>
+        <span className={`text-lg font-bold ${colors.text}`}>{formatCoverageRatio(ratio)} · {status}</span>
       </div>
       <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
         <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${barWidth}%` }} />
       </div>
       <div className="flex justify-between text-xs text-gray-400 mt-1">
-        <span>0x</span><span>1.0x (min)</span><span>1.25x (target)</span><span>2x+</span>
+        <span>0x</span><span>1x (min)</span><span>2x (healthy)</span><span>3x+</span>
       </div>
       <p className="text-xs text-gray-500 mt-2">
-        {dscr < 1.0
-          ? '?? Debt service NOT covered by NOI � immediate refinancing or capital injection needed.'
-          : dscr < 1.25
-            ? 'Marginal coverage � monitor closely and boost collections.'
-            : 'Healthy coverage � loan well-serviced from operating income.'}
+        Uncalled capital ${Math.round(uncalled ?? 0).toLocaleString()} ÷ upcoming EMI
+        (${Math.round(obligations).toLocaleString()} over {COVERAGE_WINDOW_MONTHS} mo).
+        {status === 'Review'
+          ? ' ⚠️ Insufficient uncalled capital to cover near-term debt service — issue capital call.'
+          : status === 'Monitor'
+            ? ' Marginal buffer — monitor partner commitments and EMI schedule.'
+            : ' Healthy buffer — uncalled capital covers upcoming debt service.'}
       </p>
     </div>
   );
 }
 
-// -- Refinancing Recommendation -----------------------------------------------
+// ── Refinancing Recommendation ───────────────────────────────────────────────
 
 function RefinancingRecommendation({ loans }: { loans: Loan[] }) {
-  const MARKET_RATE = 6.5;
-  const highRateLoans = loans.filter(l => l.interestRate > MARKET_RATE && l.status === 'Active');
+  const MARKET_RATE = PROPDEV_MARKET_RATE;
+  const highRateLoans = loans.filter(l => l.interestRate > MARKET_RATE && isActivePropDevLoan(l));
 
   const monthlySavings = useMemo(() => {
     return highRateLoans.reduce((s, l) => {
@@ -88,7 +177,7 @@ function RefinancingRecommendation({ loans }: { loans: Loan[] }) {
     return (
       <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl text-sm text-green-800">
         <CheckCircle2 size={16} className="shrink-0" />
-        No refinancing needed � all active loans are at or below market rate ({MARKET_RATE}%).
+        No refinancing needed — all active loans are at or below market rate ({MARKET_RATE}%).
       </div>
     );
   }
@@ -120,7 +209,7 @@ function RefinancingRecommendation({ loans }: { loans: Loan[] }) {
             </div>
           </div>
           <p className="text-xs text-amber-600 mt-2">
-            Annual savings potential: <strong>{fmt(monthlySavings * 12)}</strong>. Initiate refinancing conversations now � allow 60�90 days for processing.
+            Annual savings potential: <strong>{fmt(monthlySavings * 12)}</strong>. Initiate refinancing conversations now — allow 60–90 days for processing.
           </p>
         </div>
       </div>
@@ -128,7 +217,7 @@ function RefinancingRecommendation({ loans }: { loans: Loan[] }) {
   );
 }
 
-// -- EMI Tracker (This Month) -------------------------------------------------
+// ── EMI Tracker (This Month) ─────────────────────────────────────────────────
 
 function EmiTracker({ loans }: { loans: Loan[] }) {
   const today = new Date();
@@ -137,11 +226,11 @@ function EmiTracker({ loans }: { loans: Loan[] }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200">
       <div className="p-4 border-b border-gray-100">
-        <h3 className="font-semibold text-gray-800">EMI Tracker � This Month</h3>
+        <h3 className="font-semibold text-gray-800">EMI Tracker — This Month</h3>
         <p className="text-xs text-gray-400 mt-0.5">Today is the {dayOfMonth}{dayOfMonth === 1 ? 'st' : dayOfMonth === 2 ? 'nd' : dayOfMonth === 3 ? 'rd' : 'th'}</p>
       </div>
       <div className="divide-y divide-gray-100">
-        {loans.filter(l => l.status === 'Active').map(loan => {
+        {loans.filter(isActivePropDevLoan).map(loan => {
           const isPaid = dayOfMonth > loan.emiDate + 2;
           const isDue = dayOfMonth >= loan.emiDate && !isPaid;
           const isUpcoming = dayOfMonth < loan.emiDate;
@@ -149,7 +238,7 @@ function EmiTracker({ loans }: { loans: Loan[] }) {
             <div key={loan.id} className={`flex items-center justify-between px-4 py-3 ${isDue ? 'bg-amber-50' : ''}`}>
               <div>
                 <p className="text-sm font-medium text-gray-900">{loan.bank}</p>
-                <p className="text-xs text-gray-400">Due on {loan.emiDate}{loan.emiDate === 1 ? 'st' : 'th'} � A/c {loan.accountNo.slice(-4)}</p>
+                <p className="text-xs text-gray-400">Due on {loan.emiDate}{loan.emiDate === 1 ? 'st' : 'th'} · A/c {loan.accountNo.slice(-4)}</p>
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-sm font-bold text-gray-900">{fmt(loan.emi)}</span>
@@ -166,17 +255,23 @@ function EmiTracker({ loans }: { loans: Loan[] }) {
         })}
         <div className="flex justify-between px-4 py-3 bg-gray-50">
           <span className="font-bold text-gray-900 text-sm">Total Monthly EMI</span>
-          <span className="font-bold text-red-600">{fmt(loans.filter(l=>l.status==='Active').reduce((s,l)=>s+l.emi,0))}</span>
+          <span className="font-bold text-red-600">{fmt(loans.filter(isActivePropDevLoan).reduce((s,l)=>s+l.emi,0))}</span>
         </div>
       </div>
     </div>
   );
 }
 
-// -- Loan Register -------------------------------------------------------------
+// ── Loan Register ─────────────────────────────────────────────────────────────
 
-function LoanRegister({ loans, monthlyCollections }: { loans: Loan[]; monthlyCollections: number }) {
-  const loanCount = Math.max(1, loans.length);
+function LoanRegister({ loans, companies, allLoans }: { loans: Loan[]; companies: CompanyData[]; allLoans: Loan[] }) {
+  const companyById = useMemo(() => new Map(companies.map(c => [c.id, c])), [companies]);
+  const coverageByCompany = useMemo(() => {
+    const m = new Map<string, ReturnType<typeof computeCapitalCallCoverage>>();
+    for (const c of companies) m.set(c.id, computeCapitalCallCoverage(c, COVERAGE_WINDOW_MONTHS, allLoans));
+    return m;
+  }, [companies, allLoans]);
+
   return (
     <div className="bg-white rounded-xl border overflow-hidden">
       <div className="px-4 py-3 border-b bg-gray-900 text-white"><h3 className="font-semibold">Loan Register</h3></div>
@@ -184,29 +279,39 @@ function LoanRegister({ loans, monthlyCollections }: { loans: Loan[]; monthlyCol
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
             <tr>
-              {['Company', 'Building', 'Bank', 'Loan Amount', 'Rate', 'EMI', 'Outstanding', 'Maturity', 'EMI Day', 'DSCR', 'Status'].map(h => (
-                <th key={h} className="px-3 py-2.5 text-right first:text-left whitespace-nowrap">{h}</th>
+              {['Company', 'Property', 'Bank', 'Loan Amount', 'Rate', 'EMI', 'Outstanding', 'Maturity', 'EMI Day', 'Call Coverage', 'Status'].map(h => (
+                <th
+                  key={h}
+                  className={`px-3 py-2.5 whitespace-nowrap ${
+                    ['Company', 'Property', 'Bank', 'Status'].includes(h) ? 'text-left' : 'text-right'
+                  }`}
+                >{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y">
             {loans.map(loan => {
-              const loanDscr = (loan.emi * 12) > 0 ? (monthlyCollections * 12 / loanCount) / (loan.emi * 12) : 99;
-              const st = loanDscrBadge(loanDscr);
+              const company = companyById.get(loan.companyId);
+              const coverage = company ? coverageByCompany.get(company.id) : undefined;
+              const covStatus = coverage?.status ?? 'N/A';
+              const propertyLabel = (loan.property || company?.property.name || '—').trim() || '—';
+              const bankLabel = (loan.bank || '—').trim() || '—';
               return (
                 <tr key={loan.id} className="hover:bg-gray-50">
-                  <td className="px-3 py-2.5">{loan.company}</td>
-                  <td className="px-3 py-2.5">{loan.property}</td>
-                  <td className="px-3 py-2.5">{loan.bank}</td>
+                  <td className="px-3 py-2.5 text-left font-medium text-gray-900">{loan.company}</td>
+                  <td className="px-3 py-2.5 text-left text-gray-800">{propertyLabel}</td>
+                  <td className="px-3 py-2.5 text-left text-gray-800">{bankLabel}</td>
                   <td className="px-3 py-2.5 text-right font-mono">{fmt(loan.amount)}</td>
                   <td className="px-3 py-2.5 text-right font-mono">{loan.interestRate.toFixed(2)}%</td>
                   <td className="px-3 py-2.5 text-right font-mono">{fmt(loan.emi)}</td>
                   <td className="px-3 py-2.5 text-right font-mono">{fmt(loan.balance)}</td>
                   <td className="px-3 py-2.5 text-right text-xs">{loan.maturityDate}</td>
                   <td className="px-3 py-2.5 text-right">{loan.emiDate}</td>
-                  <td className="px-3 py-2.5 text-right font-mono">{loanDscr > 50 ? '8' : `${loanDscr.toFixed(2)}x`}</td>
-                  <td className="px-3 py-2.5 text-right">
-                    <span className={`px-2 py-0.5 rounded-full text-xs ${DSCR_BADGE_STYLE[st]}`}>{st}</span>
+                  <td className="px-3 py-2.5 text-right font-mono">
+                    {coverage?.dataGap ? 'N/A' : formatCoverageRatio(coverage?.ratio ?? null)}
+                  </td>
+                  <td className="px-3 py-2.5 text-left">
+                    <span className={`px-2 py-0.5 rounded-full text-xs ${COVERAGE_BADGE_STYLE[covStatus]}`}>{covStatus}</span>
                   </td>
                 </tr>
               );
@@ -219,39 +324,102 @@ function LoanRegister({ loans, monthlyCollections }: { loans: Loan[]; monthlyCol
   );
 }
 
-// -- Section 1: Company-wise Loan KPI Cards ------------------------------------
+// ── Entity Capital Call Coverage Health (replaces Building DSCR Health) ───────
 
-function CompanyLoanCards({ companies, marketRate }: { companies: CompanyData[]; marketRate: number }) {
+function EntityCoverageHealth({ companies, allLoans }: { companies: CompanyData[]; allLoans: Loan[] }) {
+  const rows = useMemo(
+    () => companies
+      .map(c => ({ company: c, coverage: computeCapitalCallCoverage(c, COVERAGE_WINDOW_MONTHS, allLoans), emi: resolveCompanyMonthlyEmi(c, allLoans) }))
+      .filter(r => r.emi > 0 || r.coverage.dataGap || allLoans.some(l => l.companyId === r.company.id)),
+    [companies, allLoans],
+  );
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-100">
+        <h3 className="font-semibold text-gray-800">Entity Capital Call Coverage Health</h3>
+        <p className="text-xs text-gray-500 mt-0.5">
+          Uncalled partner capital ÷ upcoming EMI ({COVERAGE_WINDOW_MONTHS} months) — development entities only
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+            <tr>
+              {['Entity', 'Monthly EMI', 'Uncalled Capital', `EMI (${COVERAGE_WINDOW_MONTHS} mo)`, 'Coverage', 'Status'].map(h => (
+                <th key={h} className="px-4 py-2.5 text-right first:text-left whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {rows.map(({ company, coverage, emi }) => {
+              const colors = coverageStatusColors(coverage.status);
+              return (
+                <tr key={company.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-2.5 font-medium">{company.name}</td>
+                  <td className="px-4 py-2.5 text-right font-mono">{fmt(emi)}</td>
+                  <td className="px-4 py-2.5 text-right font-mono">
+                    {coverage.dataGap ? '—' : fmt(coverage.uncalled ?? 0)}
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono">{fmt(coverage.obligations)}</td>
+                  <td className={`px-4 py-2.5 text-right font-semibold ${colors.text}`}>
+                    {coverage.dataGap ? 'N/A' : formatCoverageRatio(coverage.ratio)}
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <span className={`px-2 py-0.5 rounded-full text-xs ${COVERAGE_BADGE_STYLE[coverage.status]}`}>
+                      {coverage.dataGap ? 'Data gap' : coverage.status}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {rows.some(r => r.coverage.dataGap) && (
+        <p className="px-4 py-3 text-xs text-amber-700 bg-amber-50 border-t border-amber-100">
+          Partner <strong>committed capital</strong> is not yet tracked in the data model. Add commitment amounts to partners to enable coverage ratios.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── Section 1: Company-wise Loan KPI Cards ────────────────────────────────────
+
+function CompanyLoanCards({ companies, marketRate, allLoans }: { companies: CompanyData[]; marketRate: number; allLoans: Loan[] }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-lg font-bold text-gray-900">Loan Position � By Company</h3>
+        <h3 className="text-lg font-bold text-gray-900">Loan Position — By Company</h3>
         <p className="text-sm text-gray-500 mt-0.5">Click any card to expand loan details</p>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {companies.map(company => {
-          const activeLoans = company.loans.filter(l => l.status === 'Active');
+          const activeLoans = company.loans.filter(isActivePropDevLoan);
           if (activeLoans.length === 0) return null;
           const totalBalance = activeLoans.reduce((s, l) => s + l.balance, 0);
-          const totalEMI    = activeLoans.reduce((s, l) => s + l.emi, 0);
+          const totalEMI    = resolveCompanyMonthlyEmi(company, allLoans);
+          const coverage    = computeCapitalCallCoverage(company, COVERAGE_WINDOW_MONTHS, allLoans);
           const weightedRate = totalBalance > 0
             ? activeLoans.reduce((s, l) => s + l.interestRate * l.balance, 0) / totalBalance : 0;
           const nextEmiDate      = Math.min(...activeLoans.map(l => l.emiDate));
-          const earliestMaturity = [...activeLoans].sort((a, b) => a.maturityDate.localeCompare(b.maturityDate))[0]?.maturityDate;
-          const monthlyCollections = company.customers.reduce((s, c) => s + c.collected, 0) / 6;
-          const dscr = totalEMI * 12 > 0 ? (monthlyCollections * 12) / (totalEMI * 12) : 99;
+          const earliestMaturity = pickNextUpcomingMaturity(activeLoans)?.maturityDate;
           const isAboveMarket  = weightedRate > marketRate;
-          const isLowDscr      = dscr < 1.0;
+          const isLowCoverage  = coverage.ratio != null && coverage.ratio < 1;
           const now = new Date();
           const matDate = earliestMaturity ? new Date(earliestMaturity) : null;
           const daysToMaturity = matDate ? Math.round((matDate.getTime() - now.getTime()) / 86400000) : null;
           const isMaturingSoon = daysToMaturity !== null && daysToMaturity < 90 && daysToMaturity > 0;
-          const borderColor = isLowDscr ? 'border-red-400'
+          const borderColor = isLowCoverage ? 'border-red-400'
             : (isAboveMarket || isMaturingSoon) ? 'border-amber-400' : 'border-green-400';
           const isExpanded = expandedId === company.id;
           const annualSaving = isAboveMarket ? Math.round(totalBalance * (weightedRate - marketRate) / 100) : 0;
+          const covColors = coverageStatusColors(coverage.status);
 
           return (
             <div key={company.id} className={`bg-white rounded-xl border-2 ${borderColor} overflow-hidden`}>
@@ -261,7 +429,7 @@ function CompanyLoanCards({ companies, marketRate }: { companies: CompanyData[];
               >
                 <div className="flex items-center justify-between mb-3">
                   <p className="font-semibold text-gray-900 text-sm leading-tight">{company.name}</p>
-                  <span className="text-gray-400 text-xs">{isExpanded ? '?' : '?'}</span>
+                  <span className="text-gray-400 text-xs">{isExpanded ? '▲' : '▼'}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-y-1.5 gap-x-3 text-xs mb-3">
                   {[
@@ -270,22 +438,23 @@ function CompanyLoanCards({ companies, marketRate }: { companies: CompanyData[];
                     ['Avg Rate',    `${weightedRate.toFixed(2)}%`],
                     ['Monthly EMI', fmt(totalEMI)],
                     ['Next EMI',    `${nextEmiDate}th`],
-                    ['Matures',     earliestMaturity ?? '�'],
+                    ['Matures',     earliestMaturity ?? '—'],
                   ].map(([k, v]) => (
                     <div key={k}><span className="text-gray-400">{k}: </span><span className="font-medium text-gray-700">{v}</span></div>
                   ))}
                 </div>
                 <div className="flex items-center justify-between py-2 border-t border-gray-100">
-                  <span className="text-xs text-gray-400">DSCR</span>
-                  <span className={`text-sm font-bold ${dscr >= 1.25 ? 'text-green-700' : dscr >= 1.0 ? 'text-amber-700' : 'text-red-700'}`}>
-                    {dscr > 50 ? '8' : dscr.toFixed(2)}x {dscr >= 1.25 ? '?' : dscr >= 1.0 ? '??' : '??'}
+                  <span className="text-xs text-gray-400">Capital Call Coverage</span>
+                  <span className={`text-sm font-bold ${covColors.text}`}>
+                    {coverage.dataGap ? 'N/A' : formatCoverageRatio(coverage.ratio)} {coverage.status !== 'N/A' ? `· ${coverage.status}` : ''}
                   </span>
                 </div>
                 <div className="space-y-1 mt-1">
-                  {isLowDscr      && <p className="text-xs text-red-700 bg-red-50 rounded px-2 py-1">?? DSCR below 1.0 � debt not covered by income</p>}
-                  {isAboveMarket  && <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1">?? Rate {weightedRate.toFixed(1)}% &gt; market {marketRate}% � saves {fmt(annualSaving)}/yr</p>}
-                  {isMaturingSoon && <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1">?? Loan matures in {daysToMaturity} days � begin refinancing</p>}
-                  {!isLowDscr && !isAboveMarket && !isMaturingSoon && <p className="text-xs text-green-700 bg-green-50 rounded px-2 py-1">?? All metrics healthy</p>}
+                  {isLowCoverage      && <p className="text-xs text-red-700 bg-red-50 rounded px-2 py-1">🔴 Coverage below 1x — insufficient uncalled capital for near-term EMI</p>}
+                  {coverage.dataGap   && <p className="text-xs text-gray-600 bg-gray-50 rounded px-2 py-1">⚪ Committed capital not tracked — add partner commitment amounts</p>}
+                  {isAboveMarket      && <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1">🟠 Rate {weightedRate.toFixed(1)}% &gt; market {marketRate}% — saves {fmt(annualSaving)}/yr</p>}
+                  {isMaturingSoon     && <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1">🟡 Loan matures in {daysToMaturity} days — begin refinancing</p>}
+                  {!isLowCoverage && !coverage.dataGap && !isAboveMarket && !isMaturingSoon && <p className="text-xs text-green-700 bg-green-50 rounded px-2 py-1">🟢 All metrics healthy</p>}
                 </div>
               </button>
               {isExpanded && (
@@ -321,195 +490,53 @@ function CompanyLoanCards({ companies, marketRate }: { companies: CompanyData[];
   );
 }
 
-// -- Section 2: Daily EMI Calendar ---------------------------------------------
+// ── EMI Calendar strip (matches Rentals Loan Tracker) ─────────────────────────
 
-function EmiCalendar({ companies }: { companies: CompanyData[] }) {
-  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+function EmiCalendarStrip({ loans, scopeLabel }: { loans: Loan[]; scopeLabel: string }) {
   const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth();
-  const monthName = today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDayOfWeek = new Date(year, month, 1).getDay();
-  const todayDay = today.getDate();
-
-  const emiByDay: Record<number, { company: string; bank: string; accountNo: string; amount: number }[]> = {};
-  companies.forEach(c =>
-    c.loans.filter(l => l.status === 'Active').forEach(l => {
-      const d = l.emiDate;
-      if (!emiByDay[d]) emiByDay[d] = [];
-      emiByDay[d].push({ company: l.company, bank: l.bank, accountNo: l.accountNo, amount: l.emi });
-    })
-  );
-
-  const allActive = companies.flatMap(c => c.loans.filter(l => l.status === 'Active'));
-  const totalMonthlyEMI = allActive.reduce((s, l) => s + l.emi, 0);
-  const thisWeekDays = Array.from({ length: 7 }, (_, i) => todayDay - today.getDay() + i).filter(d => d >= 1 && d <= daysInMonth);
-  const thisWeekEMI = thisWeekDays.reduce((s, d) => s + (emiByDay[d] ?? []).reduce((ss, e) => ss + e.amount, 0), 0);
-  const todayEMI = (emiByDay[todayDay] ?? []).reduce((s, e) => s + e.amount, 0);
-
-  const calendarCells: (number | null)[] = [];
-  for (let i = 0; i < firstDayOfWeek; i++) calendarCells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) calendarCells.push(d);
-
-  const bankMap: Record<string, { bank: string; companies: string[]; monthlyEMI: number; outstanding: number; rates: number[] }> = {};
-  companies.forEach(c => c.loans.filter(l => l.status === 'Active').forEach(l => {
-    if (!bankMap[l.bank]) bankMap[l.bank] = { bank: l.bank, companies: [], monthlyEMI: 0, outstanding: 0, rates: [] };
-    bankMap[l.bank].monthlyEMI  += l.emi;
-    bankMap[l.bank].outstanding += l.balance;
-    bankMap[l.bank].rates.push(l.interestRate);
-    if (!bankMap[l.bank].companies.includes(l.company)) bankMap[l.bank].companies.push(l.company);
-  }));
-  const bankRows = Object.values(bankMap).sort((a, b) => b.outstanding - a.outstanding);
+  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const activeLoans = loans.filter(isActivePropDevLoan);
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h3 className="text-lg font-bold text-gray-900">Daily EMI Calendar � All Companies</h3>
-        <p className="text-sm text-gray-500 mt-0.5">Bank-wise EMI deductions across portfolio</p>
-      </div>
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: "Today's EMI deductions", value: fmt(todayEMI) },
-          { label: 'This week total',         value: fmt(thisWeekEMI) },
-          { label: 'This month total',        value: fmt(totalMonthlyEMI) },
-        ].map(({ label, value }) => (
-          <div key={label} className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-xs text-gray-400 mb-1">{label}</p>
-            <p className="text-xl font-bold text-gray-900">{value}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-4 py-3 bg-blue-900 text-white">
-          <h4 className="font-semibold">{monthName}</h4>
-        </div>
-        <div className="p-4">
-          <div className="grid grid-cols-7 gap-1 mb-2">
-            {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
-              <div key={d} className="text-center text-xs font-medium text-gray-400 py-1">{d}</div>
-            ))}
-          </div>
-          <div className="grid grid-cols-7 gap-1">
-            {calendarCells.map((day, idx) => {
-              if (day === null) return <div key={`e${idx}`} />;
-              const hasEmi  = !!emiByDay[day];
-              const isToday = day === todayDay;
-              const isPast  = day < todayDay;
-              const dayAmt  = (emiByDay[day] ?? []).reduce((s, e) => s + e.amount, 0);
-              return (
-                <button
-                  key={day}
-                  onClick={() => setSelectedDay(selectedDay === day ? null : day)}
-                  className={`relative rounded-lg p-1 text-center min-h-[52px] flex flex-col items-center justify-start transition-colors
-                    ${isToday ? 'bg-blue-600 text-white' : hasEmi ? 'bg-blue-50 hover:bg-blue-100 cursor-pointer' : 'hover:bg-gray-50'}
-                    ${selectedDay === day ? 'ring-2 ring-blue-500' : ''}`}
-                >
-                  <span className={`text-xs font-medium ${isToday ? 'text-white' : isPast && !hasEmi ? 'text-gray-300' : 'text-gray-700'}`}>{day}</span>
-                  {hasEmi && (
-                    <>
-                      <div className="flex gap-0.5 mt-0.5">
-                        {Array.from({ length: Math.min(emiByDay[day].length, 3) }).map((_, i) => (
-                          <div key={i} className={`w-1.5 h-1.5 rounded-full ${isToday ? 'bg-white' : 'bg-blue-500'}`} />
-                        ))}
-                      </div>
-                      <span className={`text-[9px] mt-0.5 leading-tight ${isToday ? 'text-blue-100' : 'text-blue-600'}`}>
-                        {fmt(dayAmt)}
-                      </span>
-                    </>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {selectedDay !== null && (emiByDay[selectedDay] ?? []).length > 0 && (
-            <div className="mt-4 border border-blue-200 rounded-xl overflow-hidden">
-              <div className="px-4 py-2 bg-blue-900 text-white text-sm font-medium">
-                EMI Due � {selectedDay}{[,'st','nd','rd'][selectedDay] ?? 'th'} {monthName}
+    <div style={{ background: PT.cardBg, borderRadius: 12, border: `1px solid ${PT.border}`, padding: 16 }}>
+      <h3 style={{ fontSize: 15, fontWeight: 600, color: PT.text, marginBottom: 12 }}>
+        EMI Calendar — {scopeLabel} · {today.toLocaleString('default', { month: 'long', year: 'numeric' })}
+      </h3>
+      <div className="flex flex-wrap gap-1">
+        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
+          const dueLoans = activeLoans.filter(l => l.emiDate === d);
+          if (dueLoans.length === 0) {
+            return (
+              <div key={d} style={{ width: 28, height: 28, fontSize: 11, color: '#C5BDB0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {d}
               </div>
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-gray-400 text-xs uppercase">
-                  <tr>{['Company','Bank','Account','Amount','Status'].map(h => (
-                    <th key={h} className="px-3 py-2 text-right first:text-left">{h}</th>
-                  ))}</tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {(emiByDay[selectedDay] ?? []).map((item, i) => {
-                    const status = selectedDay < todayDay ? '? Paid' : selectedDay === todayDay ? '? Due Today' : '?? Upcoming';
-                    return (
-                      <tr key={i} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 font-medium text-gray-900">{item.company}</td>
-                        <td className="px-3 py-2 text-gray-600">{item.bank}</td>
-                        <td className="px-3 py-2 text-gray-400 text-xs">{item.accountNo}</td>
-                        <td className="px-3 py-2 text-right font-bold">{fmt(item.amount)}</td>
-                        <td className="px-3 py-2 text-right">{status}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            );
+          }
+          return (
+            <div key={d} className="relative group">
+              <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#166534', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 3 }}>
+                {d}
+              </div>
+              <div className="hidden group-hover:block absolute z-10 top-7 left-0 bg-gray-900 text-white text-xs rounded p-2 whitespace-nowrap">
+                {dueLoans.map(l => (
+                  <div key={l.id}>{l.bank}: {fmtUSD(l.emi)}</div>
+                ))}
+              </div>
             </div>
-          )}
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100"><h4 className="font-semibold text-gray-800">Bank-Wise EMI Summary</h4></div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-400 text-xs uppercase">
-              <tr>{['Bank','Companies','Monthly EMI','Outstanding','Avg Rate','Status'].map(h => (
-                <th key={h} className="px-4 py-3 text-right first:text-left">{h}</th>
-              ))}</tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {bankRows.map(row => {
-                const avgRate = row.rates.reduce((s, r) => s + r, 0) / row.rates.length;
-                return (
-                  <tr key={row.bank} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-900">{row.bank}</td>
-                    <td className="px-4 py-3 text-gray-400 text-xs max-w-[140px] truncate">{row.companies.join(', ')}</td>
-                    <td className="px-4 py-3 text-right font-semibold">{fmt(row.monthlyEMI)}</td>
-                    <td className="px-4 py-3 text-right">{fmt(row.outstanding)}</td>
-                    <td className={`px-4 py-3 text-right font-medium ${avgRate > 6.5 ? 'text-amber-700' : 'text-green-700'}`}>{avgRate.toFixed(2)}%</td>
-                    <td className="px-4 py-3 text-right">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${avgRate > 6.5 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
-                        {avgRate > 6.5 ? 'Above Market' : 'Optimal'}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr className="bg-gray-900 text-white">
-                <td className="px-4 py-3 font-bold">TOTAL</td>
-                <td className="px-4 py-3 text-xs text-gray-400">{bankRows.length} banks</td>
-                <td className="px-4 py-3 text-right font-bold">{fmt(bankRows.reduce((s,r) => s+r.monthlyEMI, 0))}</td>
-                <td className="px-4 py-3 text-right font-bold">{fmt(bankRows.reduce((s,r) => s+r.outstanding, 0))}</td>
-                <td className="px-4 py-3 text-right font-bold">
-                  {(bankRows.reduce((s,r) => s + r.rates.reduce((ss,rr)=>ss+rr,0), 0) /
-                    Math.max(1, bankRows.reduce((s,r) => s+r.rates.length, 0))).toFixed(2)}%
-                </td>
-                <td />
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-// -- Section 3: Bank Rate Intelligence -----------------------------------------
+// ── Section 3: Bank Rate Intelligence ─────────────────────────────────────────
 
 function BankRateIntelligence({ companies }: { companies: CompanyData[] }) {
   const [marketRate, setMarketRate] = useState(6.5);
   const [calc, setCalc] = useState({ balance: '', currentRate: '', targetRate: '6.5' });
 
-  const allLoans = companies.flatMap(c => c.loans.filter(l => l.status === 'Active'));
+  const allLoans = companies.flatMap(c => c.loans.filter(isActivePropDevLoan));
 
   const bankMap: Record<string, { bank: string; loans: Loan[]; totalDebt: number; monthlyEMI: number; weightedRate: number }> = {};
   allLoans.forEach(l => {
@@ -547,7 +574,7 @@ function BankRateIntelligence({ companies }: { companies: CompanyData[] }) {
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h3 className="text-lg font-bold text-gray-900">?? Bank Rate Intelligence</h3>
+          <h3 className="text-lg font-bold text-gray-900">🏦 Bank Rate Intelligence</h3>
           <p className="text-sm text-gray-500 mt-0.5">Strategic insights on refinancing opportunities</p>
         </div>
         <div className="flex items-center gap-2">
@@ -580,11 +607,11 @@ function BankRateIntelligence({ companies }: { companies: CompanyData[] }) {
                     <td className="px-4 py-3 text-right">{fmt(row.totalDebt)}</td>
                     <td className={`px-4 py-3 text-right font-semibold ${above ? 'text-red-600' : 'text-green-700'}`}>{row.weightedRate.toFixed(2)}%</td>
                     <td className="px-4 py-3 text-right text-gray-500">{marketRate.toFixed(1)}%</td>
-                    <td className="px-4 py-3 text-right">{above ? <span className="text-red-600 font-medium">+{(row.weightedRate-marketRate).toFixed(2)}%</span> : <span className="text-green-600">?</span>}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-green-700">{annSave > 0 ? fmt(annSave) : '�'}</td>
+                    <td className="px-4 py-3 text-right">{above ? <span className="text-red-600 font-medium">+{(row.weightedRate-marketRate).toFixed(2)}%</span> : <span className="text-green-600">✓</span>}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-green-700">{annSave > 0 ? fmt(annSave) : '—'}</td>
                     <td className="px-4 py-3 text-right">
                       <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${above ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                        {above ? '? REFINANCE' : '? OPTIMAL'}
+                        {above ? '↓ REFINANCE' : '✓ OPTIMAL'}
                       </span>
                     </td>
                   </tr>
@@ -598,12 +625,12 @@ function BankRateIntelligence({ companies }: { companies: CompanyData[] }) {
       <div className="space-y-3">
         {bestRateBank && (
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-            <p className="text-sm font-bold text-blue-900 mb-1">?? INSIGHT 1 � BEST RATE BANK</p>
+            <p className="text-sm font-bold text-blue-900 mb-1">💡 INSIGHT 1 — BEST RATE BANK</p>
             <p className="text-sm text-blue-800"><strong>{bestRateBank.bank}</strong> offers the lowest weighted rate at <strong>{bestRateBank.weightedRate.toFixed(2)}%</strong> across <strong>{bestRateBank.loans.length} loan{bestRateBank.loans.length>1?'s':''}</strong> totaling <strong>{fmt(bestRateBank.totalDebt)}</strong>. Consider consolidating higher-rate loans here.</p>
           </div>
         )}
         <div className={`border rounded-xl p-4 space-y-3 ${highRateLoans.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
-          <p className={`text-sm font-bold mb-1 ${highRateLoans.length > 0 ? 'text-amber-900' : 'text-green-900'}`}>?? INSIGHT 2 � REFINANCING OPPORTUNITY</p>
+          <p className={`text-sm font-bold mb-1 ${highRateLoans.length > 0 ? 'text-amber-900' : 'text-green-900'}`}>💡 INSIGHT 2 — REFINANCING OPPORTUNITY</p>
           {highRateLoans.length > 0 ? (
             <>
               <p className="text-sm text-amber-800"><strong>{highRateLoans.length} loan{highRateLoans.length>1?'s':''}</strong> above market rate ({marketRate}%) totaling <strong>{fmt(highRateLoans.reduce((s,l)=>s+l.balance,0))}</strong>. Refinancing saves <strong>{fmt(monthlySavingTotal)}/month</strong> | <strong>{fmt(monthlySavingTotal*12)}/year</strong>.</p>
@@ -636,23 +663,23 @@ function BankRateIntelligence({ companies }: { companies: CompanyData[] }) {
           )}
         </div>
         <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-          <p className="text-sm font-bold text-gray-900 mb-2">?? INSIGHT 3 � RATE TREND</p>
+          <p className="text-sm font-bold text-gray-900 mb-2">💡 INSIGHT 3 — RATE TREND</p>
           <p className="text-sm text-gray-700 mb-2">Weighted avg portfolio rate is <strong>{weightedAvgRate.toFixed(2)}%</strong> vs market <strong>{marketRate}%</strong>. {refLoans.length > 0 ? 'Priority refinancing order (by annual saving):' : 'All loans at or below market rate.'}</p>
           {refLoans.length > 0 && (
             <ol className="space-y-1">{refLoans.map((l, i) => (
               <li key={l.id} className="text-sm text-gray-700">
-                <strong>{i+1}.</strong> {l.company} � {l.bank} @ <span className="text-red-600 font-medium">{l.interestRate}%</span> � saves <strong>{fmt(Math.round(l.balance*(l.interestRate-marketRate)/100))}/yr</strong>
+                <strong>{i+1}.</strong> {l.company} · {l.bank} @ <span className="text-red-600 font-medium">{l.interestRate}%</span> — saves <strong>{fmt(Math.round(l.balance*(l.interestRate-marketRate)/100))}/yr</strong>
               </li>
             ))}</ol>
           )}
         </div>
         <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-          <p className="text-sm font-bold text-green-900 mb-2">?? INSIGHT 4 � BEST BANK TO APPROACH</p>
+          <p className="text-sm font-bold text-green-900 mb-2">💡 INSIGHT 4 — BEST BANK TO APPROACH</p>
           <div className="space-y-1 text-sm text-green-800">
             {bankRows.slice(0,3).map((b,i) => (
-              <p key={b.bank}><strong>{b.bank}</strong> � {b.weightedRate.toFixed(2)}% avg rate � {fmt(b.totalDebt)} total � {b.loans.length} loan{b.loans.length>1?'s':''}{i===0?' (largest lender)':''}</p>
+              <p key={b.bank}><strong>{b.bank}</strong> — {b.weightedRate.toFixed(2)}% avg rate · {fmt(b.totalDebt)} total · {b.loans.length} loan{b.loans.length>1?'s':''}{i===0?' (largest lender)':''}</p>
             ))}
-            {bestRateBank && <p className="mt-1 font-medium">Best rate: <strong>{bestRateBank.bank}</strong> @ {bestRateBank.weightedRate.toFixed(2)}% � ideal for consolidation.</p>}
+            {bestRateBank && <p className="mt-1 font-medium">Best rate: <strong>{bestRateBank.bank}</strong> @ {bestRateBank.weightedRate.toFixed(2)}% — ideal for consolidation.</p>}
           </div>
         </div>
       </div>
@@ -691,16 +718,40 @@ function BankRateIntelligence({ companies }: { companies: CompanyData[] }) {
   );
 }
 
-// -- Section 4: Cash Position + EMI Alerts -------------------------------------
+// ── Section 4: Cash Position + EMI Alerts ─────────────────────────────────────
 
-function CashPositionAlerts({ companies }: { companies: CompanyData[] }) {
-  const [cashPositions, setCashPositions] = useState<Record<string, { amount: number; date: string; bank: string }>>(() =>
-    Object.fromEntries(companies.map(c => [c.id, { amount: c.property.cashAvailable, date: new Date().toISOString().split('T')[0], bank: 'Operating Account' }]))
-  );
+function CashPositionAlerts({ companies, allLoans }: { companies: CompanyData[]; allLoans: Loan[] }) {
+  const [cashPositions, setCashPositions] = useState<Record<string, { amount: number; date: string; bank: string }>>({});
   const [formCompanyId, setFormCompanyId] = useState(companies[0]?.id ?? '');
   const [formCash,      setFormCash]      = useState('');
   const [formBank,      setFormBank]      = useState('');
   const today = new Date().toISOString().split('T')[0];
+
+  // Sync cash positions when companies load from API (initial state alone misses async data).
+  useEffect(() => {
+    setCashPositions(prev => {
+      const next = { ...prev };
+      for (const c of companies) {
+        if (!next[c.id]) {
+          next[c.id] = {
+            amount: c.property.cashAvailable,
+            date: today,
+            bank: 'Operating Account',
+          };
+        }
+      }
+      return next;
+    });
+    if (!formCompanyId && companies[0]?.id) {
+      setFormCompanyId(companies[0].id);
+    }
+  }, [companies, today, formCompanyId]);
+
+  const emiByCompanyId = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of companies) m.set(c.id, resolveCompanyMonthlyEmi(c, allLoans));
+    return m;
+  }, [companies, allLoans]);
 
   function updateCash() {
     if (!formCompanyId || !formCash) return;
@@ -712,27 +763,27 @@ function CashPositionAlerts({ companies }: { companies: CompanyData[] }) {
   const alerts: AlertItem[] = [];
   companies.forEach(c => {
     const pos = cashPositions[c.id];
-    const monthlyEMI = c.loans.filter(l=>l.status==='Active').reduce((s,l)=>s+l.emi,0);
+    const monthlyEMI = emiByCompanyId.get(c.id) ?? 0;
     const cash = pos?.amount ?? 0;
-    const ratio = monthlyEMI > 0 ? cash/monthlyEMI : 99;
+    const status = cashEmiStatus(cash, monthlyEMI);
     const daysSince = pos?.date ? Math.round((new Date().getTime()-new Date(pos.date).getTime())/86400000) : 0;
-    if (ratio < 1 && monthlyEMI > 0)
-      alerts.push({ id:`crit-${c.id}`, severity:'critical', company:c.name, message:`Cash covers only ${ratio.toFixed(1)} months of EMI`, detail:`Cash: ${fmt(cash)} | Monthly EMI: ${fmt(monthlyEMI)}`, actions:['Update Cash','View Loans'] });
-    else if (ratio < 3 && monthlyEMI > 0)
-      alerts.push({ id:`warn-${c.id}`, severity:'warning', company:c.name, message:`Cash covers ${ratio.toFixed(1)} months of EMI`, detail:`Consider capital call or lot sale to boost liquidity`, actions:['Issue Capital Call','View Lots'] });
+    if (status.kind === 'critical')
+      alerts.push({ id:`crit-${c.id}`, severity:'critical', company:c.name, message:`Cash covers only ${status.ratio!.toFixed(1)} months of EMI`, detail:`Cash: ${fmt(cash)} | Monthly EMI: ${fmt(monthlyEMI)}`, actions:['Update Cash','View Loans'] });
+    else if (status.kind === 'warning' || status.kind === 'monitor')
+      alerts.push({ id:`warn-${c.id}`, severity:'warning', company:c.name, message:`Cash covers ${status.ratio!.toFixed(1)} months of EMI`, detail:`Consider capital call or lot sale to boost liquidity`, actions:['Issue Capital Call','View Lots'] });
     if (daysSince >= 7)
       alerts.push({ id:`stale-${c.id}`, severity:'watch', company:c.name, message:`Cash position not updated since ${pos?.date ?? 'unknown'}`, detail:`${daysSince} days since last update`, actions:['Update Now'] });
   });
 
   const sevCfg = {
-    critical: { bg:'bg-red-50',    border:'border-l-red-500',    icon:'??', color:'text-red-700'    },
-    warning:  { bg:'bg-amber-50',  border:'border-l-amber-500',  icon:'??', color:'text-amber-700'  },
-    watch:    { bg:'bg-yellow-50', border:'border-l-yellow-400', icon:'??', color:'text-yellow-700' },
+    critical: { bg:'bg-red-50',    border:'border-l-red-500',    icon:'🔴', color:'text-red-700'    },
+    warning:  { bg:'bg-amber-50',  border:'border-l-amber-500',  icon:'🟠', color:'text-amber-700'  },
+    watch:    { bg:'bg-yellow-50', border:'border-l-yellow-400', icon:'🟡', color:'text-yellow-700' },
   };
 
   return (
     <div className="space-y-5">
-      <div><h3 className="text-lg font-bold text-gray-900">?? Cash Position & EMI Alert System</h3></div>
+      <div><h3 className="text-lg font-bold text-gray-900">💵 Cash Position & EMI Alert System</h3></div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h4 className="font-semibold text-gray-800 mb-4">Update Cash Position</h4>
@@ -761,7 +812,7 @@ function CashPositionAlerts({ companies }: { companies: CompanyData[] }) {
 
       {alerts.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-5 py-3 bg-red-900 text-white"><h4 className="font-semibold">?? ACTIVE ALERTS ({alerts.length})</h4></div>
+          <div className="px-5 py-3 bg-red-900 text-white"><h4 className="font-semibold">🔔 ACTIVE ALERTS ({alerts.length})</h4></div>
           <div className="divide-y divide-gray-100">
             {alerts.map(alert => {
               const cfg = sevCfg[alert.severity];
@@ -769,7 +820,7 @@ function CashPositionAlerts({ companies }: { companies: CompanyData[] }) {
                 <div key={alert.id} className={`p-4 ${cfg.bg} border-l-4 ${cfg.border}`}>
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <p className={`text-sm font-bold ${cfg.color}`}>{cfg.icon} {alert.company} � {alert.message}</p>
+                      <p className={`text-sm font-bold ${cfg.color}`}>{cfg.icon} {alert.company} — {alert.message}</p>
                       <p className={`text-xs mt-0.5 ${cfg.color} opacity-80`}>{alert.detail}</p>
                     </div>
                     <div className="flex gap-2 ml-4">
@@ -797,23 +848,21 @@ function CashPositionAlerts({ companies }: { companies: CompanyData[] }) {
             <tbody className="divide-y divide-gray-100">
               {companies.map(c => {
                 const pos = cashPositions[c.id];
-                const monthlyEMI = c.loans.filter(l=>l.status==='Active').reduce((s,l)=>s+l.emi,0);
+                const monthlyEMI = emiByCompanyId.get(c.id) ?? 0;
                 const cash = pos?.amount ?? 0;
-                const ratio = monthlyEMI > 0 ? cash/monthlyEMI : 99;
+                const status = cashEmiStatus(cash, monthlyEMI);
                 const daysSince = pos?.date ? Math.round((new Date().getTime()-new Date(pos.date).getTime())/86400000) : 0;
-                const sc = ratio > 6 ? 'bg-green-100 text-green-700' : ratio > 3 ? 'bg-amber-100 text-amber-700' : ratio > 1 ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700';
-                const sl = ratio > 6 ? '?? Safe' : ratio > 3 ? '?? Monitor' : ratio > 1 ? '?? Warning' : '?? Critical';
                 return (
                   <tr key={c.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-gray-900">{c.name}</td>
                     <td className="px-4 py-3 text-right font-mono">{fmt(cash)}</td>
                     <td className="px-4 py-3 text-right font-mono">{fmt(monthlyEMI)}</td>
-                    <td className="px-4 py-3 text-right font-semibold">{ratio > 50 ? '8' : ratio.toFixed(1)}x</td>
-                    <td className="px-4 py-3 text-right">{ratio > 50 ? '8' : ratio.toFixed(1)} mo</td>
+                    <td className="px-4 py-3 text-right font-semibold">{formatCoverageRatio(status.ratio)}</td>
+                    <td className="px-4 py-3 text-right">{status.months != null ? `${status.months.toFixed(1)} mo` : '—'}</td>
                     <td className="px-4 py-3 text-right text-xs text-gray-400">
-                      {daysSince === 0 ? 'Today' : `${daysSince}d ago`}{daysSince >= 7 && <span className="text-amber-600 ml-1">??</span>}
+                      {daysSince === 0 ? 'Today' : `${daysSince}d ago`}{daysSince >= 7 && <span className="text-amber-600 ml-1">⚠️</span>}
                     </td>
-                    <td className="px-4 py-3 text-right"><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${sc}`}>{sl}</span></td>
+                    <td className="px-4 py-3 text-right"><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${status.badgeClass}`}>{status.label}</span></td>
                   </tr>
                 );
               })}
@@ -825,9 +874,9 @@ function CashPositionAlerts({ companies }: { companies: CompanyData[] }) {
   );
 }
 
-// -- Section 5: 90-Day Cash Flow Forecast -------------------------------------
+// ── Section 5: 90-Day Cash Flow Forecast ─────────────────────────────────────
 
-function CashFlowForecast({ companies }: { companies: CompanyData[] }) {
+function CashFlowForecast({ companies, allLoans }: { companies: CompanyData[]; allLoans: Loan[] }) {
   const today = new Date();
   const monthLabels = [0,1,2].map(offset => {
     const d = new Date(today.getFullYear(), today.getMonth()+offset, 1);
@@ -835,7 +884,7 @@ function CashFlowForecast({ companies }: { companies: CompanyData[] }) {
   });
 
   const forecasts = companies.map(c => {
-    const monthlyEMI  = c.loans.filter(l=>l.status==='Active').reduce((s,l)=>s+l.emi,0);
+    const monthlyEMI  = resolveCompanyMonthlyEmi(c, allLoans);
     const monthly$Col = c.customers.reduce((s,cust)=>s+cust.collected,0)/6;
     let cash = c.property.cashAvailable;
     return {
@@ -886,7 +935,7 @@ function CashFlowForecast({ companies }: { companies: CompanyData[] }) {
                 <td className={`px-4 py-2 text-right font-bold font-mono ${row.isNegative ? 'text-red-700' : 'text-gray-900'}`}>{fmt(row.closingCash)}</td>
                 <td className="px-4 py-2 text-right">
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${row.isNegative ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                    {row.isNegative ? '?? Shortfall' : '?? OK'}
+                    {row.isNegative ? '🔴 Shortfall' : '🟢 OK'}
                   </span>
                 </td>
               </tr>
@@ -906,7 +955,7 @@ function CashFlowForecast({ companies }: { companies: CompanyData[] }) {
 
       {negForecast && (
         <div className="bg-red-50 border border-red-300 rounded-xl p-4">
-          <p className="text-sm font-bold text-red-700">?? Cash shortfall projected for {negForecast.rows.find(r=>r.isNegative)?.month}:</p>
+          <p className="text-sm font-bold text-red-700">🔴 Cash shortfall projected for {negForecast.rows.find(r=>r.isNegative)?.month}:</p>
           <p className="text-sm text-red-600 mt-1">
             {negForecast.company} needs additional {fmt(Math.abs(negForecast.rows.find(r=>r.isNegative)?.closingCash??0))}.
             Options: <strong>Capital call</strong> | <strong>Lot sale</strong> | <strong>Bridge loan</strong> | <strong>Defer distribution</strong>
@@ -915,7 +964,7 @@ function CashFlowForecast({ companies }: { companies: CompanyData[] }) {
       )}
 
       <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h4 className="font-semibold text-gray-700 text-sm mb-3">Portfolio Cash vs EMI � 3 Month View</h4>
+        <h4 className="font-semibold text-gray-700 text-sm mb-3">Portfolio Cash vs EMI — 3 Month View</h4>
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={chartData} barGap={4}>
             <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
@@ -925,7 +974,7 @@ function CashFlowForecast({ companies }: { companies: CompanyData[] }) {
             <Legend />
             <Bar dataKey="cash"        fill="#16A34A" name="Closing Cash"  radius={[4,4,0,0]} />
             <Bar dataKey="emi"         fill="#DC2626" name="EMI Due"       radius={[4,4,0,0]} />
-            <Bar dataKey="collections" fill="#6366F1" name="Collections"   radius={[4,4,0,0]} />
+            <Bar dataKey="collections" fill="#5B5FEF" name="Collections"   radius={[4,4,0,0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -936,194 +985,672 @@ function CashFlowForecast({ companies }: { companies: CompanyData[] }) {
   );
 }
 
-// -- Main Component ------------------------------------------------------------
+// ── Main Component (layout mirrors Rentals Loan Tracker) ──────────────────────
 
 export default function PD07Loans() {
-  const { loans, properties, customers, companies } = usePropDev();
-  const p = properties[0];
+  const { refetchCompanies, selectedCompanyId } = usePropDev();
+  const { setTab } = usePropDevNav();
+  const [showUpload, setShowUpload] = useState(false);
+  const [propertyFilter, setPropertyFilter] = useState('all');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [pageTab, setPageTab] = useState<'overview' | 'loan-management' | 'calculations'>('overview');
 
-  const totalBalance = loans.reduce((s, l) => s + l.balance, 0);
-  const totalEMI = loans.reduce((s, l) => s + l.emi, 0);
-  const totalSanctioned = loans.reduce((s, l) => s + l.amount, 0);
+  useEffect(() => {
+    setPropertyFilter('all');
+  }, [selectedCompanyId]);
+  const {
+    allLoans,
+    scopedLoans,
+    scopedCompanies,
+    scopeLabel: navScopeLabel,
+    debtByProperty,
+    emiByBank,
+    maturityLadder,
+    rateVariance,
+    companies,
+    companiesWithLoans,
+  } = usePropDevLoanTrackerData();
 
-  // DSCR = NOI / Annual Debt Service
-  const monthlyCollections = customers.reduce((s, c) => s + c.collected, 0) / 6;
-  const annualDebtService = totalEMI * 12;
-  const noi = (monthlyCollections - (p ? p.cashAvailable * 0.01 : 0)) * 12;
-  const portfolioDscr = annualDebtService > 0 ? noi / annualDebtService : 99;
+  const companyOptions = useMemo(
+    () => [...companies].sort((a, b) => a.name.localeCompare(b.name)),
+    [companies],
+  );
+
+  const propertyOptions = useMemo(() => {
+    const src = selectedCompanyId !== 'all'
+      ? allLoans.filter(l => l.companyId === selectedCompanyId)
+      : allLoans;
+    return [...new Set(src.map(l => l.property).filter(Boolean))].sort();
+  }, [allLoans, selectedCompanyId]);
+
+  const filtered = useMemo(() => {
+    let rows = scopedLoans;
+    if (propertyFilter !== 'all') rows = rows.filter(l => l.property === propertyFilter);
+    return rows;
+  }, [scopedLoans, propertyFilter]);
+
+  const activeFiltered = useMemo(() => filtered.filter(isActivePropDevLoan), [filtered]);
+
+  const scopeLabel = useMemo(() => {
+    if (selectedCompanyId !== 'all' && propertyFilter !== 'all') {
+      const co = companies.find(c => c.id === selectedCompanyId)?.name ?? navScopeLabel;
+      return `${co} · ${propertyFilter}`;
+    }
+    if (propertyFilter !== 'all') return propertyFilter;
+    return navScopeLabel;
+  }, [selectedCompanyId, propertyFilter, companies, navScopeLabel]);
+
+  const kpis = useMemo(() => {
+    const loanTaken = filtered.reduce((s, l) => s + (l.amount ?? 0), 0);
+    const outstanding = activeFiltered.reduce((s, l) => s + (l.balance ?? 0), 0);
+    const emi = activeFiltered.reduce((s, l) => s + (l.emi ?? 0), 0);
+    const withBal = activeFiltered.filter(l => l.balance > 0);
+    const wAvg = withBal.length > 0
+      ? withBal.reduce((s, l) => s + l.interestRate * l.balance, 0)
+        / withBal.reduce((s, l) => s + l.balance, 0)
+      : 0;
+    const nextMat = pickNextUpcomingMaturity(filtered);
+    const nextEmiDay = nextMat?.emiDate
+      ?? (activeFiltered.length > 0 ? Math.min(...activeFiltered.map(l => l.emiDate)) : null);
+    return {
+      loanTaken,
+      outstanding,
+      emi,
+      wAvg,
+      nextMat,
+      nextEmiDay,
+      loanCount: filtered.length,
+      activeCount: activeFiltered.length,
+    };
+  }, [filtered, activeFiltered]);
+
+  const portfolioCoverage = useMemo(
+    () => computePortfolioCapitalCallCoverage(scopedCompanies, COVERAGE_WINDOW_MONTHS, allLoans),
+    [scopedCompanies, allLoans],
+  );
+
+  const companyById = useMemo(() => new Map(companies.map(c => [c.id, c])), [companies]);
+
+  const extKpis = useMemo(() => {
+    const now = new Date();
+    const totalOutstanding = sumActivePropDevLoanBalances(activeFiltered);
+
+    const loansWithMaturity = filtered.filter(l => l.maturityDate);
+    const weightedTermNum = loansWithMaturity.reduce((s, l) => {
+      const bal = l.balance ?? 0;
+      const mat = new Date(l.maturityDate!);
+      const months = Math.max(0, (mat.getFullYear() - now.getFullYear()) * 12 + mat.getMonth() - now.getMonth());
+      return s + months * bal;
+    }, 0);
+    const weightedTermDen = loansWithMaturity.reduce((s, l) => s + (l.balance ?? 0), 0);
+    const weightedAvgTerm = weightedTermDen > 0 ? weightedTermNum / weightedTermDen : null;
+
+    const in12 = filtered.filter(l => {
+      if (!l.maturityDate) return false;
+      const mat = new Date(l.maturityDate);
+      const months = (mat.getFullYear() - now.getFullYear()) * 12 + mat.getMonth() - now.getMonth();
+      return months >= 0 && months <= 12;
+    });
+    const maturingCount = in12.length;
+    const maturingAmt = in12.reduce((s, l) => s + (l.balance ?? 0), 0);
+
+    // Portfolio LTLV = Σ outstanding ÷ Σ land (same formula as CFO) — not average of per-loan LTLVs.
+    let landForLtlv = 0;
+    let ltlvLoanCount = 0;
+    const landSeen = new Set<string>();
+    activeFiltered.forEach(l => {
+      const co = companyById.get(l.companyId);
+      if (!co) return;
+      ltlvLoanCount += 1;
+      if (landSeen.has(co.id)) return;
+      landSeen.add(co.id);
+      const lv = resolveLandValue(co);
+      if (lv != null && lv > 0) landForLtlv += lv;
+    });
+    const avgLtlv = portfolioLtlvPercent(totalOutstanding, landForLtlv > 0 ? landForLtlv : null);
+
+    const byProperty: Record<string, number> = {};
+    const byLender: Record<string, number> = {};
+    activeFiltered.forEach(l => {
+      const bal = l.balance ?? 0;
+      const prop = l.property || l.company || 'Unknown';
+      byProperty[prop] = (byProperty[prop] || 0) + bal;
+      byLender[l.bank || 'Unknown'] = (byLender[l.bank || 'Unknown'] || 0) + bal;
+    });
+    const maxProperty = Object.entries(byProperty).sort((a, b) => b[1] - a[1])[0];
+    const maxLender = Object.entries(byLender).sort((a, b) => b[1] - a[1])[0];
+    const topPropertyPct = totalOutstanding > 0 && maxProperty ? maxProperty[1] / totalOutstanding * 100 : null;
+    const topLenderPct = totalOutstanding > 0 && maxLender ? maxLender[1] / totalOutstanding * 100 : null;
+
+    return {
+      weightedAvgTerm,
+      maturingCount,
+      maturingAmt,
+      avgLtlv,
+      ltlvCount: landSeen.size,
+      coverage: portfolioCoverage,
+      topProperty: maxProperty?.[0] ?? '',
+      topPropertyPct,
+      topLender: maxLender?.[0] ?? '',
+      topLenderPct,
+    };
+  }, [filtered, activeFiltered, companyById, portfolioCoverage]);
+
+  const chartDebt = useMemo(() => {
+    if (propertyFilter === 'all' && selectedCompanyId === 'all') return debtByProperty;
+    const map: Record<string, number> = {};
+    filtered.forEach(l => {
+      const key = l.property || l.company || 'Unknown';
+      map[key] = (map[key] ?? 0) + (l.balance ?? 0);
+    });
+    return Object.entries(map)
+      .map(([name, value]) => ({ name, value, label: name.length > 18 ? `${name.slice(0, 16)}…` : name }))
+      .sort((a, b) => b.value - a.value);
+  }, [filtered, propertyFilter, selectedCompanyId, debtByProperty]);
+
+  const chartEmi = useMemo(() => {
+    const map: Record<string, number> = {};
+    activeFiltered.forEach(l => {
+      map[l.bank || 'Unknown'] = (map[l.bank || 'Unknown'] ?? 0) + (l.emi ?? 0);
+    });
+    return Object.entries(map).map(([name, value]) => ({ name, value }));
+  }, [activeFiltered]);
+
+  const chartMaturity = useMemo(() => {
+    const map: Record<string, number> = {};
+    filtered.forEach(l => {
+      if (!l.maturityDate) return;
+      const year = l.maturityDate.slice(0, 4);
+      map[year] = (map[year] ?? 0) + (l.balance ?? 0);
+    });
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).map(([year, amount]) => ({ year, amount }));
+  }, [filtered]);
+
+  const chartRateVar = useMemo(() => {
+    return activeFiltered
+      .filter(l => l.interestRate != null)
+      .map(l => ({
+        name: (l.property || l.company || l.bank).slice(0, 20),
+        bps: Math.round((l.interestRate - PROPDEV_MARKET_RATE) * 100),
+        rate: l.interestRate,
+      }));
+  }, [activeFiltered]);
+
+  const highRateLoans = activeFiltered.filter(l => l.interestRate > PROPDEV_MARKET_RATE);
+  const monthlySavings = highRateLoans.reduce((s, l) => {
+    return s + (l.balance * (l.interestRate - PROPDEV_MARKET_RATE)) / 100 / 12;
+  }, 0);
+
+  const filteredCompanies = useMemo(() => {
+    const ids = new Set(filtered.map(l => l.companyId));
+    return companies.filter(c => ids.has(c.id));
+  }, [filtered, companies]);
+
+  const [exportingPdf, setExportingPdf] = useState(false);
+
+  const handleExportPdf = useCallback(async () => {
+    setExportingPdf(true);
+    try {
+      const registerCompanies = filteredCompanies.length ? filteredCompanies : scopedCompanies;
+      await exportPropDevLoansPdf({
+        entityLabel: scopeLabel,
+        periodLabel: 'Current',
+        propertyFilterLabel: propertyFilter === 'all' ? 'All Properties' : propertyFilter,
+        loans: filtered,
+        companies: registerCompanies,
+        allLoans,
+        marketRate: PROPDEV_MARKET_RATE,
+        kpis: {
+          loanTaken: kpis.loanTaken,
+          outstanding: kpis.outstanding,
+          emi: kpis.emi,
+          wAvg: kpis.wAvg,
+          loanCount: kpis.loanCount,
+          activeCount: kpis.activeCount,
+          nextMaturity: kpis.nextMat?.maturityDate ?? null,
+          nextMaturityProperty: kpis.nextMat?.property ?? null,
+          nextEmiDay: kpis.nextEmiDay,
+          weightedAvgTermMonths: extKpis.weightedAvgTerm,
+          maturingCount: extKpis.maturingCount,
+          maturingAmt: extKpis.maturingAmt,
+          topProperty: extKpis.topProperty,
+          topPropertyPct: extKpis.topPropertyPct,
+          topLender: extKpis.topLender,
+          topLenderPct: extKpis.topLenderPct,
+          avgLtlv: extKpis.avgLtlv,
+        },
+        coverage: {
+          ratio: portfolioCoverage.ratio,
+          status: portfolioCoverage.status,
+          dataGap: portfolioCoverage.dataGap,
+          obligations: portfolioCoverage.obligations,
+          uncalled: portfolioCoverage.uncalled,
+        },
+        debtByProperty: (chartDebt.length ? chartDebt : debtByProperty).map(d => ({
+          name: d.name, value: d.value,
+        })),
+        emiByBank: (chartEmi.length ? chartEmi : emiByBank).map(d => ({
+          name: d.name, value: d.value,
+        })),
+        maturityLadder: chartMaturity.length ? chartMaturity : maturityLadder,
+        highRateCount: highRateLoans.length,
+        monthlyRefinanceSavings: monthlySavings,
+      });
+    } catch (e: unknown) {
+      window.alert(`PDF export failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setExportingPdf(false);
+    }
+  }, [
+    scopeLabel, propertyFilter, filtered, filteredCompanies, scopedCompanies, allLoans,
+    kpis, extKpis, portfolioCoverage, chartDebt, debtByProperty, chartEmi, emiByBank,
+    chartMaturity, maturityLadder, highRateLoans.length, monthlySavings,
+  ]);
+
+  useEffect(() => {
+    const onExport = (e: Event) => {
+      const detail = (e as CustomEvent<{ scope?: string }>).detail ?? {};
+      if (detail.scope && detail.scope !== 'loans') return;
+      void handleExportPdf();
+    };
+    window.addEventListener(PROPDEV_EXPORT_PDF_EVENT, onExport);
+    return () => window.removeEventListener(PROPDEV_EXPORT_PDF_EVENT, onExport);
+  }, [handleExportPdf]);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-gray-900">Loan Tracker</h2>
-        <p className="text-sm text-gray-500 mt-0.5">DSCR analysis, refinancing opportunities and amortization</p>
+    <div className="space-y-6" style={{ background: PT.pageBg, fontSize: 13, color: PT.text }}>
+      {/* Header — same chrome as Rentals */}
+      <PropDevPageHeader
+        title="Loan Tracker"
+        subtitle={
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span>{scopeLabel} · Prop Dev debt, capital-call coverage, refinancing & amortization</span>
+            <span>
+              Loan Outstanding uses the <strong>Loan Balance</strong> column from Bank Loan Information — not Balance Sheet LTD.
+              {companiesWithLoans.length > 0 && (
+                <> · {companiesWithLoans.length} of {companies.length} entities with loan data</>
+              )}
+            </span>
+          </div>
+        }
+        actions={
+          <>
+          <select
+            value={propertyFilter}
+            onChange={e => setPropertyFilter(e.target.value)}
+            className="border rounded-lg px-2.5 py-1.5 text-sm"
+            style={{ borderColor: PT.border, background: PT.cardBg, color: PT.text }}
+          >
+            <option value="all">All Properties</option>
+            {propertyOptions.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+          <button
+            type="button"
+            onClick={() => void handleExportPdf()}
+            disabled={exportingPdf}
+            style={{ ...parchmentStyles.btnSecondary, opacity: exportingPdf ? 0.7 : 1 }}
+            title="Export Loan Tracker PDF"
+          >
+            <Download size={13} /> {exportingPdf ? 'Exporting…' : 'Export PDF'}
+          </button>
+          <button type="button" className="flex items-center gap-1 px-3 py-1.5 text-white rounded-lg text-xs"
+            style={{ background: 'linear-gradient(135deg,#5B5FEF,#4F46E5)' }}>
+            <Zap size={13} /> AI Insights
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowUpload(v => !v)}
+            className="flex items-center gap-1.5 px-4 py-1.5 text-white rounded-lg text-sm font-medium"
+            style={{ background: '#7C3AED' }}
+          >
+            <FileSpreadsheet size={14} />{showUpload ? 'Hide Import' : 'Import Excel'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('upload')}
+            className="flex items-center gap-1 px-2.5 py-1.5 border rounded-lg text-xs"
+            style={{ borderColor: PT.border, color: PT.text, background: PT.cardBg }}
+          >
+            <Upload size={12} /> Full Workbook
+          </button>
+          </>
+        }
+      />
+
+      <div className="flex gap-1 border-b" style={{ borderColor: PT.border }}>
+        {([
+          { id: 'overview' as const, label: 'Overview' },
+          { id: 'loan-management' as const, label: 'Loan Management' },
+          { id: 'calculations' as const, label: 'Calculations' },
+        ]).map(t => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setPageTab(t.id)}
+            className="px-3 py-2 text-xs font-medium border-b-2 -mb-px"
+            style={{
+              borderColor: pageTab === t.id ? '#5B5FEF' : 'transparent',
+              color: pageTab === t.id ? PT.text : PT.muted,
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {pageTab === 'loan-management' && (
+        <PDLoanManagementTab loans={scopedLoans} companies={scopedCompanies} allLoans={allLoans} />
+      )}
+
+      {pageTab === 'calculations' && (
+        <PDLoanCalculationsTab loans={scopedLoans} companies={scopedCompanies} allLoans={allLoans} />
+      )}
+
+      {pageTab === 'overview' && <>
+      {(showUpload || allLoans.length === 0) && (
+        <PropDevLoanUpload
+          onImported={async () => { await refetchCompanies(); }}
+          onClose={allLoans.length > 0 ? () => setShowUpload(false) : undefined}
+        />
+      )}
+
+      {/* Primary KPIs — EMI Date sits next to Next Maturity */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2">
         {[
-          { label: 'Active Loans',       value: `${loans.filter(l=>l.status==='Active').length}`,  sub: `of ${loans.length} total`           },
-          { label: 'Total Sanctioned',   value: fmt(totalSanctioned),                               sub: 'original loan amount'               },
-          { label: 'Total Outstanding',  value: fmt(totalBalance),                                  sub: fmt(totalSanctioned - totalBalance) + ' repaid' },
-          { label: 'Monthly EMI Burden', value: fmt(totalEMI),                                      sub: fmt(totalEMI * 12) + '/year'          },
-        ].map(({ label, value, sub }) => (
-          <div key={label} className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{label}</p>
-            <p className="text-xl font-bold text-gray-900">{value}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
+          { label: 'Loan Taken', value: fmtUSD(kpis.loanTaken), hero: true, sub: `${scopeLabel} · sum of Loan Amount` },
+          { label: 'Loan Outstanding', value: fmtUSD(kpis.outstanding), sub: `${scopeLabel} · Loan Tracker (Active + Current)` },
+          { label: 'Total Monthly EMI', value: fmtUSD(kpis.emi), sub: scopeLabel },
+          { label: 'Weighted Avg Rate', value: `${kpis.wAvg.toFixed(2)}%`, sub: 'Weighted by outstanding balance' },
+          {
+            label: selectedCompanyId !== 'all' ? 'Company Loans' : 'Total Loans',
+            value: String(kpis.loanCount),
+            sub: selectedCompanyId !== 'all'
+              ? (propertyFilter !== 'all' ? propertyFilter : scopeLabel)
+              : `${companyOptions.length} companies`,
+          },
+          { label: 'Next Maturity', value: kpis.nextMat?.maturityDate ?? '—', sub: kpis.nextMat?.property ?? 'No upcoming maturity' },
+          {
+            label: 'EMI Date',
+            value: kpis.nextEmiDay != null
+              ? `${kpis.nextEmiDay}${kpis.nextEmiDay === 1 ? 'st' : kpis.nextEmiDay === 2 ? 'nd' : kpis.nextEmiDay === 3 ? 'rd' : 'th'}`
+              : '—',
+            sub: kpis.nextEmiDay != null
+              ? (kpis.nextMat ? `Due day · ${kpis.nextMat.property}` : 'Monthly EMI due day')
+              : 'No EMI day on loans',
+          },
+        ].map(k => (
+          <div key={k.label} style={{
+            background: k.hero ? 'linear-gradient(135deg,#5B5FEF,#4F46E5)' : PT.cardBg,
+            border: k.hero ? '1px solid #5B5FEF' : `1px solid ${PT.border}`,
+            ...LT_KPI_CARD,
+          }}>
+            <p style={{ ...LT_KPI_LABEL, color: k.hero ? 'rgba(255,255,255,0.85)' : PT.muted }}>{k.label}</p>
+            <p style={{ ...LT_KPI_VALUE, color: k.hero ? '#fff' : PT.text }}>{k.value}</p>
+            {k.sub && <p style={{ ...LT_KPI_SUB, color: k.hero ? 'rgba(255,255,255,0.75)' : PT.muted }} title={k.sub}>{k.sub}</p>}
           </div>
         ))}
       </div>
 
-      {/* Portfolio DSCR */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h3 className="font-semibold text-gray-800 mb-3">Portfolio DSCR</h3>
-        <DscrGauge dscr={Math.max(0.1, portfolioDscr)} />
+      {/* Extended KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, ...LT_KPI_CARD }}>
+          <p style={{ ...LT_KPI_LABEL, color: PT.muted }}>Wtd Avg Remaining Term</p>
+          {extKpis.weightedAvgTerm != null ? (
+            <>
+              <p style={{
+                ...LT_KPI_VALUE,
+                color: extKpis.weightedAvgTerm < 12 ? '#C0392B' : extKpis.weightedAvgTerm < 36 ? '#B45309' : PT.text,
+              }}>
+                {Math.round(extKpis.weightedAvgTerm)}mo
+              </p>
+              <p style={{ ...LT_KPI_SUB, color: PT.muted }}>~{(extKpis.weightedAvgTerm / 12).toFixed(1)} yrs · weighted by balance</p>
+            </>
+          ) : (
+            <p style={LT_KPI_NA}>No maturity dates</p>
+          )}
+        </div>
+
+        <div style={{
+          background: PT.cardBg, border: `1px solid ${PT.border}`, ...LT_KPI_CARD,
+          borderLeft: extKpis.maturingCount > 0 ? '3px solid #C0392B' : `1px solid ${PT.border}`,
+        }}>
+          <p style={{ ...LT_KPI_LABEL, color: PT.muted }}>Maturing ≤12 Months</p>
+          <p style={{ ...LT_KPI_VALUE, color: extKpis.maturingCount > 0 ? '#C0392B' : '#166534' }}>
+            {extKpis.maturingCount} loan{extKpis.maturingCount !== 1 ? 's' : ''}
+          </p>
+          <p style={{ ...LT_KPI_SUB, color: PT.muted }}>
+            {extKpis.maturingCount > 0 ? `${fmtUSD(extKpis.maturingAmt)} coming due` : 'No near-term maturities'}
+          </p>
+        </div>
+
+        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, ...LT_KPI_CARD }}>
+          <p style={{ ...LT_KPI_LABEL, color: PT.muted }}>Property Concentration</p>
+          {extKpis.topPropertyPct != null ? (
+            <>
+              <p style={{
+                ...LT_KPI_VALUE,
+                color: extKpis.topPropertyPct > 50 ? '#C0392B' : extKpis.topPropertyPct > 33 ? '#B45309' : '#166534',
+              }}>
+                {extKpis.topPropertyPct.toFixed(0)}%
+              </p>
+              <p style={{ ...LT_KPI_SUB, color: PT.muted }} title={`Largest: ${extKpis.topProperty}`}>
+                Largest: {extKpis.topProperty}
+              </p>
+            </>
+          ) : <p style={LT_KPI_NA}>—</p>}
+        </div>
+
+        <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, ...LT_KPI_CARD }}>
+          <p style={{ ...LT_KPI_LABEL, color: PT.muted }}>Lender Concentration</p>
+          {extKpis.topLenderPct != null ? (
+            <>
+              <p style={{
+                ...LT_KPI_VALUE,
+                color: extKpis.topLenderPct > 60 ? '#C0392B' : extKpis.topLenderPct > 40 ? '#B45309' : '#166534',
+              }}>
+                {extKpis.topLenderPct.toFixed(0)}%
+              </p>
+              <p style={{ ...LT_KPI_SUB, color: PT.muted }} title={`Largest lender: ${extKpis.topLender}`}>
+                Largest lender: {extKpis.topLender}
+              </p>
+            </>
+          ) : <p style={LT_KPI_NA}>—</p>}
+        </div>
       </div>
 
-      <LoanRegister loans={loans} monthlyCollections={monthlyCollections} />
+      <EmiCalendarStrip loans={filtered} scopeLabel={scopeLabel} />
 
-      <CompanyLoanCards companies={companies} marketRate={6.5} />
-
-      {/* Refinancing Recommendation */}
-      <RefinancingRecommendation loans={loans} />
-
-      <EmiCalendar companies={companies} />
-
-      {/* EMI Tracker */}
-      <EmiTracker loans={loans} />
-
-      {/* -- Per-Loan Cards -- */}
-      {loans.map(loan => {
-        const schedule = buildAmortizationSchedule(loan, 12);
-        const totalInterest = schedule.reduce((s, r) => s + r.interest, 0);
-        const ltv = loan.amount > 0 ? ((loan.balance / loan.amount) * 100).toFixed(1) : '�';
-        const loanNoi = monthlyCollections * 12 / Math.max(1, loans.length);
-        const loanDscr = (loan.emi * 12) > 0 ? loanNoi / (loan.emi * 12) : 99;
-
-        return (
-          <div key={loan.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            {/* Loan Header */}
-            <div className="bg-blue-900 text-white p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <Landmark size={20} className="text-blue-300" />
-                  <div>
-                    <h3 className="font-bold text-lg">{loan.bank}</h3>
-                    <p className="text-sm text-blue-200">{loan.property} � A/c: {loan.accountNo}</p>
-                  </div>
-                </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${STATUS_COLORS[loan.status]}`}>
-                  {loan.status}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
-                {[
-                  { label: 'Loan Amount',   value: fmt(loan.amount)         },
-                  { label: 'Outstanding',   value: fmt(loan.balance)        },
-                  { label: 'Rate',          value: `${loan.interestRate}% p.a.` },
-                  { label: 'Monthly EMI',   value: fmt(loan.emi)            },
-                ].map(({ label, value }) => (
-                  <div key={label}>
-                    <p className="text-xs text-blue-300 uppercase">{label}</p>
-                    <p className="font-bold text-white">{value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Loan Details */}
-              <div className="space-y-3">
-                <h4 className="font-semibold text-gray-700 text-sm">Loan Details</h4>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  {[
-                    ['Company',     loan.company     ],
-                    ['Loan Date',   loan.loanDate    ],
-                    ['Maturity',    loan.maturityDate ],
-                    ['EMI Date',    `${loan.emiDate}${loan.emiDate===1?'st':'th'}`],
-                    ['LTV',         `${ltv}%`        ],
-                    ['Repaid',      fmt(loan.amount - loan.balance)],
-                  ].map(([k, v]) => (
-                    <div key={k}>
-                      <p className="text-xs text-gray-400">{k}</p>
-                      <p className="font-medium text-gray-900">{v}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-2 p-3 bg-gray-50 rounded-lg space-y-1.5 text-sm">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Lender Contact</p>
-                  <div className="flex items-center gap-2 text-gray-600"><Landmark size={12}/>{loan.lenderName}</div>
-                  <div className="flex items-center gap-2 text-blue-600"><Mail size={12}/>{loan.lenderEmail}</div>
-                  <div className="flex items-center gap-2 text-gray-600"><Phone size={12}/>{loan.lenderPhone}</div>
-                  <div className="flex items-center gap-2 text-gray-600"><Calendar size={12}/>EMI due {loan.emiDate}{loan.emiDate===1?'st':'th'}</div>
-                </div>
-              </div>
-
-              {/* DSCR */}
-              <div>
-                <h4 className="font-semibold text-gray-700 text-sm mb-3">Loan DSCR</h4>
-                <DscrGauge dscr={Math.max(0.1, loanDscr)} />
-                {loan.interestRate > 6.5 && (
-                  <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
-                    <AlertTriangle size={12} className="inline mr-1" />
-                    Rate {loan.interestRate}% above market 6.5% � est. saving {fmt((loan.balance * (loan.interestRate - 6.5) / 100) / 12)}/month if refinanced.
-                  </div>
-                )}
-              </div>
-
-              {/* Amortization Chart */}
-              <div>
-                <h4 className="font-semibold text-gray-700 text-sm mb-3">12-Month Balance Trend</h4>
-                <ResponsiveContainer width="100%" height={160}>
-                  <LineChart data={schedule}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${(v/1000).toFixed(0)}K`} />
-                    <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, '']} />
-                    <Line type="monotone" dataKey="balance" stroke="#6366F1" strokeWidth={2} dot={false} name="Balance" />
-                    <Line type="monotone" dataKey="interest" stroke="#DC2626" strokeWidth={1.5} dot={false} name="Interest" />
-                  </LineChart>
-                </ResponsiveContainer>
-                <p className="text-xs text-gray-400 mt-1">Est. 12-month interest: {fmt(totalInterest)}</p>
-              </div>
-            </div>
-
-            {/* Mini Amortization Table */}
-            <div className="border-t border-gray-100">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-gray-50 text-gray-400 uppercase">
-                    <tr>
-                      {['Month', 'EMI', 'Principal', 'Interest', 'Balance'].map(h => (
-                        <th key={h} className="px-4 py-2 text-right first:text-left">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {schedule.slice(0, 6).map(row => (
-                      <tr key={row.month} className="hover:bg-gray-50">
-                        <td className="px-4 py-2 font-medium">{row.month}</td>
-                        <td className="px-4 py-2 text-right">{fmt(loan.emi)}</td>
-                        <td className="px-4 py-2 text-right text-blue-600">{fmt(row.principal)}</td>
-                        <td className="px-4 py-2 text-right text-red-500">{fmt(row.interest)}</td>
-                        <td className="px-4 py-2 text-right text-gray-700">{fmt(row.balance)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+      {/* Alert banners — same pattern as Rentals */}
+      <div className="space-y-3">
+        {highRateLoans.length > 0 && (
+          <div style={{ background: '#FFF7E8', borderLeft: '4px solid #F2994A', borderRadius: '0 8px 8px 0', padding: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <AlertCircle size={18} style={{ color: '#F2994A', flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <h4 style={{ fontSize: 14, fontWeight: 600, color: '#7A4500', marginBottom: 2 }}>Refinancing Opportunity</h4>
+              <p style={{ fontSize: 13, color: '#7A4500' }}>
+                {highRateLoans.length} loan(s) above market rate ({PROPDEV_MARKET_RATE}%).
+                Est. monthly savings: <strong>{fmtUSD(monthlySavings)}</strong> ({fmtUSD(monthlySavings * 12)}/yr)
+              </p>
             </div>
           </div>
-        );
-      })}
+        )}
+        {kpis.emi > 0 && kpis.outstanding > 0 && kpis.emi * 12 > kpis.outstanding * 0.12 && (
+          <div style={{ background: '#FFECEC', borderLeft: '4px solid #C0392B', borderRadius: '0 8px 8px 0', padding: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <TrendingDown size={18} style={{ color: '#C0392B', flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <h4 style={{ fontSize: 14, fontWeight: 600, color: '#7B0000', marginBottom: 2 }}>High Debt Service</h4>
+              <p style={{ fontSize: 13, color: '#7B0000' }}>
+                Annual EMI of <strong>{fmtUSD(kpis.emi * 12)}</strong> exceeds 12% of loan portfolio — review cash / capital calls.
+              </p>
+            </div>
+          </div>
+        )}
+        {highRateLoans.length === 0 && activeFiltered.length > 0 && (
+          <div style={{ background: '#ECFDF5', borderLeft: '4px solid #166534', borderRadius: '0 8px 8px 0', padding: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <CheckCircle2 size={18} style={{ color: '#166534', flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <h4 style={{ fontSize: 14, fontWeight: 600, color: '#14532D', marginBottom: 2 }}>All Rates Optimized</h4>
+              <p style={{ fontSize: 13, color: '#14532D' }}>
+                All active loans are at or below market rate ({PROPDEV_MARKET_RATE}%).
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
 
-      {/* --------------------------------------------------------------- */}
-      {/* NEW SECTIONS � added below existing Active Loans content      */}
-      {/* --------------------------------------------------------------- */}
-      <BankRateIntelligence companies={companies} />
-      <CashPositionAlerts   companies={companies} />
-      <CashFlowForecast     companies={companies} />
+      <PropDevLoanPortfolioCharts
+        scopeLabel={scopeLabel}
+        debtByProperty={chartDebt.length ? chartDebt : debtByProperty}
+        emiByBank={chartEmi.length ? chartEmi : emiByBank}
+        maturityLadder={chartMaturity.length ? chartMaturity : maturityLadder}
+        rateVariance={chartRateVar.length ? chartRateVar : rateVariance}
+      />
+
+      <div style={{ background: PT.cardBg, border: `1px solid ${PT.border}`, borderRadius: 12, padding: 20 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 600, color: PT.text, marginBottom: 12 }}>Portfolio Capital Call Coverage</h3>
+        <CapitalCallCoverageGauge
+          ratio={portfolioCoverage.ratio}
+          status={portfolioCoverage.status}
+          dataGap={portfolioCoverage.dataGap}
+          obligations={portfolioCoverage.obligations}
+          uncalled={portfolioCoverage.uncalled}
+        />
+      </div>
+
+      <LoanRegister loans={filtered} companies={filteredCompanies.length ? filteredCompanies : scopedCompanies} allLoans={allLoans} />
+
+      <EntityCoverageHealth
+        companies={filteredCompanies.length ? filteredCompanies : scopedCompanies}
+        allLoans={allLoans}
+      />
+
+      {/* Prop Dev extras — below Rentals-parity spine */}
+      <div className="pt-2">
+        <button
+          type="button"
+          onClick={() => setShowAdvanced(v => !v)}
+          className="text-xs font-medium text-stone-600 underline underline-offset-2 hover:text-stone-900"
+        >
+          {showAdvanced ? 'Hide' : 'Show'} detailed loan cards, EMI tracker & cash outlook
+        </button>
+      </div>
+
+      {showAdvanced && (
+        <>
+          <CompanyLoanCards companies={scopedCompanies} marketRate={PROPDEV_MARKET_RATE} allLoans={allLoans} />
+          <EmiTracker loans={filtered} />
+          {filtered.map(loan => {
+            const schedule = buildAmortizationSchedule(loan, 12);
+            const totalInterest = schedule.reduce((s, r) => s + r.interest, 0);
+            const company = companyById.get(loan.companyId);
+            const ltlv = company ? computeLtlv(loan, company) : null;
+            const companyCoverage = company
+              ? computeCapitalCallCoverage(company, COVERAGE_WINDOW_MONTHS, allLoans)
+              : null;
+
+            return (
+              <div key={loan.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="bg-stone-900 text-white p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <Landmark size={20} className="text-amber-300" />
+                      <div>
+                        <h3 className="font-bold text-lg">{loan.bank}</h3>
+                        <p className="text-sm text-stone-300">{loan.property} · A/c: {loan.accountNo}</p>
+                      </div>
+                    </div>
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${STATUS_COLORS[loan.status]}`}>
+                      {loan.status}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
+                    {[
+                      { label: 'Loan Amount', value: fmt(loan.amount) },
+                      { label: 'Outstanding', value: fmt(loan.balance) },
+                      { label: 'Rate', value: `${loan.interestRate}% p.a.` },
+                      { label: 'Monthly EMI', value: fmt(loan.emi) },
+                    ].map(({ label, value }) => (
+                      <div key={label}>
+                        <p className="text-xs text-stone-400 uppercase">{label}</p>
+                        <p className="font-bold text-white">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="space-y-3">
+                    <h4 className="font-semibold text-gray-700 text-sm">Loan Details</h4>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      {[
+                        ['Company', loan.company],
+                        ['Loan Date', loan.loanDate],
+                        ['Maturity', loan.maturityDate],
+                        ['EMI Date', `${loan.emiDate}${loan.emiDate === 1 ? 'st' : 'th'}`],
+                        ['LTLV', ltlv != null ? `${ltlv.toFixed(1)}%` : '—'],
+                        ['Land Value', company ? (resolveLandValue(company) != null ? fmt(resolveLandValue(company)!) : '—') : '—'],
+                        ['Repaid', fmt(loan.amount - loan.balance)],
+                      ].map(([k, v]) => (
+                        <div key={k}>
+                          <p className="text-xs text-gray-400">{k}</p>
+                          <p className="font-medium text-gray-900">{v}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 p-3 bg-gray-50 rounded-lg space-y-1.5 text-sm">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Lender Contact</p>
+                      <div className="flex items-center gap-2 text-gray-600"><Landmark size={12} />{loan.lenderName}</div>
+                      <div className="flex items-center gap-2 text-blue-600"><Mail size={12} />{loan.lenderEmail}</div>
+                      <div className="flex items-center gap-2 text-gray-600"><Phone size={12} />{loan.lenderPhone}</div>
+                      <div className="flex items-center gap-2 text-gray-600"><Calendar size={12} />EMI due {loan.emiDate}{loan.emiDate === 1 ? 'st' : 'th'}</div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="font-semibold text-gray-700 text-sm mb-3">Entity Capital Call Coverage</h4>
+                    {companyCoverage ? (
+                      <CapitalCallCoverageGauge
+                        ratio={companyCoverage.ratio}
+                        status={companyCoverage.status}
+                        dataGap={companyCoverage.dataGap}
+                        obligations={companyCoverage.obligations}
+                        uncalled={companyCoverage.uncalled}
+                      />
+                    ) : (
+                      <p className="text-sm text-gray-500">Company data not available</p>
+                    )}
+                    {loan.interestRate > PROPDEV_MARKET_RATE && (
+                      <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+                        <AlertTriangle size={12} className="inline mr-1" />
+                        Rate {loan.interestRate}% above market {PROPDEV_MARKET_RATE}% — est. saving {fmt((loan.balance * (loan.interestRate - PROPDEV_MARKET_RATE) / 100) / 12)}/month if refinanced.
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <h4 className="font-semibold text-gray-700 text-sm mb-3">12-Month Balance Trend</h4>
+                    <ResponsiveContainer width="100%" height={160}>
+                      <LineChart data={schedule}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+                        <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}K`} />
+                        <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, '']} />
+                        <Line type="monotone" dataKey="balance" stroke="#5B5FEF" strokeWidth={2} dot={false} name="Balance" />
+                        <Line type="monotone" dataKey="interest" stroke="#DC2626" strokeWidth={1.5} dot={false} name="Interest" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                    <p className="text-xs text-gray-400 mt-1">Est. 12-month interest: {fmt(totalInterest)}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          <BankRateIntelligence companies={scopedCompanies} />
+          <CashPositionAlerts companies={scopedCompanies} allLoans={allLoans} />
+          <CashFlowForecast companies={scopedCompanies} allLoans={allLoans} />
+        </>
+      )}
+      </>}
     </div>
   );
 }

@@ -1,8 +1,8 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Optional
 
-from sqlalchemy import DateTime, ForeignKey, Index, JSON, Numeric, String, Uuid, func
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, JSON, Numeric, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -56,6 +56,35 @@ class PropDevCompany(Base):
 
     status: Mapped[str | None] = mapped_column(String(20), nullable=True, server_default="active")
 
+    # Property Profile — identity
+    city: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    state: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    zip_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    county: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    legal_description: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+
+    # Property Profile — land details
+    land_use_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    zoning: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    current_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    # Property Profile — ownership history
+    previous_owner_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    previous_owner_entity: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    acquisition_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    acquisition_price: Mapped[float | None] = mapped_column(Numeric(16, 2), nullable=True)
+    acquisition_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    title_company: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    deed_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Property Profile — tax information
+    tax_parcel_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    property_tax_annual: Mapped[float | None] = mapped_column(Numeric(16, 2), nullable=True)
+    tax_assessment_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tax_assessed_value: Mapped[float | None] = mapped_column(Numeric(16, 2), nullable=True)
+    tax_exemptions: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    tax_due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -66,5 +95,11 @@ class PropDevCompany(Base):
     loans: Mapped[list["PropDevLoan"]] = relationship("PropDevLoan", back_populates="company", cascade="all, delete-orphan")
     capital_calls: Mapped[list["PropDevCapitalCall"]] = relationship("PropDevCapitalCall", back_populates="company", cascade="all, delete-orphan")
     expenses: Mapped[list["PropDevExpense"]] = relationship("PropDevExpense", back_populates="company", cascade="all, delete-orphan")
+    property_improvements: Mapped[list["PropDevPropertyImprovement"]] = relationship(
+        "PropDevPropertyImprovement", back_populates="company", cascade="all, delete-orphan",
+    )
+    distributions: Mapped[list["PropDevDistribution"]] = relationship(
+        "PropDevDistribution", back_populates="company", cascade="all, delete-orphan",
+    )
 
     __table_args__ = (Index("ix_propdev_companies_tenant", "tenant_id"),)

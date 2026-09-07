@@ -565,11 +565,29 @@ async def import_quickbooks(
     # Clean up QuickBooks company name (may include "LLC" etc.)
     raw_name = company_name.strip()
 
-    # ── Upsert company ────────────────────────────────────────────────────────
+    # Upsert company — prefer exact name, then tight containment (never raw_name[:6],
+    # which collided across Prop Dev entities and overwrote the wrong company).
     company = db.query(PropDevCompany).filter(
         PropDevCompany.tenant_id == current_user.tenant_id,
-        PropDevCompany.name.ilike(f"%{raw_name[:6]}%"),
+        PropDevCompany.name.ilike(raw_name),
     ).first()
+    if not company and len(raw_name) >= 8:
+        company = db.query(PropDevCompany).filter(
+            PropDevCompany.tenant_id == current_user.tenant_id,
+            PropDevCompany.name.ilike(f"%{raw_name}%"),
+        ).first()
+    if not company and len(raw_name) >= 8:
+        # Reverse containment: registry name contained in QBO header (or vice versa).
+        candidates = db.query(PropDevCompany).filter(
+            PropDevCompany.tenant_id == current_user.tenant_id,
+        ).all()
+        needle = raw_name.casefold()
+        hits = [
+            c for c in candidates
+            if needle in (c.name or "").casefold() or (c.name or "").casefold() in needle
+        ]
+        if len(hits) == 1:
+            company = hits[0]
 
     if not company:
         company = PropDevCompany(
@@ -636,6 +654,7 @@ async def import_quickbooks(
                 tenant_id     = current_user.tenant_id,
                 company_id    = cid,
                 bank          = lr["bank"],
+                property_name = lr.get("property_name") or company.property_name or company.name or "",
                 loan_date     = lr.get("loan_date"),
                 account_no    = lr.get("account_no"),
                 loan_amount   = lr.get("loan_amount", 0.0),

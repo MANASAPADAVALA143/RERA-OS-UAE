@@ -27,13 +27,15 @@ _COL_ALIASES: dict[str, tuple[str, ...]] = {
     "rate": ("loan interest rate", "interest rate", "int rate", "interest %", "rate %"),
     "emi": ("loan emi", "monthly emi", "monthly payment", "monthly p&i", "p&i payment", "emi", "payment"),
     "lender_name": ("lender name", "contact name", "loan officer", "relationship manager"),
+    "lender_email": ("lender email", "lender e-mail", "contact email"),
+    "lender_phone": ("lender phone", "lender contact", "contact phone", "phone"),
     "maturity": (
         "loan maturity date", "loan maurity date", "maturity date", "maturity", "maurity",
         "due date", "loan end date",
     ),
     "balance": (
-        "loan balance as of", "loan balance", "outstanding balance", "balance outstanding",
-        "current balance", "outstanding", "principal balance",
+        "loan balance as of", "loan balance as on", "loan balance", "outstanding balance",
+        "balance outstanding", "current balance", "outstanding", "principal balance",
     ),
     "emi_day": ("loan emi date", "loan emi day", "monthly emi date", "emi date", "emi day", "payment day", "due day"),
     "deduction_acct": ("loan deduction bank account", "deduction account", "payment account"),
@@ -46,6 +48,27 @@ _SKIP_SHEET_NAMES = frozenset({
 })
 
 _SKIP_SHEET_SUBSTRINGS = ("closed", "personal loan")
+
+# Consolidated loan register tabs — Property Dev Loan Tracker uses these only.
+_BANK_LOAN_SHEET_EXACT = frozenset({
+    "bank loan information",
+    "business banks and loan information",
+    "business bank and loan information",
+})
+_BANK_LOAN_SHEET_SUBSTRINGS = (
+    "bank loan information",
+    "business banks and loan",
+    "business bank and loan",
+)
+
+
+def _is_bank_loan_tab(title: str) -> bool:
+    t = _norm_header(title)
+    if not t:
+        return False
+    if t in _BANK_LOAN_SHEET_EXACT:
+        return True
+    return any(s in t for s in _BANK_LOAN_SHEET_SUBSTRINGS)
 
 _SKIP_ROW = frozenset({
     "company name", "entity name", "company", "sl no", "sl no.", "sl", "#",
@@ -80,6 +103,8 @@ class ParsedLoanRow:
     loan_interest_rate: float | None
     loan_emi: float | None
     lender_name: str | None
+    lender_email: str | None
+    lender_phone: str | None
     maturity_date: date | None
     loan_balance: float | None
     loan_emi_day: int | None
@@ -216,9 +241,33 @@ def _month_key_from_header(header: str) -> str | None:
     return None
 
 
+def _has_loan_bank_column(labels: list[str]) -> bool:
+    for h in labels:
+        if not h:
+            continue
+        if h in _COL_ALIASES["bank"]:
+            return True
+        if any(a in h for a in _COL_ALIASES["bank"] if len(a) > 4):
+            return True
+    return False
+
+
+def company_matches_registry(company_name: str, registry_names: set[str]) -> bool:
+    """True when loan company name matches a Company Registry entry (fuzzy)."""
+    key = (company_name or "").lower().strip()
+    if not key:
+        return False
+    for reg in registry_names:
+        rn = reg.lower().strip()
+        if rn == key or key in rn or rn in key:
+            return True
+    return False
+
+
 def _map_headers(header_row: tuple) -> tuple[dict[str, int], dict[str, int]]:
     labels = [_norm_header(c) for c in header_row]
     has_entity_name_col = any(h in _COMPANY_HEADERS for h in labels if h)
+    has_loan_bank_col = _has_loan_bank_column(labels)
 
     mapping: dict[str, int] = {}
     for idx, cell in enumerate(header_row):
@@ -234,8 +283,14 @@ def _map_headers(header_row: tuple) -> tuple[dict[str, int], dict[str, int]]:
             else:
                 mapping["entity_line"] = idx
             continue
+        # Excel "Lender Name" = institution when "Loan Bank Name" column is absent
+        if not has_loan_bank_col and h == "lender name":
+            mapping["bank"] = idx
+            continue
         for fld, aliases in _COL_ALIASES.items():
             if fld in mapping:
+                continue
+            if fld == "lender_name" and not has_loan_bank_col and h == "lender name":
                 continue
             if h in aliases or any(a in h for a in aliases if len(a) > 4):
                 mapping[fld] = idx
@@ -313,6 +368,8 @@ def _parse_row_mapped(
     prop = str(_cell(row, col_map, "property") or "").strip() or company
     bank = str(_cell(row, col_map, "bank") or "").strip()
     if not bank or bank == "—":
+        bank = str(_cell(row, col_map, "lender_name") or "").strip()
+    if not bank or bank == "—":
         return None
 
     balance_by_month: dict[str, float] = {}
@@ -340,6 +397,8 @@ def _parse_row_mapped(
         loan_interest_rate=rate,
         loan_emi=_parse_num(_cell(row, col_map, "emi")),
         lender_name=str(_cell(row, col_map, "lender_name") or "").strip() or None,
+        lender_email=str(_cell(row, col_map, "lender_email") or "").strip() or None,
+        lender_phone=str(_cell(row, col_map, "lender_phone") or "").strip() or None,
         maturity_date=_parse_date(_cell(row, col_map, "maturity")),
         loan_balance=static_balance,
         loan_emi_day=_parse_emi_day(_cell(row, col_map, "emi_day")),
@@ -360,6 +419,49 @@ def _collect_balance_periods(rows: list[ParsedLoanRow]) -> list[str]:
     return sorted(keys)
 
 
+def _sheet_priority(sheet: str) -> int:
+    """Prefer consolidated bank loan register over per-company tabs."""
+    return 0 if _is_bank_loan_tab(sheet) else 1
+
+
+def _dedup_key(row: ParsedLoanRow) -> tuple[str, str, str, str]:
+    return (
+        row.company.lower().strip(),
+        row.property_name.lower().strip(),
+        row.bank_name.lower().strip(),
+        (row.account_no or "").strip().lower(),
+    )
+
+
+def _row_richness(row: ParsedLoanRow) -> int:
+    score = 0
+    if row.loan_balance is not None:
+        score += 4
+    score += len(row.balance_by_month) * 2
+    if row.loan_emi is not None:
+        score += 1
+    if row.maturity_date is not None:
+        score += 1
+    return score
+
+
+def dedupe_parsed_loan_rows(rows: list[ParsedLoanRow]) -> tuple[list[ParsedLoanRow], int]:
+    """Collapse duplicate loans from multiple sheets (same company/property/bank/account)."""
+    best: dict[tuple[str, str, str, str], ParsedLoanRow] = {}
+    for row in rows:
+        key = _dedup_key(row)
+        prev = best.get(key)
+        if prev is None:
+            best[key] = row
+            continue
+        prev_score = (_row_richness(prev), -_sheet_priority(prev.sheet), -prev.row_num)
+        new_score = (_row_richness(row), -_sheet_priority(row.sheet), -row.row_num)
+        if new_score > prev_score:
+            best[key] = row
+    deduped = list(best.values())
+    return deduped, len(rows) - len(deduped)
+
+
 def _balance_for_period(row: ParsedLoanRow, period: str | None) -> tuple[float | None, date | None]:
     if period and period in row.balance_by_month:
         y, m = period.split("-")
@@ -373,20 +475,28 @@ def _balance_for_period(row: ParsedLoanRow, period: str | None) -> tuple[float |
     return None, None
 
 
-def parse_loan_workbook(content: bytes) -> ParseLoanWorkbookResult:
+def parse_loan_workbook(
+    content: bytes,
+    *,
+    entity_scope: str = "rental",
+    sheet_scope: str = "any",
+) -> ParseLoanWorkbookResult:
     import openpyxl
 
     wb = openpyxl.load_workbook(BytesIO(content), data_only=True)
     out: list[ParsedLoanRow] = []
     skipped_non_rental = 0
     has_entity_line = False
+    bank_loan_only = sheet_scope == "bank_loan_only"
     sheet_order = sorted(
         wb.worksheets,
-        key=lambda ws: 0 if _norm_header(ws.title) == "bank loan information" else 1,
+        key=lambda ws: 0 if _is_bank_loan_tab(ws.title) else 1,
     )
 
     for ws in sheet_order:
         title_norm = _norm_header(ws.title)
+        if bank_loan_only and not _is_bank_loan_tab(ws.title):
+            continue
         if title_norm in _SKIP_SHEET_NAMES or any(s in title_norm for s in _SKIP_SHEET_SUBSTRINGS):
             continue
         rows = list(ws.iter_rows(values_only=True))
@@ -402,11 +512,12 @@ def parse_loan_workbook(content: bytes) -> ParseLoanWorkbookResult:
             has_entity_line = True
         sheet_company = (
             ws.title.strip()
-            if ws.title and _norm_header(ws.title) not in ("loans", "loan register", "closed_loans", "bank loan information")
+            if ws.title and not _is_bank_loan_tab(ws.title)
+            and _norm_header(ws.title) not in ("loans", "loan register", "closed_loans")
             else None
         )
         for row_num, row in enumerate(rows[hdr_idx + 1:], start=hdr_idx + 2):
-            if filter_entity_line:
+            if filter_entity_line and entity_scope == "rental":
                 entity_line_raw = _cell(row, col_map, "entity_line")
                 if not is_rental_entity_line(entity_line_raw):
                     if _cell(row, col_map, "company") or _parse_num(_cell(row, col_map, "loan_amount")):
@@ -475,7 +586,7 @@ def import_rental_loans_from_excel(
     balance_period: str | None = None,
 ) -> dict:
     parsed_result = parse_loan_workbook(content)
-    parsed = parsed_result.rows
+    parsed, deduped_count = dedupe_parsed_loan_rows(parsed_result.rows)
     if not parsed:
         return {
             "created": 0,
@@ -505,7 +616,7 @@ def import_rental_loans_from_excel(
                 f"Row {row.row_num}: company '{row.company}' not found in Company Registry — skipped"
             )
             continue
-        row.company, row.property_name = resolved
+        # Keep Excel input names for company, property, and lender — registry match is validation only
         matched.append(row)
 
     if not matched:
@@ -545,6 +656,8 @@ def import_rental_loans_from_excel(
             loan_interest_rate=p.loan_interest_rate,
             loan_emi=p.loan_emi,
             lender_name=p.lender_name,
+            lender_email=p.lender_email,
+            lender_phone=p.lender_phone,
             loan_maturity_date=p.maturity_date,
             loan_balance_as_of=bal,
             loan_balance_as_of_date=bal_date,
@@ -559,9 +672,20 @@ def import_rental_loans_from_excel(
         created += 1
 
     db.commit()
+
+    total_outstanding = 0.0
+    for p in matched:
+        bal, _ = _balance_for_period(p, period)
+        total_outstanding += bal or 0.0
+
     skip_msg = (
         f" Skipped {parsed_result.skipped_non_rental} non-rental row(s)."
         if parsed_result.skipped_non_rental
+        else ""
+    )
+    dedup_msg = (
+        f" Deduplicated {deduped_count} duplicate row(s) across sheets."
+        if deduped_count
         else ""
     )
     registry_msg = (
@@ -579,5 +703,9 @@ def import_rental_loans_from_excel(
         "balance_period_used": period,
         "companies_updated": sorted(companies_in_file),
         "sheets_parsed": sheets_used,
-        "message": f"Imported {created} loan(s) for {len(companies_in_file)} registry company(ies).{skip_msg}{registry_msg}{period_msg}",
+        "total_outstanding": round(total_outstanding, 2),
+        "message": (
+            f"Imported {created} loan(s) for {len(companies_in_file)} registry company(ies)."
+            f" Outstanding balance total: ${total_outstanding:,.2f}.{skip_msg}{dedup_msg}{registry_msg}{period_msg}"
+        ),
     }

@@ -70,7 +70,7 @@ export default function CompanyComparisonPanel({ columns, title = 'Company Compa
             <tr>
               <th className="px-4 py-3 text-left">Rank</th>
               <th className="px-4 py-3 text-left">Company</th>
-              <th className="px-4 py-3 text-right">Lots</th>
+              <th className="px-4 py-3 text-right">Status</th>
               {columns.map(col => (
                 <th key={col.label} className="px-4 py-3 text-right whitespace-nowrap">{col.label}</th>
               ))}
@@ -99,8 +99,12 @@ export default function CompanyComparisonPanel({ columns, title = 'Company Compa
                   </div>
                 </td>
                 <td className="px-4 py-3 text-right text-xs">
-                  <span className="font-medium">{c.property.totalLots}</span>
-                  <span className="text-gray-400 ml-1">lots</span>
+                  {(() => {
+                    const lot = c.lots[0];
+                    if (!lot) return <span className="text-gray-400">—</span>;
+                    const labels: Record<string, string> = { sold: 'Sold', contracted: 'Contracted', available: 'For Sale', reserved: 'Reserved', legal_pending: 'Legal', cancelled: 'Cancelled' };
+                    return <span className="font-medium capitalize">{labels[lot.status] ?? lot.status.replace('_', ' ')}</span>;
+                  })()}
                 </td>
                 {columns.map(col => {
                   const value = col.getValue(c);

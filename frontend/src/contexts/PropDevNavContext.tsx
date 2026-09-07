@@ -1,17 +1,21 @@
 import { createContext, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  LayoutDashboard, TrendingUp, Grid3X3, Warehouse,
-  Users, Phone, Landmark, Home, BarChart2,
-  Waves, FolderOpen, Upload, Building2,
+  LayoutDashboard,
+  Users, Phone, Landmark,
+  BarChart2,
+  Waves, Upload, Building2, Percent, ClipboardList, MapPin,
 } from 'lucide-react';
 
 export type PropDevTab =
-  | 'company-setup' | 'upload'
-  | 'dashboard' | 'deal-pl' | 'pricing' | 'inventory'
-  | 'partners' | 'capital-calls' | 'loans' | 'sales'
-  | 'performance' | 'cash-flow' | 'documents'
-  | 'financials';
+  | 'upload' | 'companies'
+  | 'dashboard'
+  | 'entity-executive-summary'
+  | 'properties'
+  | 'executive-summary'
+  | 'partners' | 'capital-calls' | 'loans'
+  | 'cash-flow'
+  | 'financials' | 'financial-ratios';
 
 type LIcon = React.FC<{ size?: number; className?: string }>;
 
@@ -23,20 +27,18 @@ export interface PropDevNavItem {
 }
 
 export const PROPDEV_TABS: PropDevNavItem[] = [
-  { id: 'company-setup', label: 'Company Registry',   Icon: Building2,      groupLabel: 'Setup'       },
   { id: 'upload',        label: 'Upload Data',        Icon: Upload,         groupLabel: 'Data Import' },
+  { id: 'companies',     label: 'Companies',          Icon: Building2,      groupLabel: 'Portfolio'   },
   { id: 'dashboard',     label: 'Command Center',     Icon: LayoutDashboard, groupLabel: 'Analytics'  },
-  { id: 'deal-pl',       label: 'Deal P&L',           Icon: TrendingUp      },
-  { id: 'pricing',       label: 'Lot Pricing',        Icon: Grid3X3         },
-  { id: 'inventory',     label: 'Lot Inventory',      Icon: Warehouse       },
-  { id: 'partners',      label: 'Partners / JV',      Icon: Users           },
+  { id: 'executive-summary', label: 'Executive Summary', Icon: ClipboardList },
+  { id: 'entity-executive-summary', label: 'Entity Executive Summary', Icon: ClipboardList },
+  { id: 'properties',    label: 'Properties',         Icon: MapPin          },
+  { id: 'partners',      label: 'Ownership',          Icon: Users           },
   { id: 'capital-calls', label: 'Capital Calls',      Icon: Phone           },
   { id: 'loans',         label: 'Loan Tracker',       Icon: Landmark        },
-  { id: 'sales',         label: 'Sale of Property',   Icon: Home            },
-  { id: 'performance',   label: 'Performance',        Icon: BarChart2       },
   { id: 'cash-flow',     label: 'Cash Flow',          Icon: Waves           },
-  { id: 'documents',     label: 'Documents',          Icon: FolderOpen      },
-  { id: 'financials',   label: 'Financials',         Icon: BarChart2,      groupLabel: 'Financials' },
+  { id: 'financials',        label: 'Financials',         Icon: BarChart2,      groupLabel: 'Financials' },
+  { id: 'financial-ratios',  label: 'Financial Ratios',   Icon: Percent        },
 ];
 
 interface PropDevNavState {

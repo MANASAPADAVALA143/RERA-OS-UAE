@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, HardHat, Building2, Landmark, Home,
   ShieldAlert, Map, Settings, LogOut, HardDriveUpload, Database,
-  Menu, X,
+  Menu, X, Briefcase,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Badge } from '../ui/Badge';
@@ -24,6 +24,11 @@ import {
   usePropDevNav,
   PROPDEV_TABS,
 } from '../../contexts/PropDevNavContext';
+import {
+  ConsultancyNavProvider,
+  useConsultancyNav,
+  CONSULTANCY_TABS,
+} from '../../contexts/ConsultancyNavContext';
 
 const NAV = [
   { to: '/executive-summary', label: 'Executive Summary', icon: LayoutDashboard },
@@ -31,6 +36,7 @@ const NAV = [
   { to: '/development',       label: 'Development',       icon: Building2       },
   { to: '/reit',              label: 'REIT',              icon: Landmark        },
   { to: '/property-dev',      label: 'Property Dev',      icon: HardDriveUpload },
+  { to: '/consultancy',       label: 'Consultancy & Outsourcing', icon: Briefcase },
   { to: '/rental',            label: 'Rental & Lease',    icon: Home            },
   { to: '/capital-risk',      label: 'Capital & Risk',    icon: ShieldAlert     },
   { to: '/pipeline-market',   label: 'Pipeline & Market', icon: Map             },
@@ -49,9 +55,11 @@ function SidebarInner() {
   const onConstruction = location.pathname.startsWith('/construction');
   const onRental       = location.pathname.startsWith('/rental');
   const onPropDev      = location.pathname.startsWith('/property-dev');
+  const onConsultancy  = location.pathname.startsWith('/consultancy');
   const { tab, setTab, projectId, setProjectId, projects } = useConstructionNav();
   const { tab: rentalTab, setTab: setRentalTab }           = useRentalNav();
   const { tab: propDevTab, setTab: setPropDevTab }         = usePropDevNav();
+  const { tab: consultancyTab, setTab: setConsultancyTab } = useConsultancyNav();
 
   // Close sidebar on any navigation (mobile UX)
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
@@ -170,6 +178,31 @@ function SidebarInner() {
                 </div>
               )}
 
+              {/* Consultancy sub-nav */}
+              {to === '/consultancy' && onConsultancy && (
+                <div className="mt-1 mb-1">
+                  {CONSULTANCY_TABS.map(({ id, label: itemLabel, Icon: ItemIcon, groupLabel, comingSoon }) => (
+                    <div key={id}>
+                      {groupLabel && (
+                        <p className="pl-7 pr-3 pt-2 pb-0.5 text-sm uppercase tracking-wider font-medium"
+                          style={{ color: '#6366F1', opacity: 0.7 }}>
+                          ─── {groupLabel} ───
+                        </p>
+                      )}
+                      <button
+                        onClick={() => setConsultancyTab(id)}
+                        className={subBase}
+                        style={consultancyTab === id ? subActive : subInactive}
+                      >
+                        <ItemIcon size={15} className="shrink-0" />
+                        {itemLabel}
+                        {comingSoon && <span className="ml-auto text-[11px] opacity-60">soon</span>}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Construction sub-nav */}
               {to === '/construction' && onConstruction && (
                 <div className="mt-1 mb-1">
@@ -269,7 +302,9 @@ export default function AppShell() {
       <RentalNavProvider>
         <RentalPortfolioProvider>
           <PropDevNavProvider>
-            <SidebarInner />
+            <ConsultancyNavProvider>
+              <SidebarInner />
+            </ConsultancyNavProvider>
           </PropDevNavProvider>
         </RentalPortfolioProvider>
       </RentalNavProvider>

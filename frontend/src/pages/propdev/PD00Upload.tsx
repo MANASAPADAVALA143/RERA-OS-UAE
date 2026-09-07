@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
-import api from '../../services/api';
+import { useNavigate } from 'react-router-dom';
+import api, { formatApiError, wakeApi } from '../../services/api';
 import * as XLSX from 'xlsx';
 import {
   Upload, FileSpreadsheet, CheckCircle2, AlertCircle, X,
@@ -9,6 +10,8 @@ import { usePropDev } from '../../contexts/PropertyDevContext';
 import type { Loan, Partner, CapitalCall, Property } from '../../contexts/PropertyDevContext';
 import { createEmptyCompany } from '../../contexts/PropertyDevContext';
 import { usePropDevNav } from '../../contexts/PropDevNavContext';
+import { useConstructionNav } from '../../contexts/ConstructionNavContext';
+import PropDevPageHeader from '../../components/propdev/PropDevPageHeader';
 
 interface ParsedSheet {
   name: string;
@@ -41,8 +44,23 @@ function detectSheetType(name: string, rows: Record<string, string | number>[]):
 }
 
 function isCapitalContributionFile(sheets: ParsedSheet[]): boolean {
-  return sheets.every(s => s.detected === 'Company Capital Call' || s.detected === 'Unknown')
-    && sheets.some(s => s.detected === 'Company Capital Call');
+  // Prefer capital-call endpoint whenever call signals exist — even if the same
+  // workbook also has Annexure / Loan / Lot sheets (common in "capital call sheet final.xlsx").
+  // Previously annexure/loan sheet *names* short-circuited to import-excel and
+  // Capital Calls stayed empty despite a successful-looking upload.
+  return sheets.some(s => {
+    const text = JSON.stringify(s.rows).toLowerCase();
+    const n = s.name.toLowerCase();
+    return s.detected === 'Company Capital Call'
+      || s.detected === 'Capital Call Sheet'
+      || n.includes('capital')
+      || text.includes('capital call')
+      || text.includes('capital contribution')
+      || text.includes('shareholding pattern')
+      || text.includes('amount called')
+      || text.includes('new call')
+      || text.includes('old dues');
+  });
 }
 
 function parseExcelFile(file: File): Promise<ParsedSheet[]> {
@@ -252,12 +270,47 @@ interface ImportSummary {
   capitalCalls: number;
 }
 
+interface CapitalImportReport {
+  capital_call_blocks: number;
+  expense_builder_blocks: number;
+  property_pl_blocks: number;
+  capital_call_rows_imported: number;
+  property_pl_blocks_routed: number;
+  totals: {
+    called: number;
+    received: number;
+    outstanding: number;
+  };
+  manual_review: Array<{ sheet: string; title: string; type: string; reason: string }>;
+  company_preview?: CapitalCompanyPreviewRow[];
+}
+
+interface CapitalCompanyPreviewRow {
+  sheet_name: string;
+  company_id: string | null;
+  company_name: string | null;
+  matched: boolean;
+  attribution_confidence: string;
+  attribution_reason: string;
+  latest_date_range: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  partner_rows: number;
+  skipped_date_ranges: string[];
+  date_range_unclear: boolean;
+  warning_badge: string | null;
+  warnings: string[];
+  totals: { called?: number; received?: number; balance?: number };
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function PD00Upload() {
   const { companies, selectedCompanyId, setSelectedCompanyId, setCompanies,
-          addUploadRecord, uploadHistory } = usePropDev();
+          addUploadRecord, uploadHistory, refetchCompanies } = usePropDev();
   const { setTab } = usePropDevNav();
+  const { setTab: setConstructionTab } = useConstructionNav();
+  const navigate = useNavigate();
 
   const [dragOver, setDragOver] = useState(false);
   const [parsing, setParsing] = useState(false);
@@ -267,6 +320,8 @@ export default function PD00Upload() {
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState('');
   const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [capitalImportReport, setCapitalImportReport] = useState<CapitalImportReport | null>(null);
+  const [capitalPreview, setCapitalPreview] = useState<CapitalImportReport | null>(null);
   const [seeding, setSeeding] = useState(false);
   const [seedResult, setSeedResult] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -318,14 +373,14 @@ export default function PD00Upload() {
     setQbError('');
     setQbResult(null);
     try {
+      await wakeApi();
       const fd = new FormData();
       qbFiles.forEach(f => fd.append('files', f));
       const res = await api.post<typeof qbResult>('/api/propdev/import-quickbooks', fd);
       setQbResult(res.data);
       setTimeout(() => window.location.reload(), 3000);
     } catch (e: unknown) {
-      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setQbError(detail || 'Upload failed');
+      setQbError(formatApiError(e, 'QuickBooks upload failed'));
     } finally {
       setQbUploading(false);
     }
@@ -351,6 +406,11 @@ export default function PD00Upload() {
     ? companies[0]
     : companies.find(c => c.id === selectedCompanyId) ?? companies[0];
 
+  const isCapitalWorkbook = sheets != null && isCapitalContributionFile(sheets);
+  const companySheets = sheets?.filter(s =>
+    s.detected === 'Company Capital Call' || s.detected === 'Capital Call Sheet',
+  ) ?? [];
+
   function inferCompanyName(sheetList: ParsedSheet[]): string | null {
     for (const sheet of sheetList) {
       for (const row of sheet.rows.slice(0, 20)) {
@@ -372,6 +432,8 @@ export default function PD00Upload() {
     setSheets(null);
     setConfirmed(false);
     setSummary(null);
+    setCapitalImportReport(null);
+    setCapitalPreview(null);
     setFileName(file.name);
     setSelectedFile(file);
     try {
@@ -403,41 +465,135 @@ export default function PD00Upload() {
     setError('');
 
     try {
+      await wakeApi();
       const formData = new FormData();
       formData.append('file', selectedFile);
 
-      // Route to correct endpoint based on file type
-      const endpoint = isCapitalContributionFile(sheets)
-        ? '/api/propdev/import-capital-contributions'
-        : '/api/propdev/import-excel';
+      // Capital workbooks: Preview first (no DB writes). Approve is a second step.
+      if (isCapitalContributionFile(sheets)) {
+        const previewRes = await api.post<{
+          status: string;
+          capital_call_blocks?: number;
+          expense_builder_blocks?: number;
+          property_pl_blocks?: number;
+          totals?: { called: number; received: number; outstanding: number };
+          manual_review?: Array<{ sheet: string; title: string; type: string; reason: string }>;
+          company_preview?: CapitalCompanyPreviewRow[];
+        }>('/api/propdev/import-capital-contributions/preview', formData);
+        const data = previewRes.data;
+        setCapitalPreview({
+          capital_call_blocks: data.capital_call_blocks ?? 0,
+          expense_builder_blocks: data.expense_builder_blocks ?? 0,
+          property_pl_blocks: data.property_pl_blocks ?? 0,
+          capital_call_rows_imported: 0,
+          property_pl_blocks_routed: 0,
+          totals: data.totals ?? { called: 0, received: 0, outstanding: 0 },
+          manual_review: data.manual_review ?? [],
+          company_preview: data.company_preview ?? [],
+        });
+        return;
+      }
 
-      const response = await api.post<{ companies: Array<{ id: string; name: string; property?: string; total_lots?: number }> }>(
-        endpoint,
-        formData,
-      );
+      const response = await api.post<{
+        companies?: Array<{ id: string; name: string; property?: string; total_lots?: number }>;
+        imported?: number;
+        capital_call_blocks?: number;
+        expense_builder_blocks?: number;
+        property_pl_blocks?: number;
+        capital_call_rows_imported?: number;
+        property_pl_blocks_routed?: number;
+        totals?: { called: number; received: number; outstanding: number };
+        manual_review?: Array<{ sheet: string; title: string; type: string; reason: string }>;
+      }>('/api/propdev/import-excel', formData);
       const data = response.data;
+      const companiesImported = data.companies?.length ?? data.imported ?? 0;
       setSummary({
-        dealPL: true,
-        partners: data.companies.length,
-        loans: data.companies.length,
-        capitalCalls: data.companies.length,
+        dealPL: Boolean(data.companies?.length),
+        partners: 0,
+        loans: data.companies?.length ?? 0,
+        capitalCalls: 0,
       });
       setConfirmed(true);
-
-      // Trigger a refresh of companies
-      await api.get('/api/propdev/companies');
-      window.location.reload();
-
+      await refetchCompanies();
       const sheetsImported = sheets.filter(sh => sh.detected !== 'Unknown').map(sh => sh.detected);
       addUploadRecord({
-        companyId: data.companies[0]?.id || 'unknown',
-        companyName: data.companies[0]?.name || 'Imported',
+        companyId: data.companies?.[0]?.id || 'multiple',
+        companyName: data.companies?.[0]?.name || `${companiesImported} companies`,
         fileName,
         uploadDate: new Date().toISOString(),
         sheetsImported,
       });
     } catch (err) {
-      setError(`Upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setError(formatApiError(err, 'Upload failed'));
+    } finally {
+      setParsing(false);
+    }
+  }
+
+  async function handleApproveCapitalImport() {
+    if (!selectedFile || !capitalPreview) return;
+    setParsing(true);
+    setError('');
+    try {
+      await wakeApi();
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('confirm', 'true');
+      const response = await api.post<{
+        status: string;
+        imported?: number;
+        capital_call_blocks?: number;
+        expense_builder_blocks?: number;
+        property_pl_blocks?: number;
+        capital_call_rows_imported?: number;
+        property_pl_blocks_routed?: number;
+        totals?: { called: number; received: number; outstanding: number };
+        manual_review?: Array<{ sheet: string; title: string; type: string; reason: string }>;
+        company_preview?: CapitalCompanyPreviewRow[];
+        message?: string;
+        companies?: Array<{ id: string; name: string }>;
+      }>('/api/propdev/import-capital-contributions', formData);
+
+      const data = response.data;
+      if (data.status === 'preview_required') {
+        setError(data.message || 'Import requires confirmation.');
+        return;
+      }
+      const capitalRows = data.capital_call_rows_imported ?? 0;
+      setSummary({
+        dealPL: (data.property_pl_blocks_routed ?? 0) > 0,
+        partners: capitalRows,
+        loans: 0,
+        capitalCalls: capitalRows,
+      });
+      setCapitalImportReport({
+        capital_call_blocks: data.capital_call_blocks ?? 0,
+        expense_builder_blocks: data.expense_builder_blocks ?? 0,
+        property_pl_blocks: data.property_pl_blocks ?? 0,
+        capital_call_rows_imported: capitalRows,
+        property_pl_blocks_routed: data.property_pl_blocks_routed ?? 0,
+        totals: data.totals ?? { called: 0, received: 0, outstanding: 0 },
+        manual_review: data.manual_review ?? [],
+        company_preview: data.company_preview ?? capitalPreview.company_preview,
+      });
+      if (capitalRows === 0) {
+        setError(
+          'Capital-call file was recognized but 0 partner call rows were imported. '
+          + 'Check the Preview matching table — sheet tabs must match Company Registry names.',
+        );
+      }
+      setCapitalPreview(null);
+      setConfirmed(true);
+      await refetchCompanies();
+      addUploadRecord({
+        companyId: data.companies?.[0]?.id || 'multiple',
+        companyName: `${data.imported ?? capitalPreview.company_preview?.length ?? 0} companies`,
+        fileName,
+        uploadDate: new Date().toISOString(),
+        sheetsImported: (sheets ?? []).filter(sh => sh.detected !== 'Unknown').map(sh => sh.detected),
+      });
+    } catch (err) {
+      setError(formatApiError(err, 'Capital import failed'));
     } finally {
       setParsing(false);
     }
@@ -449,25 +605,61 @@ export default function PD00Upload() {
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
-        <h2 className="text-xl font-bold text-gray-900">Upload Client Excel Data</h2>
+        <PropDevPageHeader title="Upload Client Excel Data" />
         <p className="text-sm text-gray-500 mt-0.5">
-          Upload your Annexure Excel file — data is parsed and written live into the selected company.
+          Upload one Excel file — capital-call workbooks include all companies (one sheet per company inside the file).
         </p>
       </div>
 
-      {/* Target company */}
-      {targetCompany ? (
+      <div className="flex items-start gap-3 p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-700">
+        <FileSpreadsheet size={18} className="shrink-0 mt-0.5 text-green-600" />
+        <div>
+          <p className="font-semibold text-gray-900">Single file for all companies</p>
+          <p className="mt-1">
+            Drop your full capital-call workbook once (all companies in one file). Prefer Excel tabs named like the
+            Company Registry (e.g. &quot;Victoria Ventures Group LLC&quot;). If a tab is generic, put the company name
+            in the sheet title row — fuzzy matching also accepts missing &quot;LLC&quot; / &quot;Group&quot; suffixes.
+            Extra Annexure / Loan tabs in the same file are OK and will be skipped or routed separately.
+          </p>
+        </div>
+      </div>
+
+      {isCapitalWorkbook && (
+        <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-900">
+          <FileSpreadsheet size={18} className="shrink-0 mt-0.5 text-blue-600" />
+          <div>
+            <p className="font-semibold">Capital-call file recognized</p>
+            <p className="text-blue-800 mt-1">
+              {companySheets.length > 0
+                ? `${companySheets.length} company sheet${companySheets.length === 1 ? '' : 's'} in this file: ${companySheets.map(s => s.name).join(', ')}.`
+                : 'Sheets will be matched to companies by sheet name (e.g. JKL LLC, MNO LLC).'}
+              {' '}Click <strong>Preview Matching</strong> to verify sheet → company → latest date range before any data is written.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!isCapitalWorkbook && (
+        <p className="text-sm text-gray-500 -mt-3">
+          {sheets
+            ? 'Annexure / mixed workbook detected — data is parsed into the matching company.'
+            : 'Other annexure files: data is parsed and written into the matching company.'}
+        </p>
+      )}
+
+      {/* Target company — only for non-capital annexure uploads */}
+      {!isCapitalWorkbook && targetCompany ? (
         <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
           <CheckCircle2 size={16} className="shrink-0" />
           Uploading to: <strong className="ml-1">{targetCompany.name}</strong>
           {selectedCompanyId === 'all' && <span className="text-blue-500 ml-1">(select a specific company in the top bar to target another)</span>}
         </div>
-      ) : (
+      ) : !isCapitalWorkbook ? (
         <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
           <AlertCircle size={16} className="shrink-0" />
           No companies yet — your first upload will create a new company from the Excel file.
         </div>
-      )}
+      ) : null}
 
       {/* Drop Zone */}
       {!sheets && (
@@ -494,7 +686,10 @@ export default function PD00Upload() {
             ) : (
               <div>
                 <p className="font-semibold text-gray-700 text-lg">Drop your Excel file here</p>
-                <p className="text-sm text-gray-400 mt-1">or click to browse · .xlsx, .xls, .xlsm</p>
+                <p className="text-sm text-gray-400 mt-1">
+                  or click to browse · .xlsx, .xls, .xlsm
+                  <span className="block mt-1 font-medium text-gray-500">One file · all companies · one sheet per company inside the file</span>
+                </p>
               </div>
             )}
             {!parsing && (
@@ -513,7 +708,7 @@ export default function PD00Upload() {
       )}
 
       {/* Preview */}
-      {sheets && !confirmed && (
+      {sheets && !confirmed && !capitalPreview && (
         <div className="space-y-4">
           <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-xl p-4">
             <div className="flex items-center gap-3">
@@ -523,7 +718,7 @@ export default function PD00Upload() {
                 <p className="text-sm text-green-700">{sheetCount} sheets found · {recognizedCount} recognized · {sheetCount - recognizedCount} unknown</p>
               </div>
             </div>
-            <button onClick={() => { setSheets(null); setFileName(''); }} className="text-gray-400 hover:text-gray-600">
+            <button onClick={() => { setSheets(null); setFileName(''); setCapitalPreview(null); }} className="text-gray-400 hover:text-gray-600">
               <X size={18} />
             </button>
           </div>
@@ -534,13 +729,108 @@ export default function PD00Upload() {
           </div>
 
           <div className="flex items-center gap-4 pt-2">
-            <button onClick={handleConfirm}
-              className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700">
-              <CheckCircle2 size={16} /> Confirm & Import Data
+            <button onClick={handleConfirm} disabled={parsing}
+              className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-60">
+              <CheckCircle2 size={16} />
+              {isCapitalWorkbook ? (parsing ? 'Previewing…' : 'Preview Matching') : (parsing ? 'Importing…' : 'Confirm & Import Data')}
             </button>
-            <button onClick={() => { setSheets(null); setFileName(''); }}
+            <button onClick={() => { setSheets(null); setFileName(''); setCapitalPreview(null); }}
               className="px-6 py-3 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50">
               Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Capital Calls matching summary — review BEFORE commit */}
+      {capitalPreview && !confirmed && (
+        <div className="space-y-4 rounded-2xl border-2 border-amber-300 bg-amber-50 p-5">
+          <div>
+            <h3 className="font-bold text-amber-950 text-lg">Capital Calls — Preview Summary</h3>
+            <p className="text-sm text-amber-900 mt-1">
+              Existing Capital Call records have <strong>not</strong> been changed. Verify each sheet’s matched company
+              and <strong>latest date range</strong> (sorted by period end date), then approve to import.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div className="bg-white rounded-lg border border-amber-200 p-3">
+              <p className="text-xs text-gray-500">Latest tables</p>
+              <p className="font-bold">{capitalPreview.capital_call_blocks}</p>
+            </div>
+            <div className="bg-white rounded-lg border border-amber-200 p-3">
+              <p className="text-xs text-gray-500">Total Called</p>
+              <p className="font-bold">${capitalPreview.totals.called.toLocaleString()}</p>
+            </div>
+            <div className="bg-white rounded-lg border border-amber-200 p-3">
+              <p className="text-xs text-gray-500">Received</p>
+              <p className="font-bold text-green-700">${capitalPreview.totals.received.toLocaleString()}</p>
+            </div>
+            <div className="bg-white rounded-lg border border-amber-200 p-3">
+              <p className="text-xs text-gray-500">Outstanding</p>
+              <p className="font-bold text-red-700">${capitalPreview.totals.outstanding.toLocaleString()}</p>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto bg-white rounded-xl border border-amber-200">
+            <table className="w-full text-sm">
+              <thead className="bg-amber-100 text-amber-950 text-xs uppercase">
+                <tr>
+                  {['Sheet', 'Matched company', 'Latest date range', 'Partners', 'Skipped ranges', 'Status'].map(h => (
+                    <th key={h} className="px-3 py-2 text-left whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-amber-100">
+                {(capitalPreview.company_preview ?? []).map(row => (
+                  <tr key={row.sheet_name} className={row.date_range_unclear || !row.matched ? 'bg-amber-50' : ''}>
+                    <td className="px-3 py-2 font-medium">{row.sheet_name}</td>
+                    <td className="px-3 py-2">
+                      {row.matched ? (row.company_name ?? '—') : <span className="text-red-700 font-semibold">Unmatched</span>}
+                      {row.attribution_reason && (
+                        <p className="text-[11px] text-gray-500 mt-0.5">{row.attribution_reason}</p>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 font-semibold">{row.latest_date_range ?? '—'}</td>
+                    <td className="px-3 py-2">{row.partner_rows}</td>
+                    <td className="px-3 py-2 text-xs text-gray-600">
+                      {row.skipped_date_ranges?.length
+                        ? row.skipped_date_ranges.join(', ')
+                        : '—'}
+                    </td>
+                    <td className="px-3 py-2">
+                      {row.warning_badge ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-900 bg-amber-200 px-2 py-1 rounded-lg">
+                          ⚠️ {row.warning_badge}
+                        </span>
+                      ) : row.matched ? (
+                        <span className="text-xs font-medium text-green-700">Ready</span>
+                      ) : (
+                        <span className="text-xs font-medium text-red-700">Needs review</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <button
+              type="button"
+              onClick={handleApproveCapitalImport}
+              disabled={parsing}
+              className="flex items-center gap-2 px-6 py-3 bg-green-700 text-white rounded-xl font-semibold hover:bg-green-800 disabled:opacity-60"
+            >
+              <CheckCircle2 size={16} />
+              {parsing ? 'Importing…' : 'Approve & Import (overwrite matched companies)'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setCapitalPreview(null)}
+              className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-white"
+            >
+              Back
             </button>
           </div>
         </div>
@@ -560,14 +850,22 @@ export default function PD00Upload() {
           {/* What was updated */}
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: 'Deal P&L',       updated: summary.dealPL,         page: 'deal-pl' as const,       count: summary.dealPL ? '1 property' : null },
-              { label: 'Partners',       updated: summary.partners > 0,   page: 'partners' as const,      count: summary.partners > 0 ? `${summary.partners} partners` : null },
-              { label: 'Loans',          updated: summary.loans > 0,      page: 'loans' as const,         count: summary.loans > 0 ? `${summary.loans} loans` : null },
-              { label: 'Capital Calls',  updated: summary.capitalCalls > 0, page: 'capital-calls' as const, count: summary.capitalCalls > 0 ? `${summary.capitalCalls} calls` : null },
-            ].map(({ label, updated, page, count }) => (
+              { label: 'Deal P&L',       updated: summary.dealPL,         propDevPage: null as const, constructionPage: 'deal_pl' as const, count: summary.dealPL ? '1 property' : null },
+              { label: 'Partners',       updated: summary.partners > 0,   propDevPage: 'partners' as const,      constructionPage: null, count: summary.partners > 0 ? `${summary.partners} partners` : null },
+              { label: 'Loans',          updated: summary.loans > 0,      propDevPage: 'loans' as const,         constructionPage: null, count: summary.loans > 0 ? `${summary.loans} loans` : null },
+              { label: 'Capital Calls',  updated: summary.capitalCalls > 0, propDevPage: 'capital-calls' as const, constructionPage: null, count: summary.capitalCalls > 0 ? `${summary.capitalCalls} calls` : null },
+            ].map(({ label, updated, propDevPage, constructionPage, count }) => (
               <button
                 key={label}
-                onClick={() => updated && setTab(page)}
+                onClick={() => {
+                  if (!updated) return;
+                  if (constructionPage) {
+                    setConstructionTab(constructionPage);
+                    navigate('/construction');
+                  } else if (propDevPage) {
+                    setTab(propDevPage);
+                  }
+                }}
                 className={`flex items-center justify-between p-3 rounded-xl border text-left ${
                   updated
                     ? 'bg-white border-green-200 hover:border-blue-300 hover:shadow-sm cursor-pointer'
@@ -585,9 +883,34 @@ export default function PD00Upload() {
             ))}
           </div>
 
+          {capitalImportReport && (
+            <div className="rounded-xl border border-blue-200 bg-white p-4 space-y-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                <div><p className="text-xs text-gray-500">Call Blocks</p><p className="font-bold">{capitalImportReport.capital_call_blocks}</p></div>
+                <div><p className="text-xs text-gray-500">Total Called</p><p className="font-bold">${capitalImportReport.totals.called.toLocaleString()}</p></div>
+                <div><p className="text-xs text-gray-500">Total Received</p><p className="font-bold text-green-700">${capitalImportReport.totals.received.toLocaleString()}</p></div>
+                <div><p className="text-xs text-gray-500">Outstanding</p><p className="font-bold text-red-700">${capitalImportReport.totals.outstanding.toLocaleString()}</p></div>
+              </div>
+              <p className="text-xs text-gray-600">
+                {capitalImportReport.expense_builder_blocks} expense-builder block(s) detected ·{' '}
+                {capitalImportReport.property_pl_blocks_routed} of {capitalImportReport.property_pl_blocks} Property P&amp;L block(s) routed to Financials.
+              </p>
+              {capitalImportReport.manual_review.length > 0 && (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
+                  <p className="text-xs font-semibold text-amber-800 mb-1">Manual review required</p>
+                  {capitalImportReport.manual_review.map((item, i) => (
+                    <p key={`${item.sheet}-${i}`} className="text-xs text-amber-700">
+                      {item.sheet} · {item.title}: {item.reason}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <p className="text-xs text-green-600">Click any updated card above to navigate to that page and see the imported data.</p>
 
-          <button onClick={() => { setSheets(null); setFileName(''); setConfirmed(false); setSummary(null); }}
+          <button onClick={() => { setSheets(null); setFileName(''); setConfirmed(false); setSummary(null); setCapitalImportReport(null); setCapitalPreview(null); }}
             className="mt-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">
             Upload Another File
           </button>
@@ -595,11 +918,11 @@ export default function PD00Upload() {
       )}
 
       {/* ── QuickBooks Multi-File Upload ────────────────────────────────────── */}
-      <div className="rounded-2xl border-2 overflow-hidden" style={{ borderColor: 'rgba(99,102,241,0.40)', background: '#FDFCF8' }}>
+      <div className="rounded-2xl border-2 overflow-hidden" style={{ borderColor: 'rgba(212,175,55,0.40)', background: '#FDFCF8' }}>
         {/* Header */}
-        <div className="px-5 py-4 border-b flex items-center gap-3" style={{ borderColor: 'rgba(99,102,241,0.20)', background: 'rgba(99,102,241,0.08)' }}>
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#6366F1' }}>
-            <Zap size={16} color="#1E1B4B" />
+        <div className="px-5 py-4 border-b flex items-center gap-3" style={{ borderColor: 'rgba(212,175,55,0.20)', background: 'rgba(212,175,55,0.08)' }}>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#5B5FEF' }}>
+            <Zap size={16} color="#161310" />
           </div>
           <div>
             <p className="font-bold text-sm" style={{ color: '#78350F' }}>Upload QuickBooks Export Files</p>
@@ -668,7 +991,7 @@ export default function PD00Upload() {
                   onClick={handleQbUpload}
                   disabled={qbUploading}
                   className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold disabled:opacity-50"
-                  style={{ background: '#6366F1', color: '#1E1B4B' }}
+                  style={{ background: '#5B5FEF', color: '#161310' }}
                 >
                   <Upload size={14} />
                   {qbUploading ? 'Parsing & importing…' : `Parse & Import ${qbFiles.length} file${qbFiles.length !== 1 ? 's' : ''}`}
@@ -740,7 +1063,31 @@ export default function PD00Upload() {
         </div>
       </div>
 
-      {/* WWBG quick-seed removed in public demo — use Excel upload or synthetic rental seed only */}
+      {/* WWBG Quick Seed */}
+      <div className="rounded-xl border p-4 max-w-2xl" style={{ background: 'rgba(212,175,55,0.06)', borderColor: 'rgba(212,175,55,0.30)' }}>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm font-semibold" style={{ color: '#92400E' }}>WWBG Land Dev — Quick Load</div>
+            <div className="text-xs text-gray-500 mt-0.5">
+              Loads WWBG data from 4 pre-parsed Excel files (BS, P&L, Loans, Cash Flows) directly into the database.
+              Populates CFO Dashboard (Property Dev), Deal P&L (Construction), Loan Tracker, and Cash Flow sections.
+            </div>
+            {seedResult && (
+              <div className={`text-xs mt-2 font-medium ${seedResult.startsWith('✅') ? 'text-green-700' : 'text-red-700'}`}>
+                {seedResult}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={handleSeedWWBG}
+            disabled={seeding}
+            className="flex-shrink-0 text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50"
+            style={{ background: '#5B5FEF', color: '#161310' }}
+          >
+            {seeding ? 'Loading...' : '⚡ Load WWBG Data'}
+          </button>
+        </div>
+      </div>
 
       {/* Expected format guide */}
       <div className="bg-white rounded-xl border border-gray-200">
@@ -764,7 +1111,7 @@ export default function PD00Upload() {
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center justify-between">
         <div>
           <p className="font-semibold text-blue-800 text-sm">Need a template?</p>
-          <p className="text-xs text-blue-600 mt-0.5">Download the RERA OS Excel template with all required sheets pre-formatted.</p>
+          <p className="text-xs text-blue-600 mt-0.5">Download the EstateCFO Excel template with all required sheets pre-formatted.</p>
         </div>
         <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
           <Upload size={14} /> Download Template

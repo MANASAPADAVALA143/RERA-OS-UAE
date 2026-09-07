@@ -12,6 +12,7 @@ import Reit from './pages/Reit';
 import ReitPropertyDetail from './pages/ReitPropertyDetail';
 import Rental from './pages/Rental';
 import PropertyDev from './pages/PropertyDev';
+import Consultancy from './pages/Consultancy';
 import CapitalRisk from './pages/CapitalRisk';
 import PipelineMarket from './pages/PipelineMarket';
 import Settings from './pages/Settings';
@@ -53,6 +54,7 @@ export default function App() {
             <Route path="/rental/analytics/exceptions" element={<Rental />} />
             <Route path="/rental/calculations-review" element={<Rental />} />
             <Route path="/property-dev" element={<PropertyDev />} />
+            <Route path="/consultancy" element={<Consultancy />} />
             <Route path="/capital-risk" element={<CapitalRisk />} />
             <Route path="/pipeline-market" element={<PipelineMarket />} />
             <Route path="/settings" element={<Settings />} />

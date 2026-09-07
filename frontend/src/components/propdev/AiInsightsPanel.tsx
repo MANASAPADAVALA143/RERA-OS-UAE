@@ -38,9 +38,9 @@ function generateInsights(tab: string, data: ReturnType<typeof usePropDev>) {
   const insights: Record<string, { bullets: string[]; actions: string[]; riskScore: number }> = {
     dashboard: {
       bullets: [
-        `${companyLabel}: ${soldPct}% sold — ${soldLots.length} of ${lots.length} lots closed, generating ${fmt(totalRevenue)} in realized revenue.`,
-        `${contractedLots.length} lots under contract represent ${fmt(contractedLots.reduce((s,l) => s+l.listPrice,0))} in near-term revenue.`,
-        `${availableLots.length} lots still available — velocity risk if unsold past 12 months.`,
+        `${companyLabel}: ${soldLots.length} of ${companies.length || lots.length} properties sold, generating ${fmt(totalRevenue)} in realized revenue.`,
+        `${contractedLots.length} propert${contractedLots.length !== 1 ? 'ies' : 'y'} under contract represent ${fmt(contractedLots.reduce((s,l) => s+l.listPrice,0))} in near-term revenue.`,
+        `${availableLots.length} propert${availableLots.length !== 1 ? 'ies' : 'y'} still for sale — review pricing if unsold past 12 months.`,
         overdueCalls.length > 0
           ? `⚠️ ${overdueCalls.length} capital call${overdueCalls.length > 1 ? 's' : ''} overdue — ${fmt(overdueCalls.reduce((s,c) => s+c.totalDue-c.received,0))} outstanding.`
           : 'All capital calls current — no overdue obligations.',
@@ -50,38 +50,22 @@ function generateInsights(tab: string, data: ReturnType<typeof usePropDev>) {
         overdueCalls.length > 0
           ? `Send demand notices for ${overdueCalls.length} overdue call${overdueCalls.length > 1 ? 's' : ''} — ${fmt(overdueCalls.reduce((s,c) => s+c.totalDue-c.received,0))} at risk.`
           : 'Issue next capital call before cash drops below 2× monthly EMI.',
-        `Accelerate pricing on ${availableLots.length} available lots — consider 3–5% discount for Q3 closings.`,
+        `Review pricing on ${availableLots.length} unsold propert${availableLots.length !== 1 ? 'ies' : 'y'} — consider market comparables.`,
         'Review loan maturity schedule — start refinancing conversations now if rates below 7%.',
       ],
       riskScore: overdueCalls.length > 1 ? 7 : 4,
     },
-    'deal-pl': {
-      bullets: [
-        `${companyLabel}: net margin ${netMargin}% — ${parseFloat(netMargin) >= 35 ? 'exceeds' : 'below'} the 35% target.`,
-        `Land cost ${fmt(p?.landCost ?? 0)} = ${p ? ((p.landCost / p.saleConsideration) * 100).toFixed(0) : '0'}% of sale consideration (target 35–45%).`,
-        `Management fee (${(p?.managementFeeRate ?? 0.09)*100}% of land) = ${fmt(managementFee)}, commission = ${fmt(commission)}.`,
-        `Net profit ${fmt(netProfit)} on ${lots.length} lots = ${fmt(netProfit / Math.max(1, lots.length))} per lot.`,
-        `ROI on partner capital: ${roi}% — equity multiple ${totalCapital > 0 ? ((totalCapital + netProfit) / totalCapital).toFixed(2) : '—'}x.`,
-      ],
-      actions: [
-        'Negotiate bulk discount on legal fees — potential 15–20% saving.',
-        'Model a 5% price increase — with unsold lots remaining, revenue impact is significant.',
-        'Review management fee structure — performance-based model aligns incentives better.',
-      ],
-      riskScore: parseFloat(netMargin) < 25 ? 7 : 3,
-    },
     pricing: {
       bullets: [
-        `${companyLabel}: ${availableLots.length} lots available, avg list ${fmt(availableLots.reduce((s,l)=>s+l.listPrice,0)/Math.max(1,availableLots.length))}.`,
-        `Break-even per lot (basic) ≈ ${fmt((totalCost + managementFee + commission) / Math.max(1, lots.length))}.`,
-        `${contractedLots.length} lots contracted — maintain pricing to protect margin on remaining inventory.`,
-        `Sold lots avg price: ${fmt(soldLots.reduce((s,l)=>s+(l.salePrice??0),0)/Math.max(1,soldLots.length))}.`,
-        `Total unsold inventory value: ${fmt(availableLots.reduce((s,l)=>s+l.listPrice,0))}.`,
+        `${companyLabel}: ${availableLots.length} propert${availableLots.length !== 1 ? 'ies' : 'y'} for sale, avg list ${fmt(availableLots.reduce((s,l)=>s+l.listPrice,0)/Math.max(1,availableLots.length))}.`,
+        `Break-even sale price (basic) ≈ ${fmt(totalCost + managementFee + commission)}.`,
+        `${contractedLots.length} propert${contractedLots.length !== 1 ? 'ies' : 'y'} contracted — maintain pricing to protect margin.`,
+        `Sold properties avg price: ${fmt(soldLots.reduce((s,l)=>s+(l.salePrice??0),0)/Math.max(1,soldLots.length))}.`,
+        `Total unsold value: ${fmt(availableLots.reduce((s,l)=>s+l.listPrice,0))}.`,
       ],
       actions: [
-        'Price all lots above the Partnership break-even threshold to cover preferred returns.',
-        `Reprice lowest-margin available lots first — run Scenario Slider to test +5% impact.`,
-        'Offer corner/premium lots at a 5–8% premium vs interior lots to improve blended margin.',
+        'Price property above the Partnership break-even threshold to cover preferred returns.',
+        `Review pricing vs break-even — run Scenario Slider to test +5% impact.`,
       ],
       riskScore: availableLots.some(l => l.listPrice < (totalCost + managementFee + commission) / Math.max(1, lots.length)) ? 6 : 3,
     },
@@ -112,7 +96,7 @@ function generateInsights(tab: string, data: ReturnType<typeof usePropDev>) {
       ],
       actions: [
         'Run Distribution Waterfall calculator to confirm entitlements before any payout.',
-        'Preferred return distribution should trigger once 75% of lots are sold.',
+        'Preferred return distribution should trigger upon property sale.',
         'Send quarterly capital account statements to all partners to maintain trust.',
       ],
       riskScore: 3,
@@ -148,23 +132,6 @@ function generateInsights(tab: string, data: ReturnType<typeof usePropDev>) {
         'Maintain minimum $150K cash reserve — draw credit line if collections slip.',
       ],
       riskScore: p && p.cashAvailable < 200000 ? 8 : 4,
-    },
-    performance: {
-      bullets: [
-        `${companyLabel}: ${roi}% ROI on ${fmt(totalCapital)} invested capital — equity multiple ${totalCapital > 0 ? ((totalCapital + netProfit) / totalCapital).toFixed(2) : '—'}x.`,
-        `${soldLots.length} lots closed generating ${fmt(totalRevenue)} realized revenue (${((soldLots.length/Math.max(1,lots.length))*100).toFixed(0)}% of portfolio).`,
-        `Net profit ${fmt(netProfit)} = ${netMargin}% net margin.`,
-        isConsolidated
-          ? `Top performer: ${[...companies].sort((a,b) => (b.property.saleConsideration - b.property.landCost) - (a.property.saleConsideration - a.property.landCost))[0]?.name ?? '—'}.`
-          : `Gross profit before fees: ${fmt(p ? p.saleConsideration - totalCost : 0)} (${p ? (((p.saleConsideration-totalCost)/p.saleConsideration)*100).toFixed(1) : '0'}% gross margin).`,
-        'Partner preferred returns (8%) must be funded before general profit distribution.',
-      ],
-      actions: [
-        'Accelerate lot sales to lock in IRR before holding costs compound.',
-        'Initiate preferred return distribution once 75%+ of lots are sold.',
-        isConsolidated ? 'Reallocate GP attention to bottom-3 performing properties.' : 'Model bulk sale vs. individual lot exit — compare IRR outcomes.',
-      ],
-      riskScore: parseFloat(roi) < 15 ? 6 : 4,
     },
   };
 
@@ -240,7 +207,7 @@ function answerQuickQuestion(q: string, data: ReturnType<typeof usePropDev>): st
 
 const QUICK_QUESTIONS = [
   { label: 'Should I make a capital call?',  key: 'capital call'  },
-  { label: 'Which lots to reprice?',          key: 'reprice lot'   },
+  { label: 'Which properties to reprice?',          key: 'reprice lot'   },
   { label: 'Should I refinance?',             key: 'refinanc'      },
   { label: 'What do partners get now?',       key: 'partner distribut' },
   { label: 'Is my cash position safe?',       key: 'cash'          },

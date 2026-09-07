@@ -113,7 +113,7 @@ function complianceToDocItem(d: ComplianceDoc): DocItem {
 const BLANK_FORM = { name:'', folder:'Legal', subfolder:'Title Documents', company:'', docType:'Legal', expiryDate:'', notes:'' };
 
 export default function PD12Documents() {
-  const { docs, setDocs, companies } = usePropDev();
+  const { docs, setDocs, companies, selectedCompanyId } = usePropDev();
 
   // Folder navigation
   const [selectedPath, setSelectedPath] = useState<FolderPath>({ folder:'All Documents', subfolder:null });
@@ -138,9 +138,12 @@ export default function PD12Documents() {
 
   // Search / filter
   const [search, setSearch] = useState('');
-  const [filterCompany, setFilterCompany] = useState('all');
   const [filterStatus, setFilterStatus] = useState<'all' | DocItem['status']>('all');
   const [statFilter, setStatFilter] = useState<'all' | 'expiring' | 'expired' | 'pending'>('all');
+
+  const scopedCompanyName = selectedCompanyId !== 'all'
+    ? companies.find(c => c.id === selectedCompanyId)?.name
+    : null;
 
   // Existing compliance docs mapped into DocItem format
   const complianceDocs: DocItem[] = docs.map(complianceToDocItem);
@@ -171,7 +174,7 @@ export default function PD12Documents() {
       if (d.folder !== selectedPath.folder) return false;
       if (selectedPath.subfolder && d.subfolder !== selectedPath.subfolder) return false;
     }
-    if (filterCompany !== 'all' && d.company !== filterCompany) return false;
+    if (scopedCompanyName && d.company !== scopedCompanyName) return false;
     if (filterStatus  !== 'all' && d.status   !== filterStatus)  return false;
 
     if (search) {
@@ -268,7 +271,7 @@ export default function PD12Documents() {
     <div className="space-y-5">
       {/* Page header */}
       <div>
-        <h2 className="text-xl font-bold text-gray-900">Documents & Compliance</h2>
+        <PropDevPageHeader title="Documents & Compliance" />
         <p className="text-sm text-gray-500 mt-0.5">Organised document library with folder structure</p>
       </div>
 
@@ -479,14 +482,6 @@ export default function PD12Documents() {
                 className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
             </div>
-            <select
-              value={filterCompany}
-              onChange={e => setFilterCompany(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400"
-            >
-              <option value="all">All Companies</option>
-              {companyNames.map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
             <select
               value={filterStatus}
               onChange={e => setFilterStatus(e.target.value as typeof filterStatus)}

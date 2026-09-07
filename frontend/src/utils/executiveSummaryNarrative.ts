@@ -691,3 +691,191 @@ export function generateStrategicRecommendations(params: {
 
   return bullets.slice(0, 5);
 }
+
+/**
+ * Ported from the EstateCFO reference app — section-level Strategy & Recommendations
+ * for PDF exports (Property Dev / Consultancy section export). Additive only; no
+ * existing narrative function above this point is touched.
+ */
+export interface SectionStrategyPlan {
+  commentary: string;
+  actions: string[];
+}
+
+const TARGET_OCC = 95;
+const TARGET_COLL = 95;
+
+function sectionActionFromText(text: string): string {
+  const m = text.match(/Action:\s*(.+?)\s*Owner:/i);
+  return m ? m[1].trim() : text;
+}
+
+/** Section-level Strategy & Recommendations for polished PDF exports. */
+export function generateSectionStrategyPlan(
+  sectionId: string,
+  params: {
+    payload: Pick<
+      CeoBoardExportPayload,
+      | 'rentalPortfolio'
+      | 'rentalPerformance'
+      | 'expenses'
+      | 'arDashboard'
+      | 'incomeStatement'
+      | 'balanceSheet'
+      | 'cashFlow'
+      | 'ownership'
+      | 'loanPortfolio'
+      | 'debtRisk'
+      | 'portfolioSnapshot'
+    >;
+    slideNarratives: SlideNarratives;
+    strategicRecommendations: string[];
+    collectionRate: number;
+    portfolio: PortfolioSummary | null;
+    vacantUnits?: number;
+  },
+): SectionStrategyPlan {
+  const {
+    payload, slideNarratives, strategicRecommendations, collectionRate, portfolio, vacantUnits,
+  } = params;
+  const rp = payload.rentalPortfolio;
+  const perf = payload.rentalPerformance;
+  const actions: string[] = [];
+
+  if (sectionId === 'overview' || sectionId === 'vacancy' || sectionId === 'units') {
+    const occ = parsePct(perf.occupancy) ?? parsePct(rp.occupancy);
+    const coll = parsePct(perf.collectionRate) ?? parsePct(rp.collectionRate);
+    const vacLoss = perf.vacancyLoss ?? rp.vacancyLoss;
+    const vac = vacantUnits ?? portfolio?.vacant_units ?? 0;
+    const parts: string[] = [];
+
+    if (occ != null) {
+      const gap = TARGET_OCC - occ;
+      if (gap > 0) {
+        parts.push(
+          `Occupancy at ${pct(occ)} remains ${pct(gap)} below our ${TARGET_OCC}% operating target, leaving ${vacLoss} in vacancy loss this period.`,
+        );
+        if (vac > 0) {
+          actions.push(`Prioritize lease-up on the ${vac} vacant unit${vac !== 1 ? 's' : ''} highlighted in the chart above.`);
+        }
+      } else {
+        parts.push(`Physical occupancy at ${pct(occ)} meets the ${TARGET_OCC}% operating target, supporting revenue stability.`);
+      }
+    }
+
+    if (coll != null) {
+      if (coll < TARGET_COLL) {
+        parts.push(
+          `Collection rate of ${pct(coll)} falls short of the typical ${TARGET_COLL}%+ target — review AR aging for units driving this gap before addressing pricing.`,
+        );
+        actions.push('Assign AR owner to clear 30+ day balances within 30 days.');
+      } else {
+        parts.push(`Collection rate of ${pct(coll)} reflects solid tenant payment discipline.`);
+      }
+    }
+
+    const ar = parseUsd(perf.arOutstanding) ?? parseUsd(rp.arOutstanding);
+    if (ar != null && ar > 0 && parts.length < 3) {
+      parts.push(`${fmtUsd(ar)} in outstanding receivables warrants near-term collection follow-up.`);
+    }
+
+    if (!parts.length) {
+      parts.push(slideNarratives.rentalPortfolio || slideNarratives.rentalPerformance);
+    }
+
+    if (!actions.length) {
+      const occOk = occ != null && occ >= TARGET_OCC;
+      const collOk = coll != null && coll >= TARGET_COLL;
+      if (occOk && collOk) {
+        actions.push('Portfolio operating metrics are on track — maintain leasing velocity and collection discipline.');
+        actions.push('Shift focus to renewal rent optimization on stabilized units.');
+      } else {
+        strategicRecommendations
+          .filter(b => /OCCUPANCY|COLLECTIONS/i.test(b))
+          .slice(0, 2)
+          .forEach(b => actions.push(sectionActionFromText(b)));
+      }
+    }
+
+    return { commentary: parts.slice(0, 3).join(' '), actions: actions.slice(0, 4) };
+  }
+
+  if (sectionId === 'expenses') {
+    const commentary = slideNarratives.expenses;
+    strategicRecommendations
+      .filter(b => /PROFITABILITY|EXPENSE/i.test(b))
+      .slice(0, 2)
+      .forEach(b => actions.push(sectionActionFromText(b)));
+    if (!actions.length && payload.expenses.available) {
+      actions.push('Hold OPEX flat-to-down vs revenue; reinvest only where NOI uplift is underwritten.');
+    }
+    if (!actions.length) {
+      actions.push('Upload P&L expense detail on Rentals → Expenses to enable category-level action items.');
+    }
+    return { commentary, actions: actions.slice(0, 4) };
+  }
+
+  if (sectionId === 'ar-dashboard') {
+    const commentary = slideNarratives.arDashboard;
+    if (collectionRate > 0 && collectionRate < TARGET_COLL) {
+      actions.push(`Accelerate collections — portfolio rate ${pct(collectionRate)} vs ${TARGET_COLL}% target.`);
+    }
+    const od90 = parseUsd(payload.arDashboard.overdue90);
+    if (od90 != null && od90 > 0) {
+      actions.push(`Clear ${payload.arDashboard.overdue90} in 90+ day AR before approving rent increases.`);
+    }
+    strategicRecommendations
+      .filter(b => /COLLECTIONS|RISK/i.test(b))
+      .slice(0, 2)
+      .forEach(b => actions.push(sectionActionFromText(b)));
+    if (!actions.length && payload.arDashboard.available) {
+      actions.push('AR aging is within normal ranges — maintain monthly QB aging uploads.');
+    }
+    return { commentary, actions: actions.slice(0, 4) };
+  }
+
+  if (sectionId === 'financials') {
+    const commentary = slideNarratives.incomeStatement;
+    strategicRecommendations
+      .filter(b => /PROFITABILITY/i.test(b))
+      .slice(0, 3)
+      .forEach(b => actions.push(sectionActionFromText(b)));
+    if (!actions.length) {
+      actions.push('Validate margin trend vs prior period before approving capex this quarter.');
+    }
+    return { commentary, actions: actions.slice(0, 4) };
+  }
+
+  if (sectionId === 'ownership') {
+    return {
+      commentary: slideNarratives.ownership,
+      actions: strategicRecommendations.filter(b => /OWNERSHIP/i.test(b)).map(sectionActionFromText).slice(0, 4),
+    };
+  }
+
+  if (sectionId === 'loan-tracker') {
+    return {
+      commentary: slideNarratives.loanPortfolio,
+      actions: strategicRecommendations.filter(b => /LEVERAGE|DEBT|RISK/i.test(b)).map(sectionActionFromText).slice(0, 4),
+    };
+  }
+
+  if (sectionId === 'financial-ratios') {
+    const parts = [
+      slideNarratives.balanceSheet,
+      payload.incomeStatement.available ? `NOI margin ${payload.incomeStatement.noiMargin}.` : '',
+    ].filter(Boolean);
+    return {
+      commentary: parts.slice(0, 2).join(' '),
+      actions: strategicRecommendations.filter(b => /LEVERAGE|PROFITABILITY/i.test(b)).map(sectionActionFromText).slice(0, 4),
+    };
+  }
+
+  const narrativeKey = sectionId as keyof SlideNarratives;
+  const commentary = (slideNarratives[narrativeKey] as string | undefined)
+    ?? 'Section metrics loaded from live dashboard data.';
+  if (!actions.length) {
+    actions.push('Continue monthly data uploads to preserve board-ready reporting.');
+  }
+  return { commentary, actions: actions.slice(0, 4) };
+}
